@@ -1,0 +1,268 @@
+[00:00.000 --> 00:02.060]  you
+[00:30.000 --> 00:46.400]  Hello FOSDEM 2021 and welcome to this talk on code reloading techniques in Python.
+[00:46.400 --> 00:52.400]  In this talk we'll be reviewing a few techniques that allow you to reload code and apply the
+[00:52.400 --> 00:54.680]  new changes you made to your program.
+[00:54.680 --> 00:59.840]  We'll look at a few different techniques to do so and we'll have an in-depth look at
+[00:59.840 --> 01:04.200]  the inner way of how they work precisely.
+[01:04.200 --> 01:09.240]  Few words about myself, so my name is Hugo Herter, I'm a software engineer consultant.
+[01:09.240 --> 01:14.880]  I discovered Python and Linux in 2003 and have been using them a lot since then.
+[01:14.880 --> 01:21.440]  My first FOSDEM was in 2004 and I think I attended almost every edition since.
+[01:21.440 --> 01:26.080]  When I'm passionate about free software, I'm really happy this year to be able to attend
+[01:26.080 --> 01:32.040]  all the dev rooms without missing any.
+[01:32.040 --> 01:37.400]  When I was starting to learn Python, I was quite amazed by how easy it is to play with
+[01:37.400 --> 01:40.920]  all the internals of the language and the constructs.
+[01:40.920 --> 01:46.000]  One thing that I found pretty interesting is this exact function that allows you to execute
+[01:46.000 --> 01:51.760]  any Python code found in a string that might come from anywhere.
+[01:51.760 --> 01:58.080]  As you can see in the example on the right, that just executes Python code from the network
+[01:58.080 --> 02:02.840]  and gives you a remote Python shell on any machine that runs this script.
+[02:02.840 --> 02:07.640]  It's basically the same idea you have in Jupyter notebook with more security and more advanced
+[02:07.640 --> 02:11.200]  features.
+[02:11.200 --> 02:16.360]  When I was learning Python, I started also to write my own web framework.
+[02:16.360 --> 02:20.680]  This was back in the times when Flask and Django even didn't exist.
+[02:20.680 --> 02:27.840]  We only had Zope and a few frameworks that do not exist anymore and on that web framework
+[02:27.840 --> 02:32.880]  I used a function called exec file which is the same as exec but for a file, it would
+[02:32.880 --> 02:40.520]  execute all the Python code in a file and I used this to be able to make my changes
+[02:40.520 --> 02:46.680]  up here immediately when I was changing some files in some web pages.
+[02:46.680 --> 02:49.480]  Which brought me to this idea of code reloading.
+[02:49.480 --> 02:54.720]  It's something that I have been playing with for a long time and I wanted to share this
+[02:54.720 --> 03:00.920]  with you because there are many interesting techniques here and you might not know about
+[03:00.920 --> 03:03.640]  all of them.
+[03:03.640 --> 03:09.280]  What I called code reloading here is the process of replacing part of a program with
+[03:09.280 --> 03:13.120]  a new version, part of all of it.
+[03:13.120 --> 03:19.360]  I'm focused here on the source code because it's the term that's used mostly for interpreted
+[03:19.360 --> 03:20.720]  languages.
+[03:20.720 --> 03:25.480]  When you are using compiled languages, there are other terms that might mean similar things
+[03:25.480 --> 03:28.160]  but they are slightly different.
+[03:28.160 --> 03:36.040]  I talk about cold reloading and what I mean by cold is that you take the process and you
+[03:36.040 --> 03:39.160]  stop it and then you restart it.
+[03:39.160 --> 03:43.920]  And hot code reloading means that you keep the process running and you patch it with
+[03:43.920 --> 03:48.120]  a new code without stopping it.
+[03:48.120 --> 03:54.040]  So as an illustration on the left, we have some kind of cold code reloading on a racetrack.
+[03:54.040 --> 03:58.640]  You stop the car, you have access to all the internals, you can change everything you want
+[03:58.640 --> 04:03.720]  but the car is out of the circuit, it's not running anymore.
+[04:03.720 --> 04:06.320]  The driver is out of the car as well.
+[04:06.320 --> 04:12.200]  On the right side you have hot code reloading where the driver is still in the car.
+[04:12.200 --> 04:17.760]  You may not want to change everything, you don't have access to the chassis, changing
+[04:17.760 --> 04:24.320]  the engine might be a complicated task here but you have access to quite a few pieces of
+[04:24.320 --> 04:29.880]  the car already and if you just want to change the color or type the wheels, it's pretty
+[04:29.880 --> 04:30.880]  easy to do.
+[04:30.880 --> 04:34.280]  You don't need to stop the car and it goes much faster.
+[04:34.280 --> 04:42.200]  It's going to be the same ID we have in programming with cold code reloading and hot code reloading.
+[04:42.200 --> 04:46.640]  So cold code reloading, you stop the process and then you restart it again.
+[04:46.640 --> 04:52.520]  It's easy, it's reliable, you've all done it if you did some Python code or any kind
+[04:52.520 --> 04:56.960]  of programming, it's the default way of doing it.
+[04:56.960 --> 05:04.600]  The issues you have with it is that you lose the states so getting that state back might
+[05:04.600 --> 05:06.000]  take time.
+[05:06.000 --> 05:13.480]  If you are programming a video game for example and you are a Vatorite in a special place
+[05:13.480 --> 05:17.200]  and it took you some time to get there with certain enemies and you want to trick the
+[05:17.200 --> 05:24.160]  behavior of the enemies, in that case restarting the entry game every time might be pretty
+[05:24.160 --> 05:32.480]  annoying and you would be interested in something that keeps the state of the whole program.
+[05:32.480 --> 05:41.240]  The easiest way on Linux to do cold code reloading is control C up arrow enter to just run the
+[05:41.240 --> 05:49.520]  same command again and it's a super easy way to do it because we all know this first shortcut
+[05:49.520 --> 05:56.840]  by reflex as we use it all the time in programming.
+[05:56.840 --> 06:07.600]  Let's have a look at how some web frameworks do this cold, some web frameworks do code reloading
+[06:07.600 --> 06:13.880]  and they used this cold approach of restarting everything but they do it in an automated
+[06:13.880 --> 06:14.880]  way.
+[06:14.880 --> 06:18.200]  Let's have a look at how they do it precisely.
+[06:18.200 --> 06:22.560]  The entry point is this function here run with reloader and you pass it a function.
+[06:22.560 --> 06:29.440]  It will run this main function and enable the reloader on the side and stop that function
+[06:29.440 --> 06:32.280]  if the code has changed to restart it.
+[06:32.280 --> 06:39.880]  The first thing we see is that it's calling here single.signal six-term lambda rx sys.exit
+[06:39.880 --> 06:45.880]  which means if the process receives the single six-term to terminate from the system then
+[06:45.880 --> 06:51.440]  it will exit to make sure that it doesn't hang if it receives this single.
+[06:51.440 --> 06:55.920]  This is a way to behave properly even in multi-threaded environments.
+[06:55.920 --> 07:01.600]  Sometimes when you have multiple threads the signals are not received by all threads and
+[07:01.600 --> 07:07.480]  you have to press control C a few times to stop it for example using some frameworks.
+[07:07.480 --> 07:15.520]  Then we see that it's initializing a reloader here using this function getReloader which
+[07:15.520 --> 07:17.880]  is defined a bit higher.
+[07:17.880 --> 07:21.120]  There are two reloader classes in Django.
+[07:21.120 --> 07:26.440]  One is the watchman which will watch for files on the file system and the other one is the
+[07:26.440 --> 07:32.720]  stat reloader which will just watch every second if the properties of the files have
+[07:32.720 --> 07:38.280]  changed and in that case say well the properties have changed so we should trigger a reload.
+[07:38.280 --> 07:47.880]  The watchman is faster and more powerful but the stat reloader works as a fullback to this.
+[07:47.880 --> 07:53.640]  And then it will pass this reloader as well as the main function here to this startDjango
+[07:53.640 --> 07:56.400]  function which is right here.
+[07:56.400 --> 08:03.600]  So that function basically starts our main function here in a thread so it creates a
+[08:03.600 --> 08:09.120]  thread to run this main function it sets it as a daemon it starts the thread so no
+[08:09.120 --> 08:15.240]  our main function is running but in a thread not in the main thread but in a side thread
+[08:15.240 --> 08:18.360]  which is controlled by this function.
+[08:18.360 --> 08:25.120]  Then it starts the reloader and it passes the thread to that reloader class which will
+[08:25.120 --> 08:34.520]  be in charge of stopping it and restarting it if something has changed and it will run
+[08:34.520 --> 08:39.520]  this in the loop as long as the reloader should not stop.
+[08:39.520 --> 08:46.880]  So this is the Django approach start the main function in a thread and then look for changes
+[08:46.880 --> 08:52.400]  on the file stem when they happen have this reloader class to just stop the thread and
+[08:52.400 --> 09:02.000]  restart it.
+[09:02.000 --> 09:07.560]  When looking at how Flask handles this reloading it's a bit more complicated because it's
+[09:07.560 --> 09:14.640]  not within Flask it's within WorkZook which is a web framework library used by Flask.
+[09:14.640 --> 09:20.160]  But we can find something similar we have this run with reloader function that takes
+[09:20.160 --> 09:28.880]  a main function as an argument it does a register to the same signal as Django and then it starts
+[09:28.880 --> 09:36.680]  a thread here with the main function and it launches the thread here and if we look at
+[09:36.680 --> 09:42.360]  the reloader this it comes from this reloader loops and when looking at it we can see that
+[09:42.360 --> 09:47.960]  it's also using something similar a stat reloader and a watchdog reloader and these are very
+[09:47.960 --> 09:54.120]  similar to those used in Django so we can assume that the behavior is identical even
+[09:54.120 --> 09:59.080]  if the codebase is different here.
+[09:59.080 --> 10:07.880]  So both Django and Flask use these watchman or watchdog reloaders under the hood but how
+[10:07.880 --> 10:09.600]  do these work?
+[10:09.600 --> 10:14.160]  Well there is something called iNotify on Linux and there are similar APIs on other
+[10:14.160 --> 10:21.040]  other platforms that allow you or your process is to watch for file system events and receive
+[10:21.040 --> 10:26.080]  a notification without having to constantly look if something has changed.
+[10:26.080 --> 10:30.640]  On Linux it's iNotify which you can use directly from the library piNotify if you're using
+[10:30.640 --> 10:36.960]  Python or there is this library called watchdog that you can use on all main platforms.
+[10:36.960 --> 10:45.680]  The way the interface to use watchdog looks like this so you can create an observer that
+[10:45.680 --> 10:52.320]  is in charge of receiving these signals and will run in a thread in the background and
+[10:52.320 --> 10:59.760]  you can then schedule some handlers on it and say well I want to register for example recursively
+[10:59.760 --> 11:06.600]  if you're looking for on a folder or not and then just start it and it will work using
+[11:06.600 --> 11:12.240]  a callback based approach.
+[11:12.240 --> 11:16.560]  Because it runs in the background I added this input at the end just to make the program
+[11:16.560 --> 11:23.640]  block and to be able to see something before Python exits.
+[11:23.640 --> 11:29.240]  Let's now look at hot code reloading so in this case we want to keep the process running
+[11:29.240 --> 11:32.520]  we want to replace the code in memory.
+[11:32.520 --> 11:38.240]  We hope it won't crash the program this might happen if we have inconsistencies and the new
+[11:38.240 --> 11:44.320]  code is not compatible with the existing one or the existing state and we want to take
+[11:44.320 --> 11:51.920]  advantage of the fact that it keeps the state and it's really fast to do this.
+[11:51.920 --> 11:57.560]  There are two challenges in this case one is we need to find and load the new code because
+[11:57.560 --> 12:03.160]  if you're just reloading everything you might as well restart the entire program and we
+[12:03.160 --> 12:11.720]  need to replace the references so in Python you can pass a lot of objects as variables
+[12:11.720 --> 12:17.800]  and you can have references to these objects in many places and we need to find all these
+[12:17.800 --> 12:25.720]  places to be able to make them use the new code instead of the old one.
+[12:25.720 --> 12:30.120]  There are other languages that also allow this kind of hot code reloading.
+[12:30.120 --> 12:36.600]  In Java for example you have this functionality called hot swap which basically allows you
+[12:36.600 --> 12:43.440]  via the debugger to specify a class and ask the virtual machine to replace the class with
+[12:43.440 --> 12:48.240]  the new compiled code from a class file.
+[12:48.240 --> 12:54.920]  In C and C++ you have DLL code reloading that allows you to reload a dynamic linked
+[12:54.920 --> 12:57.280]  library or shared library.
+[12:57.280 --> 13:02.080]  In this case as well they need to share the same interface, they need to expose the same
+[13:02.080 --> 13:08.240]  functions and classes and methods that the previous version did.
+[13:08.240 --> 13:17.360]  There are some changes that you're not allowed to because then it would break the compatibility.
+[13:17.360 --> 13:22.800]  In Python there are three ways of loading codes.
+[13:22.800 --> 13:27.960]  One is eval that allows you to evaluate a function and that one is not very useful in
+[13:27.960 --> 13:28.960]  our use case.
+[13:28.960 --> 13:36.560]  However the other two methods do work and they both have their advantages and disadvantages.
+[13:36.560 --> 13:42.160]  The first one is the import module that you are using when you are importing a library
+[13:42.160 --> 13:49.760]  and in a way similar to the DLL libraries you can reload a module that has already been
+[13:49.760 --> 13:57.720]  loaded and have the new version replace the old one and exec allows you to execute just
+[13:57.720 --> 14:03.640]  any Python code from string which can also be used in some cases.
+[14:03.640 --> 14:08.960]  What you see here is on the left a text editor with some Python code and on the right a Python
+[14:08.960 --> 14:09.960]  console.
+[14:09.960 --> 14:14.880]  So the standard way to load Python code is using import.
+[14:14.880 --> 14:21.560]  I will import my module and then I can call module.sayhello and it will just run it.
+[14:21.560 --> 14:29.240]  If I change the source code say hello will still be at the old version as expected.
+[14:29.240 --> 14:35.840]  There is however a library we can use with in Python to reload this module from import
+[14:35.840 --> 14:46.520]  lib and we can reload here module.
+[14:46.520 --> 14:52.200]  And now if we call our function again we can see that we have the new version.
+[14:52.200 --> 14:58.240]  However if we have a reference to this function then it's a bit trickier because that reference
+[14:58.240 --> 15:13.640]  will not be updated say we have say equals module.sayhello when we call say we will still
+[15:13.640 --> 15:16.160]  be calling this function.
+[15:16.160 --> 15:28.800]  Now let's update the source code and reload the code module.sayhello has the new version
+[15:28.800 --> 15:32.200]  however say is still using the old version.
+[15:32.200 --> 15:37.480]  So now we have one version that doesn't exist on the file system anymore the previous version
+[15:37.480 --> 15:42.000]  but it's still in memory it's still loaded and this is something we have to take care
+[15:42.000 --> 15:49.600]  about to be careful about when we're doing hot code reloading.
+[15:49.600 --> 15:56.920]  In practice however sometimes we are facing code that's not optimal for the reloading
+[15:56.920 --> 15:58.760]  that we were just seeing.
+[15:58.760 --> 16:03.880]  For example here we have a connection to a database that's initialized as a singleton
+[16:03.880 --> 16:10.880]  and this is a pattern we see in a lot of code where that connection is created just within
+[16:10.880 --> 16:14.480]  the module and so it's executed every time we import it.
+[16:14.480 --> 16:22.400]  So the first time we import our module it will take some time to initialize it.
+[16:22.400 --> 16:35.280]  We can now call our function say hello let's say we want to update the code of our function
+[16:35.280 --> 16:45.360]  we need to reload it so we can use importlib.reload module 2 and again we have to pay the cost
+[16:45.360 --> 16:51.240]  of the time to establish this connection and now we have the new value working.
+[16:51.240 --> 17:00.200]  So in this case this use of importlib.reload can be quite painful here we are just facing
+[17:00.200 --> 17:05.640]  a delay but sometimes there are also thresholds, limits, there are ports that are still appearing
+[17:05.640 --> 17:12.920]  as busy, there are other issues that we can face that make this approach more difficult.
+[17:12.920 --> 17:18.280]  If you can use it it's really nice because it's really simple it's all built-in in Python
+[17:18.280 --> 17:25.520]  and it's just one line so go for it but it's not always optimal in some kind of complex
+[17:25.520 --> 17:29.440]  software.
+[17:29.440 --> 17:35.960]  There is however another approach we can use to reload this function say hello without
+[17:35.960 --> 17:44.400]  going through the reloading of the database and this is the idea here is to go get the
+[17:44.400 --> 17:50.880]  new value of the source code and then to execute that using the function exec.
+[17:50.880 --> 17:55.520]  So for the first step we need to get access to the source code of a function and there
+[17:55.520 --> 18:03.680]  is a tool for that in Python in the library inspect so I will just import inspect and
+[18:03.680 --> 18:12.800]  then I can use inspect.getSource of module 2.sayHello.
+[18:12.800 --> 18:17.480]  I have the source code of the function and the really cool thing here is that if I do
+[18:17.480 --> 18:26.960]  add some code for example I add pass here and then I do a return here and let's do some
+[18:26.960 --> 18:34.680]  more changes, let's do it, call it again and we can see here that this function gets source
+[18:34.680 --> 18:40.720]  gets the new value of the code and not the old one so it's quite smart there which is
+[18:40.720 --> 18:43.120]  really handy in our use case.
+[18:43.120 --> 18:49.360]  So we now have the source code in a string and we could just try to execute it however
+[18:49.360 --> 18:55.320]  if we want to replace it within the module so that other functions that depend on it
+[18:55.320 --> 19:03.000]  would be able to access it we need to also give it access to things inside this module
+[19:03.000 --> 19:09.400]  for example db if we execute this module here it will not have access to the db variable
+[19:09.400 --> 19:11.720]  from that module.
+[19:11.720 --> 19:19.280]  So what we need to do is use inspect to get access to the module of that function.
+[19:19.280 --> 19:29.320]  So let's say module equals inspect.getModule of module 2.sayHello.
+[19:29.320 --> 19:33.760]  In this case we know which module it is, it's module 2 so it will just get the same thing
+[19:33.760 --> 19:41.080]  but sometimes we just have the function around and we don't know directly from which module
+[19:41.080 --> 19:49.680]  it is so we can use this and then what we can do is create, we want to be able to extract
+[19:49.680 --> 19:57.440]  the new value of the function so we'll create a local directory, I'll call it locals underscore
+[19:57.440 --> 20:05.720]  equals dictionary sorry not directory and then I can just execute the source code so
+[20:05.720 --> 20:23.080]  just copy this or copy the code here within the module that underscore and underscore addict
+[20:23.080 --> 20:31.440]  which is a dictionary representing the namespace of what's within that module and my local
+[20:31.440 --> 20:38.920]  dict here that I created just above.
+[20:38.920 --> 20:51.680]  And now let's look at locals, we have say hello and if we compare it to module 2.sayHello
+[20:51.680 --> 21:02.200]  you can see that they have the same identifier here and if I call one and call the other
+[21:02.200 --> 21:24.400]  so this is the old one and this is the new one and the identifiers look similar but if
+[21:24.400 --> 21:31.480]  we look here we can see they're not exactly the same so let's not be mistaken by the
+[21:31.480 --> 21:41.720]  fact that they look really close now we can just finally update this function if you want
+[21:41.720 --> 21:59.640]  so we can do module 2.sayHello equals locals.sayHello and finally module 2.sayHello call it and
+[21:59.640 --> 22:07.800]  there we have this we just reloaded the function without reloading the connection to the database
+[22:07.800 --> 22:13.960]  here.
+[22:13.960 --> 22:20.120]  If you want to use hotcode reloading in your projects and you don't want to write yourself
+[22:20.120 --> 22:26.480]  the methods to do it using the tools we have seen previously you can also use this library
+[22:26.480 --> 22:33.520]  called reloader from reload their import auto reload and here in this case you just decorate
+[22:33.520 --> 22:40.240]  your functions with this auto reload decorator and it will automatically replace them using
+[22:40.240 --> 22:46.480]  the proxy method we've seen above and the instance reference to the class method with
+[22:46.480 --> 22:52.440]  the new code when the code changes by watching the file system so this is a wrap up of all
+[22:52.440 --> 22:55.320]  the methods we've seen previously.
+[22:55.320 --> 23:00.400]  You can also manually specify when the code should be reloaded by changing the decorator
+[23:00.400 --> 23:08.560]  in this case you can manually reload the class or you can start a timer that will just reload
+[23:08.560 --> 23:18.560]  it every second or again look at the file system and as the file system changes trigger
+[23:18.560 --> 23:22.800]  the reloading of this class.
+[23:22.800 --> 23:29.680]  This on pypy so you can just install it using pip install reloader and try start using it.
+[23:29.680 --> 23:34.200]  The source code is pretty simple it just fits in one file and then you have a directory with
+[23:34.200 --> 23:38.320]  a few examples.
+[23:38.320 --> 23:44.520]  Thanks for watching and join me in the question and answer matrix room for if you want to
+[23:44.520 --> 23:50.640]  discuss any things you can find all the examples we've seen on this GitHub repository thank
+[23:50.640 --> 24:09.880]  you.
+[24:09.880 --> 24:16.400]  Thanks Hugo for your talk so I think we can now start with the questions.
+[24:16.400 --> 24:21.200]  First question is how does reloading using execs behave in terms of compiling to intermediate
+[24:21.200 --> 24:25.600]  forms like PyC and so on?
+[24:25.600 --> 24:32.680]  So it's using, Python internally is using bytecode so exec is a two steps process the
+[24:32.680 --> 24:38.120]  first step is it will compile it to bytecode it will just not store that bytecode on disk
+[24:38.120 --> 24:50.120]  and then it will execute that bytecode as like the rest of the bytecode.
+[24:50.120 --> 24:55.400]  And are there examples of applications that use hotcode reloading?
+[24:55.400 --> 25:06.360]  Usually it's a process that at least I use for development so it's not used that much
+[25:06.360 --> 25:11.120]  in production because then it can cause a lot of issues but it's the hotcode reloading
+[25:11.120 --> 25:16.000]  in general is used a lot by game developers because they're tweaking the dynamics of the
+[25:16.000 --> 25:21.480]  game while playing it and restarting the entire game every time you make a change to some
+[25:21.480 --> 25:26.600]  logic doesn't make sense in that case.
+[25:26.600 --> 25:41.520]  And how do you deal with side effects like things like shared resources and so on?
+[25:41.520 --> 25:51.400]  So the idea with hotcode reloading the way I presented it you keep these resources on
+[25:51.400 --> 25:53.920]  so you keep the state you keep these resources.
+[25:53.920 --> 25:59.360]  Of course if something changes outside of the scope of your changes then you may have
+[25:59.360 --> 26:12.800]  compatibility issues and then you just have to accept it and restart the whole process.
+[26:12.800 --> 26:34.280]  Okay any further questions from the chat?
+[26:34.280 --> 26:35.800]  What are the dangers that remain?
+[26:35.800 --> 26:40.480]  Could you fix them?
+[26:40.480 --> 26:49.840]  Well I think Python itself is not designed for hotcode reloading and other languages
+[26:49.840 --> 26:58.320]  have allowed this in a safer way so in order to make hotcode reloading easier in Python
+[26:58.320 --> 27:04.200]  I think there will be some big changes within Python would be required.
+[27:04.200 --> 27:11.000]  If you take the example of Erlang that's a language that's designed to allow hotcode reloading
+[27:11.000 --> 27:16.000]  and it's used a lot in network equipment and it's a feature built in the language in the
+[27:16.000 --> 27:17.000]  tooling.
+[27:17.000 --> 27:24.280]  If you take the example of Java there is a rule you can reload a class as long as its
+[27:24.280 --> 27:28.960]  interface does not change and your ID, your tooling will check that.
+[27:28.960 --> 27:35.240]  In Python there are no such checks so at the moment there are no guarantees that the new
+[27:35.240 --> 28:02.800]  version of the code would work with a high chance.
+[28:02.800 --> 28:21.800]  Okay thank you.
+[28:21.800 --> 28:41.560]  So, do you add decorators for reloading in your code base?
+[28:41.560 --> 28:46.480]  Is there a best practice to ignore them at the moment running your code in production?
+[28:46.480 --> 28:51.160]  I think it aligns with the other point that's adding decorators just for the sake of reloading
+[28:51.160 --> 28:55.760]  for half an hour doesn't make sense.
+[28:55.760 --> 29:00.640]  It's a trade-off.
+[29:00.640 --> 29:06.840]  I use decorators because that allows me to know exactly what is being hot reloaded and
+[29:06.840 --> 29:09.040]  what is not.
+[29:09.040 --> 29:13.200]  And also as a way to work with the references.
+[29:13.200 --> 29:18.800]  Another strategy I thought about was to try to replace in memory all the references to
+[29:18.800 --> 29:22.240]  the function with the new one within Python.
+[29:22.240 --> 29:47.200]  And that requires much lower access to the internals of Python.

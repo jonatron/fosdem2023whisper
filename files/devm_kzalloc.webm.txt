@@ -1,0 +1,269 @@
+[00:00.000 --> 00:10.120]  Hi, welcome to my talk. My name is Bartosz Gowaszewski. I work for Linaro. And today
+[00:10.120 --> 00:15.480]  I wanted to talk about an issue that had been bothering me for some time, namely a certain
+[00:15.480 --> 00:21.640]  family of youth after free bucks in the kernel that has been, for a long time, blamed on
+[00:21.640 --> 00:27.120]  Devres and then that I decided to investigate a bit and only to find out that reality is
+[00:27.120 --> 00:31.800]  often disappointing and everything is broken and the problem is actually much worse than
+[00:31.800 --> 00:39.640]  if that was Devres' fault. So yeah, without further ado, let's stack in because the time
+[00:39.640 --> 00:44.880]  is short. So typically your typical probe function in a device driver would look something
+[00:44.880 --> 00:49.280]  like this without Devres. So you allocate some resource. If it fails, you bail out. You
+[00:49.280 --> 00:55.120]  allocate a second resource. If it fails, you free the previous one, bail out, and so on
+[00:55.120 --> 01:02.080]  and so forth. So every next resource would need, if it fails, you need to free the previous
+[01:02.080 --> 01:05.600]  ones. Alternatively, you would do something like this. You would have labels at the end
+[01:05.600 --> 01:15.720]  of the function and just jump to it when it's one of the allocations or resources. You wouldn't
+[01:15.720 --> 01:19.440]  be able to acquire one of the resources. You would jump to it and free every previously
+[01:19.440 --> 01:24.240]  allocated resource in reverse order. And then you need your remove function that would
+[01:24.240 --> 01:31.000]  also drop these resources in reverse order. But you can use Devres and in this case it
+[01:31.000 --> 01:34.720]  looks much better. You allocate a resource. If it fails, you bail out. You allocate a
+[01:34.720 --> 01:39.800]  second resource. If it fails, you bail out immediately. You don't have to free those
+[01:39.800 --> 01:45.040]  resources yourself. When a driver is detached, they will be dropped automatically in reverse
+[01:45.040 --> 01:51.040]  order and with that you no longer need your remove function. So that is pretty sweet.
+[01:51.040 --> 01:55.880]  But you will notice, if you send enough patches to different subsystems, you will notice that
+[01:55.880 --> 02:01.640]  certain maintainers show a version to Devres. You would get comments like, oh no, keep Devres
+[02:01.640 --> 02:06.680]  out of my subsystem or don't you know, Devres leads to, using these interfaces leads to
+[02:06.680 --> 02:15.440]  crashes. But without, you would probably not get a lot of explanation on what the problem
+[02:15.440 --> 02:23.160]  is. And so last year I stumbled upon a talk by Laurent Panchard from last year's Linux
+[02:23.160 --> 02:30.520]  Plumbers conference. It's actually, the link is below so you can watch it. And yes, I watched
+[02:30.520 --> 02:35.200]  that and then I started browsing Lore and noticed that Laurent actually had sent an
+[02:35.200 --> 02:41.160]  email about that already in 2015 saying that if you open a device node in user space and
+[02:41.160 --> 02:48.240]  you unbind the driver that exposed it, exported it, and try to do something with that open
+[02:48.240 --> 02:54.280]  file descriptor called one of the system calls, you will get a nice stack trace in your kernel
+[02:54.280 --> 02:59.280]  log. So I thought, okay, that's interesting. I read throughout discussion. I found out
+[02:59.280 --> 03:04.400]  that there were several such discussions previously, of which I had not been aware.
+[03:04.400 --> 03:09.160]  And I don't want to go into much detail, but the gist of it is that there are certain users
+[03:09.160 --> 03:16.360]  in the kernel, mostly device drivers, or only device drivers, that allocate using devres,
+[03:16.360 --> 03:23.320]  like case alloc in this example, allocate memory that is dropped in remove, but that's
+[03:23.320 --> 03:30.760]  actually still referenced elsewhere, which leads to use after freebacks. And the first
+[03:30.760 --> 03:37.840]  thing that popped in my mind was how is that different from calling any, from dropping these
+[03:37.840 --> 03:43.760]  resources in remove. And I wasn't the only one, because many people asked about it. And
+[03:43.760 --> 03:49.160]  one of the responses when something like this, it's not, it's the same thing, but the problem
+[03:49.160 --> 03:53.560]  is that people don't understand the lifetime rules and expect magic interfaces to fix it
+[03:53.560 --> 04:00.680]  for them. So I thought that this, while this is certainly true, I think that driver developers
+[04:00.680 --> 04:05.160]  should not be expected to understand every detail of how kernel subsystems work, because
+[04:05.160 --> 04:09.640]  they actually should care more about making the device work. And I would argue that you
+[04:09.640 --> 04:14.920]  should actually expect magic interfaces in drivers to fix stuff for you. And if it's
+[04:14.920 --> 04:20.040]  not straightforward, then it's a problem of the subsystem or of given interface and
+[04:20.040 --> 04:28.240]  not of device driver developers. So I decided to investigate and see if maybe something
+[04:28.240 --> 04:33.920]  changed. And I do maintain the GPIO subsystem. So this was the first one that I tried. I
+[04:33.920 --> 04:44.160]  had this serial to USB converter cable plugged in that actually also has four GPIO pins.
+[04:44.160 --> 04:49.640]  So I opened the GPIO device. I unplugged the cable. I tried to read the value of the pin
+[04:49.640 --> 04:55.800]  and sure enough, it crashed, no point under reference. I was like, okay, that's interesting.
+[04:55.800 --> 05:00.760]  I did not expect that, but it's certainly interesting. So I tried a different subsystem.
+[05:00.760 --> 05:05.920]  I tried I2C. Surprisingly, it didn't crash. It just, like, when I tried to unbind the
+[05:05.920 --> 05:13.160]  driver, it just hang, froze and did nothing. Okay, so that's interesting. But I realized
+[05:13.160 --> 05:17.720]  that when I unplugged the cable, I had my picocon console open and it just, it didn't
+[05:17.720 --> 05:22.280]  crash. It just exited. So certainly, UART is doing something right and other subsystems
+[05:22.280 --> 05:29.720]  are not doing it correctly. So I decided to investigate a bit. So in the GPIO subsystem,
+[05:29.720 --> 05:35.680]  we have two types of structures. One that the drivers see. This is the GPIO chip. And
+[05:35.680 --> 05:40.920]  the second one that the drivers, the GPIO providers don't touch, don't even have access
+[05:40.920 --> 05:49.080]  to, which is the GPIO device. And so this will be important in a second. So I looked
+[05:49.080 --> 05:53.280]  at the crash that I had in GPIO and it turned out that it was a no pointer to reference
+[05:53.280 --> 05:58.840]  at a certain line, the one that you can see above. And at the moment where I, like, I
+[05:58.840 --> 06:03.320]  still had my device open, I tried to call one of the system calls and it turned out
+[06:03.320 --> 06:09.680]  that the chip that you can see above, when the referencing gdev was no, was already gone.
+[06:09.680 --> 06:15.800]  So this is nothing to do with DeVres. It's just that we had a bug in the GPIO character
+[06:15.800 --> 06:22.640]  device code where when we, when the driver is going away and it calls GPIO chip remove,
+[06:22.640 --> 06:26.000]  it can be called from DeVres or it can be called in your remove function. We simply
+[06:26.000 --> 06:32.960]  said the chip to null because the driver is gone, but the, the, the, the, the, the, the
+[06:32.960 --> 06:37.560]  struct device still can be referenced elsewhere. So we just numbed it down, which is the correct
+[06:37.560 --> 06:44.080]  thing to do, but it, it still, it still needs to be, needs to be checked in the, in the
+[06:44.080 --> 06:48.520]  character device code. This is, this was what we were not doing and this needs fixing clearly.
+[06:48.520 --> 06:54.560]  And there is also a question of a race condition in the, in the, in the system call callbacks
+[06:54.560 --> 06:59.320]  where if, even if we do check it in the beginning, we still need some locking because otherwise
+[06:59.320 --> 07:05.200]  the, the driver can be removed when we are still executing the system call. So I looked
+[07:05.200 --> 07:10.400]  at that and I thought, okay, this is easy enough to fix and that, that's definitely
+[07:10.400 --> 07:16.960]  not, not linked to those errors that the discussion in, in the email thread was about. So I went
+[07:16.960 --> 07:22.040]  over to I2C. I decided to see what's, what's going on in I2C. Why, why does it, why it
+[07:22.040 --> 07:26.960]  can't I unbind the driver as for as long as I keep the device open? And it turned out
+[07:26.960 --> 07:32.440]  that there is this strange completion and a comment about it, making it so that when
+[07:32.440 --> 07:39.240]  the driver, when the driver is trying to delete the I2C adapter, it waits for as long as there
+[07:39.240 --> 07:45.960]  are still references to the underlying struct device. Okay. It's, it's, it's not definitely
+[07:45.960 --> 07:52.120]  the, the, the, the, the freezing when, when you're trying to unbind the driver is not
+[07:52.120 --> 07:56.760]  the correct way, but at least it doesn't crash and someone had something, there was a purpose
+[07:56.760 --> 08:04.360]  to, to doing that. So I, I thought, okay, so why, why does UART work? I, I looked at
+[08:04.360 --> 08:08.800]  the UART code and figured out that actually UART does a smart thing. First, when you go
+[08:08.800 --> 08:15.120]  into any of the, of the system call callbacks in the kernel, you check, you have a similar
+[08:15.120 --> 08:18.960]  split like GPIO when you have a, where you have a structure that lives for as long as
+[08:18.960 --> 08:26.720]  the struct device lives and a separate structure that is allocated by the driver. So it turned
+[08:26.720 --> 08:31.680]  out that, yeah, it, it first checks if the driver is still there. If it is, then it locks
+[08:31.680 --> 08:37.880]  it so that it cannot go away from under an executing system call. Okay. So this definitely
+[08:37.880 --> 08:45.640]  makes sense. And I also noticed that spy def works fine, but upon further instruction,
+[08:45.640 --> 08:49.520]  inspection of the code, it turns out that it also suffers from a race condition because
+[08:49.520 --> 08:56.360]  the, when the spy def spy is checked, the spin lock is only taken for the duration of
+[08:56.360 --> 09:03.240]  the check or like for, for reading that, for reading of the pointer, but later it's still
+[09:03.240 --> 09:08.040]  that drive, the underlying driver can still go away while the lock is already released.
+[09:08.040 --> 09:15.200]  So this is a concurrency issue. So I started thinking that there is, there is some misconception
+[09:15.200 --> 09:21.360]  about Devers. I decided to fix some things. I started with GPIO. I sent some patches.
+[09:21.360 --> 09:26.760]  They, they were, they, they went into, into mainline. They, they seemed like in this case,
+[09:26.760 --> 09:31.360]  they did fix the issues. The, the, the user space would no longer crash. The kernel would
+[09:31.360 --> 09:38.200]  no longer crash when the user space would unbind the driver and use the character device.
+[09:38.200 --> 09:46.720]  I also sent some fixes to, for spy def. And then I send a fix for ITC. I remove this completion.
+[09:46.720 --> 09:54.320]  This is when, when things went sideways actually. I, I removed that completion. I added locking.
+[09:54.320 --> 09:59.200]  I started fiddling with this character device and I was proud of myself because I, I thought
+[09:59.200 --> 10:04.040]  that I fixed this problem that has for, for a long time existed in ITC. And Wolfram, the
+[10:04.040 --> 10:09.800]  maintainer of ITC, took that patch, reviewed it, said it passes all the, all his stress
+[10:09.800 --> 10:15.560]  testing, but he's, he's having a gut feeling that something is wrong. And after a couple
+[10:15.560 --> 10:20.440]  of days, he sends me an email and says that, okay, I found this discussion from a couple
+[10:20.440 --> 10:29.440]  of years ago where this was explained in detail. And what happened? So what, what turned out,
+[10:29.440 --> 10:35.920]  turned out to be the, the case with ITC. It turns out that ITC is a subsystem where drivers
+[10:35.920 --> 10:42.480]  allocate the ITC, the struct ITC adapter, which embeds struct device. And they allocate
+[10:42.480 --> 10:49.680]  that structure as part of a usually bigger structure that contains driver specific fields
+[10:49.680 --> 10:56.880]  in probe. And then on remove, in the remove callback, they drop that memory, but it contains
+[10:56.880 --> 11:01.520]  struct device, which is reference counted, unlike the, the, the structure that embeds
+[11:01.520 --> 11:07.200]  it. So this is, this is why this, this whole completion waiting for completion is, is there
+[11:07.200 --> 11:13.200]  in ITC because you must not drop free this memory containing struct device for as long
+[11:13.200 --> 11:17.120]  as there are references to struct device. And I noticed that this is not the only subsystem
+[11:17.120 --> 11:22.000]  that does it. There are, so every driver subsystem does things a bit differently. Some of them
+[11:22.000 --> 11:29.760]  have that split, some of them don't. For instance, spy has the same problem as ITC, but unlike
+[11:29.760 --> 11:37.680]  ITC, it doesn't expect the driver to allocate that data as part of the driver data. It expects
+[11:37.680 --> 11:44.360]  it to be allocated separately and hand it over to, to the spy subsystem, which is not
+[11:44.360 --> 11:49.800]  probably, it could use some improvement, but at least it doesn't crash and doesn't require
+[11:49.800 --> 11:56.600]  the same type of weight, synchronous waiting for, for, for dropping all the, all the references
+[11:56.600 --> 12:03.320]  to struct device. So actually this, this talk should be called don't let drivers allocate
+[12:03.320 --> 12:10.160]  and control the lifetime of struct device because this is the, the, the culprit basically.
+[12:10.160 --> 12:16.920]  So we, we have those systems that allocate struct device and there are more references
+[12:16.920 --> 12:23.160]  to it. It's still referenced elsewhere. And then we drop this memory and we still, when
+[12:23.160 --> 12:27.600]  the reference is like the, the, the, the, the driver along the, the struct device no
+[12:27.600 --> 12:32.120]  longer exists, but it's, it's still referenced somewhere. And then the subsystem, the driver
+[12:32.120 --> 12:36.840]  model tries to call, for instance, the release callback of the device and there's nothing
+[12:36.840 --> 12:42.760]  there. So we, we have those crashes. So I, I, I didn't look at all the subsystems clearly
+[12:42.760 --> 12:47.600]  and there are too many, but I, I just noticed that certain parts of the kernel get it right.
+[12:47.600 --> 12:52.400]  So GPIO now with those fixes is, is fine. You are just fine. Word.doc is fine. They,
+[12:52.400 --> 12:56.320]  they have this split where the struct device is allocated and managed by the subsystem
+[12:56.320 --> 13:01.560]  while driver data does not contain the struct device. I'm not talking about the struct device
+[13:01.560 --> 13:05.400]  that is passed to probe. I'm talking about struct device that is allocated by the drivers
+[13:05.400 --> 13:10.800]  or the, the, the respective subsystems for those proper underlying devices. So like we
+[13:10.800 --> 13:15.080]  have this, let's say a platform device for a GPIO chip and then we allocate a struct
+[13:15.080 --> 13:24.400]  device per every bank. Just an example and many subsystems do that too. So there, there's
+[13:24.400 --> 13:30.080]  this problem, but there are also other problems. So even those subsystems that get this part
+[13:30.080 --> 13:35.880]  right often suffer from concurrency issues because there is no locking in the system
+[13:35.880 --> 13:42.160]  call, callbacks in the kernel. So even if they do check if the, if the driver is still
+[13:42.160 --> 13:47.760]  there or the device is still there or attached to the driver, they often don't lock the state.
+[13:47.760 --> 13:52.960]  So it's, it's, it's possible that the driver will go away one, while they're still executing
+[13:52.960 --> 13:59.480]  and they're referencing that pointer. This was the case in, in spy for instance. And
+[13:59.480 --> 14:04.240]  I think that the issue is just about the logical scope of objects and not the scope
+[14:04.240 --> 14:09.640]  in understood as, as, as a scope of a variable in a C programming language, but more, more
+[14:09.640 --> 14:16.680]  like a logical scope of objects where you have, if something is allocated in probe,
+[14:16.680 --> 14:19.920]  when you, when you attach, first attach the device to the driver and, and you allocate
+[14:19.920 --> 14:24.960]  something in probe, it should only need to exist for as long as the driver is attached
+[14:24.960 --> 14:29.880]  and as, as soon as it goes away, it should be freed and removed, be it in, with dev res
+[14:29.880 --> 14:36.280]  or, or, or in remove. And yeah, so, so there is this problem with, with many subsystems
+[14:36.280 --> 14:42.440]  that they don't have this and they let drivers allocate some data in probe and then handle
+[14:42.440 --> 14:50.480]  it over to the subsystem or, or even do it implicitly, which leads to all these errors.
+[14:50.480 --> 14:55.880]  So I, I know that Laurent's area of interest will probably be media and DRM, so I just
+[14:55.880 --> 15:02.000]  skimmed through, through the use, user space device notes, codes in, in those subsystems
+[15:02.000 --> 15:09.040]  and noticed that they seem to be getting part of it correctly, but there are concurrency
+[15:09.040 --> 15:15.240]  issues as well. And the problem with DRM is that the RAM, the, the device handling code,
+[15:15.240 --> 15:23.040]  the, the, the, the character block device, the, the handling code is not, is, is not
+[15:23.040 --> 15:27.560]  centralized within the files, within the subsystem, meaning that we have many different struct
+[15:27.560 --> 15:31.680]  file operations with different implementations for different callbacks, correct me if I'm
+[15:31.680 --> 15:36.080]  wrong afterwards, but it, it, it seemed like, like it from, I'm not an expert on DRM, but
+[15:36.080 --> 15:41.560]  it seemed like it just from looking at it. So what about dev res? Is it safe? I have
+[15:41.560 --> 15:46.840]  found no evidence that it isn't. And if something can be freed and removed, it can be freed
+[15:46.840 --> 15:50.680]  with dev res because dev res will do just that. It will, as soon as the driver gets
+[15:50.680 --> 15:57.520]  detached from the device, the other way around, it will, it will free all, all resources allocated
+[15:57.520 --> 16:03.120]  with dev res in reverse order. There is, there are some, some, some issues like dev mk realloc
+[16:03.120 --> 16:07.280]  could use some semantic clarification because as, as it is right now, it's not clear whether
+[16:07.280 --> 16:12.720]  the order, if you call dev mk realloc, does the order change or not when, when releasing
+[16:12.720 --> 16:20.240]  those resources. In any case, I, is my strong belief that dev res makes code much more readable,
+[16:20.240 --> 16:26.280]  safer, and it actually should be encouraged and, and not discouraged, but it has a limited
+[16:26.280 --> 16:35.800]  scope. And on that point, how can we supplement it? Because a certain semblance of resource,
+[16:35.800 --> 16:41.960]  of automated resource management, RAII, if you will, in C would be useful in the kernel.
+[16:41.960 --> 16:46.160]  So yeah, the first thing that comes to mind would be using Rust. With Rust, these situations
+[16:46.160 --> 16:50.880]  that I described would never, would clearly never, never be allowed to happen. But that's
+[16:50.880 --> 16:56.480]  not, for, for now, we're still coding in C. So I was thinking that if you've ever coded
+[16:56.480 --> 17:02.240]  in, in, in a user space library like Gillib, for instance, which is, I, I, I believe a golden
+[17:02.240 --> 17:07.800]  standard of C programming in, in user space, you would notice that they use, make a, use
+[17:07.800 --> 17:13.360]  of a lot of, clean up, clean up attributes. And this is something that GCC and Clang support,
+[17:13.360 --> 17:17.560]  and I haven't seen that in the kernel, and I'm wondering why it's, because if we would
+[17:17.560 --> 17:22.640]  use reference counting in conjunction with cleanup, we could actually make it.
+[17:22.640 --> 17:29.760]  If I can interject for one second, but actually, at least not in core kernel code, but Peter
+[17:29.760 --> 17:37.440]  Zilstra used this in somewhere in the kernel source code tree, at least. And I had proposed
+[17:37.440 --> 17:41.360]  something like this, at least in person to a couple of people before, because I want
+[17:41.360 --> 17:44.720]  to make use of this as well. So I would be very happy if this happened.
+[17:44.720 --> 17:50.480]  Yeah. So I have a small example. So if you are, if you are not familiar with the cleanup
+[17:50.480 --> 17:55.440]  attribute, it allows you to specify a cleanup function for a variable. And when the variable
+[17:55.440 --> 18:01.920]  goes out of scope, it's called, so it's like a destructor in C++ basically. Alone, it's,
+[18:01.920 --> 18:06.720]  it's useful within the scope of a single code block or a single function, but in conjunction,
+[18:06.720 --> 18:11.000]  well, this is just another example of how to, how to use it, but in conjunction with reference
+[18:11.000 --> 18:14.560]  counting, it's, it's quite useful because you can, like, you can see the, the, the foo
+[18:14.560 --> 18:21.840]  and bar, foo create and bar functions on the right. You allocate a, a reference counted,
+[18:21.840 --> 18:26.400]  automatically reference counted resource. You do something with it. If you bail out, the
+[18:26.400 --> 18:31.840]  reference count goes to zero and then it's freed. But if you return it while also increasing
+[18:31.840 --> 18:36.720]  the ref count and then grab it in another function in bar in this, in this case, then
+[18:36.720 --> 18:43.200]  as soon as the, the, the foo create function returns, the reference count is decreased,
+[18:43.200 --> 18:48.520]  but it's already two. So it goes down to one and we, without having to control free those
+[18:48.520 --> 18:52.840]  resources manually, we just keep track of the references just by using reference counting
+[18:52.840 --> 18:57.200]  and cleanup. And this is what Gillib does a lot. And it, and it works quite nice. It's,
+[18:57.200 --> 19:02.920]  it makes programming in C in this space much easier. And what to do about the offending
+[19:02.920 --> 19:10.080]  subsystems? It's a case by case issue because every subsystem does it differently. And I
+[19:10.080 --> 19:14.840]  tried, I, I spoke to Wolfram a bit about what can we do in I2C. And it's, it would be very
+[19:14.840 --> 19:19.400]  hard because you would have to do a sweeping change across the entire subsystem to make
+[19:19.400 --> 19:27.160]  drivers not allocate I2C adapter, not, not I2C adapter, but rather the underlying struct
+[19:27.160 --> 19:34.360]  device on its own instead let it handle, let, let I2C, the I2C subsystem handle it. Yes,
+[19:34.360 --> 19:50.160]  I just wanted to bring that up and that's, that's it. I'm right on time. All right, questions?
+[19:50.160 --> 19:55.680]  Thank you. I, I, I like your second slide. I felt when you say I was not completely wrong
+[19:55.680 --> 20:02.720]  with my talk, so thank you for that. I was a bit worried. A few comments. It's multiple
+[20:02.720 --> 20:06.480]  problems actually that you're trying to solve here. One is the race condition between IOC
+[20:06.480 --> 20:10.600]  TL, so use space access in general and the remove function. And for everything that's
+[20:10.600 --> 20:15.280]  based on character devices, there's a patch from Dan Williams that was posted in 2021.
+[20:15.280 --> 20:19.000]  I think I don't know if you've seen that one, that attempts to fix it at the C dev level,
+[20:19.000 --> 20:21.760]  which I think is the right place to do it instead of duplicating the same fix in all
+[20:21.760 --> 20:27.520]  the subsystems. So it has been positively reviewed, not merged. I think it was just
+[20:27.520 --> 20:32.640]  one review command that said that debug FS and proc FS had similar constructs. And so
+[20:32.640 --> 20:37.720]  he was asked to just refactor the code to reuse the same instead of duplicating it.
+[20:37.720 --> 20:43.120]  But that should be something we could upstream and solve. So that's one of them. This, I
+[20:43.120 --> 20:47.960]  agree with you that there's nothing wrong with dev res or managed API in general. It
+[20:47.960 --> 20:53.160]  was mostly DevM case at the lock in particular that I had trouble with. Things like DevM,
+[20:53.160 --> 20:59.400]  IO remap for instance, is perfectly fine because you tie the lifetime management of the resource
+[20:59.400 --> 21:03.600]  with the physical strike device, which is removed at the end of the remove function,
+[21:03.600 --> 21:08.640]  and that is what you should do. So that's totally fine. The issues with the DevM functions
+[21:08.640 --> 21:14.600]  come when we try to tie, as you said, the lifetime of a resource to the wrong device.
+[21:14.600 --> 21:23.100]  DRM has grown its custom managed helpers based on dev res. So not DevM, but it's DRMM. That
+[21:23.100 --> 21:29.400]  does do it relatively right. They tie the memory management to the CDEV that's exposed
+[21:29.400 --> 21:34.640]  to user space. But where it breaks is when you have one physical device that exposed
+[21:34.640 --> 21:39.920]  multiple CDEVs because then you have a top level data structure that covers all of those.
+[21:39.920 --> 21:48.680]  So even if you allocate each of them dynamically, you will need to make sure that the top level
+[21:48.680 --> 21:54.600]  structure will be released only when nothing else can have a reference to it. So I think
+[21:54.600 --> 21:58.960]  there will always be cases where reference counting will be needed and the drivers will
+[21:58.960 --> 22:05.400]  have to handle that. But in many cases, helpers should be possible to make it simpler.
+[22:05.400 --> 22:09.640]  And also I mentioned that on the slide that I didn't say it out loud. You have some diverse
+[22:09.640 --> 22:15.480]  resource, the diverse helpers that reach into other subsystems, which also have their own
+[22:15.480 --> 22:22.000]  issues. So this can be dangerous as well.
+[22:22.000 --> 22:27.280]  So I have seen in multiple places where drivers are allocating the strike device that is then
+[22:27.280 --> 22:31.640]  getting passed to the framework. But then the solution that they are using is that they
+[22:31.640 --> 22:36.720]  are basically instead of freeing the device in remove, they are just dropping the reference
+[22:36.720 --> 22:41.480]  to that device that has been allocated. So someone is taking the ownership of that device
+[22:41.480 --> 22:46.080]  and then you rely on the reference counting to that device and then freeing that strike
+[22:46.080 --> 22:52.920]  device only from the release callback that is then set by the driver itself.
+[22:52.920 --> 23:00.080]  This is what SPY does. But I2C is a worse example because you usually have a driver data.
+[23:00.080 --> 23:04.080]  Inside it you have I2C adapter. Inside it you have strike device. And this strike device
+[23:04.080 --> 23:09.360]  has this release callback. But in the release callback, you are in the subsystem, it cannot
+[23:09.360 --> 23:17.280]  know what the outer layer structure is and where is it, what offset it adds to free it.
+[23:17.280 --> 23:28.280]  So it sets the release callback of the strike device. It's another workaround I guess.
+[23:28.280 --> 23:51.320]  It seems to me that the right thing to do is not let drivers allocate strike device instead
+[23:51.320 --> 23:56.560]  do it in the subsystem if you need to. This also hides some additional complexity from
+[23:56.560 --> 24:00.920]  the driver developers.
+[24:00.920 --> 24:06.080]  On the slide about the state of the current subsystems you had a question mark after SPY.
+[24:06.080 --> 24:09.280]  I wonder if you have doubts if it's fine today.
+[24:09.280 --> 24:12.720]  Yeah, I think, no, this is the one, right?
+[24:12.720 --> 24:13.720]  That one.
+[24:13.720 --> 24:14.720]  This one?
+[24:14.720 --> 24:17.680]  Yeah, there is a question mark in the SPY.
+[24:17.680 --> 24:24.120]  Yes, I put it there because I haven't investigated that in detail so I wasn't sure if it works
+[24:24.120 --> 24:33.000]  fine. It looks to be working fine, like just from testing it. I wasn't sure if it's correctly
+[24:33.000 --> 24:36.640]  implemented, let's say, because it sounds good in theory.
+[24:36.640 --> 24:41.360]  All right, the last question.
+[24:41.360 --> 24:48.520]  So for systems like I2C, has anybody calculated the amount of pain for things like the I2C,
+[24:48.520 --> 24:53.440]  has anybody calculated the amount of actual work to fix this?
+[24:53.440 --> 25:02.840]  It looks like it's a lot because I did send some proposition to Wolfram about wrapping
+[25:02.840 --> 25:09.240]  every the reference of the I2C adapter that dev into a helper that would then allow us
+[25:09.240 --> 25:14.960]  to change that strike device into a pointer instead of the proper structure and allocate
+[25:14.960 --> 25:18.520]  that inside the subsystem but it's not going to be easy.
+[25:18.520 --> 25:22.800]  This is why I dropped the patch. I told Wolfram not to pursue that because it looks to me
+[25:22.800 --> 25:30.200]  like it's not going to be that easy and I don't really want to get my hands that dirty.
+[25:30.200 --> 25:33.560]  So for somebody else then?
+[25:33.560 --> 25:39.200]  It's been like this for a long time so I'm not sure if anyone's going to step up to try
+[25:39.200 --> 25:40.200]  to fix that.
+[25:40.200 --> 25:41.200]  Okay, thank you.
+[25:41.200 --> 25:42.200]  All right, thanks.
+[25:42.200 --> 25:52.640]  Thank you.

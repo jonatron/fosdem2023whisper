@@ -1,0 +1,228 @@
+[00:00.000 --> 00:27.560]  Happy? Hello, everyone. Thanks for attending. We were doing okay. Is that my device or
+[00:27.560 --> 00:51.200]  I don't know if that's me or okay. So today's talk is written by Yakubo Mondi. Unfortunately,
+[00:51.200 --> 00:56.760]  he couldn't attend today. He's his back. So I'm stepping in. So what I'm talking about today is
+[00:56.760 --> 01:05.840]  not work I've done. It's about his experiences working on the Python Pro. I don't want to touch
+[01:05.840 --> 01:18.400]  you now. So my name is Kiran. Just like Yakubo, I'm an embedded camera engineer with ideas on
+[01:18.400 --> 01:25.600]  board. We've been working on VFRL2 kernel drivers and for some time now, lib camera. We can be
+[01:25.600 --> 01:33.680]  found on IRC matrix. Anyway, you want to get a hold of us at GitHub if you need or after the
+[01:33.680 --> 01:42.640]  chat. And today we want to talk about how we perceive the Linux camera stack on both desktop
+[01:42.640 --> 01:48.840]  and mobile environments. And starting with the kernel, we see lib camera as being a big part
+[01:48.840 --> 01:54.880]  of that to support the platform abstractions. And on top of lib camera, we see lots of
+[01:54.880 --> 02:01.760]  applications desiring to use pipe wire. So we're going to look through there. And the overall
+[02:01.760 --> 02:07.360]  goal is that applications shouldn't care what platform they're running on. They shouldn't care
+[02:07.360 --> 02:14.880]  if they're running on a PC, a desktop, or a Libon 5 or a Pinephone Pro. And equally, any
+[02:14.880 --> 02:18.680]  application you want to run or camera framework, they should all be able to say, hey, I want to
+[02:18.680 --> 02:25.400]  talk to the camera. Give me some pictures, please. And specifically today's talk is about the
+[02:25.400 --> 02:32.920]  Pinephone Pro. Jacobo has spent some time over the last three months or so, or more, trying to
+[02:32.920 --> 02:39.920]  make sure that we can bring up the Pinephone Pro with lib camera and standard applications. And
+[02:39.920 --> 02:44.600]  the Pinephone Pro is an interesting device because it's, I think it's promoted as like a test
+[02:44.600 --> 02:49.920]  ground. So it's like there's no official software, but it's a good device that people can play with
+[02:49.920 --> 02:58.120]  and develop their own software. Interestingly for us, it has an RK3399, which is a chip that has
+[02:58.120 --> 03:03.800]  an ISP. And it's actually a device that we have already been supporting for several years now.
+[03:03.800 --> 03:13.600]  It pretty much was one of the first devices we started sporting with lib camera. And part of why
+[03:13.600 --> 03:17.960]  we created lib camera is because cameras got complex. This is a slide I presented a few times.
+[03:17.960 --> 03:23.360]  But on the left, we can see that beyond having just a single video node where you might say,
+[03:23.360 --> 03:27.600]  UBC, give me some pictures, cameras started getting more complicated. They have multiple
+[03:27.600 --> 03:33.960]  components and you want to configure them. And the one on the left has now been removed from
+[03:33.960 --> 03:41.440]  the kernel. And the N900, which already has a lot of different nodes, that's 13 years ago. So if
+[03:41.440 --> 03:44.760]  you can imagine, there's a lot of cameras out there now that are even more complicated than
+[03:44.760 --> 03:54.080]  all the components there, particularly lots of crawl components. And with all those new components,
+[03:54.080 --> 04:01.480]  it's very difficult for applications to know what to do with each of those things. Suddenly every
+[04:01.480 --> 04:06.960]  application has to be aware of every platform. And that's going to lead to a lot of replication of
+[04:06.960 --> 04:12.480]  code. Each camera application is going to have to deal with media controller to configure the
+[04:12.480 --> 04:18.520]  pipeline, has to talk to V for L2 to get frames, has to talk to sub devices to configure parameters
+[04:18.520 --> 04:24.000]  on the sensor itself. And that changes for every platform. It's different on a Rockchip,
+[04:24.000 --> 04:30.360]  it's different on Raspberry Pi, it's different on an Intel. So lib camera's goal really is to fill
+[04:30.360 --> 04:37.640]  the gap of that abstraction so that applications only have to look at one API again. And it sits
+[04:37.640 --> 04:43.880]  on top of V for L2, it's not a replacement for V for L2. But what we have is a pipeline handler,
+[04:43.880 --> 04:49.320]  which deals with the platform abstraction. And we have a component called the IPA. And that's
+[04:49.320 --> 04:55.520]  crucial for devices like the Pinephone Pro, with an ISP and raw Bayer sensors, because you need
+[04:55.520 --> 05:03.200]  control algorithms. And the IPA in lib camera provides the space to do that. On top of lib
+[05:03.200 --> 05:10.880]  camera itself, we have a native lib camera API, which is C++. We've got Python bindings,
+[05:10.880 --> 05:15.760]  there's people developing Rust bindings. The Rust bindings are actually giving us C bindings,
+[05:15.760 --> 05:20.720]  I believe. Aside from that, we've got Android HAL integration, which is important and comes up
+[05:20.720 --> 05:30.160]  later. And integration into frameworks like G-Streamer. And as I said, the Rockchip for
+[05:30.160 --> 05:36.800]  LK3399 is one of the devices we started supporting when we started lib camera, particularly on the
+[05:36.800 --> 05:42.160]  Chromebook, Chrome tab. But it's actually a really interesting platform because it's in a lot of
+[05:42.160 --> 05:47.440]  small-ball computers as well. So it's readily available hardware, you can plug in off-the-shelf
+[05:47.440 --> 05:54.160]  cameras from Raspberry Pi and play with it. And what I actually really like is recently we've
+[05:54.160 --> 06:01.760]  been working on the IMX8M+, which has the same ISP core in the chip. So the same code that we've
+[06:01.760 --> 06:10.720]  written for Rockchip also works on the IMX8M+. So I've mentioned that these cameras are now
+[06:10.720 --> 06:14.560]  complex and we've got this thing called an ISP, which is kind of getting in the way of people
+[06:14.560 --> 06:20.320]  getting images out of their cameras. And the reason for that is the cameras themselves are now raw
+[06:20.320 --> 06:27.120]  biosensors. And that needs a lot more processing and support to get good images from, particularly
+[06:27.120 --> 06:31.120]  the underlying format is in a Bayer format, which most applications don't want to process.
+[06:31.760 --> 06:37.120]  So that data is fed into the ISP, but the ISP needs to be managed. It produces something called,
+[06:37.120 --> 06:42.720]  well, it produces statistics, usually custom to each platform. And there has to be code or an
+[06:42.720 --> 06:48.000]  algorithm to process those statistics to then generate control parameters to configure the ISP
+[06:48.000 --> 06:54.560]  for the next frame. And ultimately, then that will process in a loop and produce you some images
+[06:54.560 --> 07:01.760]  that the applications will expect, either YUV or RGB. And we already have an implementation
+[07:01.760 --> 07:05.360]  for this. This is one of the things we started early. I believe a lot of this implementation
+[07:05.360 --> 07:09.680]  is derived from Raspberry Pi, so it's quite compatible with the implementation that Raspberry
+[07:09.680 --> 07:15.040]  Pi have at the moment. But we've got various components, like AGC, to handle how bright
+[07:15.040 --> 07:22.320]  the image is automatically or set manually. White balance is important, then lens shading
+[07:22.320 --> 07:26.960]  and the kind of three that you have to start with. But all that code is open and already
+[07:26.960 --> 07:34.880]  existing in Live Camera. The kernel driver itself has been in Mainline Kernel now since,
+[07:34.880 --> 07:42.640]  I believe, 2020. And it was destaged in 21. Helen from Collabra was working on that. And
+[07:44.400 --> 07:49.360]  since then, it's still had active development. There's fixes that go up. And we've been working
+[07:49.360 --> 08:00.560]  on it to extend support for the IMX8M+. And so the kernel side and the Live Camera side is looking
+[08:00.560 --> 08:06.320]  pretty good. We've got support for processing the images. We've got the kernel drivers.
+[08:06.320 --> 08:12.240]  But when we go back to the Pinephone Pro, for quite a long time, there's no driver in the
+[08:12.240 --> 08:19.200]  Mainline Kernel for the front camera, 8858. And even though there was a driver for the back camera,
+[08:19.200 --> 08:27.760]  it wasn't tuned and it wasn't supported very well. It wasn't tuned, really. So Pinephone Pro has been
+[08:27.760 --> 08:31.280]  left behind from Live Camera for quite some time because no one was actively working on this.
+[08:31.280 --> 08:37.920]  And it just meant that you couldn't use Live Camera on a Pinephone Pro. And then Yacobo
+[08:37.920 --> 08:43.360]  has been working on this in collaboration with others who wanted to push this forward and make
+[08:43.360 --> 08:50.080]  it work again. And Nicholas Roth started this back in October, I think, where he wanted to get
+[08:50.080 --> 08:53.040]  Wade Road running on a Pinephone Pro. So he was trying to find out what the missing piece is,
+[08:53.040 --> 08:58.480]  what do we need to up three. And this talk really derived from the work that he kick-started.
+[08:59.920 --> 09:09.520]  So he submitted support for the rear camera, front camera, to Live Camera. And
+[09:11.920 --> 09:16.480]  he based that on the kernel driver that was in the Pinephone Pro
+[09:16.480 --> 09:25.280]  so self-hosted driver, not self-hosted, Meggy's tree. And interestingly, the driver was,
+[09:25.280 --> 09:28.080]  it hadn't been posted upstream, so it hadn't had any kind of review process.
+[09:29.360 --> 09:39.040]  And it exposed itself as a name with M00F underscore over 8858. So it was encoding
+[09:39.040 --> 09:44.560]  properties in the sensor name about where it is and its location. And that's not very good for
+[09:44.560 --> 09:47.760]  Live Camera because it's not generic because then we can't have a handle that says
+[09:50.080 --> 09:56.240]  only match the front camera in location zero when we want that to support every device that has
+[09:56.240 --> 10:02.000]  the sensor. So the upstreaming process actually highlights where things need to be cleaned up.
+[10:04.400 --> 10:09.040]  This has gone through some iterations. And Yakobo, who would have been talking, has taken this on to
+[10:09.040 --> 10:15.680]  completion and it will land in 6.3. It's accepted in the next media tree now. So that's getting in
+[10:16.320 --> 10:25.920]  March, I think. The support required for Live Camera, we moved that and made a release last week
+[10:25.920 --> 10:33.920]  for 004. So now we've got a kernel with the ISP driver. We've got the sensor drivers and Live
+[10:33.920 --> 10:41.120]  Camera support all upstream and mainline. The other sensor needs a lot of work still.
+[10:42.080 --> 10:48.160]  Interestingly, it's supported by Raspberry Pi and the Raspberry Pi kernel has a lot of downstream
+[10:48.160 --> 10:51.760]  patches. So if anyone wants to get involved, this is a really good opportunity to look
+[10:51.760 --> 10:56.720]  at what is in the Raspberry Pi tree, take some of those cleanups, get them suitable for mainline
+[10:56.720 --> 11:07.600]  and post them up. So if anyone's there, what's next to make it good? There's lots of patches
+[11:07.600 --> 11:16.960]  to upstream still for the 258. The next stages really are about camera tuning. And that's part
+[11:16.960 --> 11:20.880]  of the process that we're trying to provide in Live Camera as a framework. We've got a camera
+[11:20.880 --> 11:26.880]  tuning tool and that's really about helping the control loops know how to process the images. So
+[11:26.880 --> 11:31.520]  we have a camera tuning tool which is being developed and can be used already. You can tune
+[11:31.520 --> 11:36.320]  the cameras at home, simple things like taking pictures of a white wall. Ideally, you want a
+[11:36.320 --> 11:41.120]  color card that was on one of the earlier slides. But with very inexpensive tools, you can do some
+[11:41.120 --> 11:46.720]  pretty basic, an initial start at camera tuning. So if you've got devices and you want to investigate
+[11:46.720 --> 11:54.880]  this, that's a great place to get started. So that is not my work here is done, but it's Yacopos.
+[11:54.880 --> 12:03.040]  That's front and back cameras from running on the device. This is captured using CAM,
+[12:03.040 --> 12:08.480]  which is just a pure test tool in the camera. We have CAM and QCAM. They're not meant for end
+[12:08.480 --> 12:15.200]  users really. It's just for helping us develop the framework. The images probably need more work
+[12:15.200 --> 12:19.280]  on the lens shading and white balance, but that's part of the tuning process that we mentioned.
+[12:21.520 --> 12:28.240]  But users don't want to stop using test tools. So what's also been going on and progressing
+[12:28.240 --> 12:35.760]  nicely is support for application layers on top. And Robert Mader, I met back in Prague and since
+[12:35.760 --> 12:42.640]  then has been also working on this with his device, trying to get the desktop environment to be
+[12:42.640 --> 12:47.520]  suitable of the same experience you get on the desktop to work on mobile. And that's
+[12:47.520 --> 12:53.920]  been building up the camera portal in PipeWire, extending support in GStreamer to handle controls
+[12:54.960 --> 13:01.760]  and mapping that all through the camera portals. So from PipeWire's perspective, this is what the
+[13:01.760 --> 13:08.240]  MediaStack looks like for desktop environments or anything using PipeWire, where PipeWire sits on
+[13:08.240 --> 13:14.000]  top of LibCamera, knows how to look at cameras that are VFRil2 as well. But if it needs LibCamera,
+[13:14.000 --> 13:18.640]  it already has that integration. And then GStreamer and applications can sit on top of PipeWire.
+[13:19.840 --> 13:24.880]  And Robert has been doing quite a lot of work trying to clean up and finish that
+[13:26.720 --> 13:32.880]  integration of that application pipeline, particularly in getting the Nome Camera app
+[13:32.880 --> 13:39.360]  to work all the way through. And I remember when I first saw the Nome Camera app, I saw it and
+[13:39.360 --> 13:43.200]  thought, great, there's a standard design for a desktop. I want this to work on LibCamera. So
+[13:43.200 --> 13:47.840]  this has made me really happy seeing that people have pushed this forward. The Nome Camera is a
+[13:47.840 --> 13:54.880]  design, I've forgotten which team was designing it, but then James Westman took that design and
+[13:54.880 --> 13:58.720]  created an application for it, which can be part of the standard Nome environment,
+[13:58.720 --> 14:02.400]  and also run on mobile devices, which is the key point.
+[14:09.360 --> 14:11.440]  If I could have put that in the slide.
+[14:11.440 --> 14:32.160]  So, yeah, I couldn't be here today, but he did manage to record on his PinePhone Pro with
+[14:32.160 --> 14:38.480]  a screen grab and encode on the device, running Nome Camera on the PinePhone Pro,
+[14:38.480 --> 14:46.480]  running through pipe wire into LibCamera, running LibCamera algorithms and through the ISP. So
+[14:46.480 --> 14:53.520]  this is hardware accelerated camera. He's taken a picture. He, in a moment, will change the camera
+[14:53.520 --> 15:01.360]  to the front camera. There. And one of the things I like is, quite interestingly,
+[15:01.360 --> 15:07.520]  you can see the algorithms kick in. So you can see it starts out green and then it corrects
+[15:07.520 --> 15:13.360]  itself. So you can see that real time action from the algorithms that are in place in the camera.
+[15:13.920 --> 15:20.400]  In consumer devices, that still happens on a UVC webcam, but usually you hide those frames.
+[15:20.400 --> 15:23.440]  In the camera, with these up here, we're just not hiding them, so you can see it.
+[15:26.240 --> 15:26.720]  Excellent.
+[15:26.720 --> 15:37.120]  So we can have real live demos instead of video ones.
+[15:37.120 --> 16:05.760]  Can I get back? So, thank you. That demo was running Nome Camera through the pipe wire camera portal.
+[16:07.360 --> 16:13.360]  And thanks to Robert, if you have a device running pipe wire, you can install this flat
+[16:13.360 --> 16:17.840]  pack, get that application and run it on your device. I believe that will just all work.
+[16:17.840 --> 16:25.120]  The instruction from Robert over there. Okay. I went with what I had.
+[16:29.280 --> 16:34.800]  So that's great. We can now run camera application that's exactly the same on desktop and mobile.
+[16:34.800 --> 16:41.200]  But there's more that we want to do on our phones or with communications nowadays.
+[16:41.200 --> 16:50.880]  So getting browser support is really important there. But now we've got pipe wire integration
+[16:50.880 --> 16:58.320]  and portals. Browsers, which will most of them use WebRTC, would be really helpful if we had
+[16:58.320 --> 17:06.480]  integration of WebRTC that could talk to pipe wire. And Michael from Pengu Tronix has been
+[17:06.480 --> 17:11.440]  working on that. There we are. I want to see you later. Has been working on that tirelessly
+[17:11.440 --> 17:18.000]  for a year or more, I think. And I don't think I can point that far out. But what was fantastic
+[17:18.000 --> 17:21.920]  is last week, it went green and that part is merged. There's still a few more series to get in.
+[17:21.920 --> 17:29.680]  But the core support is now there. So in some months, that's a very wishy number. We should
+[17:29.680 --> 17:35.360]  be able to see browsers able to handle this pipeline and you can make a video call on your
+[17:35.360 --> 17:46.560]  Pinephone Pro, which is fantastic. It's not me. It's other people. I do talk a lot about other
+[17:46.560 --> 17:52.880]  people's work, so I don't want to take credit. Talking to some of the distros, I know that
+[17:52.880 --> 17:58.320]  even once the code is ready, I believe we can start getting early PPA-type packages available
+[17:58.320 --> 18:03.360]  so that we don't have to wait for it to filter through all the upstream processes. But that's
+[18:03.360 --> 18:10.080]  up to the distros, not me. So there's actually, it's quite exciting. There's a lot of development
+[18:10.080 --> 18:16.080]  going on with lib camera at the moment. Lots of application-side development. And another one
+[18:16.080 --> 18:22.560]  that's been being supported lately since the last three or four months is Adam Piggs is working on
+[18:23.440 --> 18:29.440]  Sailfish OS. And he had an application called Harbor Camera that ran there and he's ported
+[18:29.440 --> 18:37.680]  that to run on lib camera. So he's been working on that on the Pinephone and it's QT-based.
+[18:37.680 --> 18:45.760]  So I've been running it on my desktop, my laptop and an Intel device. But even though he's developing
+[18:45.760 --> 18:50.720]  it on the Pinephone, because it's based on lib camera, the platform is abstracted so it will
+[18:50.720 --> 18:54.560]  work on every platform that's supported by lib camera. So the same application is now going to
+[18:54.560 --> 18:59.280]  run just the same as known camera will run on all the supported platforms. I'm modified,
+[18:59.280 --> 19:04.400]  which is brilliant. I've run it on, as I said, on the surface goes and my desktop.
+[19:06.960 --> 19:11.520]  He has already started plumbing in manual controls so you can do things that you expect from your
+[19:11.520 --> 19:16.400]  mobile phone camera app to control the exposure and brightness that you might want to play around
+[19:16.400 --> 19:20.240]  with. And then autofocus and manual focus should be coming up soon.
+[19:23.840 --> 19:29.360]  That is a screen capture from Raphael, who is one of the other lib camera community members,
+[19:29.360 --> 19:35.440]  who is just testing Adam's work on the Pinephone. But that's actually running on MimoLest,
+[19:35.440 --> 19:44.800]  whereas Adam's working directly on Selfish. So again, it's nice to see that the distribution
+[19:44.800 --> 19:52.080]  doesn't matter. It's all about cross-platform. A lot of this work here started because Nicholas
+[19:52.080 --> 19:56.320]  Roth was trying to get way droid support working. He wanted to run way droid to get the Android
+[19:56.320 --> 20:02.880]  applications running on his phone. And so that is a way of running an Android environment in a
+[20:02.880 --> 20:09.360]  contained, in a containerized solution on your device, on a regular Linux system, such as we
+[20:09.360 --> 20:17.120]  can now run on the phones. And I said earlier that lib camera already provides an Android camera
+[20:17.120 --> 20:21.920]  how. So we've already got integration there for telling Android how to talk to the camera,
+[20:21.920 --> 20:27.280]  which is great. So that can be reused. There's still a fair bit of work there, unfortunately.
+[20:27.280 --> 20:33.680]  Nicholas has got it working in way droid. He can capture frames. But due to the format that
+[20:33.680 --> 20:38.240]  the buffers are captured in, he can't display them. So that's going to need some more work in
+[20:38.240 --> 20:45.360]  Mesa. And look at how the buffer management is being handled. There may be some updates from
+[20:50.640 --> 20:54.880]  Excellent. So there's recent developments that may improve this in the near future
+[20:54.880 --> 21:01.600]  with panfrost driver development. But might be an opportunity if anyone wants to get dug into
+[21:01.600 --> 21:09.200]  those layers to work on. Sorry, Millie Pixels is a fork from Dorota, where she's been supporting
+[21:09.200 --> 21:19.280]  the Libre 5. And the interesting part there is she's working on a GPU based ISP. So on devices
+[21:19.280 --> 21:25.680]  where we don't have support for managing the ISP, such as Qualcomm or devices that don't have one,
+[21:26.560 --> 21:32.720]  that work would be really interesting to see extend lib camera to work on those devices.
+[21:32.720 --> 21:38.640]  And Pavel's talk earlier was about sharp photos on a mobile phone who's creating a software,
+[21:39.600 --> 21:42.400]  CPU based implementation, which will help get things started as well.
+[21:42.400 --> 21:54.000]  These are lessons Jakob wanted to highlight that he's learned. But they do apply widely.
+[21:55.120 --> 21:59.040]  Fragmentation, when it's all split with lots of different stacks from vendors,
+[21:59.040 --> 22:06.320]  it's very difficult to use that generically. So lib camera's goal is to try and pull this all
+[22:06.320 --> 22:13.040]  together. And to do that, it needs mainlining. We have to have a single definition of what is true.
+[22:13.760 --> 22:19.920]  And mainlining is difficult. It takes a lot of effort. My friend that I traveled up on the
+[22:19.920 --> 22:25.600]  train with to FOSDEM, he was saying he posted patches to one of the Linux lists. And after
+[22:26.800 --> 22:29.600]  four, six weeks, he had no reply and he found that really demotivating.
+[22:30.880 --> 22:35.360]  So it is important that you consider mainlining from the start. You've got to get in so early.
+[22:35.360 --> 22:42.080]  It takes a lot of time. And it's always slower than when you've got control of your own repositories.
+[22:46.080 --> 22:49.760]  We've definitely learned more lessons from developing lib camera. A lot of us are derived
+[22:49.760 --> 22:54.960]  from kernel developers. So we've been on the other side. And now we're seeing just how important
+[22:54.960 --> 23:01.920]  it is on the user space side that these value or controls and interfaces need to be standardized
+[23:01.920 --> 23:07.120]  and have a reference implementation. Since we've created lib camera, we're finding that the sensor
+[23:07.120 --> 23:13.120]  drivers in Linux are improving rapidly, we hope. We've started saying that controls have to be
+[23:13.120 --> 23:17.360]  defined by the sensors. There's so many missing parts to the drivers that are already upstream
+[23:17.360 --> 23:24.320]  and they need more work to get them supported generically. But doing so means it will all be
+[23:24.320 --> 23:33.440]  more consistent and improve the experience for everyone. Thank you. I think I might have two
+[23:33.440 --> 23:36.880]  minutes. Excellent. So two minutes if you do have any questions.
+[23:41.840 --> 23:44.720]  It already does. I think there may be.
+[23:45.440 --> 23:48.960]  Let's just repeat the question. The question was will lib camera support the original
+[23:48.960 --> 23:57.040]  pine phone? So Pavel is brilliant to answer that. Wait, wait, wait.
+[24:02.480 --> 24:07.920]  And so kernel on original pine phone doesn't have required APIs for lib camera.
+[24:08.560 --> 24:13.600]  So you can either break the lib camera to work anyway or you can fix the kernel
+[24:13.600 --> 24:19.600]  and people are doing both at the moment. It's in development. But Adam Piggs who was doing the
+[24:19.600 --> 24:27.680]  pinhole camera app, he is working on pine phone. So no, on pine phone. So it's one of the active
+[24:27.680 --> 24:42.400]  platforms being used. So I believe so, yes. Any more questions? Earlier you talked about
+[24:42.400 --> 24:48.640]  releasing 0.0.4. What's on your roadmap for an 0.1 release? So what do you want to get done?
+[24:48.640 --> 24:54.320]  I'm sorry. I couldn't hear the question. For lib camera 1.0.
+[24:58.240 --> 25:05.840]  He's ducking. He's getting out of the way. We want to, there's key features that we want to
+[25:05.840 --> 25:12.000]  support in lib camera and it will break the API. So we already know exactly how we want to break
+[25:12.000 --> 25:18.640]  things. I started tagging releases so that we had defined points before Christmas. So
+[25:19.280 --> 25:25.360]  trying to do it every two months at the moment. It is in the plan. There's a big reconfiguration
+[25:25.360 --> 25:33.360]  API that wanted to try and get in first before we go for 1.0. But we need testing and app
+[25:33.360 --> 25:39.360]  to know how to get it right. Once we go 1.0, it feels like we're going to say that's it. But
+[25:39.360 --> 25:46.960]  I think some of it's more psychological. But that's versioning. So we're working on it. I'm
+[25:46.960 --> 25:51.040]  trying to make sure we handle ABI breakages automatically now. So we'll be able to improve
+[25:51.040 --> 25:55.680]  on release management. We kind of always just said use the latest because we were trying to
+[25:55.680 --> 26:02.560]  iterate so fast. And that is hopefully improving. So we're working on it. I'm out of time. Thank
+[26:02.560 --> 26:14.560]  you. Thank you. Thank you for a great talk.

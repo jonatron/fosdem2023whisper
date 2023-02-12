@@ -1,0 +1,406 @@
+[00:00.000 --> 00:10.240]  Next up, we have Peter Smith, who will talk about using all the empty-created LLVM tool
+[00:10.240 --> 00:11.240]  chains.
+[00:11.240 --> 00:16.120]  Hello, my name's Peter, and thank you all very much for staying up so late. It's almost
+[00:16.120 --> 00:23.080]  bedtime. So I'll be here to talk about embedded tool chains using LLVM. So the first thing
+[00:23.080 --> 00:27.400]  I want to clarify is what do I actually mean by an embedded tool chain? Now, some of the
+[00:27.400 --> 00:33.240]  people here earlier on were talking about, as I say, sanitizers, and we mentioned Yachto
+[00:33.240 --> 00:39.520]  and embedded Linux. That's way too high-level. This is basically for bare-metal embedded
+[00:39.520 --> 00:44.720]  systems. So, yeah, so typical, for those of you who already know this, I'm sorry, but
+[00:44.720 --> 00:48.440]  for those of you who aren't necessarily familiar about what some of the differences are. So
+[00:48.440 --> 00:53.280]  typically when you're developing on, say, Linux or Mac or Windows, whatever, you're
+[00:53.280 --> 00:57.360]  developing with the knowledge of an operating system. So when you implement your C-Library,
+[00:57.360 --> 01:01.160]  you already know you can use system calls. You know, if you want to get some more memory,
+[01:01.160 --> 01:05.280]  you ask the operating system, that type of thing. So by contrast on the embedded system,
+[01:05.280 --> 01:09.120]  you don't have an operating system you can ask for memory. So you basically have to roll
+[01:09.120 --> 01:14.240]  part of that into the C-Library, that type of thing. So also, when you're actually programming,
+[01:14.240 --> 01:18.200]  you're programming on the device, you're actually running the program on, embedded systems,
+[01:18.200 --> 01:22.600]  you're cross-compiling. That is one thing that is likely shared with Yachto and embedded
+[01:22.600 --> 01:27.340]  Linux because quite often you're cross-compiled for speed on that one there. Typically, you're
+[01:27.340 --> 01:32.640]  be static linking only because either your RTOS probably doesn't have a dynamic link
+[01:32.640 --> 01:36.280]  at that particular point and your RTOS might actually just be a library that you link into
+[01:36.280 --> 01:42.200]  your program, that type of thing. So yeah, so platform, if you're on Linux, you might
+[01:42.200 --> 01:47.560]  be using G-Lib C, that type of thing and that will be platform and then you just use, when
+[01:47.560 --> 01:51.200]  you have a tool chain, you might just need to provide a compiler and everything's there
+[01:51.200 --> 01:56.320]  for you. Embedded systems, everything's just, you have to do everything all yourself. I
+[01:56.320 --> 02:00.360]  will mention one word there, freestanding. So there is a definition in the C-plus standard
+[02:00.360 --> 02:04.520]  of what freestanding means. It's a little loose. It kind of says this is basically what the
+[02:04.520 --> 02:10.000]  minimum you have to supply, but that's practically useless unless you want to write a full C-plus
+[02:10.000 --> 02:15.600]  plus standard implementation yourself. So in effect, what happens is that most embedded
+[02:15.600 --> 02:20.240]  C-Libraries tend to roll half of an operating system into themselves, at least basically,
+[02:20.240 --> 02:23.240]  yeah, basically minimum from there. So that's what we're sort of talking about by an embedded
+[02:23.240 --> 02:29.520]  tool chain. Okay. So this is the thing we already have embedded tool chains. Why do we
+[02:29.520 --> 02:33.720]  need LLVM essentially at this particular point? So this is some of the reasons why you might
+[02:33.720 --> 02:39.520]  actually want to use LLVM over say something like GCC. So first of all, clang is kind of
+[02:39.520 --> 02:45.600]  a natural cross compiler. So you don't actually have to say, gather GCC for ARM, GCC for S5,
+[02:45.600 --> 02:51.720]  GCC for AL64, you just have one clang. Now that is quite useful if you're a team where
+[02:51.720 --> 02:56.800]  you don't want to use different compilers, different installations, I guess more administrative
+[02:56.800 --> 03:01.560]  more than anything, but it can be a benefit on some places. So code generation can also
+[03:01.560 --> 03:08.040]  be more mature and I will say be safe of fairness, sometimes less mature than GCC, for example.
+[03:08.040 --> 03:13.000]  So my, obviously for somebody who works for ARM, all my examples are for ARM just because
+[03:13.000 --> 03:16.560]  that's what I know, but I'm sure there are similar sort of things on their architectures
+[03:16.560 --> 03:26.680]  as well. So an example here, V8.1M, which is one of ARM's most recent sort of CPUs for
+[03:26.680 --> 03:32.360]  embedded systems, it's got a vector extension and basically clang has got better support
+[03:32.360 --> 03:36.960]  for auto vectorization for this than GCC, just simply because the work was done earlier,
+[03:36.960 --> 03:40.240]  that type of thing. But that's just one of the examples why if you've got that particular
+[03:40.240 --> 03:43.640]  target, you might want to use that, whereas if you've got a different target, GCC might
+[03:43.640 --> 03:48.920]  be better at the moment. Other thing is taking advantage of some of the tooling that clang
+[03:48.920 --> 03:53.320]  provides. So I'm going to go into in the next few slides how you might be able to use some
+[03:53.320 --> 03:58.480]  of the sanitizers. I know we kind of said in the earlier bit this morning that we were
+[03:58.480 --> 04:02.200]  talking particularly about MSAN and ASAN, that type of thing, and those typically have
+[04:02.200 --> 04:08.680]  quite a high runtime component, but there are sanitizers that you can use without that,
+[04:08.680 --> 04:13.080]  and I'll just go through a few of those here. And finally, you've got diversity of implementation
+[04:13.080 --> 04:17.440]  running more compilers, it's almost always good. Compilers find different sets of bugs,
+[04:17.440 --> 04:20.040]  and sometimes programs find different sets of compilers. Sorry?
+[04:20.040 --> 04:25.280]  I was working recently on a safety critical application for train, and you actually have
+[04:25.280 --> 04:30.920]  to implement several processes doing different things, so having two different compilers
+[04:30.920 --> 04:34.760]  is a good thing in that application. Yes, definitely, yes, and certainly different
+[04:34.760 --> 04:40.800]  programs find different compiler bugs as well, that sort of thing. So yeah, okay. So do you
+[04:40.800 --> 04:44.440]  think sort of sanitize the embedded system? So we kind of run through some of this earlier
+[04:44.440 --> 04:49.680]  on today. So the main restriction for sanitizers is that it's not actually the code generation,
+[04:49.680 --> 04:55.400]  it's actually the run times. So if you look at the run time for ASAN, it's basically using
+[04:55.400 --> 05:02.000]  a dynamic shared object to intercept the C library. It's got all sorts of bits that
+[05:02.000 --> 05:05.840]  sort of kind of are operating system dependent, but of course in embedded you don't have an
+[05:05.840 --> 05:10.480]  operating system, so it's very hard as a toolchain vendor to provide a kind of bare metal
+[05:10.480 --> 05:15.400]  thing that doesn't depend on one very specific example. But some of the sanitizers have a
+[05:15.400 --> 05:19.040]  very minimal run time, and some of these things you can use here. So I'm just going to go
+[05:19.040 --> 05:25.160]  through some of these right now. So the first one to use is the undefined behavior sanitizer.
+[05:25.160 --> 05:29.680]  So by default that does have a run time, but all that run time effectively doing is pretty
+[05:29.680 --> 05:34.560]  printing a nice error. But if you don't care about pretty printing a nice error, you might
+[05:34.560 --> 05:40.080]  not even have a printer. So at this particular case, then you can just say, okay, well, if
+[05:40.080 --> 05:45.000]  there's undefined behavior in my program and someone's trying to attack me, maybe that's
+[05:45.000 --> 05:49.640]  a bad thing. So maybe I just want to abort, say for example, if I've got an out of range
+[05:49.640 --> 05:55.720]  run time. This particular example is just using a very standard integer overflow detection.
+[05:55.720 --> 06:01.520]  And basically look on there, all it's really doing is just saying, check for overflow. If
+[06:01.520 --> 06:05.560]  I overflow branch to an undefined instruction that just happens to cause an abort on the
+[06:05.560 --> 06:11.400]  processor, that type of thing. So yes, crush your program. There's also a minimal run time.
+[06:11.400 --> 06:14.920]  So there is a default implementation of the minimal run time in compiler RT. You can't
+[06:14.920 --> 06:20.700]  use that directly on an embedded system, but you can basically write your own. So instead
+[06:20.700 --> 06:24.720]  of actually calling, well, going branching to an undefined instruction, it just calls
+[06:24.720 --> 06:29.080]  a user defined function. And you can basically make that do whatever you want. There are
+[06:29.080 --> 06:34.840]  ones for log and continue, and there's ones for log and terminate, that type of thing.
+[06:34.840 --> 06:40.040]  But basically the choice is yours. But those functions have got extremely trivial implementations
+[06:40.040 --> 06:45.920]  that you can make work from an embedded system. Okay. Next one here is the kernel control
+[06:45.920 --> 06:51.640]  flow integrity. And it's called KFCI. And I keep calling it KFC. I've even got this
+[06:51.640 --> 06:55.080]  to write right around it. Actually, I think I've even got it wrong on the slide, which
+[06:55.080 --> 07:01.680]  is embarrassing. I should actually be KCFI at that particular point. So there is a control
+[07:01.680 --> 07:06.680]  flow sanitizer that can work with embedded systems right now. That's the sort of the
+[07:06.680 --> 07:15.360]  full fat, I call it sanitizer. But that requires link time optimization. So the advantage of
+[07:15.360 --> 07:21.200]  the kernel control flow integrity sanitizers is it doesn't need LTO, which makes, if anyone
+[07:21.200 --> 07:25.720]  to try to use LTO on embedded systems, it works until you've got a linker script. Certainly
+[07:25.720 --> 07:31.000]  what a linker script that depends on placing things in different places. So yeah, so here's
+[07:31.000 --> 07:34.520]  just a very trivial example of something that's just calling a floating point. And this just
+[07:34.520 --> 07:39.120]  shows some of the code that's generated. So what we essentially have is this function
+[07:39.120 --> 07:45.080]  pointer has a type. And you can basically make that into a signature. So what happens
+[07:45.080 --> 07:50.320]  is we prefix the top of the function with the signature. And then we basically load
+[07:50.320 --> 07:53.760]  when we're sort of saying, oh, let's load from this arbitrary function pointer. Well,
+[07:53.760 --> 07:58.880]  let's check its signature. And then we'll check to see if it matches what we want. And
+[07:58.880 --> 08:04.640]  if it doesn't, boom. So this doesn't, as far as I know, work on C++ V tables at the moment.
+[08:04.640 --> 08:09.520]  As obviously this is implemented for the Linux kernel. So they don't care about C++. So,
+[08:09.520 --> 08:13.440]  but if you're using C with function pointers, this is a way, a relatively low cost way to
+[08:13.440 --> 08:19.000]  get control flow integrity checking. Okay. So this is just some of the things that the
+[08:19.000 --> 08:23.800]  components of an embedded tool chain. I'm kind of jumping around here at the moment.
+[08:23.800 --> 08:29.120]  So these are sort of the things you would expect in a GCC embedded tool chain. And as
+[08:29.120 --> 08:33.360]  you can see, Clang's actually, well, LLVM project, we've got pretty much all that we
+[08:33.360 --> 08:39.000]  need in one place. We're only really missing a C library at the moment. So yes, we can
+[08:39.000 --> 08:42.400]  go through some of the, I won't go through each individual thing in those titles, but
+[08:42.400 --> 08:47.280]  you've got, you know, Clang, the compiler, you've got LLV, the linker, you've got implementations
+[08:47.280 --> 08:53.680]  of obstump, read-elf, you've got implementations of the C++ runtime library. Yes, say, what
+[08:53.680 --> 09:00.840]  we're missing is a C library. So technically, GCC doesn't have a C library either, but there
+[09:00.840 --> 09:06.320]  are hooks in the build system to basically build new lib in sort of multi-lib configurations
+[09:06.320 --> 09:12.520]  at that point. LLVM is developing a C library. I would say at the moment that currently it's
+[09:12.520 --> 09:17.000]  sort of focused on what you would probably call desktop use cases, but they are planning
+[09:17.000 --> 09:20.880]  to have sort of scalable implementations. So I think the end goal is that it will be
+[09:20.880 --> 09:24.480]  able to cope with embedded systems, but I expect that to be some, some years down the
+[09:24.480 --> 09:31.320]  line at the moment. Okay. So how would you actually assemble one of these building? Well,
+[09:31.320 --> 09:34.960]  basically assemble an LLVM toolchain from the LLVM project. And the honest answer is
+[09:34.960 --> 09:39.040]  it's not as easy as it could be. Certainly when you're building a sort of a hosted toolchain,
+[09:39.040 --> 09:45.680]  it's just, you know, it's fairly easy. You just go to LLVM, Cmate, Ninja, done. So actually
+[09:45.680 --> 09:49.120]  building the tools is not difficult because they're all cross-compilers. They're just
+[09:49.120 --> 09:54.600]  all part of the default build. So if you want to get all the tools, very, very simple. Building
+[09:54.600 --> 09:58.840]  the run times is a bit more difficult because you've got to cross-compile the run times.
+[09:58.840 --> 10:01.960]  And you've got to do them in a particular order, not all of them build in all of the
+[10:01.960 --> 10:06.040]  things. So one of the big problems, if you say try and buy compiler, sorry, if you try
+[10:06.040 --> 10:11.160]  and compile compiler RT, it'll fail because you've not got all of the, you know, it's
+[10:11.160 --> 10:15.400]  kind of, if you try, it'll end up building the sanitizers. And the sanitizers obviously
+[10:15.400 --> 10:20.000]  have got dependencies on POSIX operating systems, which of course won't work. But you
+[10:20.000 --> 10:25.160]  can say, for example, build the built-ins, which are kind of like the LibGCC equivalent.
+[10:25.160 --> 10:30.720]  So what we've done at ARM is to put together an embedded toolchain for Cortex-M, which is
+[10:30.720 --> 10:34.960]  the sort of ARM's microcontroller range. And this is essentially a set of build scripts.
+[10:34.960 --> 10:42.000]  It's all open source. And we're using the Pico Lib-C at the moment as our C library.
+[10:42.000 --> 10:46.400]  And we did start with New Lib, but we sort of moved on to Pico Lib at that point. But
+[10:46.400 --> 10:52.000]  you can make it work with New Lib if you want to. So yeah, so we've got, it's primarily
+[10:52.000 --> 10:57.080]  just build scripts. It's not like got an LLVN project embedded on that. It will just go fetch
+[10:57.080 --> 11:04.680]  LLVN from the actual source code. And yes, it's got a few samples for, you know, for
+[11:04.680 --> 11:10.440]  building some programs, that type of thing. So as I say, it's by ARM, for ARM. But I'm
+[11:10.440 --> 11:14.680]  sure if anybody wanted to apply it to a different microprocessor, they pretty much could because
+[11:14.680 --> 11:20.720]  it's essentially just a bit of C make and that you can adapt.
+[11:20.720 --> 11:26.360]  So what's the usability of an LLVN toolchain like next to say the GNU embedded toolchain,
+[11:26.360 --> 11:31.040]  that type of thing. So one of the main things we're missing at the moment is multi-lib support.
+[11:31.040 --> 11:35.560]  Now there are some multi-lib support for certain targets. So for example, I think there are
+[11:35.560 --> 11:40.840]  some RISC-5 multi-libs that are already in the bare metal driver. But that's not the
+[11:40.840 --> 11:45.080]  case for ARM at the moment. I'll go on to what we're doing about that in a few slides
+[11:45.080 --> 11:53.320]  time. Clang also doesn't have a direct equivalent of GCC specs files. So specs files are basically
+[11:53.320 --> 11:57.520]  just fragments of command line, but they're not just raw command lines. They have got
+[11:57.520 --> 12:02.040]  some intelligence and they can talk to each other and override sort of defaults. So as
+[12:02.040 --> 12:08.160]  an example here, that nano.specs and RDImon.specs, that says give me newlib nano, which is the
+[12:08.160 --> 12:12.440]  really small version of newlib. And RDImon is the semi-hosted version, which is easier
+[12:12.440 --> 12:17.440]  to run on emulators, that type of thing. So for the LLVN embedded toolchain, we basically,
+[12:17.440 --> 12:25.040]  because we don't have the information for the specs file to say, ah, someone else has
+[12:25.040 --> 12:29.720]  someone added this other specs file, so I'm going to modify my behaviors, we have to basically
+[12:29.720 --> 12:34.840]  have multiple config files that just blow up for all of the possible combinations. So
+[12:34.840 --> 12:40.840]  as you see there, we've got an ARMv6m, which ideally would be handled by multi-lib in the
+[12:40.840 --> 12:46.920]  DMD semi-host version. And yeah, there's just more configuration files than you really
+[12:46.920 --> 12:51.520]  ought to have. And I would say there's probably a small, well, there's a long tail of small
+[12:51.520 --> 12:58.440]  incompatibilities. You might find that LLD doesn't do orphan placement exactly the same
+[12:58.440 --> 13:03.600]  way as GNU-LD does that type of thing. But normally these sort of small incompatibilities,
+[13:03.600 --> 13:09.360]  you can kind of code around it. There's normally a way you can make it work. So that's what
+[13:09.360 --> 13:14.920]  we've found so far anyway. Okay. So this is just, again, another jumping around, just
+[13:14.920 --> 13:19.560]  showing you how Clang might do some of this sort of stuff. So if any of you have played
+[13:19.560 --> 13:23.440]  around with Clang drivers, whenever you give them the target triple. So normally if you're
+[13:23.440 --> 13:29.000]  using Clang on your Linux, your target triple is, you know, native, I guess at this particular
+[13:29.000 --> 13:34.920]  point. Or you're using the default triple that's there. But if you're doing cross compilation,
+[13:34.920 --> 13:42.280]  you have to give it a sort of architecture environment. So you've got the Linux-GNU there.
+[13:42.280 --> 13:46.680]  So this is actually one, if you were targeting something like the Octo, that type of thing.
+[13:46.680 --> 13:50.800]  And that will Clang driver will then tell you where all of your header files are, what
+[13:50.800 --> 13:56.360]  your target features are. So it's like a much low level using sort of private command line
+[13:56.360 --> 14:03.880]  options at that particular one. So for what we find for embedded systems is that Clang
+[14:03.880 --> 14:08.000]  has added something, well, probably a few years ago, but it's sort of only recently
+[14:08.000 --> 14:12.680]  sort of getting a bit more development onto it. In particular, the multi-lib support for
+[14:12.680 --> 14:21.000]  RISC-5 came in fairly recently. And that's when you have a target that the bare metal
+[14:21.000 --> 14:27.920]  handles. So far, that's only ARMA ART64 and RISC-5 at the moment. In theory, it could
+[14:27.920 --> 14:32.760]  be added for any other target, that type of thing. If you happen to be doing bare metal
+[14:32.760 --> 14:38.360]  development on an X86 and you don't match, say, a Linux operating system or BSD or whatever,
+[14:38.360 --> 14:43.200]  you end up getting forwarded to the generic GCC driver, which basically throws everything
+[14:43.200 --> 14:48.280]  which generally knows what to do about things. So as long as you've got a GCC tool chain,
+[14:48.280 --> 14:53.400]  if you give an object file to GCC, GCC will say, oh, I'll just fire that at the linker,
+[14:53.400 --> 14:59.720]  that type of thing. So it will work itself out. Okay. So I've just basically repeated
+[14:59.720 --> 15:06.240]  what I've just said there. It will default to the LLVM tools at that particular point.
+[15:06.240 --> 15:10.680]  So as the last part of the talk, I just want to go to some of the ongoing work that's happening
+[15:10.680 --> 15:15.400]  in Clang and some of the community involvement that's going on here. So one of the first
+[15:15.400 --> 15:19.560]  and probably the major bit of work that we're doing at the moment is what I'm going to call
+[15:19.560 --> 15:24.520]  data-driven multi-lib at the moment. So currently, multi-lib support in Clang is hard-coded.
+[15:24.520 --> 15:29.680]  It's basically a C++ class where you basically describe what the multi-lib will do for that.
+[15:29.680 --> 15:38.680]  Now, that works pretty well if you're doing things like 32 or 64-bit x86 in, say, Debian
+[15:38.680 --> 15:43.560]  or Red Hat because the structures are well known at that particular point and they are
+[15:43.560 --> 15:49.040]  stable. Whereas there's no way every possible embedded tool chain with every possible library
+[15:49.040 --> 15:54.400]  variant that you might want to do could get that hard-coded in upstream Clang. So typically,
+[15:54.400 --> 15:59.880]  what you find is that every tool chain based on LLVM has its own downstream patch if it
+[15:59.880 --> 16:08.800]  wants to support multi-lib. So GCC allows you to set this up at configure time and the
+[16:08.800 --> 16:14.320]  GCC way basically maps command line options onto directories. So for Clang, we can do
+[16:14.320 --> 16:19.280]  a bit better because the Clang driver has a bit more scope to say, do things like target
+[16:19.280 --> 16:25.880]  parser and find out more about what the CPU can do. So at the moment, we're kind of proposing
+[16:25.880 --> 16:31.680]  that you kind of have a stacked tower of multi-libs where you can kind of almost like a Docker
+[16:31.680 --> 16:37.160]  container file where you get each sort of can override the next so that you can basically
+[16:37.160 --> 16:41.200]  describe what your multi-lib configuration is and then Clang will be able to take this
+[16:41.200 --> 16:48.960]  configuration file. So it will basically allow people to have multi-lib tool chains without
+[16:48.960 --> 16:53.240]  having to hard code them in downstream patches, that type of thing. So this is still in active
+[16:53.240 --> 16:58.960]  development. There's an RFC that went up probably a few weeks ago. Recently, there's some links
+[16:58.960 --> 17:03.360]  to the patches and that sort of thing. So please do, if you're interested in data-driven multi-lib
+[17:03.360 --> 17:09.880]  and how it develops, please do comment on those patches and the RFC.
+[17:09.880 --> 17:16.240]  So future work. So we'd ideally like to get some upstream build bots for some of the compiler
+[17:16.240 --> 17:24.640]  RT runtimes. So whilst there are build bots for ART64 and ARM Linux, we haven't got build
+[17:24.640 --> 17:31.400]  bots for, say, the built-ins for, say, the V6M, V7M, the sort of the very low-level embedded
+[17:31.400 --> 17:35.100]  sort of targets. And we think that would be good to, you know, well, obviously more build
+[17:35.100 --> 17:40.560]  bots the better, I think, at that particular point. There is some work going on at TI.
+[17:40.560 --> 17:49.720]  So that link to YouTube is to a presentation at the last LLVM developer meeting, basically
+[17:49.720 --> 17:56.600]  adding attributes from the linker script so that you can basically say things like, this
+[17:56.600 --> 18:03.000]  section must go in this place, this output section, this one must go in this other one.
+[18:03.000 --> 18:06.480]  Please do not cross-module inline across these boundaries because these things might not
+[18:06.480 --> 18:11.440]  be in memory at the same time, that type of thing. And also, I need this section to have
+[18:11.440 --> 18:15.520]  this particular name, so please don't give it a different name or merge it, that type
+[18:15.520 --> 18:20.200]  of thing. So that should be able to make LTO much more usable with linker scripts. And
+[18:20.200 --> 18:26.360]  what we tend to find with Clang is that if you get it right, LTO is very aggressive at
+[18:26.360 --> 18:30.560]  removing code that's not needed. So that's actually very good for code size if you can
+[18:30.560 --> 18:34.960]  make it work. Certainly we've seen, you know, for benchmarks, LTO is great, but then we
+[18:34.960 --> 18:39.640]  say to customers, hey, use LTO and it goes, ah, but we can't because of the linker script,
+[18:39.640 --> 18:45.080]  that type of thing. Next one is not strictly embedded, but it is very important for the
+[18:45.080 --> 18:50.080]  safety critical industry, which often is, you know, by definition embedded because you're
+[18:50.080 --> 18:57.200]  controlling some kind of hardware. And this is something called MCDC code coverage. And
+[18:57.200 --> 19:03.160]  that is kind of a special form of code coverage where you're kind of, if you can imagine something
+[19:03.160 --> 19:10.000]  like if, and then A, B, C, D, E, and E, it's a way of sort of deriving test cases so that,
+[19:10.000 --> 19:14.680]  so it's not quite exhaustive, but it covers more than just did this branch go this way
+[19:14.680 --> 19:21.160]  or this way. It's like, did it go this way because this condition held that type of thing.
+[19:21.160 --> 19:25.000]  Hopefully that's not going to show up too much there. And yeah, so there's some, there's
+[19:25.000 --> 19:29.640]  a patch in for generating that in the code coverage thing. And it obviously, a lot of
+[19:29.640 --> 19:36.200]  VM libc developing. And we would like that to support embedded systems. Okay, I'll skip
+[19:36.200 --> 19:39.680]  through this very quickly. There's some patches up for Big Endian support. If anyone actually
+[19:39.680 --> 19:43.520]  uses Big Endian, I don't know. I'll be rude there. There's an armed person. We're almost
+[19:43.520 --> 19:49.440]  our arms a little Indian. And then there's the Cortex-M security extensions, which are,
+[19:49.440 --> 19:54.440]  you know, that's very useful if you're trying to sort of have secure state, non-secure state.
+[19:54.440 --> 19:58.120]  So that supports in LLD. Again, if anyone wants to comment on those patches, please
+[19:58.120 --> 20:04.080]  do. Okay. Okay, so fine. Finally, if you do want to contribute to this, and this is not
+[20:04.080 --> 20:08.240]  just as a developer, we're perfectly happy to have contributions from users as well or
+[20:08.240 --> 20:13.640]  just in some ways just telling us what's important. So Clang has pretty much come out of what
+[20:13.640 --> 20:21.400]  I call the hosted community. You know, it's generally, at least as now I would say there's
+[20:21.400 --> 20:26.160]  a lot fewer people in the embedded system, embedded systems area than there is on GCC.
+[20:26.160 --> 20:30.280]  So if you, you know, there are certain features that are useful in embedded tool chains, but
+[20:30.280 --> 20:36.280]  not necessarily in say, hosted tool chains. So just telling the community that you need
+[20:36.280 --> 20:39.800]  these features is often helpful because quite often it will say, why do we need all this
+[20:39.800 --> 20:43.960]  complexity for this thing? No one's going to use it. And it's like, well, and you can
+[20:43.960 --> 20:47.560]  only get people only get used to features if they're there, but then you can't get them
+[20:47.560 --> 20:54.440]  in, you know, chicken and egg situation there. So yeah, so there is a four weekly call that
+[20:54.440 --> 20:59.640]  goes on, unfortunately, at a time slot that's not great for Europeans, but this is the only
+[20:59.640 --> 21:04.320]  sort of time slot you can kind of get across US and Europe together at that particular
+[21:04.320 --> 21:10.740]  point. So that's probably about, I'd say about 20 people turn up. And that's really just
+[21:10.740 --> 21:13.840]  about the various people who are working on embedded systems and if they want to sort
+[21:13.840 --> 21:19.240]  of highlight patches that want to be reviewed, discuss new features. Last time we were talking
+[21:19.240 --> 21:26.840]  about how we might improve LLDs, observability of diagnostics, that type of thing. Obviously
+[21:26.840 --> 21:33.320]  bug reports, welcome at those links. And obviously if you attend the developer meetings, there's
+[21:33.320 --> 21:37.480]  often a round table on embedded systems at that point. And with that, that's my last
+[21:37.480 --> 21:43.480]  slide. So hopefully we've got a few minutes for questions.
+[21:43.480 --> 21:53.560]  I'm trying to understand something. I know of some people who say that they're using
+[21:53.560 --> 21:57.760]  LLVM for embedded already. Does this mean that they're using the other definition of
+[21:57.760 --> 21:58.760]  embedded?
+[21:58.760 --> 22:04.920]  So there's two, well, you can do it. There'll be three ways they can do it. One of them is
+[22:04.920 --> 22:10.040]  they're kind of using an LLVM based tool chain from a vendor. So that vendor will have done
+[22:10.040 --> 22:15.840]  all of that packaging up. Or it will be like, for example, ARM will sell you a commercial
+[22:15.840 --> 22:22.200]  tool chain that is a derivative of Clang, that type of thing. That's one way of doing
+[22:22.200 --> 22:26.480]  it, that sort of thing. Or they might be using embedded Linux, that type of thing. The question
+[22:26.480 --> 22:29.760]  was, sorry, I've been holding up a picture all day saying, please repeat the question.
+[22:29.760 --> 22:35.680]  I didn't. And the question was, some people say they're already using LLVM. Does that
+[22:35.680 --> 22:41.360]  mean they were using a hosted system or not? Okay. Just the first, sorry, go out the back
+[22:41.360 --> 22:42.360]  there.
+[22:42.360 --> 22:47.520]  Yes. So one of the things I noticed is LLVM ships its own assembler. We've noticed for
+[22:47.520 --> 22:52.560]  some LLVM projects that they have trouble with some of the new assembler macros. So we have
+[22:52.560 --> 22:57.800]  to go back to the truth and just put some of the targets. Is there some plans for work
+[22:57.800 --> 23:01.440]  on this?
+[23:01.440 --> 23:09.360]  So with the latest LLVM, I know, sorry, sorry, repeat the question. So the question was,
+[23:09.360 --> 23:16.560]  the LLVM has an integrated assembler. GNU has GNU AS. And there are some directives or macro
+[23:16.560 --> 23:24.560]  support that might be in the GNU assembler, but not LLVM. So I think it's generally done
+[23:24.560 --> 23:30.920]  on demand. So there was a big effort to get the Linux kernel compiled with Clang. And that
+[23:30.920 --> 23:34.920]  added quite a lot of features that were basically needed for the Linux kernel. So the best thing
+[23:34.920 --> 23:39.700]  to do is have a really important project that's a big company wants to get compiled with the
+[23:39.700 --> 23:46.240]  integrated assembler. Yes. Yes. Yes. Yes. That is a very good way of doing it.
+[23:46.240 --> 23:51.240]  As macros were in the Linux kernel and they asked us to support them and say, no, screw
+[23:51.240 --> 23:56.200]  this, the kernel changed away from macros. And they changed away from macros.
+[23:56.200 --> 23:59.760]  Yeah. But there certainly was support. There was, I think there is a directive where you
+[23:59.760 --> 24:05.080]  can switch the GNU assembler into advanced macro mode or something like that. Or I can't
+[24:05.080 --> 24:10.120]  remember. No, that's not that. That's the inline assembly thing. There is an F. Yes,
+[24:10.120 --> 24:19.160]  there is a high GNU extensions option. But no, there was a patch that probably landed
+[24:19.160 --> 24:25.840]  a few years ago. So depending on how long ago you tried, then there was some support
+[24:25.840 --> 24:30.120]  done for more macros. But whether it's got all of it or not, I don't know.
+[24:30.120 --> 24:32.440]  Well, I actually don't. I've got a lot of problems. It was a while ago.
+[24:32.440 --> 24:38.600]  Right. Yes. You may find that someone has already fixed that already. Yes. Thank you.
+[24:38.600 --> 24:43.200]  Yeah. So my question is about, like, we, for example, tried to deploy machine learning
+[24:43.200 --> 24:49.080]  models on tiny bare metal devices. Yeah. And there we are also looking into, for example,
+[24:49.080 --> 24:54.240]  TVM as a tool chain, but also MLIR now, or like the EV project from Google.
+[24:54.240 --> 24:57.840]  Yeah. And they're basically what they do is they use this entire tool chain, and then
+[24:57.840 --> 25:03.760]  they use the MITC dialect, for example, in EV to MITC code again. Okay. To then put it
+[25:03.760 --> 25:08.360]  into an embedded tool chain to actually do the final compilation stuff. Do you think
+[25:08.360 --> 25:14.680]  that there is, or what is basically needed to omit this last going back to C, or is this
+[25:14.680 --> 25:23.200]  a good idea or not? Or... Oh, well, I mean, I suppose... I'm just trying to think how,
+[25:23.200 --> 25:28.760]  not very familiar. So the question was about people deploying machine learning models on
+[25:28.760 --> 25:36.280]  small devices, and they're currently outputting to a C back end, and then recompiling that
+[25:36.280 --> 25:42.920]  C back end. And do I think this is a good idea or not? I mean, I guess the C back ends
+[25:42.920 --> 25:48.280]  are often the, how do I get this up and running as quickly as possible? I do know that there
+[25:48.280 --> 25:54.480]  are, I guess, machine learning compilers that have got, I guess, code generation out. I
+[25:54.480 --> 26:00.480]  mean, I guess if you're using LLVM itself, it's probably not too difficult to just lower
+[26:00.480 --> 26:05.920]  to LLVM and get most, and you then get the code generation for free. I guess the bit
+[26:05.920 --> 26:12.400]  that you might not get is, have you got all of the run time and intrinsics that you might
+[26:12.400 --> 26:16.120]  have that the C compiler might insert, but I don't, you might find someone else knows
+[26:16.120 --> 26:20.800]  why. So maybe just in addition, it does not compile the whole machine learning models
+[26:20.800 --> 26:26.560]  to C, so they are still a static library linked in which it's generated via LLVM. It's just
+[26:26.560 --> 26:33.360]  some parts around, so it's not that they are as pure C in the end. That's not done in
+[26:33.360 --> 26:40.300]  the approach. Okay. Yes, sir, yes. I was one of those unfortunate uses of big ambient
+[26:40.300 --> 26:47.360]  arm. We were running several compilers in this safety-critical application. Everyone
+[26:47.360 --> 26:53.120]  had a problem with one thing, and that's the linker. We're trying to generate a header.
+[26:53.120 --> 26:58.240]  And the linker, you can't insert a text string in the linker. It's very difficult to insert
+[26:58.240 --> 27:04.960]  static data. We want to insert information about how large is the section. That was basically
+[27:04.960 --> 27:11.440]  possible to do with the linker. How does LLVM handle all these other things?
+[27:11.440 --> 27:18.320]  With great difficulty, I think, I think there isn't really a, there isn't, I think the,
+[27:18.320 --> 27:25.400]  yeah, I think Christoph is nailed it in that, what I would probably do myself is reserve
+[27:25.400 --> 27:32.720]  some space in the binary, name a section out of it, and then use Obstump to poke it in
+[27:32.720 --> 27:36.240]  at that particular point. Can you see my problem?
+[27:36.240 --> 27:38.280]  No, yes. I mean, there are some...
+[27:38.280 --> 27:40.720]  Putting a string in the link command file.
+[27:40.720 --> 27:47.680]  Well, it's a bit more difficult. It's the, I think the linker needs to know the length.
+[27:47.680 --> 27:52.600]  I mean, I suppose you could do it with horrifying things. You could use data statements in the
+[27:52.600 --> 27:56.360]  linker script, but that sounds a bit, it's really what you would want.
+[27:56.360 --> 27:57.360]  I want it.
+[27:57.360 --> 28:02.960]  Yes, really, I think, yeah, because you get a number, but really, yeah, I suppose, yeah,
+[28:02.960 --> 28:05.160]  find the extension request of a linker script.
+[28:05.160 --> 28:10.040]  I mean, specify the size of the section to start with, then I know the size.
+[28:10.040 --> 28:13.480]  Yeah, I think we do have the problem, we do have a problem with things like build ID,
+[28:13.480 --> 28:17.960]  I think at that particular point where you're generating the build ID string, which needs
+[28:17.960 --> 28:21.520]  to know everything all at once, but yeah, I get, yeah. Unfortunately, there's nothing
+[28:21.520 --> 28:23.520]  in the LLD linker that's different.
+[28:23.520 --> 28:28.720]  If someone should try to generate the header for a binary, contain the interest in information,
+[28:28.720 --> 28:30.720]  then you quickly realize all the problems.
+[28:30.720 --> 28:31.720]  Oh, yep, sure.
+[28:31.720 --> 28:35.320]  The new assembler has the ink bin, doesn't it?
+[28:35.320 --> 28:39.960]  Yes, the assembler does have ink bin, but I think the idea is, for the header, you want
+[28:39.960 --> 28:44.240]  the linker to generate something based on the properties of something, but...
+[28:44.240 --> 28:48.480]  You want to generate the information about the link time, not when you assembled it two
+[28:48.480 --> 28:49.480]  weeks ago.
+[28:49.480 --> 28:56.960]  You can assemble, just before the link is done, assemble something that's generated.
+[28:56.960 --> 29:02.080]  Even.ovmile, and then link that in using the link script.
+[29:02.080 --> 29:06.720]  I know there are workarounds, but a good workaround would have to have a good link.
+[29:06.720 --> 29:11.120]  Yeah, I mean, I think, I mean, a lot of the times with linkers, it's the, because one
+[29:11.120 --> 29:14.920]  of the, one of the perennial things you could ask is, how do I embed some kind of custom
+[29:14.920 --> 29:18.200]  checksum that I've written at link time, you know, that type of thing?
+[29:18.200 --> 29:24.240]  And it's just which one, and do you then have a linker Python script extension or plug-in?
+[29:24.240 --> 29:25.240]  It just tends to build.
+[29:25.240 --> 29:26.240]  Yeah.
+[29:26.240 --> 29:31.240]  Check some afterwards, and that's also something that should be supported in linker.
+[29:31.240 --> 29:32.240]  Yeah.
+[29:32.240 --> 29:37.040]  And it would be done, just say, run this application afterwards on this section, something like
+[29:37.040 --> 29:38.040]  that.
+[29:38.040 --> 29:39.040]  Yeah.
+[29:39.040 --> 29:40.040]  So it's...
+[29:40.040 --> 29:44.040]  Do you do a partial link, and then analyze the object file, then do a final link?
+[29:44.040 --> 29:45.040]  Yeah.
+[29:45.040 --> 29:46.040]  I mean, I guess...
+[29:46.040 --> 29:47.040]  More workarounds.
+[29:47.040 --> 29:48.040]  Yeah.
+[29:48.040 --> 29:51.560]  I mean, to paraphrase, I guess, is the tools are supposed to make users' life easier, I
+[29:51.560 --> 29:52.800]  suppose, at that particular point.
+[29:52.800 --> 29:56.560]  So if it's a common enough thing to do, then it should be, they should be able to find
+[29:56.560 --> 29:57.560]  a way of doing it.
+[29:57.560 --> 30:02.000]  And if this is security, then you don't want to generate the checksum in one process, and
+[30:02.000 --> 30:03.400]  then use it in the other process.
+[30:03.400 --> 30:07.720]  You want to use all in one, because I know who generated this, and it didn't come from
+[30:07.720 --> 30:08.720]  outside.
+[30:08.720 --> 30:11.720]  We actually have to have two different programs, and is that the case?
+[30:11.720 --> 30:12.720]  Yeah.
+[30:12.720 --> 30:13.720]  So, I wait, so I better go for...
+[30:13.720 --> 30:20.720]  Yeah, so I just have a follow-up to that discussion, so I'm not an LFM developer, but I deal with
+[30:20.720 --> 30:21.720]  a lot of built-ins.
+[30:21.720 --> 30:24.720]  Does anyone working on stuff to make things a bit better, this sort of thing?
+[30:24.720 --> 30:27.720]  Because essentially, like, you're talking about communicating between the file stage
+[30:27.720 --> 30:32.720]  and the link stage, and introducing dependencies to what you have, and that you have to link
+[30:32.720 --> 30:33.720]  with after that.
+[30:33.720 --> 30:34.720]  Right.
+[30:34.720 --> 30:38.720]  And now, like, it seems like you need, like, a schema, a data format, and a dependency specification
+[30:38.720 --> 30:42.720]  for that, so the built systems could actually use it, and spare the users who have to deal
+[30:42.720 --> 30:43.720]  with that.
+[30:43.720 --> 30:44.720]  Nice.
+[30:44.720 --> 30:52.720]  I mean, I think that the big...
+[30:52.720 --> 30:57.400]  I say it's mostly a, what I would call, almost a coordination problem between getting the
+[30:57.400 --> 31:00.720]  right people on board at that particular point, and it's...
+[31:00.720 --> 31:01.720]  So it's quite...
+[31:01.720 --> 31:02.720]  Can you repeat the question?
+[31:02.720 --> 31:03.720]  Sorry.
+[31:03.720 --> 31:04.720]  Yes.
+[31:04.720 --> 31:05.720]  Okay.
+[31:05.720 --> 31:11.720]  So the question was about, is anybody working on build systems and things that they will
+[31:11.720 --> 31:13.720]  be able to communicate the...
+[31:13.720 --> 31:16.960]  Of the linker to be able to communicate to the build system and automate things like the
+[31:16.960 --> 31:19.720]  checksome sort of handling and that type of thing.
+[31:19.720 --> 31:26.160]  I mean, I think the major difficulty is just an LVM is an open source project, and there's
+[31:26.160 --> 31:30.760]  often, as soon as you open something like that up, it ends up in lots and lots of discussions
+[31:30.760 --> 31:34.920]  about what the right way, and you can easily find a way that works for one, a small number
+[31:34.920 --> 31:39.840]  of people, but completely doesn't work for someone else, so it's one of those...
+[31:39.840 --> 31:43.400]  It first of all needs someone brave enough to actually try it rather than just implementing
+[31:43.400 --> 31:44.560]  it downstream.
+[31:44.560 --> 31:45.560]  So I think it's...
+[31:45.560 --> 31:50.960]  What it really needs in this case is, because this is sort of things that...
+[31:50.960 --> 31:52.640]  This is not...
+[31:52.640 --> 31:56.560]  It really needs people to go on the LVM mailing list and say, yes, we really need this, because
+[31:56.560 --> 32:00.640]  typically this sort of thing is to silent people who say, oh, this stuff's all rubbish,
+[32:00.640 --> 32:01.640]  but we don't...
+[32:01.640 --> 32:05.440]  As developers, we don't get to hear about it, or at least we don't get to hear it loud
+[32:05.440 --> 32:10.440]  enough for the people who pay our wages to say go and work on it.
+[32:10.440 --> 32:11.440]  Yeah.
+[32:11.440 --> 32:13.440]  Right, yeah.
+[32:13.440 --> 32:23.400]  Okay, I probably ought to hold it there to let everyone go, I think, at that point.
+[32:23.400 --> 32:36.720]  Thank you very much for staying and I'll see you all next time.

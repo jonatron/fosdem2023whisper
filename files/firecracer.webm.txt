@@ -1,0 +1,191 @@
+[00:00.000 --> 00:12.260]  So, hi, I will start right away because my talk is quite packed, so I'm focusing on
+[00:12.260 --> 00:17.440]  this working for Amazon in the Amazon Coretto team.
+[00:17.440 --> 00:21.600]  My slides and the examples are on GitHub, I will show this link one more time at the
+[00:21.600 --> 00:24.960]  end of the talk, so you don't have to take a copy.
+[00:24.960 --> 00:29.280]  I am principal engineer in the Amazon Coretto team, working in the OpenGDK since more than
+[00:29.280 --> 00:39.600]  15 years, been with SAP before, that's for also more than 15 years and have various duties
+[00:39.600 --> 00:42.080]  in the OpenGDK and JCP.
+[00:42.080 --> 00:46.080]  So let's get started about firecrackers, so firecracker is a minimalistic virtual machine
+[00:46.080 --> 00:52.360]  monitor, it's KVM backed, it only supports a limited set of devices, basically block
+[00:52.360 --> 00:57.240]  and network devices which are virtualized to Vortio and a VSOC and a serial device that
+[00:57.240 --> 01:03.440]  makes it very fast and also very secure because it doesn't support any exotic devices like
+[01:03.440 --> 01:08.720]  for example QMU, it has a rest-based configuration, it's completely written in Rust which also
+[01:08.720 --> 01:17.240]  makes it kind of safe, it's based on, it was forked from Google's CrossVM and it's nowadays
+[01:17.240 --> 01:22.880]  based on Rust VMM library which is like a based library for virtual machine monitors
+[01:22.880 --> 01:26.240]  and I think that's also used by CrossVM meanwhile.
+[01:26.240 --> 01:31.200]  It supports a microvia metadata service which is basically a JSON storage where you can
+[01:31.200 --> 01:35.840]  share data between guest and host because with full virtualization it's not easy to
+[01:35.840 --> 01:40.960]  exchange data between guest and host because all the guest applications run on their own
+[01:40.960 --> 01:46.280]  kernel and with this data service for example you don't need a network connection between
+[01:46.280 --> 01:51.520]  host and guest and then the firecracker process itself supports in addition to the security
+[01:51.520 --> 01:59.080]  provided by KVM, sandboxing, so a jailer utility which basically places the firecracker process
+[01:59.080 --> 02:04.080]  on the host into additional C-group, change-route and sec-comp environment and it's all open
+[02:04.080 --> 02:11.240]  source, Apache 2 licensed and it's the technology behind AWS Lambda.
+[02:11.240 --> 02:16.880]  So every Lambda runs in its own firecracker virtualized container.
+[02:16.880 --> 02:21.520]  So here's just a picture of what I've just told you.
+[02:21.520 --> 02:26.680]  So we have the kernel with KVM on the downside and then we have the firecracker process which
+[02:26.680 --> 02:33.360]  has a thread for each VCPU which you configure in your guest and then it has a special thread
+[02:33.360 --> 02:39.480]  to handle IO and an API thread which is low priority to handle the rest requests and then
+[02:39.480 --> 02:46.360]  it boots the guest kernel which has the VATIO devices and the VM thread handles these VATIO
+[02:46.360 --> 02:52.920]  queues and maps them for network to tap devices on the host and for the block devices for
+[02:52.920 --> 02:57.920]  either on a native block device on the host or on a file system which is exported as
+[02:57.920 --> 03:03.000]  block device to the guest and then you can run a bit more application on the guest and
+[03:03.000 --> 03:10.000]  you can run as many guests as you want, it's only limited by your amount of memory basically,
+[03:10.000 --> 03:18.320]  and overhead by firecracker is just about 50 megabytes per, I know it's less, we will
+[03:18.320 --> 03:21.520]  see, it's very small.
+[03:21.520 --> 03:28.120]  So let's go to a demo.
+[03:28.120 --> 03:30.160]  So I have to truncate the file.
+[03:30.160 --> 03:38.160]  So here we just start firecracker, we specify the API socket where we communicate, we have
+[03:38.160 --> 03:43.080]  a log file and a log info in the boot timer to see the boot time.
+[03:43.080 --> 03:51.040]  And now from another terminal we start to config this with JSON data as I told you before,
+[03:51.040 --> 04:00.360]  so we configure two VCPUs and 512 megabytes of memory.
+[04:00.360 --> 04:07.400]  I have here a root file system, extended X4 root file system and a freshly compiled Linux
+[04:07.400 --> 04:17.640]  kernel, so I will now use another REST command to configure the Linux image which will be
+[04:17.640 --> 04:23.320]  booted and I pass quite a lot of kernel arguments, it's mostly to switch off devices which we
+[04:23.320 --> 04:28.520]  don't need anyway and which unsupported and we define as init script to just run bash,
+[04:28.520 --> 04:38.320]  so init script will be just a shell and then we finally have to define a root file system,
+[04:38.320 --> 04:44.480]  that's our X4 file which I showed you before and now that we've configured everything we
+[04:44.480 --> 04:52.080]  can just start the virtual machine again with a JSON request and when we go back into our
+[04:52.080 --> 04:57.640]  window we see that now the virtual machine has been started and it took about 200 milliseconds
+[04:57.640 --> 05:12.960]  to start bash and it's fully configured Linux, the image was assembled from Ubuntu 22 image
+[05:12.960 --> 05:29.600]  and the kernel I've compiled it myself, you see we have two CPUs and about 512 megabytes
+[05:29.600 --> 05:35.200]  of memory, so if we exit the shell it will be able just reboot because it was our init
+[05:35.200 --> 05:43.480]  process, from this 200 milliseconds which you take to boot the serial device alone took
+[05:43.480 --> 05:48.320]  about 100 milliseconds, so if you take that away usually in production you don't need
+[05:48.320 --> 05:59.840]  the serial device it puts in 100 milliseconds and that's on my laptop, okay, so very quick
+[05:59.840 --> 06:05.160]  comparison of Firecracker and Docker, so Firecracker is fully KVM virtualized, Docker has only
+[06:05.160 --> 06:11.200]  C group namespace isolation, the good thing about C group namespace isolation only is
+[06:11.200 --> 06:16.080]  that Docker images run on the same kernel so they can do copy and write, page cache memory
+[06:16.080 --> 06:24.160]  sharing so if you run many of them they are denser whereas for if you run several Firecracker
+[06:24.160 --> 06:28.600]  images they cannot directly share memory so you have to use ballooning devices for example
+[06:28.600 --> 06:33.280]  in the guest to give back memory to the host, on the other side that's much more secure
+[06:33.280 --> 06:41.680]  because every container has its own memory, its own kernel and Firecracker has snapshot
+[06:41.680 --> 06:46.560]  support to a checkpoint the whole container like with the kernel everything together and
+[06:46.560 --> 06:53.600]  Docker can use Crewe checkpoint to store in user space to do the same thing basically serialize
+[06:53.600 --> 07:01.600]  Docker container with all processes to a file, I will see examples for that now, so now what
+[07:01.600 --> 07:07.200]  is crack and Crewe, so as was mentioned before crack is called in native to store and checkpoint
+[07:07.200 --> 07:14.320]  that's a new project in the OpenJDK, it has basically three points which are important,
+[07:14.320 --> 07:21.120]  first one is to create the standard checkpoint restore notification API because many applications
+[07:21.120 --> 07:29.600]  are not aware of being cloned and there is state, security, time, all this kind of stuff
+[07:29.600 --> 07:35.920]  which an application might want to react upon especially not only when cloning but not only
+[07:35.920 --> 07:40.400]  when checkpointing and restoring but especially when cloning the application, think for example
+[07:40.400 --> 07:46.240]  of an application which logs to a file and then you checkpoint it and restart two clones
+[07:46.240 --> 07:49.840]  and they both write to the same file they will corrupt the file usually so you have
+[07:49.840 --> 07:55.120]  to take some measures if you run many things in parallel and the application is not prepared
+[07:55.120 --> 08:00.640]  for that, so if you want to, a crack is currently not part of an official OpenJDK release it's still
+[08:01.840 --> 08:06.400]  mostly a research project in the OpenJDK but you can already now make your application ready
+[08:06.400 --> 08:13.040]  for crack by using the org crack API that's available on Maven Central and that basically wraps
+[08:13.040 --> 08:19.600]  JDK crack namespace which is currently in the crack repository in OpenJDK but if it finds
+[08:19.600 --> 08:25.200]  javax.crack once it should become available it will switch to that and it also offers the
+[08:25.920 --> 08:33.840]  possibility to pass the custom implementations to a system property and then finally what
+[08:33.840 --> 08:38.720]  makes crack interesting for many people to experiment with is that it basically integrates
+[08:38.720 --> 08:46.480]  with Creel so it has a copy of Creel packed with the crack distribution so you can easily
+[08:46.480 --> 08:54.000]  checkpoint your java process and restart it and then as I mentioned before Creel is checkpoint
+[08:54.000 --> 08:59.200]  and restore in user space that's an old java functionality which allows to serialize a single
+[08:59.200 --> 09:04.960]  process to the file system it uses kernel free cgroup freezer to freeze the processes or process
+[09:04.960 --> 09:12.560]  tree and then writes all the memory to the disk and so on. Still Creel has some issues because
+[09:12.560 --> 09:20.560]  it has to take to look at all the open file descriptors, shared memory segments, stuff like
+[09:20.560 --> 09:25.520]  that which might not be available again when you restore the image whereas firecracker as I said
+[09:25.520 --> 09:29.200]  before it restores the whole kernel with all the file system everything in place so it's much
+[09:29.200 --> 09:36.800]  much simpler from that perspective. So let's take a quick demo on crack.
+[09:36.800 --> 09:47.920]  So I have here open gdk.17 with crack extensions and then you simply pass the option checkpoint
+[09:47.920 --> 09:55.840]  to that's a file and this is just a pet clinic up a spring boot pet clinic example application
+[09:56.640 --> 10:05.280]  and I modified it to register with the orc crack callbacks as I said you can see here
+[10:05.280 --> 10:16.880]  it's registered to orc crack and now that I've started it I can use j command to checkpoint it
+[10:16.880 --> 10:23.440]  so I send it a checkpoint command and when you see just out of the box it didn't work it shows
+[10:23.440 --> 10:30.080]  some exception because it found for example that the port 8080 is open and this uses a vanilla
+[10:30.080 --> 10:39.360]  version of Tomcat which is implementing the crack callbacks so but that's not that bad
+[10:40.560 --> 10:48.640]  it has a developer option which has to ignore exceptions so for this simple case it will probably
+[10:48.640 --> 10:58.000]  work so let's try it started one more time prepare the checkpoint here so let's wait
+[10:58.000 --> 11:09.120]  until it becomes ready so and now now checkpoint it and you see we also locked the resources so
+[11:09.120 --> 11:13.920]  you see what they were about 10 file descriptors and most of them were okay because like the crack
+[11:13.920 --> 11:21.200]  modified VM already knows a lot of the file descriptors the VM is using for example for
+[11:21.200 --> 11:26.800]  the jar files it has opened or for the module files and it closes them by themselves without
+[11:26.800 --> 11:35.920]  need to register anything so and the checkpoint you work and what's interesting is here that
+[11:35.920 --> 11:42.000]  before checkpointing it calls the my the the listener the handler I installed in my pet clinic
+[11:42.000 --> 11:50.000]  application so I could do additional stuff before checkpointing and now we can just
+[11:50.000 --> 12:02.000]  restore this frozen process and you see it starts instantly it calls the after restore a hook
+[12:02.000 --> 12:11.440]  I have registered and we can send a serial request on 8080 and yeah it basically still works
+[12:12.480 --> 12:18.720]  so that's nice let's go further so now firecracker so that's basically combination of
+[12:18.720 --> 12:23.840]  initial firecracker and crack I found it somehow funny that words are so similar so
+[12:23.840 --> 12:28.640]  it's a play with words and my my opinion it's the best of two worlds to combine these two
+[12:28.640 --> 12:34.800]  currently as I said a crack project is based on crew but I think it might be interesting to
+[12:34.800 --> 12:41.120]  add support for firecracker as well and I'm currently working on that so with firecracker you can
+[12:41.120 --> 12:51.840]  basically checkpoint a plain JDK even with if it's not modified by crack because as I said no need
+[12:51.840 --> 12:59.040]  to worry to worry about fire descriptors so on one issue with firecracker as I said before you
+[12:59.040 --> 13:04.800]  cannot trigger the checkpoint from Java so the crack implementation in open JDK can checkpoint
+[13:04.800 --> 13:12.000]  itself because crew is running on the same kernel like the Java application so the Java just
+[13:12.000 --> 13:17.680]  so JNI calls crew and checkpoints itself that's obviously not possible in firecracker because
+[13:17.680 --> 13:22.560]  you cannot escape from the gas that's the whole thing about running it in in a in a
+[13:22.560 --> 13:28.160]  fully virtualized guest so we need another means of communication but that's not not that complicated
+[13:29.440 --> 13:34.720]  it offers maximum security and speed and I said before no copy and write memory sharing but
+[13:34.720 --> 13:40.640]  you can use ballooning same page merging kernel features which are also have their plus and
+[13:40.640 --> 13:47.600]  their drawbacks but things to investigate so let's do a firecracker demo with Java now
+[13:51.280 --> 13:54.960]  to not bore you more with all this
+[13:54.960 --> 14:04.960]  JSON request I've written a shell script which basically does all that in in one script and
+[14:04.960 --> 14:19.040]  instead of calling bash it just starts Java as in it process and we can now submit the request
+[14:19.040 --> 14:27.040]  and you see it's it's it's working it's here here is the request my I have still registered
+[14:27.040 --> 14:32.400]  this this callbacks although I'm running on a vanilla JDK by using the org crack library so
+[14:32.400 --> 14:40.400]  they are they are empty they won't do anything and I can now snapshot firecracker you see that's
+[14:40.400 --> 14:49.520]  also quite quite fix quite quick firecracker is not is resumed automatically so I have to kill
+[14:49.520 --> 15:01.520]  it manually and now if I restart from snapshot you will see it also it takes just a few milliseconds
+[15:01.520 --> 15:13.760]  to restart the whole image and again I can see well into it it it works you see there is no the
+[15:13.760 --> 15:19.440]  hooks are not being called because there is no real crack implementation in the back in this case
+[15:19.440 --> 15:27.440]  but like checkpointing for Java itself works and it's also easy to run a second clone now
+[15:27.440 --> 15:34.720]  obviously we cannot run it in the same namespace because it will use the same IP address like
+[15:34.720 --> 15:42.800]  the like the first version so we we started in a in a network namespace so minus and zero is just
+[15:42.800 --> 15:52.160]  to create a new namespace for for the clone and you see it uses IP net NS net names with exec to
+[15:52.160 --> 16:02.480]  execute firecracker but it restores quite as quickly and the initial IP address of the
+[16:02.480 --> 16:09.840]  of the of the process has now in this namespace is it's now mapped on a different IP address on
+[16:09.840 --> 16:16.640]  the host but you see it's it's still working so in the get the guest still has the same IP address
+[16:16.640 --> 16:23.120]  it has in the first place it's just running in its own namespace and inside the guest again the
+[16:23.120 --> 16:35.040]  Tomcat is running on the same port all no problem so we just kill the first instance and we kill the
+[16:35.040 --> 16:52.080]  we kill the second instance how much time do I have oh okay okay so just a few words I I realized
+[16:52.080 --> 16:58.400]  that talks which are rated highest are usually so some animation so I decided to do animation
+[16:58.400 --> 17:05.680]  because usually only so console console demos so quick introduction user fold demon is a
+[17:05.680 --> 17:12.880]  is a possibility to handle page faults from the user space and firecracker offers the possibility
+[17:12.880 --> 17:19.920]  instead of mapping the image file right into fires firecrackers memory to to use an external
+[17:19.920 --> 17:26.080]  user fold demon and if we write the user fold demon ourselves we have the possibility to follow
+[17:26.080 --> 17:32.400]  page by page which addresses get loaded at the restore and I found it interesting so
+[17:34.960 --> 17:42.640]  I created that kind of thing so to an animation for that and for that
+[17:45.200 --> 17:53.280]  we we restart our our our firecracker service native memory enabled native memory tracking
+[17:53.280 --> 18:04.400]  and from the guest we do now ssh into into our firecracker guest where Tomcat is running
+[18:04.400 --> 18:11.520]  and just call j command native memory details and and put that into a file and we do the same thing
+[18:14.320 --> 18:20.480]  with the pmap information this is just a shell script inside the guest which basically
+[18:20.480 --> 18:28.000]  prints all the virtual to physical mappings for all processes into a file
+[18:30.480 --> 18:41.120]  and now we can start the the visualizer and it takes the locks
+[18:41.120 --> 18:56.080]  oops it it takes the locks of the user fold demon and the nmt and the native mapping so what you
+[18:56.080 --> 19:01.600]  see here is basically the physical memory layout of the guest so it's memory page zero and in the
+[19:01.600 --> 19:09.360]  end it's memory page one gigabyte and every square is four kilobyte page and if you go and
+[19:09.360 --> 19:14.960]  that's on the java process for example you see the dark these are the pages the rss of the java
+[19:14.960 --> 19:21.360]  process blue ones are occupied by the java process but they are also in the page cache so that's
+[19:21.360 --> 19:31.600]  probably a file for example or something or uh uh class uh spare shell class for example
+[19:31.600 --> 19:36.800]  when you when you look at the nmt output we see that for example for the classes we use about
+[19:36.800 --> 19:45.520]  66 i probably cannot read it it says virtually 69 megabytes uh rss is 60 megabytes and user
+[19:45.520 --> 19:53.120]  fold demon loaded about 10 megabytes of it and here's the the animation i promised you
+[19:53.120 --> 19:59.120]  so this is how the pages got loaded when we did the first call request on a on a resumed image
+[19:59.120 --> 20:04.960]  and like the the yellow ones are all the pages which i've loaded and the orange one i don't know
+[20:04.960 --> 20:11.840]  yeah some are orange belong to the to the to the virtual memory region i have selected here so for
+[20:11.840 --> 20:18.000]  example all the orange pages are the the parts of the class space which got loaded for the first
+[20:18.000 --> 20:26.960]  request so this is a lot of space for more investigation would be nice to to compact this
+[20:26.960 --> 20:32.640]  more like physically because you want to prefetch the the things which get loaded especially if you
+[20:32.640 --> 20:39.040]  download your images from from network for example and but the problem is that all the physical
+[20:39.040 --> 20:46.720]  address space is continuous like the virtual uh the physical pages are are not and try to look
+[20:46.720 --> 20:56.480]  into uh possibility to do that so that that's it thank you thank you very much
+[20:56.480 --> 21:02.880]  there's about 30 seconds for questions is anyone got a question called your answer question
+[21:02.880 --> 21:10.880]  i have a question regarding uh when you showed uh uh crack uh implementation there was uh
+[21:10.880 --> 21:14.880]  implementation that put into the uh
+[21:14.880 --> 21:18.320]  so
+[21:23.200 --> 21:26.320]  yeah
+[21:30.720 --> 21:36.560]  yes i unfortunately there is no time in 20 minutes to show that but you can obviously use the current
+[21:36.560 --> 21:43.760]  crack implementation inside firecracker use j command and instead of crue there is a backend
+[21:43.760 --> 21:49.680]  called uh post handler that's just a small program which instead of calling crue just
+[21:49.680 --> 21:56.000]  dispense the whole process and then you can send in the signal to restore it so with firecracker you
+[21:56.000 --> 22:03.040]  basically checkpoint with the post engine then do the firecracker snapshot then restore firecracker
+[22:03.040 --> 22:07.920]  and then just do an ssh with a kill signal on on the process and it will will restart that's one
+[22:07.920 --> 22:14.800]  possibility another one is i wrote the jvmti agent which basically has the same thing even without crue
+[22:14.800 --> 22:22.800]  it uh it um suspends all threads it calls system gc and then waits uh on a on a port so you just
+[22:22.800 --> 22:30.720]  ping it with telnet or whatsoever and and it even calls uh the the the the hooks by implementing
+[22:30.720 --> 22:38.320]  the this custom possibility to uh with the property so i i i i say or crack to use my
+[22:38.320 --> 22:45.760]  crack implementation to call the hooks so that all works it's in the in the repository which is
+[22:45.760 --> 23:01.680]  i had a resource slide which i didn't show it has all the links so

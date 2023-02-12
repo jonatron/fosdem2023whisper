@@ -1,0 +1,204 @@
+[00:00.000 --> 00:15.680]  Okay, so yeah, my name is Matthew Wilde and I'm going to talk about, it's a, hopefully
+[00:15.680 --> 00:22.800]  not too technical talk, but the topics are technical, but I'm trying to keep it general.
+[00:22.800 --> 00:31.680]  So who am I? I founded the Prosody XMPP server. XMPP is an open chat protocol, so the idea
+[00:31.680 --> 00:37.660]  is you can choose the software that you use to chat with, you can choose your service
+[00:37.660 --> 00:42.760]  provider, or the providers federate using a server-to-server protocol, so this is like
+[00:42.760 --> 00:47.840]  some other open federated networks. There's email, which we're all familiar with, where
+[00:47.840 --> 00:53.120]  you can choose your provider, choose your software, there's the phone network, which
+[00:53.120 --> 00:59.600]  kind of works, and many of you here have probably heard of Matrix, and that's another very similar
+[00:59.600 --> 01:04.360]  like goals to XMPP, where we have an open protocol, and we're doing federation, and we're bridging
+[01:04.360 --> 01:09.480]  to proprietary networks. So Prosody is an XMPP server that you can self-host, it's all open
+[01:09.480 --> 01:16.160]  source. Snicket is a newer thing, which is kind of an all-in-one XMPP setup, it's kind
+[01:16.160 --> 01:21.480]  of more like a self-hosted WhatsApp, I actually created it for my family, because they were
+[01:21.480 --> 01:27.920]  still using WhatsApp, even though I'd been working on XMPP for a long time. And so yeah,
+[01:27.920 --> 01:32.560]  so Snicket has apps and stuff, that's all just working out of the box with voice and
+[01:32.560 --> 01:38.280]  video calls and things. As part of this, I worked on a modern XMPP, which is a set of
+[01:38.280 --> 01:44.320]  guidelines, UI guidelines, because the XMPP Standards Foundation, of which I'm one of
+[01:44.320 --> 01:49.360]  the directors, we publish protocols, and we say, this is how you send a file, this is
+[01:49.360 --> 01:54.560]  how you send a chat message or make a call, but we don't say this is how you should structure
+[01:54.560 --> 01:59.240]  the UI. So I wanted to bring some consistency and some good guidelines and help developers
+[01:59.240 --> 02:02.840]  with that. So yeah, I'm also part of the XMPP Standards Foundation, I'm the executive
+[02:02.840 --> 02:08.080]  director, I work on the board, but I've also been on the technical council, and so yeah,
+[02:08.080 --> 02:12.800]  I'm involved in a lot of XMPP things. So this talk is focusing on something that I had a
+[02:12.800 --> 02:22.160]  grant for from NGI Assure via NLNet, and it was to work on modernizing XMPP authentication
+[02:22.160 --> 02:30.640]  and authorization. So, authentication, you start out connecting to the server, and you
+[02:30.640 --> 02:35.520]  then have to prove your identity to the server. You can't just say, hey, I'm Matthew, because
+[02:35.520 --> 02:42.280]  every TCP connection has to be authenticated somehow. So how do we do that? Traditionally,
+[02:42.280 --> 02:47.400]  you make the connection, and you send a username and your password, and the server tells you
+[02:47.400 --> 02:53.440]  if it's correct, and then you can proceed to do authenticated stuff. This is actually
+[02:53.440 --> 03:00.840]  how the web works, pretty much. So you have this HTML form, you put in your username,
+[03:00.840 --> 03:06.000]  you put in your password, your password gets sent to the web server, and the server verifies
+[03:06.000 --> 03:12.360]  it, and usually on the server side, the password is hashed, which means, I mean, if it's a good
+[03:12.360 --> 03:16.760]  place, then it's hashed on the server side, so then they hash the incoming password, and
+[03:16.760 --> 03:26.120]  they compare it with the hash that they have stored. So XMPP uses a standard authentication
+[03:26.120 --> 03:33.000]  protocol called SASL. It's actually used by a bunch of different protocols, and there's
+[03:33.000 --> 03:39.160]  currently work to try and implement it in HTTP as well. And so SASL defines a bunch
+[03:39.160 --> 03:46.040]  of mechanisms, and the mechanism says what you send. And so the simplest one probably
+[03:46.040 --> 03:51.280]  is plain, and this is exactly what we just saw with the, you know, the Hi, I'm Matthew,
+[03:51.280 --> 03:59.720]  my password is, and the web is very similar. You're just sending a username and your password.
+[03:59.720 --> 04:07.120]  And so sending passwords across the wire is absolutely fine because of all these reasons,
+[04:07.120 --> 04:12.600]  and nobody ever reuses passwords, and they are, you know, frequently rotated and updated,
+[04:12.600 --> 04:16.520]  and they never contain personal information, so if they're leaked, then, you know, no bad
+[04:16.520 --> 04:21.840]  consequences. And, yeah, they're never also reused across services, which means this is
+[04:21.840 --> 04:26.520]  just great because if passwords ever do get leaked, and those hashes maybe, you know, brute
+[04:26.520 --> 04:31.120]  forced, then, you know, no one gets access to any other service than the compromised
+[04:31.120 --> 04:38.080]  one, which was already compromised anyway. Okay. Yeah, that was just a joke. So in XMPP,
+[04:38.080 --> 04:42.640]  we don't really use plain. We use another SASL mechanism that someone defined called
+[04:42.640 --> 04:49.280]  Scram. It's not just, hey, my password is, it's a challenge response thing, so there's
+[04:49.280 --> 04:56.120]  a bit of magic going on with hashing, and it has some really nice features. It does involve
+[04:56.120 --> 05:00.840]  multiple round trips, so, yeah, you're going backwards and forwards, but these by you that
+[05:00.840 --> 05:05.520]  the client and the server can only store hashes, so previously, we couldn't have the client
+[05:05.520 --> 05:09.640]  store a hash because it has to send the raw password for the server to hash. If you only
+[05:09.640 --> 05:16.040]  send a hash, then the hash becomes your password, which is kind of weird. So Scram has multiple
+[05:16.040 --> 05:20.200]  iterations of hashing. It allows the client to store a hash. It allows the server to still
+[05:20.200 --> 05:26.760]  store a hash, and only hashes exchanged over the wire. It's pretty magic, and the mutual
+[05:26.760 --> 05:33.320]  authentication part means that at the end of the authentication exchange, both the server
+[05:33.320 --> 05:39.760]  has authenticated the client and proven, yes, this person originally had the password, and
+[05:39.760 --> 05:43.680]  they are who they say they are, but importantly, it allows the client to verify that the server
+[05:43.680 --> 05:49.800]  also knows the original password, which in the past, with the plain mechanisms and like
+[05:49.800 --> 05:53.720]  the web, the server can just lie and say, yeah, I have your password, carry on, send
+[05:53.720 --> 05:58.800]  me more sensitive information, and so we have this mutual authentication, so when you connect
+[05:58.800 --> 06:06.080]  over XMPP and you use Scram, you have this verification that also the server you're
+[06:06.080 --> 06:10.760]  connecting to is the right one, and yes, we do have this with TLS, obviously, but there
+[06:10.760 --> 06:16.120]  are certain cases where TLS isn't always reliable, and that's where channel binding comes in,
+[06:16.120 --> 06:21.440]  which is a bit more magic, and this binds your authentication, that mutual authentication
+[06:21.440 --> 06:27.600]  stuff to your TLS channel, and so if you reach the end and the mutual authentication checks
+[06:27.600 --> 06:35.240]  out, but you find a little mismatch, this TLS magic can tell you that actually there
+[06:35.240 --> 06:39.440]  is someone listening in on your TLS connection, and that can be because, for example, your
+[06:39.440 --> 06:45.480]  certificate authority was compromised or whatever, so someone installed a different trust route
+[06:45.480 --> 06:49.520]  on your system without you knowing, and so we can actually detect this, and it's pretty
+[06:49.520 --> 06:55.040]  smart, all this security comes at a cost, obviously we just talked about why it's necessary,
+[06:55.040 --> 07:00.560]  but it's also still password based, so what can we do?
+[07:00.560 --> 07:05.120]  So there's been a lot of interesting development on the web ecosystem in recent years, they're
+[07:05.120 --> 07:11.440]  trying to, they've tried fixing stuff, and it's basically hard, users are always going
+[07:11.440 --> 07:16.320]  to be users, they're always going to choose memorable passwords, and there has been some
+[07:16.320 --> 07:19.960]  progress, there are password managers and so on, but although they're best practice,
+[07:19.960 --> 07:24.640]  they're not widely used, I mean amongst normal people, probably everyone here, I hope has
+[07:24.640 --> 07:34.600]  a password manager, so WebOrthN 502, it's basically a combination of things, they allow the browser
+[07:34.600 --> 07:39.920]  to do some special stuff and help with the authentication, you can do that with an external
+[07:39.920 --> 07:45.600]  hardware token, but these days also browsers are supporting TPM chips inside the hardware,
+[07:45.600 --> 07:49.780]  which allows you to link that authentication securely to a single device, and pass keys
+[07:49.780 --> 07:54.400]  are like Apple's thing that they're really pushing, which is based on all this, and allows
+[07:54.400 --> 08:04.280]  you to basically create an account without a password, and authenticate using this special
+[08:04.280 --> 08:08.120]  key that is only on your device, except it's also synchronized via iCloud, and so you
+[08:08.120 --> 08:13.320]  can access your account from all your devices without ever needing a password, which is
+[08:13.320 --> 08:18.200]  as long as you can access your iCloud account, now that's just one implementation, there
+[08:18.200 --> 08:26.640]  are other things, WebOrthN 502, and it's all based on open standards, but XMPP uses Sassel,
+[08:26.640 --> 08:34.400]  which is focused on passwords, so what can we do, I've been working on this new mechanism
+[08:34.400 --> 08:42.680]  in XMPP, which is token based, and it builds on some earlier work, which introduces a new
+[08:42.680 --> 08:49.880]  Sassel mechanism, or a family of mechanisms, which allow you to exchange a hash of the
+[08:49.880 --> 08:55.880]  token over the wire, so we're not sending the raw token, so it's a bit scram-like in
+[08:55.880 --> 09:02.400]  that sense, it still provides mutual authentication, and it still supports channel binding, so
+[09:02.400 --> 09:09.840]  you still have all those nice features of scram, it is a single round trip, so there's
+[09:09.840 --> 09:16.280]  no back and forth like with scram, the things that we are weakening in that sense don't
+[09:16.280 --> 09:22.120]  matter because the tokens are not passwords, and so although there is a slightly reduced
+[09:22.120 --> 09:30.400]  level of security around the token compared to scram, the tokens are temporary, so if
+[09:30.400 --> 09:36.520]  they get leaked, then you can easily revoke them, rotate them, and they are unique to
+[09:36.520 --> 09:39.920]  that service, and I would hope that if a service is compromised, you know, they're obviously
+[09:39.920 --> 09:44.320]  going to revoke all their tokens straight away, it's harder to get users to reset all
+[09:44.320 --> 09:49.600]  their passwords straight away, so there's many benefits to using tokens, and we still
+[09:49.600 --> 09:53.680]  get all the nice features of scram, but users aren't going to generate tokens and enter
+[09:53.680 --> 10:00.320]  them themselves, so this opens the door to two-factor authentication in XMPP as well,
+[10:00.320 --> 10:04.400]  previously we've had this problem where you can kind of do two-factor authentication,
+[10:04.400 --> 10:09.720]  but every time you drive through a tunnel, then your XMPP app is re-authenticating on
+[10:09.720 --> 10:13.680]  the other side because it's reconnecting to the server and has to re-prove who it is,
+[10:13.680 --> 10:18.440]  if it uses the password, then the server is going to say, well, you know, you have the
+[10:18.440 --> 10:22.120]  password, but the whole point of two-factor authentication is to make the password not
+[10:22.120 --> 10:27.840]  enough because of all the weaknesses that passwords entail, so if you authenticate
+[10:27.840 --> 10:31.360]  with a token instead, then the server knows it issued this token once, it issued it to
+[10:31.360 --> 10:36.320]  that device, and it knows who you are, and there's a higher security guarantee around
+[10:36.320 --> 10:37.680]  that.
+[10:37.680 --> 10:42.960]  So by using the new Sassel mechanism, servers won't, they'll see that you're authenticating
+[10:42.960 --> 10:47.400]  with a secure token, and they won't send the two-factor authentication prompts that
+[10:47.400 --> 10:50.520]  they usually send.
+[10:50.520 --> 10:53.560]  This is basically how two-factor auth on the web already works.
+[10:53.560 --> 10:58.000]  You provide that web form or whatever, maybe you're using pass keys, but once you do that
+[10:58.000 --> 11:02.160]  initial authentication step, the web service is going to send back a cookie that gets stored
+[11:02.160 --> 11:06.920]  in your browser in plain text, and with every request, yes, it's going over HTTPS, but it's
+[11:06.920 --> 11:11.840]  still sending that, you know, plain text string, and it doesn't have all the protections of
+[11:11.840 --> 11:18.800]  the channel binding and the mutual authentication that the FAST and Sassel mechanisms are supporting.
+[11:18.800 --> 11:24.280]  So in this sense, using FAST over, for example, the new HTTP Sassel stuff would be an interesting
+[11:24.280 --> 11:29.760]  security improvement for many secure web applications.
+[11:29.760 --> 11:34.280]  And so the other thing is it opens the door to having passwordless accounts.
+[11:34.280 --> 11:40.600]  So instead of exchanging your password for a token, you could exchange your password
+[11:40.600 --> 11:45.120]  plus a two-factor auth for a token, or you could do something entirely different, something
+[11:45.120 --> 11:50.160]  came up just at the real-time stand downstairs, someone wants to do SMS authentication, so
+[11:50.160 --> 11:55.880]  they verify SMS, kind of like how WhatsApp or Signal work, and then you will just be
+[11:55.880 --> 12:01.600]  given a FAST token, and then you can reconnect to the server using that.
+[12:01.600 --> 12:03.960]  And that will last for as long as you keep your device active.
+[12:03.960 --> 12:09.280]  If you have an inactive device, then that token will stop being refreshed, it will eventually
+[12:09.280 --> 12:18.000]  expire, and you will have to reauthenticate using SMS or maybe some recovery mechanism.
+[12:18.000 --> 12:22.080]  And once you've breached up this passwordless account, then obviously you can add other
+[12:22.080 --> 12:27.840]  recovery mechanisms as a backup if you need to.
+[12:27.840 --> 12:29.840]  And yeah, that was kind of the summary of my talk.
+[12:29.840 --> 12:35.000]  I hope there's still time for many questions if you are interested.
+[12:35.000 --> 12:38.920]  So this talk is kind of a complement to a blog post that I wrote on the Presley blog
+[12:38.920 --> 12:44.080]  about all this stuff, but the blog post focus mostly on the performance optimizations because
+[12:44.080 --> 12:50.560]  that matters to people, they want to be reconnected to the server as quickly as possible because
+[12:50.560 --> 12:53.000]  responsiveness and all this.
+[12:53.000 --> 12:59.000]  And so the blog post focus on the optimization aspects of this, today the talk focuses on
+[12:59.000 --> 13:01.960]  the security aspects.
+[13:01.960 --> 13:06.440]  And yeah, there's some more XMPP talks coming up later on, I am downstairs also in the real
+[13:06.440 --> 13:13.240]  time lounge, which is just down around the corner, and you can reach me on XMPP or email
+[13:13.240 --> 13:19.400]  and yeah, happy to answer any questions.
+[13:19.400 --> 13:36.360]  Can you tell us where they overlap, where they differ, can fast be used in scenarios where
+[13:36.360 --> 13:42.600]  JSON web tokens already exist as something better, or is it more divergent as a difference?
+[13:42.600 --> 13:43.600]  It's pretty different.
+[13:43.600 --> 13:50.840]  Yeah, sorry, so the question is ultimately, are JWT, JSON web tokens similar overlapping
+[13:50.840 --> 13:53.120]  with fast tokens?
+[13:53.120 --> 14:01.160]  Fast tokens are essentially opaque random strings of a good length for security reasons.
+[14:01.160 --> 14:05.600]  JSON web tokens, they are also embedding stuff inside that token.
+[14:05.600 --> 14:11.240]  A server could do similar, and when it issues the token, use a JWT instead.
+[14:11.240 --> 14:14.280]  There's not really much benefit to that.
+[14:14.280 --> 14:19.840]  JSON web tokens, they are still useful for some cases, definitely, but they have a bad
+[14:19.840 --> 14:22.240]  reputation with regards to security.
+[14:22.240 --> 14:27.800]  Yeah, it's complicated, but there's not really much overlap.
+[14:27.800 --> 14:33.200]  They can be kind of used in the same situation, but not entirely.
+[14:33.200 --> 14:37.920]  If you were doing a distributed network where you didn't really necessarily want to have
+[14:37.920 --> 14:42.480]  a backend communication, could you authenticate a fast token against one service, and then
+[14:42.480 --> 14:48.240]  that contains information that could authenticate with a trusted system that's not sharing a
+[14:48.240 --> 14:49.240]  backend?
+[14:49.240 --> 14:50.240]  Yeah, absolutely.
+[14:50.240 --> 14:52.200]  Any way that the server can verify the token is valid?
+[14:52.200 --> 15:00.120]  Sorry, the question is, if you were working on a decentralized system where the authentication
+[15:00.120 --> 15:04.360]  system is separate to the place where the user is logging in, then can you use JWT in
+[15:04.360 --> 15:05.360]  that situation?
+[15:05.360 --> 15:08.360]  The answer is yes, you could use it.
+[15:08.360 --> 15:15.360]  Two questions, are you attempting to standardize fast within the standards body, and second,
+[15:15.360 --> 15:23.120]  do you set the tokens that are disused, decayed by what mechanism?
+[15:23.120 --> 15:27.480]  The first question was, are we attempting to standardize fast?
+[15:27.480 --> 15:34.240]  Yes, so the sassel mechanism that it is based on is already a draft at the IETF, it's been
+[15:34.240 --> 15:35.840]  going a while.
+[15:35.840 --> 15:42.360]  We had a meeting with the sassel working group at the IETF just last month, and they agreed
+[15:42.360 --> 15:45.680]  that this is stuff that is interesting and they want to move forward with, because it
+[15:45.680 --> 15:50.600]  is also useful for other protocols, the email ecosystem and many others.
+[15:50.600 --> 15:56.240]  So yes, we are the XMPP layer of this, the whole fast stuff.
+[15:56.240 --> 16:02.920]  That is being standardized at the XMPP Standards Foundation, so that layer, if another protocol
+[16:02.920 --> 16:06.400]  wanted to use it, they would have to define their own, because the fast stuff specifically
+[16:06.400 --> 16:08.160]  is XMPP specific.
+[16:08.160 --> 16:12.440]  They can copy how we have done it, but it has to be translated to a different protocol.
+[16:12.440 --> 16:18.720]  The second question was, how do disused tokens decay?
+[16:18.720 --> 16:23.160]  That is basically up to the server, there is an algorithm in the fast specification,
+[16:23.160 --> 16:27.600]  which is linked from the blog post, which tells you how to implement the server in a
+[16:27.600 --> 16:34.400]  way that is going to securely rotate tokens, without having to check every possible token
+[16:34.400 --> 16:37.640]  on the server, because we don't necessarily know the user's identity until we verified
+[16:37.640 --> 16:38.640]  the token.
+[16:38.640 --> 16:43.240]  So it can be a bit complex, but essentially it's just the server knows the expiry time
+[16:43.240 --> 16:48.720]  of a token when the token was last seen, and some interesting stuff came up with how to
+[16:48.720 --> 16:54.120]  refresh tokens, because if the client authenticates and then you provide it with a new token
+[16:54.120 --> 16:58.880]  and immediately expire the old one, so that's one way of doing the rotation, there are
+[16:58.880 --> 17:05.200]  cases where the client actually reconnected, used the old token, and then did not receive
+[17:05.200 --> 17:10.560]  the new token, got disconnected, and then it gets logged out, basically, because it
+[17:10.560 --> 17:12.480]  can no longer access.
+[17:12.480 --> 17:17.440]  So the server has to store the last token that the client used, and also the new replacement
+[17:17.440 --> 17:19.640]  token, it's expecting it to use next.
+[17:19.640 --> 17:23.680]  And if the client never uses that token, then it will eventually issue a new one and work
+[17:23.680 --> 17:24.680]  out.
+[17:24.680 --> 17:28.080]  And that's the moment you see it authenticate with the new token.
+[17:28.080 --> 17:32.000]  That's when you expire the old one completely, and obviously there is a time limit to that,
+[17:32.000 --> 17:34.960]  because otherwise someone can carry on using the old one indefinitely, and we don't want
+[17:34.960 --> 17:35.960]  that either.
+[17:35.960 --> 17:43.440]  So there's kind of two timeouts built in, okay, excellent.
+[17:43.440 --> 17:44.440]  Thank you.
+[17:44.440 --> 17:54.560]  Thank you.
+[17:54.560 --> 18:02.240]  Thank you.

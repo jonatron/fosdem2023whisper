@@ -1,0 +1,348 @@
+[00:00.000 --> 00:13.520]  Okay. So, hello. Let me introduce us. Like you may have heard, we are from Redhead, from
+[00:13.520 --> 00:22.400]  Bruno, actually, and we are going to talk about DNF, DNF5, a new generation as we have
+[00:22.400 --> 00:30.400]  in the title. To introduce us and the talk, we have it split into three sections. The
+[00:30.400 --> 00:37.400]  first one is covered by me. It will be a technical overview. Then there is a community history
+[00:37.400 --> 00:49.800]  and action items by Nicola. And finally, a live demo from Jan. First, I would like to
+[00:49.800 --> 00:55.760]  explain what are we actually talking about. I imagine most of you already know this, but
+[00:55.760 --> 01:02.640]  DNF is a package manager. Probably the easiest way to explain this to someone is to compare
+[01:02.640 --> 01:09.960]  it to, like, an app store or command line app store. So, it installs, upgrades, removes
+[01:09.960 --> 01:18.880]  packages and dependencies, and stuff like that. And there are many examples. You might
+[01:18.880 --> 01:26.840]  be, and we are actually working on DNF and micro-DNF. To put this into some more context,
+[01:26.840 --> 01:34.960]  we have this diagram that's actually describing Fedora. But I think many distributions have
+[01:34.960 --> 01:42.040]  something, some similar setup like this. You can see that it's possible to interact with
+[01:42.040 --> 01:49.040]  the package manager on, like, many ways or in many levels. But here we are talking about
+[01:49.040 --> 01:58.200]  the high-level manager, and that is DNF or LibDNF. If we focus on that section, we could
+[01:58.200 --> 02:08.440]  see a diagram of components that, for the current version, looks something like this.
+[02:08.440 --> 02:19.240]  There are some problems with this, actually. And at first glance, I think it already looks
+[02:19.240 --> 02:25.640]  more complicated than it needs to be. But mainly, you can see that the LibDNF, the library,
+[02:25.640 --> 02:34.160]  is split into two sections. And DNF is actually just using the Hawkeye section, but not the
+[02:34.160 --> 02:40.080]  Libheave one, while micro-DNF is using both. This would be fine if there was some extra
+[02:40.080 --> 02:45.760]  functionality in micro-DNF, but it is actually the other way around. Micro-DNF does less
+[02:45.760 --> 02:54.760]  than DNF, and this is because we have, like, duplicate code there. That's, of course, not
+[02:54.760 --> 03:03.800]  good, so we should fix that. And the other big issues is with the extensions or plugins.
+[03:03.800 --> 03:09.760]  Most of our plugins are for DNF, and they are in Python, but as you can see from the
+[03:09.760 --> 03:16.000]  diagram, it's not possible to use the same extensions in micro-DNF. There's, like, simply
+[03:16.000 --> 03:20.720]  no way how to get to them. And also, the other way around, if you have some extension for
+[03:20.720 --> 03:28.320]  the Libheave, it doesn't get used in DNF. This is, again, not good, because we already
+[03:28.320 --> 03:32.800]  have some extensions that we want in both, and we have to duplicate them. Again, that's
+[03:32.800 --> 03:40.920]  just a bad situation. And to resolve that, we are introducing or creating DNF5. I should
+[03:40.920 --> 03:45.600]  mention that when I say DNF5 here, I mean, like, this whole part of the stack, so the
+[03:45.600 --> 03:56.000]  library, the plugins, the actual command line DNF tool. But the new diagram looks like this.
+[03:56.000 --> 04:03.080]  It is much simpler. We have merged the insights of the library into one piece, and we have
+[04:03.080 --> 04:13.000]  also merged DNF and micro-DNF into just one tool, which is here called DNF5. There's also
+[04:13.000 --> 04:22.320]  a new DNF demon. We still have to, like, to plug in two nodes here for plugins or extensions,
+[04:22.320 --> 04:28.760]  but it is much more clearly separated. We have, for the library, we have more, like,
+[04:28.760 --> 04:35.640]  a passive extensions that get used automatically. Every time you use the library, they get
+[04:35.640 --> 04:43.960]  loaded and run. And for DNF5, there are some more, like, active plugins. So this is typically,
+[04:43.960 --> 04:48.120]  like, a new command that you can add, and the user actually has to, like, type it and
+[04:48.120 --> 04:59.320]  run it. Okay. Another big two features are that we actually are breaking API, and it's
+[04:59.320 --> 05:04.600]  not backwards-comfortable. So, okay, these are not exactly features, and you might ask,
+[05:04.600 --> 05:12.920]  why are we doing this? So let me try to explain that or justify it. First, for the library,
+[05:12.920 --> 05:20.120]  we completely restructured the API and tried to make it better and most importantly unified
+[05:20.120 --> 05:27.360]  and safer, because before, like I mentioned, it was merged together a bunch of things,
+[05:27.360 --> 05:33.080]  and it wasn't that great. So hopefully, this time, we try to learn from our mistakes and
+[05:33.080 --> 05:42.760]  make it better. And we are, another change we are also doing is inside of the library.
+[05:42.760 --> 05:50.440]  For example, we are now loading and downloading the repositories at the same time. This is
+[05:50.440 --> 05:55.960]  because typically downloading the repositories is network intensive, but loading them on
+[05:55.960 --> 06:03.560]  the other end requires CPU, so they kind of nicely match together and can be done at the
+[06:03.560 --> 06:11.080]  same time. Another change is no, we don't download the file list metadata by default.
+[06:11.080 --> 06:15.880]  If you are not familiar, then the file list metadata contains a list of every file in
+[06:15.880 --> 06:21.600]  all of the RPMs, so it is quite a big file, and we think it's possible to get by without
+[06:21.600 --> 06:27.880]  it as other distributions do, so we don't download it by default, but of course, it's
+[06:27.880 --> 06:33.360]  still possible if the user wants to download it or even configure it, so it's downloaded
+[06:33.360 --> 06:40.520]  every time. Okay, then we are trying to make it, of course, in general, faster, and I think
+[06:40.520 --> 06:51.560]  we will see this in the demo later. And, yeah, we have bindings for the new library. We mainly
+[06:51.560 --> 06:57.320]  focus on Python, because that's most of our users, but thanks to Sveak, it should be possible
+[06:57.320 --> 07:04.960]  to generate also for other languages like Ruby, and it will need some work to do that,
+[07:04.960 --> 07:13.720]  but hopefully it wouldn't be too bad. Now, I'm moving to the actual command line package
+[07:13.720 --> 07:21.280]  manager, DNF, DNF5. Probably the biggest change or one of the biggest changes is that
+[07:21.280 --> 07:27.000]  we dropped Python as a dependency, and this is actually what allowed us to merge micro
+[07:27.000 --> 07:37.720]  DNF and DNF together, because before we needed micro DNF for containers on minimal environments
+[07:37.720 --> 07:43.320]  where you need smaller footprints, but since now we don't need Python and everything is
+[07:43.320 --> 07:55.120]  in C++, in C++, we have best of both worlds. Yeah, not everything has changed. Most of
+[07:55.120 --> 08:00.080]  the commands are actually the same, except for a couple of differences that needed like
+[08:00.080 --> 08:06.480]  picking or fixing, but on the other hand, the outputs of the commands did change. In
+[08:06.480 --> 08:16.240]  fact, we do run still the same CI test that we run for DNF4 as well as for DNF5, and usually
+[08:16.240 --> 08:22.440]  you have to change the checking of the outputs to make it work. Not all of the tests work,
+[08:22.440 --> 08:29.160]  but we are still developing it and working on that. Yeah, then there is the daemon, and
+[08:29.160 --> 08:36.880]  just really quickly, it already is accessible by debas, and since it uses the whole library
+[08:36.880 --> 08:43.160]  or the same library, it will have the same functions, so you can use it to work with
+[08:43.160 --> 08:50.480]  groups or modules and stuff like that. Okay, last thing from me, I want to mention a couple
+[08:50.480 --> 08:59.280]  of additional improvements. I'm not going to match too many details, but we have configurable
+[08:59.280 --> 09:06.960]  aliases, fully integrated modularity, just single configuration for all the users of
+[09:06.960 --> 09:12.440]  the library. We manage to separate system state from history database and module state,
+[09:12.440 --> 09:19.280]  and for example, we have built in autocomplete. There is address, and if you have questions
+[09:19.280 --> 09:25.880]  about this or anything else, you can of course ask us after the presentation. Okay, so that
+[09:25.880 --> 09:32.720]  was everything from me, and let me now hand it over to Nicola and the community part.
+[09:32.720 --> 09:39.840]  Thank you. So after the technical overview, let's focus more on who is actually contributing
+[09:39.840 --> 09:47.040]  to DNF5 and how we are changing our idea of looking at the community, not just our idea
+[09:47.040 --> 09:53.400]  of the code base, how we plan to change our approach with the community. So of course,
+[09:53.400 --> 09:59.520]  DNF5 is an upstream project, so it all starts from upstream, and it was a, I would say quite
+[09:59.520 --> 10:04.880]  a bit chaotic in the past because components were a bit separated, issues were not enabled
+[10:04.880 --> 10:11.640]  for DNF, for example, for quite a while, now they are, but it wasn't super clear the path
+[10:11.640 --> 10:17.400]  we were taking with the community, many issues stayed open for a while, poor requests are
+[10:17.400 --> 10:25.200]  reviewed, we didn't do great, but we plan to change it. So let me give you an overview
+[10:25.200 --> 10:31.400]  of what was the past of DNF contributions, then we will look of what we expect in the
+[10:31.400 --> 10:38.980]  future, and then the action items that the team has to make everything more transparent
+[10:38.980 --> 10:47.200]  and all the workflow much clearer. So first of all, the past of the projects. So I'm saying
+[10:47.200 --> 10:53.400]  projects because here I graphed the weekly contributions by author of DNF, and DNF and
+[10:53.400 --> 10:59.400]  DNF5, and what I want to pull out from this graph is that, well, first of all, now the
+[10:59.400 --> 11:06.200]  effort of the team is all focused on DNF5, as you see, it's just all the contributions
+[11:06.200 --> 11:14.560]  are on the green part, and one other interesting thing is that, yes, DNF5 efforts are higher,
+[11:14.560 --> 11:22.040]  are more, compared to DNF or LibDNF alone, but actually the effort, if you sum, the highest
+[11:22.040 --> 11:27.720]  points of DNF and LibDNF, the efforts of DNF5 is less, and that's because you have
+[11:27.720 --> 11:37.280]  to maintain a unified code base, and that's much, much more easier to do, just one thing.
+[11:37.280 --> 11:43.480]  Also I want to show you during the history of the project how many people actually contributed,
+[11:43.480 --> 11:51.240]  so these are on the Y, the number of people that did some number of contributions on the
+[11:51.240 --> 11:57.760]  X, so there is some exceptional guy, around 200, there is some others, there's just one
+[11:57.760 --> 12:07.040]  guy, 150, 125, and I like, everyone is doing a very small number, so that's fact, and that's
+[12:07.040 --> 12:12.480]  how upstream works, you have exceptional core team members that they will do all the job
+[12:12.480 --> 12:19.400]  and they are carrying, they're pulling the efforts, but it's actually good to maybe improve
+[12:19.400 --> 12:25.480]  the community a bit more, and well to give you maybe some more perspective, you can even
+[12:25.480 --> 12:33.640]  see, like this is, every bar is a contribution, so it's a different person, and yet again
+[12:33.640 --> 12:40.320]  there are just few people that did a huge amount, a huge number of contributions, sorry,
+[12:40.320 --> 12:47.960]  and many, many people that did just a few, like one, which of course are important, but
+[12:47.960 --> 12:57.000]  what it means to us when we, what it means for us having someone from outside contributing,
+[12:57.000 --> 13:06.520]  so I had this idea of kind of splitting the contribution into groups, and here is my analysis,
+[13:06.520 --> 13:12.440]  so there are of course the authors of the project, they are responsible of let's say
+[13:12.440 --> 13:21.920]  the 10% of the total number of commits or contributions, and there are 1, 2, max 5 maybe in the project,
+[13:21.920 --> 13:27.760]  those are like the key components, they are there from the beginning, I'm talking generally,
+[13:27.760 --> 13:34.320]  but this applies for our components, and there are paid programmers, co-authors, exceptional
+[13:34.320 --> 13:40.840]  contributors that are doing 100 of commits, 100 of commits, well it's quite a number,
+[13:40.840 --> 13:43.960]  and then of course there are the one-liners, the people that come and they're like, hey
+[13:43.960 --> 13:48.880]  there's a typo here, super important as well, but they are just, they come and go, you will
+[13:48.880 --> 13:54.320]  never see them again, and well they might be not even interested, sometimes they just
+[13:54.320 --> 14:02.320]  come and they are just doing one small fix and going away, and then there are who I call
+[14:02.320 --> 14:08.760]  the people in the middle, so actually the people that can effectively contribute by following
+[14:08.760 --> 14:20.960]  the project, and by coming in more than once to just point out, hey, I am doing this request,
+[14:20.960 --> 14:28.560]  maybe I'm opening an issue, and then the contributor gets interested in working into the project
+[14:28.560 --> 14:35.560]  and does active commit, let's say, so brings in some code, or maybe delete some code, deleting
+[14:35.560 --> 14:43.240]  code is very important, so let's look at how we perceive contributions from inside a team,
+[14:43.240 --> 14:51.120]  so for DNF, talking still about weekly contributors, we had a total of 225 contributors, 4 authors,
+[14:51.120 --> 14:58.760]  so 4 people that did more than 10% of the whole work, and 19 people, very good people
+[14:58.760 --> 15:06.960]  that did 100 commits, and those people, they are regular, they are since forever, you kind
+[15:06.960 --> 15:12.240]  of know that they are there helping you out, but let's focus on the others, so how many
+[15:12.240 --> 15:18.080]  commits are in total, and how many have been without those people, and the number is actually
+[15:18.080 --> 15:25.200]  roughly 10,000 total commits, oh sorry, I'm talking about contributions, so it's a little
+[15:25.200 --> 15:31.600]  binned, so it's smaller numbers, but still, the statistic applies, roughly 4,000 commits
+[15:31.600 --> 15:39.280]  without the authors, and roughly 1,000, so 1,000 commits are done just by those people
+[15:39.280 --> 15:47.680]  that stay in the middle, more or less, and so what is your effort to be, let's say, active
+[15:47.680 --> 15:52.960]  member of the community, so I said, okay, I want to do the 1% of this, that's pretty
+[15:52.960 --> 16:01.960]  good, you do roughly 1, sorry, 11 commits, 11 issues, 11 whatever, 11 comments, and you
+[16:01.960 --> 16:10.840]  are actually 1%, if you know 100 people, you definitely remember, if one person is missing
+[16:10.840 --> 16:16.520]  or not, or like, hey, you, I don't know, you change your haircut to pink, and you remember,
+[16:16.520 --> 16:21.480]  because the 1% is quite a lot, so it's very easy, and I'm talking about 11 contributions
+[16:21.480 --> 16:28.600]  in all the history of DNF, and DNF is being active for like 10 years, so it's like 1 contribution
+[16:28.600 --> 16:34.320]  per year, it's quite easy, right, and now it's the time to jump into DNF 5, because
+[16:34.320 --> 16:40.240]  if you look to DNF 5, same applies, it's basically just team effort, so 5 authors roughly, this
+[16:40.240 --> 16:46.920]  number will decrease with time, and 6 very good contributors, and then those are the number
+[16:46.920 --> 16:54.480]  of contributions, and again, if you do 1 to contributors, we value that kind of contribution,
+[16:54.480 --> 16:58.720]  whatever it is, quite a lot, I mean, it's significant, this is what I'm trying to bring
+[16:58.720 --> 17:04.200]  up, so what kind of contributions are we talking about, we have a transparent workflow, we have
+[17:04.200 --> 17:09.880]  open issues now, we triage all the issues weekly, this is something that, again, we were not
+[17:09.880 --> 17:17.640]  doing for DNF for some time, we have public milestones in GitHub, so you can understand
+[17:17.640 --> 17:23.520]  what our action plans are, and also we have discussions open that we use for announcement,
+[17:23.520 --> 17:29.840]  that we use for, yeah, gathering opinions, like DNF 5 naming, it's discussed on GitHub,
+[17:29.840 --> 17:35.320]  so you can go there and give your opinion, and questions, of course, if you have a question
+[17:35.320 --> 17:39.440]  now, you can ask it, if you have a question later, there will be the link to GitHub to
+[17:39.440 --> 17:45.480]  just go there and ask something, and, of course, we have bugzilla for Fedora tracking, and,
+[17:45.480 --> 17:53.920]  I mean, downstream requests, or specific Fedora things, but, like, the upstream is where we
+[17:53.920 --> 18:00.680]  start, and the upstream is where we are trying to improve to the community, a bit more to
+[18:00.680 --> 18:06.120]  that, we have now a better documentation, the documentation is actually generated from
+[18:06.120 --> 18:12.560]  the code base, it is tested, so everything, every snippet that's there, gets compiler
+[18:12.560 --> 18:18.920]  deficiency plus plus, it gets interpreted, it's in Python, and so it's much more, let's
+[18:18.920 --> 18:26.200]  say, reliable documentation, so we expect to have, I'm not saying what we expect to
+[18:26.200 --> 18:31.600]  have, you know what, because you'll never know, but then we have now tutorials, we have
+[18:31.600 --> 18:43.320]  code templates, we have a lot more material that a newcomer could work on and start to
+[18:43.320 --> 18:50.600]  contribute to DNF using that material, right, and then we are planning to also add contributing
+[18:50.600 --> 18:56.800]  guides that now are missing, but we are planning to improve the contribution workflow on GitHub
+[18:56.800 --> 19:04.120]  yet again, and also to open first time issues which are missing, but we are targeting that,
+[19:04.120 --> 19:11.080]  so just to conclude my part, who's the community, actually the community for us is the people
+[19:11.080 --> 19:16.840]  who create issues, I mean, not create problems, create GitHub issues, right, people who add
+[19:16.840 --> 19:22.320]  or remove code, and people to take part in the discussions, even now, even just by coming
+[19:22.320 --> 19:28.800]  to us and say, hey, DNF 5, you know what, I tried it, it worked, or it broke my system,
+[19:28.800 --> 19:34.800]  it happened, so I mean, it can happen, it's not perfect, or the people who raise questions
+[19:34.800 --> 19:40.920]  like now, or again, they are reaching back to us to the mailing list, the more questions
+[19:40.920 --> 19:47.600]  we have, the more reliable we can provide a code that actually works for the most user
+[19:47.600 --> 19:54.160]  cases, so, and just using DNF 5, you are part of the community, and most importantly, and
+[19:54.160 --> 20:03.640]  I really feel this quite a lot, because when I started working on DNF, I actually needed
+[20:03.640 --> 20:12.240]  help from the team, and I believe that many people didn't quite dive into the contribution
+[20:12.240 --> 20:20.000]  system because they didn't have help, so we are actually in the need of people that help
+[20:20.000 --> 20:27.600]  and ask for help, and that will bring to all the other points, so, well, I hope now it's
+[20:27.600 --> 20:36.280]  much more clear how we intend to work in the future, and now, let's see how DNF 5 works
+[20:36.280 --> 20:43.240]  in practice with the demo, so, here you go, Jan will talk to you about the demo.
+[20:43.240 --> 20:52.880]  Okay, so hopefully it will work, so, okay, let's try some hands-on usages, and what do
+[20:52.880 --> 20:54.440]  we have here?
+[20:54.440 --> 21:02.000]  So we have two separate individual containers, both running federal Linux, and on the, they
+[21:02.000 --> 21:08.600]  have the same configuration, and on the left side, I will show you the examples using the
+[21:08.600 --> 21:13.960]  original DNF command, and on the right side, I will show you the same examples running
+[21:13.960 --> 21:22.560]  the DNF 5 command, so, let's start with something simple, just install a package, so, we will
+[21:22.560 --> 21:33.400]  try to install this package, hopefully the Wi-Fi will work, and I will try the same on
+[21:33.400 --> 21:40.360]  the right side, okay, and now, what's going on?
+[21:40.360 --> 21:45.680]  We need to download the metadata about the packages, so, basically, what are the packages,
+[21:45.680 --> 21:54.680]  what are their dependencies, the requirements, so, the definition of repositories is configured
+[21:54.680 --> 22:01.800]  in the system, and now we need to just pull all the metadata from repositories, and now
+[22:01.800 --> 22:10.640]  we can see the first difference between the DNF and DNF 5, what I was already Alish talking
+[22:10.640 --> 22:19.160]  about, and it's the size of the metadata, because in DNF, everything was hard-coded,
+[22:19.160 --> 22:24.760]  and always, all metadata was downloaded, so, there is, like, 64 megabytes for the Fedora
+[22:24.760 --> 22:31.760]  37 repository, and if we look into DNF 5, there is just 21 megabytes, and it's because of
+[22:31.760 --> 22:38.800]  the file lists are not there by default, because usually we don't need them, okay, we can see
+[22:38.800 --> 22:44.080]  some differences in the outputs, like, for the DNF 5, we have some more information there,
+[22:44.080 --> 22:53.320]  like, what packages are being replaced, yes, but it's basically, it looks very similar,
+[22:53.320 --> 23:01.000]  but the output should be a little bit more convenient for the user, so let's try to install
+[23:01.000 --> 23:10.640]  the packages, and, yeah, that's it, basically. Another example, Alish was talking about the
+[23:10.640 --> 23:19.360]  auto-completion, so this was also improved, we can see that for DNF, there was also some
+[23:19.360 --> 23:25.200]  auto-completion, if we try, for example, the mark command, I will type the M and now the
+[23:25.200 --> 23:32.560]  double-tap, and we can see the DNF offers the commands for us, okay, that's fine, but
+[23:32.560 --> 23:38.960]  the mark command has also the sub-commands, so if I type the double-tap again, oh, it
+[23:38.960 --> 23:44.880]  shows me, like, the installed packages on the system, so these are the arguments I should
+[23:44.880 --> 23:53.000]  use, but if we see the help, like, we need to use one of those three sub-commands, and
+[23:53.000 --> 24:00.160]  these are not suggested by the DNF, so this was improved for DNF 5, we can look at this,
+[24:00.160 --> 24:06.000]  if we put the M and double-tap, we can already see that there is some difference, there is
+[24:06.000 --> 24:12.520]  also some brief description of the sub-commands that are, all the commands that are offered
+[24:12.520 --> 24:22.680]  for us, and if we now put double-tap again, we can see also the sub-commands there, so,
+[24:22.680 --> 24:28.360]  and of course, there is also the auto-commission of the option, so we can use the double-tap
+[24:28.360 --> 24:37.360]  again, and we can see all the parameters that are relevant to this command, and it's quite,
+[24:37.360 --> 24:40.560]  it could be quite convenient.
+[24:40.560 --> 24:51.200]  So now let's try some performance comparison, so, for example, the repo query command was
+[24:51.200 --> 24:58.680]  quite improved, so it's basically the command for querying the packages based on some keywords,
+[24:58.680 --> 25:07.800]  on filtering it, and so on, but for this example, we will use just the empty repo query, which
+[25:07.800 --> 25:13.640]  basically lists all the available packages in repositories, so let's try that, running
+[25:13.640 --> 25:21.960]  also for dnf5, and we can see that the dnf5 was a little bit faster, but let's measure
+[25:21.960 --> 25:33.000]  it exactly, so let's use the time command, and the same for dnf5, and we can see for
+[25:33.000 --> 25:40.120]  dnf, it was like almost three seconds, and for dnf5, it was one second, so it's a little
+[25:40.120 --> 25:49.840]  bit faster there, and we can also try some more advanced repo query, so we can list
+[25:49.840 --> 26:01.680]  all the packages that depend on CuraLibrary, and we will see that there will be, oh, there
+[26:01.680 --> 26:15.920]  should be quite a big difference, so what depends on, right, so running it, I will try
+[26:15.920 --> 26:28.120]  to run it parallel, and we will see, okay, so here is about six seconds for dnf5, it's
+[26:28.120 --> 26:38.720]  quite fast, and for dnf, it will be three times longer, I think, okay, 20 seconds, okay,
+[26:38.720 --> 26:51.320]  so that's it from the CLI demo, and we can move to API, and you could ask why I should
+[26:51.320 --> 26:58.840]  use the API, well, of course, it depends on the use cases, but usually if your project
+[26:58.840 --> 27:07.200]  has support, one of our scripting languages, we have the bindings for, like the Python,
+[27:07.200 --> 27:13.520]  it could be much more convenient to use directly the API, and also it's more powerful than
+[27:13.520 --> 27:25.920]  the CLI interface, but some common use cases are simpler to write through the command line,
+[27:25.920 --> 27:33.760]  and so sometimes in the end, the client chooses both approaches, right, okay, so let's see
+[27:33.760 --> 27:41.840]  some simple API example, let's say we have some, our favorite package, and we want to
+[27:41.840 --> 27:48.800]  know what are the latest available version of this package in different federal releases,
+[27:48.800 --> 27:57.200]  could be useful, so let's see step by step what we need to do, so if we have installed
+[27:57.200 --> 28:05.280]  the double packages and the API bindings following our tutorials on the GitHub pages, the importing
+[28:05.280 --> 28:11.120]  of the Python module is super simple, then we need to set up the session for the dnf,
+[28:11.120 --> 28:21.240]  and running some initialization method, then we need to override the release version variable,
+[28:21.240 --> 28:30.480]  which is basically used in the repository URL, so we always look only for the packages of
+[28:30.480 --> 28:38.680]  the respective federal release, then we need to prepare or load the repositories from the
+[28:38.680 --> 28:47.760]  configuration and prepare like the objects for the Python, and then we need to prepare
+[28:47.760 --> 28:54.360]  the query, what we will actually be querying, so this is also quite simple, there is a package
+[28:54.360 --> 29:00.760]  query object, and we will just filter all the packages containing the kernel name, and
+[29:00.760 --> 29:08.000]  we want to have the latest version always, that's simple, and if we found any of those
+[29:08.000 --> 29:14.080]  packages containing kernel, we just print the name of the package, otherwise not available,
+[29:14.080 --> 29:24.920]  okay let's try it, running this simple script, and for federal 35 there is this kernel version,
+[29:24.920 --> 29:36.760]  for federal 36 there will be some probably newer one, it's taking long, and also should
+[29:36.760 --> 29:46.560]  output for federal 37 something a little bit newer, okay, now we can try to edit our script,
+[29:46.560 --> 29:55.080]  and show you if we have already some dnf5 package available, but yeah, we need to add
+[29:55.080 --> 30:16.920]  here a raw height version, a development version of the Fedora, doesn't work, I don't know how
+[30:16.920 --> 30:30.240]  to, does anyone know how to exit V? I couldn't resist, I need to escape, it's a different
+[30:30.240 --> 30:40.360]  laptop, and the thing is that it's actually a different laptop, because the htmi wasn't
+[30:40.360 --> 31:00.240]  working, so I don't know, escape is not working, thank you, if anyone has any questions we
+[31:00.240 --> 31:05.560]  will try to move on, and maybe we can move on, okay so you will never know if dnf5 is
+[31:05.560 --> 31:13.400]  actually in some fedora, well guess what we will say it anyways, but it's always exiting
+[31:13.400 --> 31:37.920]  it, oh maybe, maybe I got it, so in federal 35 there is no dnf5, in federal 46 no dnf5,
+[31:37.920 --> 31:55.400]  it's taking some time, I don't know, maybe just, oh it's there, okay, we can move to
+[31:55.400 --> 32:08.320]  some more challenging example, but if we want to add some, our awesome new command to dnf5,
+[32:08.320 --> 32:14.240]  so then the user will install it, and just type dnf5, our command, and it will do the
+[32:14.240 --> 32:22.600]  magic, it's quite simple, we can show it to write some simple dnf5 plugin in like 5 minutes,
+[32:22.600 --> 32:27.680]  so what do we need, okay, we need devlin binding packages, that's no problem, we can install
+[32:27.680 --> 32:35.120]  it following the tutorials, we need some template sources, okay, you can steal our dnf5 plugin
+[32:35.120 --> 32:42.440]  sources and use them, and you need some build tools and build script, and you can also steal
+[32:42.440 --> 32:49.680]  the cmake script we have for the dnf5 plugin, no problem, everything is in our dnf5 repository,
+[32:49.680 --> 32:57.520]  now how to write it, you can follow our structure of dnf5 plugins, it's basically always some
+[32:57.520 --> 33:05.880]  definition file, like the header, what's there, the actual implementation, the cpp file, and
+[33:05.880 --> 33:13.600]  then there is like the adapter for the plugin API, but it's like the boilerplate code, you
+[33:13.600 --> 33:20.600]  just need to change few lines and it will work, so let's look at this c++ example, there
+[33:20.600 --> 33:27.160]  is the implementation of really simple example command, and it's following like the command
+[33:27.160 --> 33:36.080]  interface from the dnf5, so there is some methods for the setup of the command we need
+[33:36.080 --> 33:43.320]  to follow, in this step we need to tell the dnf5 we have some new command, so we basically
+[33:43.320 --> 33:50.280]  register our new command into the dnf5, this is super simple and it could be copied from
+[33:50.280 --> 33:56.840]  other plugins, then there is setting the argument parser, basically parsing the arguments, what
+[33:56.840 --> 34:05.000]  are the arguments for our new command, listing all the positional arguments and what we have,
+[34:05.000 --> 34:10.280]  but in this simple example we don't have any, so we just set some simple description, in
+[34:10.280 --> 34:16.880]  the configure section we can like modify the dnf5 session, change some configuration
+[34:16.880 --> 34:24.040]  or request some optional method that we downloaded, here we just going to be quiet, and there
+[34:24.040 --> 34:31.400]  is the actual implementation of the command in the run method where we just, we will just
+[34:31.400 --> 34:39.040]  output something on the terminal, and here I will show briefly the adapter code, so this
+[34:39.040 --> 34:46.720]  is the boilerplate one, you just copy it and change a couple of things, this is like
+[34:46.720 --> 34:54.000]  the plugin name, the version like name your outer and name of the plugin, then there is
+[34:54.000 --> 35:03.640]  this long block of some boil break code that is same for all the plugins, each plugin consists
+[35:03.640 --> 35:12.640]  of one or more commands, so we just put our new command into the list, and finally we
+[35:12.640 --> 35:21.000]  need to return the instance of our new plugin class, and that's it, so let's try to build
+[35:21.000 --> 35:29.360]  it and run it, at first I will show you that there is no example command for dnf5 right
+[35:29.360 --> 35:40.240]  now, so I'm not cheating, right, and here are the sources, right, there is the cpp file
+[35:40.240 --> 35:46.640]  I was showing, then there is the header file which is basically just the definition, and
+[35:46.640 --> 35:52.280]  the adapter code in the example plugin cpp, and then there is the build script for the
+[35:52.280 --> 36:03.920]  cmake which is stolen from the dnf5 sources, okay, so we just need to create build folder,
+[36:03.920 --> 36:13.360]  and then we will do everything to make it, there is again some weird keyboard, wow, I
+[36:13.360 --> 36:30.040]  need, this is not an English keyboard, I need like the ampersand, English, this one, how
+[36:30.040 --> 36:44.080]  to, where is it, there we are, nice, oh, it's, how did it happen, what happened, I don't
+[36:44.080 --> 36:56.200]  know, this, show me again, what the shift and, this is the Italian keyboard, so don't
+[36:56.200 --> 37:04.440]  look at this, just look at the number, oh, sorry, it is printed in Italian, sorry, so
+[37:04.440 --> 37:11.400]  make it, make install, so basically just build the sources and the installation is just the
+[37:11.400 --> 37:20.360]  copying of the library into the correct place where the dnf looks for it, so building is
+[37:20.360 --> 37:39.200]  done, and we can try running the dnf5 example, and yes, we did it, and that's it, okay, so
+[37:39.200 --> 37:46.200]  when will the dnf5 release, you discovered already, the dnf5 is actually already in fedora
+[37:46.200 --> 37:55.840]  row hide, so 38, and there is a plan to, well, in a moment, so first of all, if you're running
+[37:55.840 --> 38:01.920]  stable fedora 36 or 37, you can use a copper to try it, and it will be parallel installation
+[38:01.920 --> 38:09.040]  with dnf, and also here are all the sources that we have for whatever, you can find everything
+[38:09.040 --> 38:13.440]  in the github repo, that's the only link you need, there's everything there, we have all
+[38:13.440 --> 38:21.160]  the links copied in the talk information, if you run fedora row hide, or if you're in
+[38:21.160 --> 38:25.160]  a container of row hide, you want to try it, it's there, so just dnf install dnf5, and
+[38:25.160 --> 38:34.560]  you're good, and something more about it, when it will actually land in fedora, so there
+[38:34.560 --> 38:41.280]  is a plan to do a major upgrade of micro dnf, that will actually sim link to dnf5, so it
+[38:41.280 --> 38:49.720]  will be replaced in fedora 38, and in fedora 39, there's the plan to replace dnf with dnf5,
+[38:49.720 --> 39:00.800]  so it's coming, and we hope to be ready for that, that's it, thank you, and if you have
+[39:00.800 --> 39:11.800]  questions, you have time.
+[39:11.800 --> 39:22.800]  Any question?
+[39:22.800 --> 39:29.360]  Thank you so much for this presentation, my question is related to community, you demonstrate
+[39:29.360 --> 39:37.800]  that there is quite a few people that are not making more than like 1, 2, 3, 4 commits,
+[39:37.800 --> 39:45.000]  can you tell me what is your plan to help people contribute more, how are you going
+[39:45.000 --> 39:49.560]  to improve the contributor experience?
+[39:49.560 --> 40:04.360]  Thank you for the question, so the idea is to once again make it simpler and be more
+[40:04.360 --> 40:11.800]  proactive to help people, so again in the past we weren't very responsive, and people
+[40:11.800 --> 40:19.520]  got pissed because their code was just ignored, and the questions were not as important as
+[40:19.520 --> 40:27.200]  maintaining dnf, or that was a perception from the outside, and now we try to, again,
+[40:27.200 --> 40:34.280]  every week we go through all the discussions, all the new issues, all the new PRs from community,
+[40:34.280 --> 40:38.720]  in all our components, and we set an action plan for that, so we set the milestones in
+[40:38.720 --> 40:43.560]  every one of that, it's like we want to make this landing fedora 38, we want to make this
+[40:43.560 --> 40:50.960]  landing fedora 39, so you know what is our priority, and we take seriously in serious
+[40:50.960 --> 40:59.000]  considerations PRs, so if you just drop some code, it's very easy for us to review it and
+[40:59.000 --> 41:05.520]  be proactive to that, and once again, it's done weekly and it's on our priority, our
+[41:05.520 --> 41:08.760]  workflow has changed, hope it answered.
+[41:08.760 --> 41:24.120]  Thank you.
+[41:24.120 --> 41:30.760]  Just technical curiosity, is the new dnf5 daemon intended to replace the package kit
+[41:30.760 --> 41:49.840]  daemon, is the dnf5 daemon intended to replace the package kit daemon?
+[41:49.840 --> 41:56.000]  So it can, we did start with that in mind, because package kit was officially deprecated
+[41:56.000 --> 42:01.880]  before, so that was one of the goals, but lately I've seen that package kit is maintained
+[42:01.880 --> 42:08.720]  and there is even issue on our page that someone wants to create back end for dnf5, for the
+[42:08.720 --> 42:16.600]  new IPI for package kit, so I'm not sure how it will turn up, but we will see, it was the
+[42:16.600 --> 42:24.400]  plan originally, it could, sorry if you want to, yeah.
+[42:24.400 --> 42:34.000]  The thing is package kit works, so it's not that easy to, I'm hearing, okay, well, I would
+[42:34.000 --> 42:39.880]  say that for now gets the job done, but still, there's an alternative, actually the first
+[42:39.880 --> 42:44.280]  enablement of dnf daemon on the system, there will be for other components that are less
+[42:44.280 --> 42:50.760]  critical to probably to adapt to the new dnf, or actually the new IPI, we're looking at
+[42:50.760 --> 42:59.000]  cockpit, for example, that could use the daemon, or anaconda maybe could use it, so it's not
+[42:59.000 --> 43:07.480]  just package kit that for which the daemon would be relevant, let's say that.
+[43:07.480 --> 43:12.800]  Just finally, we would like to do that because, like to replace it because it could provide,
+[43:12.800 --> 43:16.480]  for example, like I mentioned the module support or group support to even to Grom Software,
+[43:16.480 --> 43:21.440]  which is currently not possible, and that would be nice, yeah.
+[43:21.440 --> 43:23.840]  So any other questions?
+[43:23.840 --> 43:43.120]  Hello, I do also have a community participation question, are you talking or have you consider
+[43:43.120 --> 43:50.480]  reaching out to other RPM-based distributions beyond Fedora and the CentOS, like OpenMand
+[43:50.480 --> 44:07.040]  Revour or Suze perhaps, thank you.
+[44:07.040 --> 44:14.880]  I'm not in contact because no one here is project manager or team lead, let's say that.
+[44:14.880 --> 44:22.560]  I would let another team member of us answer into that, but yes, of course, the RPM distributions
+[44:22.560 --> 44:31.360]  are taken into account and all the relatives to Fedora, they're of course taken into account.
+[44:31.360 --> 44:37.160]  The thing is, for now, let's say it's a quite young project, dnfi, it's just two years since
+[44:37.160 --> 44:41.480]  it has started the developing, and so I would say that this is the reason why we're just
+[44:41.480 --> 44:45.400]  talking about Fedora, Fedora, Fedora, Fedora, because this is our upstream where we do the
+[44:45.400 --> 44:55.200]  testing, our CI runs on Fedora, and well, I think that we definitely would be porting
+[44:55.200 --> 45:12.800]  or like we would be very happy to see dnfi land in other RPM distributions.
+[45:12.800 --> 45:23.600]  I think that's it, normal question, I think that's it, okay, thank you again, thank you
+[45:23.600 --> 45:26.400]  everyone.

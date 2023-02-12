@@ -1,0 +1,275 @@
+[00:00.000 --> 00:10.600]  Hello everyone, welcome to this session about Cilium Service Mesh.
+[00:10.600 --> 00:18.200]  My name is Raymond De Jong, I'm Field CTO for ISOFALENT, the originators from Cilium.
+[00:18.200 --> 00:23.200]  Today I'm going to talk a bit about EBPF and Cilium as an introduction, after which
+[00:23.200 --> 00:28.440]  I'm going to talk about how the Service Mesh is evolving, after which we'll talk about
+[00:28.440 --> 00:32.920]  the Cilium Service Mesh features, what we can do today, and what we're planning to
+[00:32.920 --> 00:36.080]  support in the future.
+[00:36.080 --> 00:40.480]  Quick highlight of some upcoming features and some current features, and if we have time
+[00:40.480 --> 00:44.760]  I have a little demo to show how it works.
+[00:44.760 --> 00:50.160]  Can I see some hands from you if you know EBPF?
+[00:50.160 --> 00:51.440]  Quite a lot, good.
+[00:51.440 --> 00:53.720]  How many of you know Cilium?
+[00:53.720 --> 00:54.720]  Cool.
+[00:54.720 --> 00:58.520]  OK, how many of you use Cilium, actually?
+[00:58.520 --> 00:59.520]  Not as much.
+[00:59.520 --> 01:00.520]  OK, cool.
+[01:00.520 --> 01:05.200]  So, for the ones who don't know what EBPF is, I'm going to do an introduction here,
+[01:05.200 --> 01:12.720]  is EBPF is standing for Extended Berkeley Packet Filter, by itself that doesn't mean
+[01:12.720 --> 01:18.920]  a lot, but what we like to compare it with is what JavaScript is to the browser, EBPF
+[01:18.920 --> 01:20.720]  is to the kernel.
+[01:20.720 --> 01:28.240]  What that means is that using EBPF we can attach programs to kernel events, and for
+[01:28.240 --> 01:33.720]  the purpose of this session is that we can attach EBPF programs to kernel events related
+[01:33.720 --> 01:40.360]  to networking, so that's either a socket being opened, a network packet being sent on a network
+[01:40.360 --> 01:45.200]  device, that means that's a kernel event, and that means that we can attach a program
+[01:45.200 --> 01:51.880]  to it and we can get a metrics from that packet, for example, or we can do load balancing
+[01:51.880 --> 01:54.480]  and such.
+[01:54.480 --> 02:00.760]  So Cilium is built on EBPF, you don't need to be a network, or sorry, you don't need
+[02:00.760 --> 02:05.440]  to be an EBPF developer to actually work with Cilium.
+[02:05.440 --> 02:10.960]  Cilium abstracts this complexity on technology under the hood, so based on the configuration
+[02:10.960 --> 02:18.120]  you set, Cilium will mount the required EBPF programs for you to run, and Cilium in short
+[02:18.120 --> 02:24.400]  provides networking and load balancing capabilities, security capabilities, and also a lot of observability
+[02:24.400 --> 02:28.080]  capabilities using EBPF.
+[02:28.080 --> 02:33.680]  So this is the 30,000 feet view where we are today, we started with plain networking,
+[02:33.680 --> 02:40.600]  IPv6, IPv4 years ago, and now we expand that all the networking capabilities with BGP
+[02:40.600 --> 02:47.960]  implementations, Netfor6, 64, extended load balancing out of the box we're working on,
+[02:47.960 --> 02:51.720]  having GOBGP control playing fully supported with Cilium.
+[02:51.720 --> 02:57.680]  On top of that we have an observability layer with our Hubble technology, which is a observability
+[02:57.680 --> 03:04.720]  tool which provides service-to-service communication for your namespaces, so you can see what components,
+[03:04.720 --> 03:09.680]  what services are talking to which services, after which you can make informed decisions,
+[03:09.680 --> 03:14.680]  for example what kind of network policies you want to apply, also exporting metrics
+[03:14.680 --> 03:20.320]  to tools like Rafaana, and service mesh on top of that to provide authentication, layer
+[03:20.320 --> 03:23.840]  7 path-based routing and such.
+[03:23.840 --> 03:27.080]  On the right hand side we also have Kettergon, that's not something we'll talk about today,
+[03:27.080 --> 03:32.040]  but that's runtime security using EBPF, which is also very interesting, and rerun across
+[03:32.040 --> 03:37.720]  clouds, doesn't matter if it's on-prem or hybrid or multi-cluster, so it's agnostic
+[03:37.720 --> 03:42.080]  of the platform, and supported by multiple cloud vendors.
+[03:42.080 --> 03:47.200]  So as you may know, Google and false data plane V2 under the hood is actually Cilium.
+[03:47.200 --> 03:53.120]  Microsoft has recently adopted Cilium as the default CNI for AKS clusters, and all their
+[03:53.120 --> 03:58.360]  clusters will be migrated to Cilium, and AWS, EKS, anywhere by default is Cilium, so we
+[03:58.360 --> 04:04.880]  see huge adoption in the field of Cilium.
+[04:04.880 --> 04:10.240]  So let's talk about service mesh, so obviously if we talk about service mesh we talk about
+[04:10.240 --> 04:16.640]  observing traffic, being able to secure traffic from application to application across clusters,
+[04:16.640 --> 04:24.120]  doing traffic management, building resilience across applications across clouds.
+[04:24.120 --> 04:29.520]  Service mesh originally, if you needed that capabilities, originally you would program
+[04:29.520 --> 04:34.320]  your application either in Python or Go to get that observability.
+[04:34.320 --> 04:38.800]  That wasn't really useful because you have to maintain all those libraries to get the
+[04:38.800 --> 04:40.640]  information you need.
+[04:40.640 --> 04:45.200]  That's where the sidecars came in, right, so that they abstract that complexity from
+[04:45.200 --> 04:51.520]  the application to have a standard sidecar implementation to monitor traffic, to be able
+[04:51.520 --> 04:56.040]  to route traffic, and to be able to extract metrics from that traffic.
+[04:56.040 --> 05:02.480]  However, now with Cilium our goal is to move as close to the kernel as we already run in
+[05:02.480 --> 05:08.480]  kernel with EBPF, so we're moving from a sidecar model to the kernel, and where we
+[05:08.480 --> 05:13.600]  can we will support it using EBPF.
+[05:13.600 --> 05:20.080]  The only part which is not yet there is Layer 7, so all the low balancing capabilities,
+[05:20.080 --> 05:28.440]  routing capabilities in terms of IP to IP metrics are already available with Cilium using EBPF.
+[05:28.440 --> 05:37.760]  Layer 7 routing is not yet in EBPF for multiple reasons, of which one is that EBPF has constraints
+[05:37.760 --> 05:43.200]  in terms of how big a program can be, obviously it runs in kernel space, so it has constraints
+[05:43.200 --> 05:48.960]  for a good reason, but in the future maybe we can even transport complex Layer 7 routing
+[05:48.960 --> 05:51.440]  in EBPF.
+[05:51.440 --> 05:58.880]  However, we already provide Layer 7 visibility and observability in using Cilium and EBPF,
+[05:58.880 --> 06:03.400]  we already have the capabilities to inspect traffic using EBPF.
+[06:03.400 --> 06:08.200]  We can already do the low balancing with the creep process replacement.
+[06:08.200 --> 06:14.320]  The only part is the Layer 7, but the visibility of traffic, so HTTP traffic and such is
+[06:14.320 --> 06:15.480]  already there.
+[06:15.480 --> 06:22.160]  So surface mesh capabilities are extending those capabilities moving forward.
+[06:22.160 --> 06:23.320]  So how does it work?
+[06:23.320 --> 06:29.760]  So some of you may know that Cilium runs as an agent, as a demon set on the nodes, it
+[06:29.760 --> 06:35.800]  programs the nodes to be mounting the EBPF programs for the capabilities you need, and
+[06:35.800 --> 06:40.480]  we have an embedded Envoy running inside the Cilium agent.
+[06:40.480 --> 06:47.120]  This is a narrow down Envoy proxy in the agent for networking capabilities, and we
+[06:47.120 --> 06:53.840]  leverage this Envoy proxy on the node level to do surface mesh capabilities, so all the
+[06:53.840 --> 06:57.880]  things like the HTTP path routing and such.
+[06:57.880 --> 07:02.160]  So for each namespace you would create, and where you create, for example, an ingress resource
+[07:02.160 --> 07:08.760]  or a gateway resource, that means that a listener will be created through the Envoy for that
+[07:08.760 --> 07:12.520]  specific namespace for that specific workload.
+[07:12.520 --> 07:17.680]  And we leverage C groups and stuff to have separation as well for the security reasons
+[07:17.680 --> 07:23.760]  to not be able to have traffic across namespaces as such.
+[07:23.760 --> 07:29.960]  So what is different with Cilium's surface mesh compared to other surface mesh implementations?
+[07:29.960 --> 07:34.840]  First of all, our goal is to reduce operational complexity by removing sidecars, resource
+[07:34.840 --> 07:42.520]  usage, reduced, better performance, and avoid sidecar startup shutdown race conditions.
+[07:42.520 --> 07:46.560]  So obviously if you're not running sidecars at scale, this makes a huge difference.
+[07:46.560 --> 07:51.440]  You don't have all the sidecar pods running alongside your normal pods, that will save
+[07:51.440 --> 07:57.920]  memory, that will save CPU, that will save connection tracking, et cetera, et cetera.
+[07:57.920 --> 08:00.320]  So a lot more efficient.
+[08:00.320 --> 08:04.680]  And also in terms of latency, running a sidecar has a cost.
+[08:04.680 --> 08:09.960]  So in this diagram you see that an application wants to send traffic to another application.
+[08:09.960 --> 08:14.680]  What that means technically is that it goes through the TCP IP stack three times with
+[08:14.680 --> 08:15.680]  the sidecar.
+[08:15.680 --> 08:20.560]  First from the app, then inbound in the sidecar where the sidecar does its processing, and
+[08:20.560 --> 08:25.600]  then external from the sidecar to the physical network device to hit the network to reach
+[08:25.600 --> 08:28.960]  another node.
+[08:28.960 --> 08:37.920]  With EBPF we are able to shortcut that connection and improve the latency because we can detect
+[08:37.920 --> 08:43.040]  that traffic and we can see if it's destined for the physical network or it should be routed
+[08:43.040 --> 08:46.040]  to the proxy.
+[08:46.040 --> 08:52.200]  So once this app opens the socket using EBPF we can shortcut that connection to the physical
+[08:52.200 --> 08:56.520]  network device to be routed on the physical network.
+[08:56.520 --> 09:02.520]  If we need layer seven processing, that means that using EBPF we can shortcut the connection
+[09:02.520 --> 09:06.560]  on the socket layer directly to the envoy proxy where the envoy proxy on the node does
+[09:06.560 --> 09:11.520]  his HTTP routing and then forwards the traffic again on the physical network.
+[09:11.520 --> 09:15.040]  So a lot less hops there.
+[09:15.040 --> 09:19.960]  And it means that latency is much, much improved because we're not going through this TCP IP
+[09:19.960 --> 09:22.800]  stack multiple times.
+[09:22.800 --> 09:28.280]  In terms of throughput there's also a small difference because we can push more packets
+[09:28.280 --> 09:33.840]  and in terms of pod ready performance this is also a consideration at scale because when
+[09:33.840 --> 09:37.840]  you're scaling out your applications you always, with traditional sidecars, you need to wait
+[09:37.840 --> 09:43.480]  for the sidecar to be spun up as well and to be ready to serve connections for that
+[09:43.480 --> 09:44.960]  application.
+[09:44.960 --> 09:49.080]  So without the sidecars with Cilium service mess it's already there.
+[09:49.080 --> 09:53.880]  It's running on the node, it's embedded in the proxy so once you scale out your application
+[09:53.880 --> 10:00.120]  the proxy immediately on that node can serve connections.
+[10:00.120 --> 10:04.160]  So in short Cilium service mess provides traffic management, observability, security
+[10:04.160 --> 10:05.540]  and resilience.
+[10:05.540 --> 10:10.520]  The goal is to bring your own control plane or we are not developing a control plane on
+[10:10.520 --> 10:11.800]  our own.
+[10:11.800 --> 10:18.040]  What it means is that you can already use Ingress resources with Cilium 1.13 will support Gateway
+[10:18.040 --> 10:19.280]  API.
+[10:19.280 --> 10:25.320]  We are working on Spiffy integration so with the 1.13 release actually the ground work
+[10:25.320 --> 10:30.360]  for MTLS and Spiffy integration is already there.
+[10:30.360 --> 10:36.480]  You are not really able to use it yet but the goal is to support both MTLS and Spiffy
+[10:36.480 --> 10:41.720]  using Cilium network policies so you can reference for example a Spiffy ID as a source
+[10:41.720 --> 10:47.480]  and destination using Cilium network policies and then under the hood the Cilium agent part
+[10:47.480 --> 10:55.080]  will connect to spy reserver where that identity is tracked and confirm if that's allowed.
+[10:55.080 --> 11:00.480]  In terms of observability you can leverage the already available observability with Grafana
+[11:00.480 --> 11:06.520]  or Hubble if you need to export events you can use scene platforms such as Splunk and
+[11:06.520 --> 11:11.440]  open telemetry is also supported.
+[11:11.440 --> 11:15.160]  If you are new, if you are running new classes you have an option you can run Cilium and
+[11:15.160 --> 11:21.320]  you can already use Cilium service mesh out of the box this is obviously the preferred
+[11:21.320 --> 11:28.200]  method but if you are running already an Istio based implementation there is still a lot
+[11:28.200 --> 11:36.080]  of benefit to run Cilium under the hood there as well because for example we already encrypt
+[11:36.080 --> 11:42.560]  the connectivity between the sidecar from an Istio based implementation towards the destination
+[11:42.560 --> 11:43.560]  pod.
+[11:43.560 --> 11:50.920]  What I mean by that is that when you run sidecars, when you run MTLS between applications that
+[11:50.920 --> 11:56.760]  connectivity may be secure but the connection between the sidecar and the actual destination
+[11:56.760 --> 12:02.720]  is encrypted on the node so anyone with specific privileges on a node could potentially listen
+[12:02.720 --> 12:08.360]  on that virtual interface and e-drop traffic and that's obviously not secure.
+[12:08.360 --> 12:13.280]  The running Cilium under the hood already gives you the benefit because we can encrypt
+[12:13.280 --> 12:21.560]  on layer 4 directly on the socket layer to the destination pod obviously.
+[12:21.560 --> 12:27.880]  With 1.12 so currently we have 1.12 available since I think 7 months.
+[12:27.880 --> 12:32.480]  We already have a production ready Cilium service mesh, a conformant ingress controller
+[12:32.480 --> 12:38.680]  which you can use for HDD path routing, canary releases and such.
+[12:38.680 --> 12:43.920]  You can use Kubernetes as your service mesh control plane, fromisius metrics, open telemetry
+[12:43.920 --> 12:45.800]  is supported.
+[12:45.800 --> 12:51.120]  For power users we have Cilium Envoy Convict and Cilium cluster wide Envoy Convict CRDs
+[12:51.120 --> 12:52.520]  available.
+[12:52.520 --> 12:57.360]  These are temporarily I would say because the goal is to replace all that capabilities
+[12:57.360 --> 13:00.720]  with Gateway API.
+[13:00.720 --> 13:04.680]  And we're releasing more and more extended Grafana dashboards for layer 7 visibility
+[13:04.680 --> 13:11.280]  so you can actually see between service to service what kind of metrics there are and
+[13:11.280 --> 13:17.600]  what the latencies are and what return codes are, so golden signals.
+[13:17.600 --> 13:24.960]  So the roadmap for 1.13 and we're very close for releasing 1.13, expected somewhere this
+[13:24.960 --> 13:27.600]  month hopefully.
+[13:27.600 --> 13:35.240]  You can already try a release candidate for Cilium 1.13 which includes a Gateway API support
+[13:35.240 --> 13:41.880]  for HTTP routing, TLS termination, HTTP traffic splitting and waiting.
+[13:41.880 --> 13:48.160]  So this allows you to do percentage based routing or canary releases as such without
+[13:48.160 --> 13:51.240]  configuring Cilium Envoy Convict resources.
+[13:51.240 --> 13:55.280]  And also the capability to have multiple ingresses parallel balancer.
+[13:55.280 --> 14:00.360]  What that means is that currently when you create a Cilium ingress we rely on the hood
+[14:00.360 --> 14:06.280]  on a low balancer to attract traffic and forward that to the proxy.
+[14:06.280 --> 14:11.960]  Obviously at scale having a low balancer for each ingress, especially in clouds is expensive.
+[14:11.960 --> 14:16.800]  So this with an annotation we allow multiple ingresses per low balancer so you can save
+[14:16.800 --> 14:20.640]  cost there.
+[14:20.640 --> 14:23.360]  So how am I doing at the time?
+[14:23.360 --> 14:25.800]  Good features.
+[14:25.800 --> 14:32.800]  So today ingress 1.12, also with services we are having support for annotations.
+[14:32.800 --> 14:40.360]  So imagine you have received traffic from your ingress, you forward it to a service.
+[14:40.360 --> 14:45.880]  That means we support annotations on a simple cluster IP to forward traffic for example
+[14:45.880 --> 14:48.480]  to a specific endpoint.
+[14:48.480 --> 14:52.640]  If you know what Cilium cluster mesh is we can connect Cilium across clusters.
+[14:52.640 --> 14:57.920]  With simple annotations you can have even higher availability of services across clusters.
+[14:57.920 --> 15:02.800]  Gateway API which I will show a bit later and the Envoy Convict.
+[15:02.800 --> 15:08.360]  So this is a simple example of ingress and this is also something I will show in a demo.
+[15:08.360 --> 15:14.840]  You have an ingress and from a specific path you want to forward traffic to specific service.
+[15:14.840 --> 15:21.200]  We also support GRPC so you can also have specific GRPC URLs to be forwarded to specific
+[15:21.200 --> 15:22.760]  services.
+[15:22.760 --> 15:29.160]  TLS termination to terminate TLS using secrets, using ingress.
+[15:29.160 --> 15:37.240]  A question I get a lot is what about SSL pass-through, that's on roadmap so keep that in mind.
+[15:37.240 --> 15:42.080]  And obviously new in 1.13 is Gateway API and how it looks like is you will configure a
+[15:42.080 --> 15:43.960]  Gateway resource.
+[15:43.960 --> 15:49.800]  You specify the Gateway class name for Cilium to make sure that the Gateway is created and
+[15:49.800 --> 15:52.520]  maintained through Cilium and then create listeners.
+[15:52.520 --> 15:55.960]  So in this case an HTTP listener on port 80.
+[15:55.960 --> 16:00.600]  Then additionally you create multiple HTTP routes, one or more.
+[16:00.600 --> 16:06.840]  And this specify for example a path prefix for values forward slash details to be forwarded
+[16:06.840 --> 16:12.640]  to a backend reference service called details.
+[16:12.640 --> 16:15.480]  In terms of TLS termination, same constructs.
+[16:15.480 --> 16:21.840]  You can also have for example a host name in there to only accept traffic for this given
+[16:21.840 --> 16:28.600]  host name and you reference a secret in the Gateway resource and then in the HTTP routes
+[16:28.600 --> 16:35.600]  you will specify the host name, you will reference the Gateway you want to use and then again
+[16:35.600 --> 16:41.240]  a path prefix for example to forward to specific service.
+[16:41.240 --> 16:46.120]  And then traffic splitting, very simple, also using HTTP routes.
+[16:46.120 --> 16:53.120]  Again referencing your Gateway, a path prefix and then you have in this case an Echo 1 and
+[16:53.120 --> 16:59.760]  Echo 2 service where you want to introduce slowly Echo 2 and in this case 25% of that
+[16:59.760 --> 17:05.320]  traffic will be forwarded to the Echo 2 service.
+[17:05.320 --> 17:08.040]  And this is the example what I talked about earlier.
+[17:08.040 --> 17:14.360]  Using simple annotations you can extend service miscapabilities by annotating services.
+[17:14.360 --> 17:20.760]  So in this case this service will receive traffic for GRPC and we can attach low balancing
+[17:20.760 --> 17:27.440]  modes for in this case weighted least requests to be forwarded to backend endpoints.
+[17:27.440 --> 17:32.640]  And using multi cluster capabilities you can extend these capabilities across two or more
+[17:32.640 --> 17:36.320]  clusters depending on your cluster mesh configuration.
+[17:36.320 --> 17:41.480]  And canary roll out, so you can even introduce new clusters, have the new version of your
+[17:41.480 --> 17:45.520]  application running on the new cluster, so you're absolutely sure that you have no resource
+[17:45.520 --> 17:50.360]  contingent on your original cluster and then on the service annotate traffic to forward
+[17:50.360 --> 17:57.280]  slowly to remote cluster before you do the flip over.
+[17:57.280 --> 18:03.200]  So this concludes the presentation part, so for example when you want to know more about
+[18:03.200 --> 18:08.120]  Cilium go to the Cilium community, I encourage you to join our Slack channel if you have
+[18:08.120 --> 18:13.720]  any questions, our team is there as well to answer questions for in Slack, any issues
+[18:13.720 --> 18:17.440]  you may have or any roadmap or feature request you may have, we're very interested to hear
+[18:17.440 --> 18:19.120]  from you.
+[18:19.120 --> 18:24.240]  You can also contribute, so obviously if you want to develop on Cilium, join the Cilium
+[18:24.240 --> 18:30.520]  Github and contribute, if you want to know more about EBPF go to EBPF.io and if you
+[18:30.520 --> 18:35.520]  want to know more about Isovalent, the company who originated Cilium and want to for example
+[18:35.520 --> 18:40.840]  work there, have a look there, we are looking for engineers as well, so feel free to have
+[18:40.840 --> 18:45.880]  a look and if you want to know more, ask me after the session as well.
+[18:45.880 --> 18:55.320]  All right, let me do, see how I'm doing with time, so in order to run Ingress and Gateway
+[18:55.320 --> 19:01.560]  API, you need to set a certain amount of flags on your for example your hand value style,
+[19:01.560 --> 19:07.600]  so this is an example, I've run a small demo on GKE, so this is a GKE cluster with Cilium
+[19:07.600 --> 19:15.040]  installed, what you need to do is you need to enable the Ingress controller and in this
+[19:15.040 --> 19:20.200]  case I'm also enabling metrics just because it's interesting to see what's going on.
+[19:20.200 --> 19:24.880]  For Gateway API there's also a value, so Gateway API enabled through, this will trigger Gateway
+[19:24.880 --> 19:32.440]  API to be enabled, for service mesh it's important to configure the cube proxy replacement
+[19:32.440 --> 19:38.600]  to strict or probe, strict is recommended because you have the full cube proxy replacement
+[19:38.600 --> 19:44.800]  capabilities in your cluster, this is also required for service mesh and that's basically
+[19:44.800 --> 19:47.880]  it to get started.
+[19:47.880 --> 19:54.260]  So for this simple demo, I've created a simple gateway with the Gateway class named Cilium,
+[19:54.260 --> 20:00.880]  so this is running Cilium 1.13 Release Candidate 5 which has the Gateway API support and then
+[20:00.880 --> 20:08.560]  a simple HTTP route for the book info example application which has matches for the details
+[20:08.560 --> 20:16.320]  and the default path prefixes, so when I go into my environment, I want to show quickly
+[20:16.320 --> 20:22.600]  the following, so if I do a Qubectl getService, you can see I already for the sake of time
+[20:22.600 --> 20:29.080]  created this gateways, what I wanted to show you is that obviously a low balance is required,
+[20:29.080 --> 20:37.240]  so GKE provisions me a low balancer, low balancer IP I can use to attract traffic, in this case
+[20:37.240 --> 20:44.120]  I'm demoing a default HTTP gateway and a default HTTPS gateway, so I have two low balancers
+[20:44.120 --> 20:53.080]  with each an external IP address assigned, so this configuration is applied, so if I
+[20:53.080 --> 21:03.080]  do a Qubectl get a gateway, good point, obviously in your cluster you also need to install the
+[21:03.080 --> 21:11.240]  CRDs for Gateway API support, here you can see I have my Gateway and our TLS Gateway and
+[21:11.240 --> 21:22.960]  if I do a Qubectl get HTTP routes, I can see I have my book info HTTP route installed and
+[21:22.960 --> 21:32.440]  this relates to this part obviously, so with that I should be able to connect to the details,
+[21:32.440 --> 21:38.560]  so this is running the bookstore example, so I'm using that public IP as you can see
+[21:38.560 --> 21:46.280]  it works and if I go to details I should be forwarded using the Gateway API HTTP routes
+[21:46.280 --> 21:55.040]  to that specific details service and that works as well, for HTTPS again a simple example
+[21:55.040 --> 22:03.880]  I've created that gateway, TLS gateway, I've created two listeners, so a listener for bookinfo.cillium.rocks
+[22:03.880 --> 22:11.160]  and a listener for hipster shop.cillium.rocks, I didn't have installed the hipster shop for
+[22:11.160 --> 22:18.520]  demo purposes, I'm also referencing two secrets, so I've used makesert to create a simple self
+[22:18.520 --> 22:24.080]  signed certificate installed in my certificate store and created a secret which I reference
+[22:24.080 --> 22:32.600]  using this listener, then again HTTP routes for the TLS gateway for bookinfo.cillium.rocks
+[22:32.600 --> 22:41.400]  matches to only the details path prefix on port 9080 and again apart for the hipster
+[22:41.400 --> 22:49.880]  shop, so that's what I'm going to show here, so if I do the default URL that doesn't work
+[22:49.880 --> 22:56.080]  there's no list, there's no HTTP route configured, but for details I can see I can connect it
+[22:56.080 --> 23:07.320]  securely and this certificate is run from the gateway resource as well. Obviously this
+[23:07.320 --> 23:13.280]  is a self signed certificate, but obviously you can create signed certificates as well.
+[23:13.280 --> 23:26.640]  With that, that concludes my presentation and the demo, I'm open for questions. Any
+[23:26.640 --> 23:27.640]  questions?
+[23:27.640 --> 23:46.640]  Hi, thank you very much for your presentation. When you talk about no layer 7 support in
+[23:46.640 --> 23:58.240]  going to come or not? I'm not sure about that. HTTP routing requires quite a lot of memory,
+[23:58.240 --> 24:05.200]  so obviously memory is limited in eBPF programs for good reasons, so it will depend on the
+[24:05.200 --> 24:10.160]  eBPF foundation and the roadmap there, what we can support. Technically there's no reason
+[24:10.160 --> 24:15.280]  why we shouldn't be able to do that, but in terms of memory we have constraints, so if
+[24:15.280 --> 24:24.440]  those are being raised we potentially can have parts of even all parts using eBPF.
+[24:24.440 --> 24:25.440]  Any other questions?
+[24:25.440 --> 24:37.560]  Hi, does it provide or can you provide end to end encryption, especially between the
+[24:37.560 --> 24:39.400]  nodes automatically or not?
+[24:39.400 --> 24:45.240]  Yes, so our vision there is that you should configure, for example, IP stack or wire guard
+[24:45.240 --> 24:51.160]  for node to node encryption in transit, and if you want authentication and authorization
+[24:51.160 --> 24:57.400]  on top of that to configure SPIFI or MTLS between your applications. It's a multi-layered
+[24:57.400 --> 25:03.080]  approach, so we're not doing the encryption on the MTLS part, but on the node level, if
+[25:03.080 --> 25:10.080]  that makes sense. So MTLS again, SPIFI is on roadmap, hopefully for 1.13.
+[25:10.080 --> 25:35.800]  Any other? No, okay, thank you. Thank you.

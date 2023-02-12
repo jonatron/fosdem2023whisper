@@ -1,0 +1,243 @@
+[00:00.000 --> 00:10.000]  Okay, we're good to get started with one more MPI talk, but I think a very different one
+[00:10.000 --> 00:11.000]  compared to the others.
+[00:11.000 --> 00:12.000]  Hopefully.
+[00:12.000 --> 00:13.720]  Compiler-added MPI correctness check.
+[00:13.720 --> 00:14.720]  Yeah.
+[00:14.720 --> 00:15.720]  Thank you.
+[00:15.720 --> 00:21.120]  So my name is Alexander Hück, and today I'm going to talk about basically the dynamic
+[00:21.120 --> 00:23.680]  MPI correctness tool, which is called MUST.
+[00:23.680 --> 00:28.200]  And in particular, I'm going to talk about the compiler extension, which is called Type
+[00:28.200 --> 00:34.800]  Art, which is supposed to help with MPI type correctness checking.
+[00:34.800 --> 00:41.480]  And first of all, as we heard before, the message-passing interface is the defector
+[00:41.480 --> 00:46.440]  standard of distributed computations in the HPC world, right?
+[00:46.440 --> 00:52.960]  And it defines a large set of communication routines and other stuff, and it's also designed
+[00:52.960 --> 00:59.400]  for a heterogeneous cluster system where you have different platforms that communicate
+[00:59.400 --> 01:01.400]  and compute something.
+[01:01.400 --> 01:07.640]  However, in that sense, it's also very low-level interface where you have to specify a lot
+[01:07.640 --> 01:13.400]  of stuff manually, and you can expect only a little error checking in general from the
+[01:13.400 --> 01:14.880]  library itself.
+[01:14.880 --> 01:22.000]  So the user is required for the simple MPI send operation to specify the data, which
+[01:22.000 --> 01:25.120]  is transferred as a typeless void buffer.
+[01:25.120 --> 01:32.480]  The user has to specify its data length of the buffer and the user and the type manually,
+[01:32.480 --> 01:37.800]  and also the message envelope, so the destination of the message and the communicate and stuff
+[01:37.800 --> 01:39.640]  like that has to be specified manually.
+[01:39.640 --> 01:45.040]  So there's a lot of opportunity to commit a mistake, basically.
+[01:45.040 --> 01:53.560]  And this is quite a question to you guys, if you look at this small code, try to figure
+[01:53.560 --> 01:58.040]  out how many errors you can spot in this small example.
+[01:58.040 --> 02:02.960]  And just try to look at every corner, basically.
+[02:02.960 --> 02:08.640]  And while I'm talking, I can also spoiler you that I'm going to show you every issue
+[02:08.640 --> 02:16.760]  in this small example in a couple of seconds, so to speak.
+[02:16.760 --> 02:21.840]  When I first looked at it, my colleague Joachim showed me I couldn't find the most simple
+[02:21.840 --> 02:26.760]  one that was a bit crazy to me.
+[02:26.760 --> 02:33.440]  Sometimes you don't see the forest in front of the trees.
+[02:33.440 --> 02:38.480]  OK, so the most basic one, we don't call MPI in it, right?
+[02:38.480 --> 02:40.840]  That's usually in MPI applications.
+[02:40.840 --> 02:46.720]  That's the very first call you're supposed to do, where you initialize the MPI environment.
+[02:46.720 --> 02:51.160]  And then likewise, if you look at the end of the program, we do not call MPI finalize.
+[02:51.160 --> 02:54.080]  So those are two simple mistakes.
+[02:54.080 --> 02:57.080]  But then in total, we have eight issues.
+[02:57.080 --> 02:58.960]  I don't know how many you found.
+[02:58.960 --> 03:06.320]  And I'm also not going to talk about each one of them, but it's quite easy to, if you
+[03:06.320 --> 03:13.720]  look at each individual issue, to kind of guess that it can happen to you also.
+[03:13.720 --> 03:17.000]  And those are the pointers where they are.
+[03:17.000 --> 03:22.880]  And in particular, I want to talk about the receive-receive deadlock, where, for instance,
+[03:22.880 --> 03:28.920]  two process weights on each other without being able to continue.
+[03:28.920 --> 03:33.240]  You can argue that all those issues, except maybe the deadlock, could be found by the
+[03:33.240 --> 03:34.560]  MPI library itself.
+[03:34.560 --> 03:41.120]  But typically on HPC systems, the library does not do any checking for performance reasons.
+[03:41.120 --> 03:48.800]  That's why many of these issues will not be, will cause maybe crashes for unknown reasons
+[03:48.800 --> 03:53.160]  or just produce some strange results.
+[03:53.160 --> 04:01.280]  Well, that's why the dynamic MPI correctness tool must was developed in the past, which
+[04:01.280 --> 04:09.040]  is a tool that during runtime checks for issues and produces such reports where it finds some
+[04:09.040 --> 04:10.040]  issues.
+[04:10.040 --> 04:16.200]  And this is a report of the deadlock we have seen in the example code, where the message
+[04:16.200 --> 04:18.320]  itself just describes there's a deadlock.
+[04:18.320 --> 04:26.200]  In the bottom left, you can see a wait for graph, which just shows you which rank waits
+[04:26.200 --> 04:31.440]  for another rank causing the deadlock.
+[04:31.440 --> 04:37.640]  This helps you to kind of see where the deadlock occurs and why it occurs.
+[04:37.640 --> 04:43.680]  And also, must can produce so-called call stack information, where you can see, beginning
+[04:43.680 --> 04:49.920]  from main of the program to the basically origin of the deadlock, but this was omitted
+[04:49.920 --> 04:50.920]  now.
+[04:50.920 --> 04:51.920]  Okay.
+[04:51.920 --> 05:00.160]  So, to facilitate correctness checking for MPI, must uses a so-called distributed
+[05:00.160 --> 05:04.240]  agent-based analysis, which means that you have your normal MPI application with four
+[05:04.240 --> 05:10.320]  ranks, four processes that communicate as you would expect as the user wrote it.
+[05:10.320 --> 05:17.480]  But must will also create a analysis network, which helps you to do local analysis, it helps
+[05:17.480 --> 05:18.920]  you to do distributed analysis.
+[05:18.920 --> 05:23.920]  If you think about a deadlock, you need information for more than one process to figure out that
+[05:23.920 --> 05:26.400]  there occurred a deadlock in your program.
+[05:26.400 --> 05:33.520]  So must creates that completely transparent to the user, so you would use MPI comworld
+[05:33.520 --> 05:39.120]  and any other communicator as normal, must takes care of creating such a network.
+[05:39.120 --> 05:47.480]  And also, what's maybe the focus of the talk today is the local analysis, where we look
+[05:47.480 --> 05:49.960]  at process local checks.
+[05:49.960 --> 05:54.760]  If you think about MPI type correctness of a send operation, you can do a lot of stuff
+[05:54.760 --> 06:00.240]  locally, or I should do a lot of stuff locally, and this is the focus.
+[06:00.240 --> 06:06.200]  So, MPI type correctness, we focus basically on the buffer and the user-specified length
+[06:06.200 --> 06:12.400]  and the user-specified MPI data type today.
+[06:12.400 --> 06:17.960]  Must can already detect mismatches of, for instance, the send and receive communication
+[06:17.960 --> 06:26.080]  pair, where must basically creates a so-called type map, it looks at the user-specified
+[06:26.080 --> 06:30.600]  buffer size and the user-specified data type, and compares it to the corresponding receive
+[06:30.600 --> 06:31.600]  operation.
+[06:31.600 --> 06:38.320]  If there is a mismatch, obviously, there is going to be an issue, and must creates a report
+[06:38.320 --> 06:40.320]  about that.
+[06:40.320 --> 06:44.360]  This also, of course, works for collective communications, where you can make sure that
+[06:44.360 --> 06:53.000]  all ranks call, for instance, a broadcast operation with the same data type.
+[06:53.000 --> 07:01.320]  However, since must only intercepts MPI calls in general, it cannot look behind a
+[07:01.320 --> 07:06.160]  device, like it cannot look what happens in user space, you know.
+[07:06.160 --> 07:13.640]  So, we cannot reason about the type of the Void buffer data, and this is why we were
+[07:13.640 --> 07:23.080]  motivated to create the tool type art, which is something that helps with basically figuring
+[07:23.080 --> 07:26.960]  out what the memory allocation is that you put into your MPI calls.
+[07:26.960 --> 07:33.440]  So, if you look at this small example on the right side, completely processed locally,
+[07:33.440 --> 07:38.040]  there might be some memory allocation in that example, it's a double buffer that was allocated
+[07:38.040 --> 07:47.240]  by Melloc, let's say, and the question now becomes, how can we make sure that data, the
+[07:47.240 --> 07:52.760]  data buffer, which is a Void buffer, fits the user-specified buffer size, so is it of
+[07:52.760 --> 07:58.600]  length buffer size, and it also should be compatible with the MPI float type, and of
+[07:58.600 --> 08:04.720]  course, we can already see that double and MPI float, there's a type mismatch, but must
+[08:04.720 --> 08:12.880]  cannot answer such a question without further tooling, because it just intercepts MPI calls.
+[08:12.880 --> 08:19.200]  Okay, so to just show you that it's not an academic example, there's two well-known HPC
+[08:19.200 --> 08:26.600]  benchmark codes, which have some issues, so one was reported in the past by others, where
+[08:26.600 --> 08:31.880]  there's a broadcast operation, it uses a big end, which is an alias for a 64-bit data type,
+[08:31.880 --> 08:38.640]  however, the user-specified MPI end, which is a 32-bit data type for the broadcast operation,
+[08:38.640 --> 08:45.080]  so there's an obvious mismatch, that could be a problem, likely, and also for milk, there's
+[08:45.080 --> 08:52.000]  an all-reduced operation, where the user's passed in a struct with two float members,
+[08:52.000 --> 08:58.840]  and it's interpreted as a float array of size two, which is B9, to be honest, but that could
+[08:58.840 --> 09:03.040]  be a portability issue in the future, maybe, you know, depending on the platform, maybe
+[09:03.040 --> 09:07.480]  there's padding, or whatnot, and maybe it's an illegal operation, so this could also be
+[09:07.480 --> 09:09.760]  an issue in the future.
+[09:09.760 --> 09:16.360]  Well, from a high-level point of view, how it does must work, well, you have your MPI
+[09:16.360 --> 09:22.120]  application, and during runtime, it intercepts all the MPI calls, and collects all the states
+[09:22.120 --> 09:29.880]  that it's needed for deadlock detection, and so on, and we added type art, which looks
+[09:29.880 --> 09:35.560]  at all those allocations that are passed to MPI calls for those local analysis of buffers,
+[09:35.560 --> 09:43.320]  which is the compiler extension based on LLVM, so you compile your code with our extension,
+[09:43.320 --> 09:48.800]  and the extension instruments all allocations, be it stack, be it heap, which are related
+[09:48.800 --> 09:56.080]  to MPI calls, and we also provide a runtime, so during runtime, we get callbacks of the
+[09:56.080 --> 10:02.000]  target application, all allocations, all free operations, so we have a state of the allocation
+[10:02.000 --> 10:05.960]  of the memory, basically, in a target code.
+[10:05.960 --> 10:11.160]  We also, of course, look at the allocations and pass out their type, so simple case is
+[10:11.160 --> 10:17.520]  buffer, A is a double type, more complex cases would be structs or classes, we pass the serialized
+[10:17.520 --> 10:23.200]  type information to our runtime, which then enables, of course, must to make queries,
+[10:23.200 --> 10:29.320]  so for instance, for an MPI center operation, we give the type art runtime the buffer, the
+[10:29.320 --> 10:33.960]  typeless buffer, and the runtime would return all the necessary type information to ensure
+[10:33.960 --> 10:38.120]  type correctness of those buffer handles.
+[10:38.120 --> 10:40.960]  This is the whole high level process behind it.
+[10:40.960 --> 10:49.440]  And then if you take a look at an example of a memory allocation, C is a small heap
+[10:49.440 --> 10:56.280]  allocation of a float array, this all happens in LLVM IR, I'm just showing C like code to
+[10:56.280 --> 11:03.840]  make it easier to understand, we would add such a type art alloc callback, which where
+[11:03.840 --> 11:10.120]  we need the data pointer, of course, and then we need a so called type ID, it's just a representation
+[11:10.120 --> 11:16.440]  of what we allocated, that is later used for type checking, and of course we need the dynamic
+[11:16.440 --> 11:23.520]  length of the allocated array to reason about where we are in the memory space, so to speak.
+[11:23.520 --> 11:28.560]  Once we handle stack and global allocations, for stack allocations, of course, we have
+[11:28.560 --> 11:34.040]  to respect the automatic scope dependent lifetime properties, and for global we just register
+[11:34.040 --> 11:40.000]  once and then it exists at our runtime for the whole program duration.
+[11:40.000 --> 11:45.920]  And of course, for performance reasons, you can imagine that the less callbacks the better,
+[11:45.920 --> 11:50.240]  hence we try to filter out allocations where we can prove that they are never part of an
+[11:50.240 --> 11:56.840]  MPI call and just never instrument those.
+[11:56.840 --> 12:06.160]  This is basically possible on LLVM IR by data flow analysis, so in the function foo we have
+[12:06.160 --> 12:11.040]  two stack allocations and then we try to follow the data flow where we can see that A is passed
+[12:11.040 --> 12:17.480]  to bar, and inside bar there's never any MPI call, so we can just say, okay, we do not need
+[12:17.480 --> 12:21.520]  to instrument this, this is discarded.
+[12:21.520 --> 12:28.160]  Likewise for foo bar, we can see that B is passed, if it's in another translation unit
+[12:28.160 --> 12:36.280]  we would need to have a whole program view of the program, which we support, but other
+[12:36.280 --> 12:41.120]  tools have to create such a call graph with those required information.
+[12:41.120 --> 12:48.720]  Anyways, so also if we had this view, we can see foo bar also does not call MPI, so both
+[12:48.720 --> 12:54.240]  stack allocations don't need to be instrumented, which helps a lot with the performance.
+[12:54.240 --> 13:04.400]  Okay, so the type ID which is passed to the runtime for identification works as follows,
+[13:04.400 --> 13:10.000]  built-in types are obviously known a priori, so we know the type layout, float is 4 bytes,
+[13:10.000 --> 13:15.320]  double is 8 bytes, depending on platform of course, for user defined types, which means
+[13:15.320 --> 13:24.160]  structs, classes and so on, we basically serialize it to a YAML file and the corresponding type
+[13:24.160 --> 13:30.560]  ID of course, so we can match those during runtime, where we have the extent how many
+[13:30.560 --> 13:36.360]  members offsets, byte offsets basically from the beginning of the struct, and also the
+[13:36.360 --> 13:44.000]  subtypes are listed, which can then be used for making type queries about the layout and
+[13:44.000 --> 13:48.520]  stuff like that.
+[13:48.520 --> 13:54.840]  And then of course, must needs to have some API to figure out type correctness, and this
+[13:54.840 --> 14:05.080]  is provided by our runtime, which has quite a few API functions, the most basic one would
+[14:05.080 --> 14:12.280]  be this type out get type where you put in the MPI buffer handle, and what we put out
+[14:12.280 --> 14:18.000]  is the type ID and the error length, and then you can use the type ID subsequently, for
+[14:18.000 --> 14:23.280]  instance in this call where you put in the type ID and you get out the struct layout
+[14:23.280 --> 14:33.440]  I just mentioned earlier, and this way you kind of can assemble some iterative type checking
+[14:33.440 --> 14:38.640]  which is done in must.
+[14:38.640 --> 14:46.520]  And then putting it all together, if you want to use our tooling, you would need to first
+[14:46.520 --> 14:55.520]  of all compile your program with our provided compiler wrapper, which is a batch script and
+[14:55.520 --> 15:00.920]  does the bookkeeping require to introduce the instrumentation, the type out stuff, so
+[15:00.920 --> 15:04.880]  you exchange your compiler, that's the first step, it's optional, you don't have to do
+[15:04.880 --> 15:11.640]  it if you don't need this local type out checking, and then you would also need to replace your
+[15:11.640 --> 15:18.240]  MPI exec or MPI run depending on the system with the must run, which also does some bookkeeping
+[15:18.240 --> 15:27.680]  for must to execute the target code appropriately, spawn all the analysis agent based networking
+[15:27.680 --> 15:35.760]  and so on, and then the program runs as normal and must output file is generated with all
+[15:35.760 --> 15:45.080]  issues found during execution of your program, and as a side note maybe, as I said must does
+[15:45.080 --> 15:49.480]  this agent based network and in the most simple case for the distributed analysis, there's
+[15:49.480 --> 15:57.320]  an additional process needed for the deadlock detection and so on, so for SLAM or whatnot
+[15:57.320 --> 16:03.840]  you need to allocate an additional process, however you don't need to specify it in the
+[16:03.840 --> 16:11.160]  must run stuff, it happens automatically in the background, alright, so that's it, if
+[16:11.160 --> 16:17.600]  you look now at what the impact is of our tooling, well that's quite dependent as I
+[16:17.600 --> 16:23.000]  kind of alluded to, how many callbacks you have, how many memory allocations you actually
+[16:23.000 --> 16:29.520]  have to track, and how good we are at filtering them, so here's two examples, Lulech and
+[16:29.520 --> 16:36.720]  Tachyon, which are again quite well known HPC benchmarking codes, and Lulech is quite
+[16:36.720 --> 16:44.520]  favorable for our presentation because there's not many callbacks and hence our runtime impact
+[16:44.520 --> 16:53.200]  is like quite non-existent so to speak, where you can see that this is compared to vanilla
+[16:53.200 --> 17:00.920]  without any instrumentation without our tooling, type art almost has no impact, and then with
+[17:00.920 --> 17:09.200]  type art analysis enabled has almost no additional impact, for Tachyon the picture looks quite
+[17:09.200 --> 17:15.120]  different as you can see, there's an overhead factor of about three using when you introduce
+[17:15.120 --> 17:21.840]  type art, this is because there's a lot of stack allocations that cannot filter, so we
+[17:21.840 --> 17:29.120]  track a lot of stack allocations and the runtime impact is quite high, and this is reflected
+[17:29.120 --> 17:36.400]  by those runtime and static instrumentation numbers, so first of all the buff table here
+[17:36.400 --> 17:43.960]  shows you during compilation what we instrument, so you can see that there's some heap free
+[17:43.960 --> 17:49.040]  operations that we find an instrument, there's some stack allocations and globals that we
+[17:49.040 --> 17:57.000]  instrument, well of course those numbers do not represent the runtime numbers because
+[17:57.000 --> 18:02.840]  heap and free operations sometimes are written in a way that they are like centralized in
+[18:02.840 --> 18:13.160]  a program, that's why those numbers are not as high as you would expect, for stack allocations
+[18:13.160 --> 18:20.480]  we find 54 and out of those 54 we can filter for Lulish at least 21%, and globals are much
+[18:20.480 --> 18:25.040]  easier to follow along the data flow in LLVM IR so we can filter much more and much more
+[18:25.040 --> 18:32.680]  effectively, well going to the runtime numbers which means that those are basically the
+[18:32.680 --> 18:40.400]  number of callbacks that happen during our benchmarking, we can already see that the
+[18:40.400 --> 18:50.360]  high overhead of which we observed in Tachyon is to be explained by the almost 80 million
+[18:50.360 --> 18:54.760]  stack allocation callbacks basically that we have to track during runtime, which is
+[18:54.760 --> 19:05.000]  a lot of context switching and so on, which is not good for the runtime, alright so this
+[19:05.000 --> 19:12.080]  is already my conclusion, what we have done is basically with type art must can now check
+[19:12.080 --> 19:18.880]  all phases of the MPI communication with respect to type correctness, so the first phase that
+[19:18.880 --> 19:24.360]  must can already do is this one, which is basically the message transfer, this is checked
+[19:24.360 --> 19:29.320]  against, however there is also the phase of message assembly, right where you go kind
+[19:29.320 --> 19:36.200]  of from the user process into the MPI process and you have to check this, and of course
+[19:36.200 --> 19:40.760]  if you think about it you would also have to kind of check the message disassembly where
+[19:40.760 --> 19:51.160]  you go from the received data to your user program again, so type art enables these kind
+[19:51.160 --> 20:05.640]  of local checks to ensure type correctness, thank you very much.
+[20:05.640 --> 20:22.720]  Any questions?
+[20:22.720 --> 20:27.400]  Yeah so I really like to talk, I thought it was really interesting, so one thing I wanted
+[20:27.400 --> 20:36.800]  to ask was how does one get must, like how do they install it, is it available for distribution
+[20:36.800 --> 20:40.520]  package managers or is it more that you have to compile it yourself?
+[20:40.520 --> 20:48.080]  Good question, I think you have to compile it yourself, even on our HPC system so, but
+[20:48.080 --> 20:56.280]  it's not that tedious to compile I think, maybe I'm biased, but just go to the website
+[20:56.280 --> 21:03.640]  and there's a zip file, it includes every dependency that you need and I think the documentation
+[21:03.640 --> 21:09.680]  is quite straightforward, you need of course maybe open MPI installed, but not much more
+[21:09.680 --> 21:16.040]  to be honest and then you should be good to go, yeah, I think it's CMAC based, I don't
+[21:16.040 --> 21:22.840]  know if you have problems with that, but yeah, it should be straightforward to try it out.
+[21:22.840 --> 21:38.440]  Thank you, another question there on my way.
+[21:38.440 --> 21:45.480]  So on the type analysis that you do, I mean if you look at malloc and it has like a type
+[21:45.480 --> 21:49.480]  cast then you know what the type is, but if it doesn't have a type cast, if you malloc
+[21:49.480 --> 21:53.840]  into a void pointer and if the amount of bytes you are allocating comes from some constant
+[21:53.840 --> 21:59.480]  or macro or some argument, how far do you follow and if you can't see it, do you have
+[21:59.480 --> 22:03.040]  a warning, do you crash?
+[22:03.040 --> 22:08.440]  That's a good question and that's basically a fundamental problem, right, so we have to
+[22:08.440 --> 22:16.320]  have some expectations of the program, right, so our expectation is that the malloc calls
+[22:16.320 --> 22:29.080]  are typed, otherwise we would just track it as a chunk of bytes and I think our analysis
+[22:29.080 --> 22:37.960]  is quite forgiving, so we would just look at okay this is a chunk of bytes, it fits you
+[22:37.960 --> 22:40.520]  know the buffer and this is fine.
+[22:40.520 --> 22:53.360]  Yes, you kind of lose that, right, if you just know it's a chunk of bytes then you kind
+[22:53.360 --> 23:00.880]  of lose the alignment checks because you could, if you have like say you malloc is struct
+[23:00.880 --> 23:07.720]  and then you do some pointer magic for your MPI buffer and you point between members in
+[23:07.720 --> 23:16.840]  the padding area, only if type art knows about the malloc struct, it can of course warn that
+[23:16.840 --> 23:23.040]  you are doing some illegal memory operations, if we just see a void pointer due to the type
+[23:23.040 --> 23:38.560]  plus malloc then we have lost basically, anyone else, do you have any thoughts on using Rust
+[23:38.560 --> 23:44.600]  which is a way more memory safe language than C and C plus pluses, have you looked at it?
+[23:44.600 --> 23:53.920]  Not really, not yet, for now we have so much to do with the C and C plus words to support
+[23:53.920 --> 24:01.920]  typing better, to get more robustness and so on and not yet to be honest.
+[24:01.920 --> 24:04.920]  Maybe all that work becomes irrelevant if Rust gets popular enough.
+[24:04.920 --> 24:12.280]  I think in general maybe I'm completely like a newbie when it comes to Rust, I think the
+[24:12.280 --> 24:20.360]  MPI support itself is still in the works, I read some papers about like generating bindings
+[24:20.360 --> 24:30.360]  for MPI which are inherently type safe, not sure how that goes.
+[24:30.360 --> 24:36.300]  I think everyone will be happy if Rust or some other type safe language becomes more
+[24:36.300 --> 24:43.080]  used by people and this kind of work is irrelevant, but while people still use C plus pluses,
+[24:43.080 --> 24:44.800]  this is very relevant.
+[24:44.800 --> 24:49.720]  That pays my bills.
+[24:49.720 --> 24:50.720]  Thank you very much.
+[24:50.720 --> 25:07.760]  Thank you.

@@ -1,0 +1,283 @@
+[00:00.000 --> 00:11.880]  So, now we have Haley Thompson and we're going to talk about the distributed music programming
+[00:11.880 --> 00:15.400]  with Gleam, Beam and the Web Audio API.
+[00:15.400 --> 00:17.400]  Give it up.
+[00:17.400 --> 00:27.720]  Okay, so, hello everyone, yeah, today I'm going to be talking about a little web app
+[00:27.720 --> 00:34.120]  I've been making using Beam, Gleam and the Web Audio API.
+[00:34.120 --> 00:38.040]  Just before I get into that, maybe a little bit about who I am.
+[00:38.040 --> 00:39.040]  My name is Haley.
+[00:39.040 --> 00:43.920]  I'm a front-end Elm developer, actually, so I don't really do any back-end stuff.
+[00:43.920 --> 00:47.240]  I'm totally new to Beam, Erlang and Elixir.
+[00:47.240 --> 00:54.240]  I've been doing Elm professionally, almost exclusively, for about three years now and
+[00:54.240 --> 00:59.960]  kind of personally, for four or maybe five, and also a PhD student.
+[00:59.960 --> 01:04.640]  I'm writing up my thesis at the moment on programming language design and particularly
+[01:04.640 --> 01:09.200]  how it relates to sound and music computing.
+[01:09.200 --> 01:13.680]  And finally, I am a Gleam community person.
+[01:13.680 --> 01:17.440]  If you've ever dropped into the Gleam Discord, you've probably seen me spending way too much
+[01:17.440 --> 01:21.960]  of my own time there.
+[01:21.960 --> 01:25.520]  So distributed audio, what the heck am I talking about?
+[01:25.520 --> 01:28.720]  What am I going to be making?
+[01:28.720 --> 01:35.120]  This nondescript-looking box is called a mono, and one of the things it can be is a step
+[01:35.120 --> 01:36.120]  sequencer.
+[01:36.120 --> 01:43.120]  And so what that means is each of these buttons represents a note that can be played, and
+[01:43.120 --> 01:48.440]  the columns are steps in time, and the rows are different notes, different frequencies.
+[01:48.440 --> 01:55.120]  And what I'd like to make is one of these in software, and I want to supercharge that
+[01:55.120 --> 01:59.040]  basically by making it networked and collaborative.
+[01:59.040 --> 02:03.840]  So we want everyone to be working on the same instrument, you know, on different computers
+[02:03.840 --> 02:07.000]  over the web.
+[02:07.000 --> 02:11.360]  The way I structured this talk, I'm not going to be going into too many technical details
+[02:11.360 --> 02:14.680]  about Gleam or the app itself.
+[02:14.680 --> 02:18.600]  If you were here earlier this morning, Harry's talk would have done a really good job of
+[02:18.600 --> 02:23.240]  introducing you to Gleam, and if you missed that, the language docs are a much better
+[02:23.240 --> 02:25.960]  start than what I could give you.
+[02:25.960 --> 02:32.480]  So instead, I'm first going to go over some of the languages I could have chosen and didn't,
+[02:32.480 --> 02:36.160]  and then briefly explain why I picked Gleam.
+[02:36.160 --> 02:42.240]  And then I'm going to give you a very, very abridged tour of the codebase by basically
+[02:42.240 --> 02:45.680]  building the thing from the ground up.
+[02:45.680 --> 02:48.480]  So why not your favorite language?
+[02:48.480 --> 02:50.480]  Why not JavaScript?
+[02:50.480 --> 02:56.360]  Well, I've been doing Elm, as I said, for three, four, five years now.
+[02:56.360 --> 03:02.160]  I've been in this great statically-typed, pure, functional fantasy land, and the idea
+[03:02.160 --> 03:08.960]  of going back to a mutable, dynamically-typed, object-oriented thing terrifies me.
+[03:08.960 --> 03:12.160]  I just don't want to do that at all.
+[03:12.160 --> 03:14.480]  So okay, why not Elm then?
+[03:14.480 --> 03:17.200]  If I'm so used to it, why would I not use that?
+[03:17.200 --> 03:23.720]  Well, I actually maintain a package for doing Web Audio things in Elm, but if you've ever
+[03:23.720 --> 03:30.200]  used Elm before, you probably know it has a rather interesting take on foreign function
+[03:30.200 --> 03:35.080]  interfaces and interrupt with JavaScript, and I just don't want to deal with that for
+[03:35.080 --> 03:37.040]  this particular project.
+[03:37.040 --> 03:40.920]  And then it also leaves the question open on what to choose for the back end, and really
+[03:40.920 --> 03:43.800]  add, like, just one language for the entire stack.
+[03:43.800 --> 03:47.040]  And finally, why not Elixir?
+[03:47.040 --> 03:52.200]  Well, I don't know it for a start.
+[03:52.200 --> 03:55.840]  As I understand, I'm still going to need to use a lot of JavaScript for the audio side
+[03:55.840 --> 03:59.920]  of things, even if I use something like LiveView.
+[03:59.920 --> 04:07.880]  And I'm a bit of a type nerd, so the dynamic typing kind of puts me off a bit.
+[04:07.880 --> 04:12.440]  For me, I think Gleam conveniently addresses all of these things.
+[04:12.440 --> 04:16.280]  So I get to use the same language across the entire stack.
+[04:16.280 --> 04:21.600]  Gleam targets both Arlang and JavaScript, and I get to share types across the stack
+[04:21.600 --> 04:22.880]  as well.
+[04:22.880 --> 04:29.600]  So my audio code and my messaging and stuff, this can all be well typed across kind of
+[04:29.600 --> 04:32.480]  the network boundary.
+[04:32.480 --> 04:35.960]  It also got a really good interop story.
+[04:35.960 --> 04:39.280]  The FFI in Gleam is very simple, very, very easy to use.
+[04:39.280 --> 04:46.240]  And so if I need to dip into JavaScript or Arlang or Elixir, that can be quite easy.
+[04:46.240 --> 04:50.400]  And also, it's a very simple language.
+[04:50.400 --> 04:54.280]  So for someone like me that's very new to back end programming, this is a great kind
+[04:54.280 --> 04:59.080]  of soft introduction to Beam and OTP and that sort of thing.
+[04:59.080 --> 05:05.720]  Well, I didn't go to that slide, but that's the slide I just did.
+[05:05.720 --> 05:09.000]  The first thing I want to do is make some sounds.
+[05:09.000 --> 05:14.960]  And to do that, we need to have a bit of an understanding of the web audio API.
+[05:14.960 --> 05:21.560]  And so a super, super quick primer on that is it's a lowish level browser API for making
+[05:21.560 --> 05:23.880]  sounds on the web.
+[05:23.880 --> 05:30.360]  You create audio nodes, so they might be sound sources like an oscillator or some signal
+[05:30.360 --> 05:37.000]  processing like a filter or a delay, and you connect those into a graph in JavaScript.
+[05:37.000 --> 05:43.760]  But all the signal processing happens in native code that we don't write and we don't control.
+[05:43.760 --> 05:49.480]  So this is just a very brief example of what that looks like in JavaScript.
+[05:49.480 --> 05:54.440]  I don't know about any of you, but to me, this is really, really clunky.
+[05:54.440 --> 05:58.840]  We create a bunch of nodes, then we set a bunch of properties, then we have to remember
+[05:58.840 --> 06:02.440]  to connect them up, and then we have to remember to start some of them, and then at the end
+[06:02.440 --> 06:04.520]  hopefully we get some sound.
+[06:04.520 --> 06:10.320]  Instead, what I'd like to do is get a really nice declarative API for this, something that
+[06:10.320 --> 06:12.600]  we might be used to for doing like view code.
+[06:12.600 --> 06:16.560]  And for that, I'm going to model that with these two types in Glean.
+[06:16.560 --> 06:22.440]  So we have a node type with a filled T, which stands for type, and so that says whether
+[06:22.440 --> 06:24.840]  it's an oscillator or a delay or a filter.
+[06:24.840 --> 06:32.920]  And we have a list of parameters that we want set on that node, and then a list of connections.
+[06:32.920 --> 06:34.240]  And then we end up with something like this.
+[06:34.240 --> 06:39.120]  So this is the same audio graph that we just saw with a, in my opinion, a much, much nicer
+[06:39.120 --> 06:40.120]  API.
+[06:40.120 --> 06:48.360]  You kind of get implicit connections based on how nested things are, kind of like a DOM
+[06:48.360 --> 06:53.880]  tray or HTML or something.
+[06:53.880 --> 06:59.360]  What I'd need to do then is write a little bit of JavaScript to turn those Glean values
+[06:59.360 --> 07:04.880]  into some Web Audio code, and we're not going to go into any detail on that here.
+[07:04.880 --> 07:08.680]  It took me about 50 lines of JavaScript to do that, and that is the only not Glean code
+[07:08.680 --> 07:11.720]  that I wrote in this whole app.
+[07:11.720 --> 07:21.280]  So assuming that all works, the next thing we want to do is render something onto a page.
+[07:21.280 --> 07:27.080]  For that, we're going to use a framework that I made called Luster.
+[07:27.080 --> 07:33.200]  I've said maybe like 50 times now that I'm a big Elm fan, and so Luster takes a lot of
+[07:33.200 --> 07:39.400]  the ideas from Elm, particularly its ModelView update or the Elm architecture, and it basically
+[07:39.400 --> 07:41.120]  applies it on top of React.
+[07:41.120 --> 07:44.760]  So we actually have a wrapper for React, and we can use React components and all that sort
+[07:44.760 --> 07:50.280]  of thing with this nice kind of unidirectional stake flow.
+[07:50.280 --> 07:56.400]  So we start off with a model, and this is what we're going to derive both user interface
+[07:56.400 --> 07:58.760]  and audio code from.
+[07:58.760 --> 08:05.720]  And so here, I don't have the type up on the screen, but where we've got rows, a row has
+[08:05.720 --> 08:10.680]  the note, so the frequency to play, and then an array of steps that either indicate whether
+[08:10.680 --> 08:17.760]  it's on or off, and we take that model and we render it into something.
+[08:17.760 --> 08:22.800]  Now Gleam doesn't have macros, it doesn't have a templating engine, or really anything
+[08:22.800 --> 08:24.760]  like JSX or anything like that.
+[08:24.760 --> 08:26.840]  What we have is just functions.
+[08:26.840 --> 08:32.800]  So here, we're calling element.dev, and we're setting a class on it, and then inside we're
+[08:32.800 --> 08:38.560]  rendering a button, and we have this message, this update step message, and basically that's
+[08:38.560 --> 08:44.120]  going to be fired whenever the button is clicked on, and that goes through the runtime into
+[08:44.120 --> 08:46.480]  our update function.
+[08:46.480 --> 08:52.200]  We change some rows, update some program state, and the cycle continues.
+[08:52.200 --> 08:58.880]  So the state changes, our UI changes, more interactions, blah, blah, blah.
+[08:58.880 --> 09:03.640]  If all goes well, we end up with something that looks like this.
+[09:03.640 --> 09:10.880]  And what we have here is just a simple client web app.
+[09:10.880 --> 09:13.480]  This is the sequence that I've been talking about.
+[09:13.480 --> 09:19.480]  This only runs on the client, so anyone that loads this up is going to get their own thing.
+[09:19.480 --> 09:24.480]  And so far, we haven't spoken about back-end, so I'm assuming you're serving this on GitHub
+[09:24.480 --> 09:27.840]  pages or your own server or whatever.
+[09:27.840 --> 09:34.720]  So what we want to do next is serve this with some Gleam code, and to do that, we're
+[09:34.720 --> 09:37.360]  going to use two more packages.
+[09:37.360 --> 09:38.800]  One is called GLSEN.
+[09:38.800 --> 09:43.360]  This is a fairly low-level package that sets up a supervisor and manages a pool of connections
+[09:43.360 --> 09:48.640]  that can manage things like TCP connections and sockets and this sort of thing.
+[09:48.640 --> 09:53.440]  And on top of that, another package called mist, which is a web server written in Gleam
+[09:53.440 --> 09:58.600]  that provides a kind of dead simple HTTP server that you can then configure to accept web
+[09:58.600 --> 10:04.680]  socket connections or do SSL connections, these sorts of things.
+[10:04.680 --> 10:07.640]  So far, I've been heavily abridging the code.
+[10:07.640 --> 10:13.160]  This is pretty much all you need to start serving some static files using mist and
+[10:13.160 --> 10:15.960]  GLSEN.
+[10:15.960 --> 10:20.360]  The magic kind of happens just in this very simple serve static asset function, which
+[10:20.360 --> 10:22.240]  takes a path.
+[10:22.240 --> 10:28.040]  Ideally we'd do some finalization on the path, but I've left that out to be brief.
+[10:28.040 --> 10:30.520]  Read the file if the file exists.
+[10:30.520 --> 10:34.440]  We just respond and we make sure we set the right headers, and that's it.
+[10:34.440 --> 10:43.080]  Now we can host our little web app statically with more Gleam code.
+[10:43.080 --> 10:47.400]  The final piece of the puzzle then is client server communication.
+[10:47.400 --> 10:51.520]  How do we make this distributed?
+[10:51.520 --> 10:57.200]  How do we have everyone connected to the same instance?
+[10:57.200 --> 11:02.760]  So for that, we need to set up web sockets and mist makes this dead simple as well.
+[11:02.760 --> 11:09.680]  You just set up an upgrade handler on any particular path that you want here.
+[11:09.680 --> 11:13.320]  It's just the web socket path, and that code looks like this.
+[11:13.320 --> 11:18.760]  You set up some event listeners on when the socket opens or closes, and then also how
+[11:18.760 --> 11:21.760]  you want to handle messages.
+[11:21.760 --> 11:29.600]  On WS message here, essentially just Jason decodes the message into something well typed
+[11:29.600 --> 11:34.960]  and sends that off to our app's main process.
+[11:34.960 --> 11:37.960]  On the front end, we need to hook up web sockets as well.
+[11:37.960 --> 11:41.240]  There's a package for that called LusterWebSocket.
+[11:41.240 --> 11:42.240]  This isn't made by me.
+[11:42.240 --> 11:46.200]  Someone else has very gratefully made this.
+[11:46.200 --> 11:52.960]  For that, we just need to call WS.init in our app's init function, and that will set
+[11:52.960 --> 11:56.760]  up everything that we need, so it will do all the plumbing into the runtime to make
+[11:56.760 --> 12:00.520]  sure the events are dispatched and end up in our update function.
+[12:00.520 --> 12:07.000]  So here, we pass in this WebSocket message constructor, and then whenever we get an event
+[12:07.000 --> 12:11.200]  on the WebSocket that goes into our update function, we can change our state, do whatever
+[12:11.200 --> 12:15.880]  we need to do, and that will affect the app and renders and so on.
+[12:15.880 --> 12:23.000]  Now, I mess, that is the wrong text, but oh well.
+[12:23.000 --> 12:28.080]  I mentioned earlier that one of the great things about DREAM is that we can share types
+[12:28.080 --> 12:30.720]  across the front and the back end.
+[12:30.720 --> 12:37.120]  And so, what we can start to do is have to type messages between client and server.
+[12:37.120 --> 12:42.240]  So here, we have a to back end message type, so this is what the clients will send to
+[12:42.240 --> 12:46.520]  the back end to ask it to update some state change.
+[12:46.520 --> 12:56.400]  So for example, start the sequence, stop it, toggle a step on or off, update some parameters,
+[12:56.400 --> 13:02.920]  and then we'd handle that in our apps main update function on the back end.
+[13:02.920 --> 13:08.000]  So here, we're updating some shared state, and this is the state that is shared across
+[13:08.000 --> 13:14.360]  all clients, and then we're broadcasting that state back to clients.
+[13:14.360 --> 13:19.280]  And we do that with a to front end message, and so this is the same kind of idea in reverse.
+[13:19.280 --> 13:27.560]  This will tell the client to update a particular part of its model.
+[13:27.560 --> 13:28.560]  That looks like this.
+[13:28.560 --> 13:32.640]  Again, we decode the JSON that we're getting from the web socket, and then we can just
+[13:32.640 --> 13:36.000]  branch off of that, and this would be called in our update function.
+[13:36.000 --> 13:43.960]  And so what we end up is this really neat, tidy kind of loop where the server sends
+[13:43.960 --> 13:50.080]  a message to the client with some state to render, then user interaction happens, an
+[13:50.080 --> 13:54.680]  event is emitted from there, and instead of updating the state locally, we send a message
+[13:54.680 --> 13:59.320]  back to the back end, that updates the state on the back end, and then that state is broadcast
+[13:59.320 --> 14:04.360]  back to the clients, and we have the same kind of event loop that we had just on the
+[14:04.360 --> 14:10.920]  client, but now across the network.
+[14:10.920 --> 14:16.120]  Now I've waffled on for a bit, I think it would be cool to maybe see a demo.
+[14:16.120 --> 14:18.320]  I'm not sure we can get the sound.
+[14:18.320 --> 14:24.680]  I'm going to check the sound of the video guys, let's try to do what you want to do.
+[14:24.680 --> 14:25.680]  What would you like me to do?
+[14:25.680 --> 14:37.920]  I'll try to play audio, and I will see if I can.
+[14:37.920 --> 14:44.600]  Yeah, we are trying to play audio with the mini jack.
+[14:44.600 --> 14:48.040]  I can just play out the speaker, it's fine.
+[14:48.040 --> 14:50.240]  It's not a very big room.
+[14:50.240 --> 14:53.240]  The mini jack audio is not coming off.
+[14:53.240 --> 14:58.000]  Okay, well while they're dealing with that, I'll just explain what's happening, I think
+[14:58.000 --> 14:59.000]  it's kind of clear.
+[14:59.000 --> 15:02.960]  So we have two clients open here.
+[15:02.960 --> 15:13.360]  Okay, that's important, no problem.
+[15:13.360 --> 15:20.520]  Maybe it was me that was having no sound.
+[15:20.520 --> 15:28.320]  If it was muted, maybe it was the plug in there, let's try.
+[15:28.320 --> 15:29.320]  No.
+[15:29.320 --> 15:30.320]  Okay, cool.
+[15:30.320 --> 15:32.440]  It wasn't user error, it was okay.
+[15:32.440 --> 15:38.320]  So we have two instances going on here, for some reason that one isn't going, there we
+[15:38.320 --> 15:39.320]  go.
+[15:39.320 --> 15:44.600]  So I can change the parameters on this side, you can see they're reflected on the other,
+[15:44.600 --> 15:48.920]  add steps or whatever.
+[15:48.920 --> 15:56.760]  Yes, and so this is all totally networked, conceptually you could run this on the web
+[15:56.760 --> 16:01.400]  and have, I mean this is just running locally but I would have hoped that people could open
+[16:01.400 --> 16:04.600]  up here.
+[16:04.600 --> 16:10.360]  So just a recap, we've got a full stack GLEAM app, we have an ATP server on the back end,
+[16:10.360 --> 16:15.800]  we have a React app on the front end, both written in pure GLEAM, both sharing types,
+[16:15.800 --> 16:22.640]  and we have this live view style of communication, but specifically or kind of crucially, this
+[16:22.640 --> 16:25.600]  communication is well typed and so we know all the messages that we're supposed to be
+[16:25.600 --> 16:30.520]  handling on both the front end and the back end.
+[16:30.520 --> 16:36.240]  And this is just a quick kind of look at how many lines of code we're in this code base,
+[16:36.240 --> 16:41.760]  and so you can see 85 lines of JavaScript was all that was needed and everything else
+[16:41.760 --> 16:42.760]  is pure GLEAM.
+[16:42.760 --> 16:48.040]  Which I think is pretty cool, it's pretty exciting that you can do that today.
+[16:48.040 --> 16:58.200]  So yeah, thank you for listening.
+[16:58.200 --> 17:08.720]  Thank you, are there any questions, yep.
+[17:08.720 --> 17:15.200]  Thank you for sharing, maybe it was apparent from your presentation but I just wanted to
+[17:15.200 --> 17:19.520]  check how are the different clients synchronized.
+[17:19.520 --> 17:27.440]  Yeah, okay, so let me go back.
+[17:27.440 --> 17:34.360]  We had this model and when I introduced that each client had their own model and so basically
+[17:34.360 --> 17:40.880]  the server has its own version of this now and it's broadcasting, every time the sequence
+[17:40.880 --> 17:46.600]  resets, it broadcasts the entire model to make sure everything stays in sync and then
+[17:46.600 --> 17:50.680]  whenever one client changes something it broadcasts a message to tell the client to update their
+[17:50.680 --> 17:52.560]  local version.
+[17:52.560 --> 18:01.320]  So it depends on how the client gets this new information and that's more or less okay
+[18:01.320 --> 18:04.320]  enough for synchronization.
+[18:04.320 --> 18:08.960]  Yeah it seems to be kind of fine, I guess if one person is in Australia and one is over
+[18:08.960 --> 18:14.200]  here there's going to be some noticeable ping but then you wouldn't be stupid enough to
+[18:14.200 --> 18:16.160]  do that.
+[18:16.160 --> 18:26.960]  Thank you.
+[18:26.960 --> 18:35.520]  So I don't know much about the Gleam front end stuff, what was necessary to write in
+[18:35.520 --> 18:40.480]  JavaScript that you couldn't write in Gleam?
+[18:40.480 --> 18:49.760]  Yeah, the JavaScript is just the part that actually renders the Web Audio stuff.
+[18:49.760 --> 18:53.800]  So that's the APIs that are available in Gleam?
+[18:53.800 --> 19:00.960]  Well so Gleam doesn't really have any browser API bindings at the moment, I could have FFI'd
+[19:00.960 --> 19:06.840]  the whole thing and probably taken a bit more into Gleam but for that particular bit I've
+[19:06.840 --> 19:12.520]  done that JavaScript myself quite a few times and so it was just quicker to just keep that
+[19:12.520 --> 19:14.280]  little bit in JavaScript.
+[19:14.280 --> 19:18.920]  Thank you, thanks.
+[19:18.920 --> 19:28.760]  Any other question?
+[19:28.760 --> 19:38.040]  In the beginning you presented an API for connecting audio nodes by using nesting, my
+[19:38.040 --> 19:45.320]  question is how would that work with more complex graphs that have forks and merges
+[19:45.320 --> 19:50.880]  or feedbacks?
+[19:50.880 --> 19:54.040]  So you're talking about this, right?
+[19:54.040 --> 20:00.440]  Yeah, actually presented a kind of Striptown version of the actual API and there we have
+[20:00.440 --> 20:05.560]  like keyed nodes so you can assign like an ID to a node and then there's like Reth nodes
+[20:05.560 --> 20:11.000]  as well so you can refer to other nodes in the graph outside of the tree and so that
+[20:11.000 --> 20:16.280]  way you can keep this kind of tree-like structure but jump out and refer to anything you want
+[20:16.280 --> 20:18.600]  and have loops or whatever.
+[20:18.600 --> 20:22.320]  And so actually that's what's happening in this app so we've got that delay that's going
+[20:22.320 --> 20:27.160]  on in the background and that's the feedback loop and then it's going, yeah, does that
+[20:27.160 --> 20:28.160]  make sense?
+[20:28.160 --> 20:29.160]  Cool.
+[20:29.160 --> 20:32.160]  Any other question?
+[20:32.160 --> 20:41.760]  Hello, sorry, I didn't see the full presentation, I arrived in the middle and maybe I will ask
+[20:41.760 --> 20:48.800]  something that you already shared but I would like to know if can we apply this environment
+[20:48.800 --> 20:56.680]  for live coding, improvise the performance, it's mainly dedicated for building clients
+[20:56.680 --> 20:57.680]  and applications?
+[20:57.680 --> 21:03.560]  Yeah, I think you could totally transfer these ideas to live coding or performance, I mean
+[21:03.560 --> 21:11.240]  ultimately it just comes down to sending messages right and so here we're sending like user
+[21:11.240 --> 21:18.280]  interaction events but you could do conceptually the same thing with code snippets or some other
+[21:18.280 --> 21:22.720]  kind of data transfer, yeah.
+[21:22.720 --> 21:25.720]  Any other question?
+[21:25.720 --> 21:35.640]  Hi, Redsorg, I was wondering you said it was compatible with React and so will it be compatible
+[21:35.640 --> 21:39.440]  with other frameworks like Vue or the future?
+[21:39.440 --> 21:46.200]  Yeah, at the moment it's just React but it's been on my to-do list for a while now to kind
+[21:46.200 --> 21:52.480]  of factor out the state management that Lustre does away from the actual renderer that you
+[21:52.480 --> 21:59.080]  choose so right now just React, some nebulous time in the future, it could be Vue or Morphdome
+[21:59.080 --> 22:00.480]  or whatever.
+[22:00.480 --> 22:08.480]  Okay, I think there's time for one more question if there is one.
+[22:08.480 --> 22:12.080]  Okay.
+[22:12.080 --> 22:18.080]  Thanks for talk but if someone want to use some hardware devices to connect, does Glim
+[22:18.080 --> 22:24.520]  support some other wrappers over Web API to speak with some hardware parts like the USB
+[22:24.520 --> 22:26.120]  serial port, etc.?
+[22:26.120 --> 22:27.120]  Right.
+[22:27.120 --> 22:34.760]  Do you mean from the browser side or yeah, so like I said there aren't really any official
+[22:34.760 --> 22:41.560]  bindings at the moment but as I also said the FFI story is very simple so it's actually
+[22:41.560 --> 22:46.400]  quite easy to create bindings for these browsers yourself which is pretty much the situation
+[22:46.400 --> 22:47.400]  where we're at today.
+[22:47.400 --> 22:52.840]  I mean the biggest thing maybe just holding Glim back at the moment is the ecosystem is
+[22:52.840 --> 22:58.600]  just very, very young and so we don't have many packages or bindings for a lot of stuff.
+[22:58.600 --> 23:01.440]  Okay, thank you again for your talk.
+[23:01.440 --> 23:02.440]  Thank you.
+[23:02.440 --> 23:12.440]  Thank you.

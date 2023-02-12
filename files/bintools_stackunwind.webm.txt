@@ -1,0 +1,456 @@
+[00:00.000 --> 00:12.200]  Welcome everyone, today we are going to talk about walking native stacks in BPF without
+[00:12.200 --> 00:13.720]  frame pointers.
+[00:13.720 --> 00:18.960]  So my name is Roy Shally, I work at Polar Signals as a software engineer, I mostly work
+[00:18.960 --> 00:25.360]  on profilers and eBPF related stuff and before that I have worked in different kernel subsystems
+[00:25.360 --> 00:27.880]  as part of my job.
+[00:27.880 --> 00:31.160]  My name is Javier and I have been working at Polar Signals for a year, mostly working
+[00:31.160 --> 00:35.000]  on native stack and winding, so the work that we are going to introduce today and before
+[00:35.000 --> 00:41.000]  that I was working on web reliability, tooling for developers and performance at Facebook.
+[00:41.000 --> 00:47.400]  Yeah, so before we dive into the topic, I wanted to go through the agenda.
+[00:47.400 --> 00:51.560]  So first we actually want to talk about why there is a need for a dwarf based stack walker
+[00:51.560 --> 00:56.520]  in eBPF because that is like the most asked question, then we will go into the design
+[00:56.520 --> 01:01.240]  of our stack walker and then we will talk about how we went from the prototype to making
+[01:01.240 --> 01:08.080]  it production ready and then a bunch of learnings so far on some future plans.
+[01:08.080 --> 01:13.240]  So as we said, we work on the production profilers which means that generally sampling profilers
+[01:13.240 --> 01:19.320]  collect the stack traces at particular intervals and attaches values to it.
+[01:19.320 --> 01:23.760]  Note that the profilers generally need like the user and application level stacks as well
+[01:23.760 --> 01:30.680]  as kernel stacks and it sort of involves iterating over all the stack frames and then collecting
+[01:30.680 --> 01:32.520]  the written addresses.
+[01:32.520 --> 01:37.960]  Historically, there have been a dedicated register for that called frame pointer in both
+[01:37.960 --> 01:47.160]  x86 and 64, but in recent times because of some of the compiler optimizations, it has
+[01:47.160 --> 01:54.520]  been mostly disabled in most of the runtimes as well as in distros.
+[01:54.520 --> 02:01.320]  Also it becomes really hard when you don't have frame pointers and instead of involving
+[02:01.320 --> 02:07.680]  a couple of memory accesses per frame which is like quite fast, we will need to really
+[02:07.680 --> 02:11.160]  do more work in the stack walkers.
+[02:11.160 --> 02:14.560]  Note that the stack walking is like also a common practice in the debuggers as you all
+[02:14.560 --> 02:15.560]  know.
+[02:15.560 --> 02:18.560]  So what's like the current state of the world?
+[02:18.560 --> 02:25.760]  Well, it's not a problem for the hyperscalers because hyperscalers actually have all the
+[02:25.760 --> 02:32.240]  applications which are already enabling frame pointers in production and this is important
+[02:32.240 --> 02:36.200]  because when the things break and you want to really go through the inspection, it's
+[02:36.200 --> 02:42.080]  really helpful to have all the stack when it's needed.
+[02:42.080 --> 02:46.680]  There's also a recent discussion in the Fedora mailing list, so just feel free to go through
+[02:46.680 --> 02:47.680]  it.
+[02:47.680 --> 02:55.760]  TLDR of that discussion is that it's being, so FPs are going to be enabled.
+[02:55.760 --> 03:03.600]  Since I think Fedora 38, so that's about to be released in late April, Mac or software
+[03:03.600 --> 03:08.240]  always have binaries which has frame pointers enabled.
+[03:08.240 --> 03:14.960]  There's also an amazing work going on by Oracle engineers to have a simple format instead
+[03:14.960 --> 03:21.840]  of Dwarf and we hope that that work also goes through and helps the ecosystem.
+[03:21.840 --> 03:27.800]  So that's like sort of the current status, but what we want is we want that right now
+[03:27.800 --> 03:32.960]  and we want the support for all the distros as well as all the runtimes which is like
+[03:32.960 --> 03:41.760]  scattered here and there, for example, only go runtime, enables FPs like since go 1.7
+[03:41.760 --> 03:50.160]  and in x86 and since 1.12 and 64.
+[03:50.160 --> 03:57.040]  So now some of you might be wondering if not frame pointers, what do we have?
+[03:57.040 --> 04:05.520]  For example, say in Rust where it has been disabled by its own, by default, but even,
+[04:05.520 --> 04:11.120]  but when you have the panic, you still get the all mattress, so how is it happening?
+[04:11.120 --> 04:16.720]  So well, compilers always have this information and we generally need to know the value of
+[04:16.720 --> 04:21.200]  the stack pointer in the previous frame and it can be like from any offset if there is
+[04:21.200 --> 04:24.720]  no frame pointer.
+[04:24.720 --> 04:28.960]  So that way we can always like find the value of the return addresses and continue unwinding
+[04:28.960 --> 04:30.460]  the stack.
+[04:30.460 --> 04:38.720]  This information is generally encoded as part of.ehframe section or.debugframe section
+[04:38.720 --> 04:47.000]  in the Dwarf and there is also another way which is like unwine tables can be also synthesized
+[04:47.000 --> 04:54.200]  from the object file which is something being done by orc format that has been used in kernel
+[04:54.200 --> 04:55.600]  for a while now.
+[04:55.600 --> 05:03.520]  We will talk in detail about.ehframe in a minute, but first of all, let's see if anybody
+[05:03.520 --> 05:09.080]  else is using.ehframe already, of course.
+[05:09.080 --> 05:14.920]  So the profiler we have developed is not the first thing who is going to use.ehframe.
+[05:14.920 --> 05:23.920]  Perf, the popular profiler from Linux kernel, added the Dwarf support in since like when
+[05:23.920 --> 05:30.240]  the perf event opens, this call was added which was like in 3.4 and it can collect the registers
+[05:30.240 --> 05:36.800]  for the profile processors as well as the copy of the stack for every sample.
+[05:36.800 --> 05:42.360]  While this approach has been proven to work, there are a bunch of drawbacks to it.
+[05:42.360 --> 05:48.080]  For example, one of the things which perf does is it actually collects all the stacks
+[05:48.080 --> 05:51.000]  and copies it into the user space.
+[05:51.000 --> 05:57.280]  The second thing is that the implications of one process having another processes data
+[05:57.280 --> 06:03.440]  in the user space can be quite complicated and also be it's like a lot of data especially
+[06:03.440 --> 06:09.600]  for the CPU intensive applications.
+[06:09.600 --> 06:16.840]  So why BPF? Stack walking in BPF for our profilers actually makes a lot of sense to us because
+[06:16.840 --> 06:20.800]  in that case we don't really have to copy the whole stack.
+[06:20.800 --> 06:26.880]  The information, a lot of it still stays in the kernel which provides like higher safety
+[06:26.880 --> 06:31.320]  guarantees especially in the case of like stack walking mechanism.
+[06:31.320 --> 06:37.160]  Once it's been implemented, we can like sort of leverage the perf subsystem to get the
+[06:37.160 --> 06:43.840]  sample CPU cycles and then instructions, altricache misses, etc.
+[06:43.840 --> 06:50.000]  And it can then also help us to develop other tools like allocation tracers, runtime specific
+[06:50.000 --> 06:56.960]  profilers for example for JVM or Ruby, etc.
+[06:56.960 --> 07:02.800]  So some of you who are probably also familiar with BPF may know that there is already BPF
+[07:02.800 --> 07:07.920]  get stack ID so why there is a need for implementing something different.
+[07:07.920 --> 07:14.480]  Well, as it turns out, the problem with that helper is that it also requires frame pointers.
+[07:14.480 --> 07:17.920]  So it also uses frame pointers to walk through the stacks.
+[07:17.920 --> 07:26.000]  And for the historical reasons, fully featured DWARF unwinder is like unlikely to be part
+[07:26.000 --> 07:29.760]  of the Linux kernel.
+[07:29.760 --> 07:39.240]  So before we dive into how we are using EH frame with BPF, let's look at what EH frame
+[07:39.240 --> 07:42.080]  actually has to offer.
+[07:42.080 --> 07:49.360]  So the EH frame section contains one or more call frame informations.
+[07:49.360 --> 07:56.040]  The main goal of the call frame information is to provide answers on like how to restore
+[07:56.040 --> 08:01.480]  every register for the previous frame at any part of our code execution.
+[08:01.480 --> 08:07.480]  Directly storing the table, that sort of contain each program counter and all the registered
+[08:07.480 --> 08:13.640]  and then locations such as like whether they have been pushed to the stack or not, etc.
+[08:13.640 --> 08:17.240]  would generate huge unwind tables.
+[08:17.240 --> 08:25.960]  And for that reason, DWARF is actually quite compact and very space efficient in that sense.
+[08:25.960 --> 08:33.600]  So the unwind tables encoded in the CFI format are in the form of upcodes and those upcodes
+[08:33.600 --> 08:35.040]  needs to be evaluated.
+[08:35.040 --> 08:39.000]  So in the case of stack walking, once it has been evaluated, we generate the table that
+[08:39.000 --> 08:43.400]  contains for each instruction boundary like how to store the value of the register.
+[08:43.400 --> 08:46.400]  There are two main layers to it.
+[08:46.400 --> 08:53.160]  One is that it helps with repetitive patterns that compress well and allows for like more
+[08:53.160 --> 08:56.920]  compact representation of some data.
+[08:56.920 --> 09:04.240]  In some cases, there is like also a specialized opcode that consumes say 1, 2, 4 bytes rather
+[09:04.240 --> 09:07.320]  than just 4 bytes at like all time.
+[09:07.320 --> 09:13.400]  And the second layer, which we call the second layer is the spatial opcode.
+[09:13.400 --> 09:19.640]  That contains like the other set of opcodes, which is like containing the arbitrary expressions.
+[09:19.640 --> 09:21.960]  That needs to be evaluated and that's like a lot of work.
+[09:21.960 --> 09:26.520]  The main difference between these two is that in the first one, we just need like these
+[09:26.520 --> 09:28.680]  two values.
+[09:28.680 --> 09:34.200]  But in the second part of it, we will actually need to evaluate like the arbitrary during
+[09:34.200 --> 09:36.640]  complete expressions.
+[09:36.640 --> 09:42.080]  So for that reason, we would need to have like the full blown VM to be implemented in
+[09:42.080 --> 09:48.600]  the BPF itself, which is not quite practical.
+[09:48.600 --> 09:55.000]  So those who don't know how like generally the BPF applications flow works.
+[09:55.000 --> 10:01.200]  This is how it would look like in a very, yeah, very high level point of view.
+[10:01.200 --> 10:07.200]  So like in the user space, you would have like the driver program written in go.
+[10:07.200 --> 10:13.560]  Like that's that's our stack and we are using likely BPF go over there.
+[10:13.560 --> 10:20.240]  We are doing like creating the maps, attaching the BPF program to a CPU cycle perf event.
+[10:20.240 --> 10:25.880]  It reads parses and evaluates the EH frame section of the process and like all the dynamic
+[10:25.880 --> 10:27.520]  libraries.
+[10:27.520 --> 10:34.840]  And in the BPF program, we have using the PID, we are fetching the table.
+[10:34.840 --> 10:40.360]  And then we have like an unwind algorithm, which processes that work information.
+[10:40.360 --> 10:49.480]  We will go in depth for each component, but let's see how the algorithm looks like.
+[10:49.480 --> 10:53.400]  So basically for this one, it's like a really simple one.
+[10:53.400 --> 10:57.320]  But basically we just read like three important register.
+[10:57.320 --> 11:00.320]  First one is instruction pointer, RIP.
+[11:00.320 --> 11:02.240]  Next one is the stack pointer.
+[11:02.240 --> 11:08.640]  And the third one is, of course, like frame pointer, RBP.
+[11:08.640 --> 11:14.360]  And then when the frame count is less or equal to the maximum stack depth we have defined,
+[11:14.360 --> 11:18.560]  we find the unwind table for the program counter.
+[11:18.560 --> 11:23.160]  We are the instruction pointer to the stack, calculate the previous frame, frame stack
+[11:23.160 --> 11:30.200]  pointer, then update the registers with the calculated values for the previous frame and
+[11:30.200 --> 11:32.400]  then continue with the next frame.
+[11:32.400 --> 11:38.000]  So there's like just a nutshell that's what the algorithm is in the BPF.
+[11:38.000 --> 11:44.600]  But now the important part is how we store that unwind information and what we have done
+[11:44.600 --> 11:46.640]  to make it scalable.
+[11:46.640 --> 11:52.600]  So now Javier will talk about that.
+[11:52.600 --> 11:57.720]  Cool.
+[11:57.720 --> 12:02.640]  So now we have some unwind information that we're going to describe the format later,
+[12:02.640 --> 12:05.560]  but we need to put it somewhere, right?
+[12:05.560 --> 12:10.560]  So one possibility would be to store this unwind info in the memory space of the applications
+[12:10.560 --> 12:12.640]  that we are trying to profile.
+[12:12.640 --> 12:17.360]  And we could do this, for example, using a combination of ptrace, mmap, and mlock.
+[12:17.360 --> 12:25.040]  And we could use ptrace to hijack the process execution and allocate a new memory segment.
+[12:25.040 --> 12:29.760]  And then we will have to lock it because in BPF we need to make sure that the pages that
+[12:29.760 --> 12:33.480]  we are accessing are never going to be swapped out.
+[12:33.480 --> 12:37.480]  But this has a big problem, that is, that will be altering the execution flow of the
+[12:37.480 --> 12:38.480]  program.
+[12:38.480 --> 12:41.040]  And it's something that we never want to do.
+[12:41.040 --> 12:44.960]  One of the reasons for this is because, first, this memory will live in the process, which
+[12:44.960 --> 12:49.360]  means that accounting for it will be odd and developers will find a new memory segment
+[12:49.360 --> 12:50.520]  there that appeared out of the blue.
+[12:50.520 --> 12:54.520]  So in their metrics, there will be something that changes behind their backs, which is not
+[12:54.520 --> 12:55.520]  great.
+[12:55.520 --> 12:59.240]  But also because the lifecycle of managing this memory chunk is very complicated.
+[12:59.240 --> 13:04.120]  For example, what do you do if our application, if our profiler dies before the processes
+[13:04.120 --> 13:05.640]  that we are introspecting?
+[13:05.640 --> 13:06.640]  How do we clean this up?
+[13:06.640 --> 13:12.840]  It involves a lot of, that's a lot of problems and adding solutions to these problems will
+[13:12.840 --> 13:19.340]  require like crazy engineering, which we were not planning to tackle because it will over
+[13:19.340 --> 13:21.080]  complicated project a lot.
+[13:21.080 --> 13:26.840]  The other problem is that sharing memories way harder and accounting for our overhead
+[13:26.840 --> 13:27.840]  is also very hard.
+[13:27.840 --> 13:31.960]  If you think about it, for example, Libc is probably linked in most of the applications
+[13:31.960 --> 13:33.120]  in your machine.
+[13:33.120 --> 13:38.360]  So why having the same information like for every single process, right?
+[13:38.360 --> 13:40.800]  So how do we actually store this information?
+[13:40.800 --> 13:46.320]  We use BPF maps, which are data structures that, as Shali said, they can be written and
+[13:46.320 --> 13:49.160]  read both from kernel and user space.
+[13:49.160 --> 13:53.480]  We use in particular hash maps, which in the case of BPF, they are basically a mapping
+[13:53.480 --> 13:58.680]  of bytes to bytes where you can put arbitrary information.
+[13:58.680 --> 14:00.560]  So this is always locked in memory.
+[14:00.560 --> 14:05.920]  BPF allows you with this flag not to lock memory, but in the type of BPF program we use,
+[14:05.920 --> 14:07.720]  it is mandatory to lock it.
+[14:07.720 --> 14:13.440]  Otherwise, as we said before, these pages could be swapped out and from the type of
+[14:13.440 --> 14:18.720]  BPF programs that we have, page faults are forbidden.
+[14:18.720 --> 14:25.000]  And yeah, in the end, we could reuse these mappings because they are in this kind of
+[14:25.000 --> 14:28.280]  global BPF map that we have control over.
+[14:28.280 --> 14:32.000]  So we can store, for example, Libc in one particular area, and then we'll have to add
+[14:32.000 --> 14:37.360]  metadata for where it is for every single process that has this mapping.
+[14:37.360 --> 14:42.880]  So yeah, this is a logical representation of our information for different executable
+[14:42.880 --> 14:43.880]  segments.
+[14:43.880 --> 14:48.340]  So imagine this is Libc, MySQL, Zlib, SystemD, and then some tank that isn't used.
+[14:48.340 --> 14:55.160]  So this assumes that we have this logical view has a chunk of memory that is contiguous.
+[14:55.160 --> 14:58.480]  But in reality, we cannot allocate any arbitrary chunk of memory in BPF.
+[14:58.480 --> 15:02.720]  We cannot say we want 200 megabytes and it needs to be contiguous.
+[15:02.720 --> 15:05.160]  We cannot do an malloc, right?
+[15:05.160 --> 15:09.680]  So we've been doing some experiments and in the systems that we have tested and the kernels
+[15:09.680 --> 15:18.220]  that we want to support, we can add up to 250,000 wine entries to each value of a
+[15:18.220 --> 15:20.320]  BPF map.
+[15:20.320 --> 15:25.920]  So because we want to be able to fit larger wine tables, we basically use the same solution
+[15:25.920 --> 15:33.480]  that you would use in any other data intensive application, which is partitioning or sharding.
+[15:33.480 --> 15:40.840]  So we are splitting the wine table into different shards and depending on the memory that your
+[15:40.840 --> 15:45.920]  machine has, we'll allocate more or less shards ahead of time.
+[15:45.920 --> 15:51.400]  That will result in a CPU to memory trade-off because when they get full, we'll regenerate
+[15:51.400 --> 15:52.400]  them.
+[15:52.400 --> 15:54.280]  But we'll talk about this later.
+[15:54.280 --> 15:58.800]  So for example, let's see SystemD some wine table and let's suppose that it's a bit bigger
+[15:58.800 --> 16:04.720]  than 250,000 elements so it doesn't fit in a single shard.
+[16:04.720 --> 16:06.840]  So because it doesn't, we have to chunk it up.
+[16:06.840 --> 16:11.760]  So we store the first chunk in the first shard and then there's a little bit that it's stored
+[16:11.760 --> 16:14.400]  in the second shard.
+[16:14.400 --> 16:16.280]  So we have added all these layers of indirection.
+[16:16.280 --> 16:21.600]  We need some bookkeeping to do and this metadata is also stored in BPF maps.
+[16:21.600 --> 16:26.040]  So we have a process that can have many mappings.
+[16:26.040 --> 16:32.400]  Each mapping can have one or more chunks and then each chunk maps to a particular shard
+[16:32.400 --> 16:39.000]  because you might have one and wine entry or up to 250,000 in a shard.
+[16:39.000 --> 16:45.400]  We have some other metadata to exactly tell you where that information leaves.
+[16:45.400 --> 16:50.440]  So yeah, thanks to this way of organizing data, we're able to, as we said before, share
+[16:50.440 --> 16:56.360]  these executable mappings and thanks to that, we skip table generation for most of the executables
+[16:56.360 --> 16:57.360]  in your box.
+[16:57.360 --> 17:02.960]  And thanks to this, we only use 0.9% of the CPU cycles doing the process that Vashali
+[17:02.960 --> 17:06.400]  was talking about before, which is not the most complex process in the universe, but
+[17:06.400 --> 17:11.760]  it consumes some CPU cycles because we need to read some information from your L file,
+[17:11.760 --> 17:16.680]  find the section, then we need to read the section and we need to parse it and interpret
+[17:16.680 --> 17:18.480]  the dwarf information.
+[17:18.480 --> 17:20.360]  So now we need to do way fewer times.
+[17:20.360 --> 17:25.680]  So in your machine, we're only going to do it once per unique executable section.
+[17:25.680 --> 17:27.480]  So what happens if we run out of space?
+[17:27.480 --> 17:31.400]  So basically what we have implemented is basically a bump allocator.
+[17:31.400 --> 17:35.520]  We keep on appending information to the shards and logically you can see it as a big chunk
+[17:35.520 --> 17:36.520]  of memory.
+[17:36.520 --> 17:40.520]  Once it's full, at some point, we'll decide to wipe the whole thing and start again, but
+[17:40.520 --> 17:47.240]  we do it in such a way that we give every single process a fair chance of being profiled.
+[17:47.240 --> 17:49.360]  So yeah, let's take a look at how are we doing this.
+[17:49.360 --> 17:54.000]  So we start with a PID of any process that you find in your machine that at that point
+[17:54.000 --> 18:00.160]  happens to be running on CPU, and the first thing we do is to check if it has unwind information.
+[18:00.160 --> 18:04.320]  If it does, we need to find the mapping with the current instruction pointer that we have
+[18:04.320 --> 18:06.720]  for that frame.
+[18:06.720 --> 18:08.380]  Then we need to find the chunk.
+[18:08.380 --> 18:13.720]  We can find it doing linear search because we have the information of every single, like
+[18:13.720 --> 18:18.840]  minimum and maximum program counter that is covered by that chunk.
+[18:18.840 --> 18:24.560]  Once we get the chunk, we can have the shard information, and once we have the shard information,
+[18:24.560 --> 18:26.480]  we have the unwind information.
+[18:26.480 --> 18:31.200]  But the problem is the unwind information, as we said before, it's basically an array.
+[18:31.200 --> 18:35.120]  On this array, we need to find it there, but it can be up to 250,000 items.
+[18:35.120 --> 18:42.280]  If you have done anything on BPF, you know that you have to basically build whatever
+[18:42.280 --> 18:46.680]  you need yourself, and you don't have, for example, some sort of binary search that is
+[18:46.680 --> 18:50.200]  executed on kernel space for you, so you need to implement it yourself, which is not a big
+[18:50.200 --> 18:51.200]  deal in general.
+[18:51.200 --> 18:56.160]  Implementing binary search is not rocket science, but the problem, most of the times, it's difficult
+[18:56.160 --> 19:00.280]  to get all the off by once, but the problem here is that in kernel space, we have a lot
+[19:00.280 --> 19:03.520]  of limitations we're going to talk about later, and we're going to talk about how we overcame
+[19:03.520 --> 19:09.520]  them, because this produces quite a bit of code that has to be split logically.
+[19:09.520 --> 19:14.640]  Not only the data structures are sharded, but the code is sharded, too.
+[19:14.640 --> 19:20.480]  So anyways, we binary search this with up to seven iterations, but let's say eight, if
+[19:20.480 --> 19:25.840]  you're feeling pessimistic, and then we're going to get the unwind action.
+[19:25.840 --> 19:30.260]  So what is the operation we need to do to the current registers to recover the previous
+[19:30.260 --> 19:35.000]  registers, and add that frame to the stack trace, and continue with the next frame, as
+[19:35.000 --> 19:37.400]  I shall explain before.
+[19:37.400 --> 19:42.080]  If the stack is correct, and we have the luxury to know that, because when we have known one
+[19:42.080 --> 19:49.480]  information, and RBP is zero, that is specified by the X64 API to be the end of the stack,
+[19:49.480 --> 19:51.760]  the bottom of the stack.
+[19:51.760 --> 19:57.400]  So if it is correct, we hash the addresses, add the hash to a map, and bump a counter.
+[19:57.400 --> 20:01.640]  So it is reasonably cheap, and I will show you some data later on this.
+[20:01.640 --> 20:04.720]  And then every couple seconds, I think it's every 10 seconds or so, we collect all this
+[20:04.720 --> 20:11.000]  information from user space, and we generate the actual profiles that we send to some server.
+[20:11.000 --> 20:15.400]  As I said before, BPF has some interesting challenges for us.
+[20:15.400 --> 20:20.040]  I think it's the closest that I've been to coding in the 90s or 80s, because we have
+[20:20.040 --> 20:21.040]  very little stack space.
+[20:21.040 --> 20:24.360]  We have 512 bytes, if I am not mistaken.
+[20:24.360 --> 20:30.920]  So in order to overcome that, we used BPF maps as some sort of heap.
+[20:30.920 --> 20:34.400]  Then there's a problem that I mentioned before about memory locking.
+[20:34.400 --> 20:38.240]  That memory can never be swapped out, and it is in kernel space.
+[20:38.240 --> 20:43.000]  So we want to make sure that we allocate the minimal space you need, and we need to do it
+[20:43.000 --> 20:49.320]  properly, because each single environment has a different C-group configuration, and as
+[20:49.320 --> 20:53.520]  some talks explained yesterday, it's quite tricky to know the actual memory that your
+[20:53.520 --> 20:56.000]  machine has available.
+[20:56.000 --> 20:59.040]  For the program size, there is two main issues.
+[20:59.040 --> 21:03.880]  One of them is that there's a limitation on the number of instructions that you can store
+[21:03.880 --> 21:09.640]  in the kernel, but also the BPF verifier, which is this machinery that makes sure that your
+[21:09.640 --> 21:13.080]  program is safe, and for example, your program is going to finish, you're not the reference
+[21:13.080 --> 21:22.760]  in any null pointers, and that in general, you're not going to crash the kernel, has
+[21:22.760 --> 21:27.840]  a limit on the amount of iterations that it does internally.
+[21:27.840 --> 21:34.320]  This is a problem for us, because doing a full binary search already fills these limits.
+[21:34.320 --> 21:39.080]  So we need to use some techniques like this thing called BPF tail calls that is similar
+[21:39.080 --> 21:43.240]  to Lisp tail calls, and if you're lucky, we are not.
+[21:43.240 --> 21:48.240]  You can use, well, we use bounded loops, but we're going to use this new helper called
+[21:48.240 --> 21:52.880]  BPF loop that basically it's a function that you can call multiple times creating some
+[21:52.880 --> 21:57.440]  sort of loop in BPF, but we cannot use that because we want to support older kernels.
+[21:57.440 --> 22:00.680]  That's a pretty new feature.
+[22:00.680 --> 22:03.720]  So let's switch to something else.
+[22:03.720 --> 22:09.960]  We have written our application in user space in Go, and we are a profiler, so we want to
+[22:09.960 --> 22:13.800]  make sure that the overhead we have on your machine is as little as possible.
+[22:13.800 --> 22:17.240]  But unfortunately, many of the Go APIs aren't designed with performance in mind.
+[22:17.240 --> 22:18.240]  I am new to Go.
+[22:18.240 --> 22:22.000]  I didn't know this was like this, and every single time I profiled our profiler, and I
+[22:22.000 --> 22:25.240]  found these things, I was like, how is this possible?
+[22:25.240 --> 22:29.520]  But it has the dwarf and elf parsing library in the standard library, which is great, but
+[22:29.520 --> 22:35.640]  they are not designed for performance sensitive environments, let's say.
+[22:35.640 --> 22:41.400]  And also, there's two functions that are binary read and binary writes that we use all the
+[22:41.400 --> 22:47.960]  time because we need to deal with bytes back and forth that allocate in the fast path.
+[22:47.960 --> 22:50.760]  But anyways, we profile our profiler all the time.
+[22:50.760 --> 22:54.480]  We have found lots of opportunities that we keep on fixing, but of course, there's more
+[22:54.480 --> 22:56.640]  work to do.
+[22:56.640 --> 23:03.320]  And one of the areas where we try to be pretty comprehensive, it's with testing.
+[23:03.320 --> 23:08.400]  So we have thorough testing for, well, unit testing for most of the core functions to
+[23:08.400 --> 23:12.160]  ensure that we don't regress, but I think that, in my opinion, has helped us the most
+[23:12.160 --> 23:13.960]  is snapshot testing.
+[23:13.960 --> 23:16.600]  If you're not familiar with this technique, it's very simple.
+[23:16.600 --> 23:20.680]  You basically generate some textual representation of your data structures, write them to disk
+[23:20.680 --> 23:24.240]  or somewhere in memory, it doesn't matter, and then you generate them again after you
+[23:24.240 --> 23:27.400]  make some changes to your code, and then you compare them.
+[23:27.400 --> 23:28.720]  So this is how it looks in our case.
+[23:28.720 --> 23:33.440]  We have some Git sub repository called test data, and then we have this textual representation
+[23:33.440 --> 23:34.440]  of the unwind tables.
+[23:34.440 --> 23:39.320]  You don't have to understand it all, but the idea here is that this covers a full function,
+[23:39.320 --> 23:43.640]  which program counter starts in the one over there and ends in the one over there.
+[23:43.640 --> 23:46.840]  And then we have the information for every single program counter, and then it tells
+[23:46.840 --> 23:48.480]  you, for example, what to do here.
+[23:48.480 --> 23:51.440]  The first one says CFA type two that I know is for RBP.
+[23:51.440 --> 23:56.480]  So you need to get the current RBP at eight, and that will give you the previous frame
+[23:56.480 --> 23:58.160]  stack pointer.
+[23:58.160 --> 24:02.520]  But anyways, the interesting thing here is that this is very easy to implement, as you
+[24:02.520 --> 24:06.520]  can see by our very advanced setup in our make file.
+[24:06.520 --> 24:10.920]  We just build our binary.
+[24:10.920 --> 24:16.040]  We dump these tables to disk, and then we ask Git to give us the changes.
+[24:16.040 --> 24:19.800]  And if there's anything that has changed, we fail.
+[24:19.800 --> 24:24.480]  So thanks to this, we have found a lot of bugs, and it has allowed us to iterate with
+[24:24.480 --> 24:27.440]  confidence.
+[24:27.440 --> 24:30.680]  One of the important things in this project has been de-risking it.
+[24:30.680 --> 24:32.280]  It's been quite complex.
+[24:32.280 --> 24:34.320]  When I started working at this, I had no idea about dwarf unwinding.
+[24:34.320 --> 24:37.760]  I had no idea about unwinding without frame pointers at all.
+[24:37.760 --> 24:41.240]  So we had to make sure that all these avenues were properly covered.
+[24:41.240 --> 24:45.640]  We had, for example, the dwarf parser properly implemented, that we had all the interactions
+[24:45.640 --> 24:50.240]  with BPF cover, and that the BPF unwinder worked well as well.
+[24:50.240 --> 24:54.680]  So for this, we always tried to have a plan B at every stage of the project, and we tried
+[24:54.680 --> 24:57.880]  to go in depth as well as in breadth.
+[24:57.880 --> 24:59.600]  But anyways, I have five minutes left apparently.
+[24:59.600 --> 25:03.160]  So we had a lot of automated testing, and one of the things that we did was adding kernel
+[25:03.160 --> 25:08.000]  tests, which is super important, especially for BPF programs, because the BPF sub-system
+[25:08.000 --> 25:10.200]  changes a lot over time.
+[25:10.200 --> 25:13.640]  And there's a lot of features that we want to make sure we don't use, because otherwise
+[25:13.640 --> 25:15.760]  it wouldn't work in other kernels.
+[25:15.760 --> 25:22.200]  So we have a kernel testing system where basically it runs our application in multiple kernels
+[25:22.200 --> 25:26.320]  and reports the state.
+[25:26.320 --> 25:30.120]  And one of the things that I want to talk about is that production, as usual, brings
+[25:30.120 --> 25:31.520]  a lot of interesting challenges.
+[25:31.520 --> 25:34.960]  So by deploying our profiler to production, we found a lot of things that we didn't know
+[25:34.960 --> 25:35.960]  about.
+[25:35.960 --> 25:39.800]  And we were able to find some of these things thanks to using continuous profiling, our
+[25:39.800 --> 25:42.040]  own profiler on our profiler.
+[25:42.040 --> 25:46.440]  As you know, different hardware and different configuration are the biggest sources of performance
+[25:46.440 --> 25:49.880]  differences as well as incidents in production.
+[25:49.880 --> 25:52.080]  So I want to show you two things that we have found recently.
+[25:52.080 --> 25:58.440]  One of them is basically we're using almost 30% CPU time opening files in our production
+[25:58.440 --> 26:01.520]  environments that never showed up on my NVMe.
+[26:01.520 --> 26:06.200]  And the reason is because, turns out, cloud disks are very slow.
+[26:06.200 --> 26:10.080]  So we have fixed this.
+[26:10.080 --> 26:13.960]  Another very interesting thing that we fixed the other day, it's something that happened
+[26:13.960 --> 26:18.080]  when we rolled our profiler to production and then it started crashing.
+[26:18.080 --> 26:21.320]  If you are interested, we will upload the slides, so feel free to check the pull request
+[26:21.320 --> 26:22.760]  because everything is open source.
+[26:22.760 --> 26:27.120]  But basically what happened here was that, for reasons, Go has a signal-based profiler
+[26:27.120 --> 26:29.680]  and we have it enabled for even more reasons.
+[26:29.680 --> 26:32.240]  And this only was enabled in production.
+[26:32.240 --> 26:39.320]  So SIGPROV was interrupting our program execution while we were trying to load the BPF program.
+[26:39.320 --> 26:42.720]  The BPF program takes a little while to load because the verifier has to run a bunch of
+[26:42.720 --> 26:48.160]  algorithms to start to actually ensure that everything is safe and it was getting interrupted
+[26:48.160 --> 26:49.160]  all the time.
+[26:49.160 --> 26:52.760]  The BPF, that is the BPF library we used to load the BPF program, was retrying this up
+[26:52.760 --> 26:57.960]  to five times until it basically said, I tried, this didn't work, sorry, and obviously we
+[26:57.960 --> 27:01.440]  need the BPF program to be loaded to work.
+[27:01.440 --> 27:05.560]  So there's many other considerations in this project, like short-lived processes, which
+[27:05.560 --> 27:09.120]  we haven't optimized for, but we are still pretty decent ads.
+[27:09.120 --> 27:13.480]  If your program runs for one second, we're probably going to catch it, but if this is
+[27:13.480 --> 27:15.640]  something that you care about, feel free to message us.
+[27:15.640 --> 27:17.800]  It will be something that we optimized.
+[27:17.800 --> 27:22.000]  And then, yeah, this is our current format, I probably have one minute left or something
+[27:22.000 --> 27:23.000]  like that.
+[27:23.000 --> 27:26.000]  So you don't have to understand it all, but the point is we represent every single row
+[27:26.000 --> 27:33.440]  with 264-bit words, but since we are making it a bit smaller, and this is basically how
+[27:33.440 --> 27:35.440]  our size compares to dwarf.
+[27:35.440 --> 27:40.520]  We are bigger because dwarf is optimized for disk while we are optimized for disk space
+[27:40.520 --> 27:42.800]  while we are optimized for just raw speeds.
+[27:42.800 --> 27:50.920]  So for example, our whole table for one shard pretty much fits in L2 cache.
+[27:50.920 --> 27:54.120]  I guess, do I have any more time, or probably not, right?
+[27:54.120 --> 27:58.080]  Two minutes, oh, okay, sorry, maybe I sped up too much.
+[27:58.080 --> 28:04.240]  So we need to support parsing every single dwarf CFI opcodes, and the reason for this
+[28:04.240 --> 28:11.080]  is because otherwise we won't be able to progress, but we cannot unwind from every single program
+[28:11.080 --> 28:13.440]  counter, which sucks.
+[28:13.440 --> 28:15.400]  But this is not a problem in practice.
+[28:15.400 --> 28:20.040]  The reason for this is because the most typical way to recover the previous frame stack pointer
+[28:20.040 --> 28:25.800]  is, which is called CFA in dwarf, but doesn't matter, is that you will get given which register
+[28:25.800 --> 28:30.920]  you need to apply some offset to, and that will give you the previous frame stack pointer.
+[28:30.920 --> 28:34.640]  We support that, but the problem is that it could be any arbitrary register, and right
+[28:34.640 --> 28:39.440]  now we only support either RBP or RSP offsets, which happen 99% of the time.
+[28:39.440 --> 28:41.400]  So this is something that we're going to work on soon.
+[28:41.400 --> 28:46.120]  The other problem, as Vishali said before, is that dwarf has a VM that you need to implement,
+[28:46.120 --> 28:50.000]  which has to be Turing-complete, and can implement any expression.
+[28:50.000 --> 28:52.440]  It's not Turing-complete.
+[28:52.440 --> 28:53.440]  The second level, yeah.
+[28:53.440 --> 28:54.440]  The dwarf?
+[28:54.440 --> 28:55.440]  No.
+[28:55.440 --> 29:00.440]  That's why in the infinity project they had to add this new opcode in the draft hat.
+[29:00.440 --> 29:01.440]  Okay.
+[29:01.440 --> 29:03.440]  It's not exactly Turing-complete, it's almost there, yeah.
+[29:03.440 --> 29:04.440]  Okay, well.
+[29:04.440 --> 29:08.680]  But you need to implement a VM that basically has a set of virtual registers.
+[29:08.680 --> 29:09.680]  Yeah.
+[29:09.680 --> 29:13.800]  But the second, well, we're going to talk about those later, because the first level, yeah,
+[29:13.800 --> 29:17.000]  it's the stack machine 100%, but the second level is, I can show you our code, it's messed
+[29:17.000 --> 29:18.000]  up.
+[29:18.000 --> 29:20.720]  It's messed up.
+[29:20.720 --> 29:24.560]  But anyways, but the thing is that we are very lucky here, and you can check more about
+[29:24.560 --> 29:26.480]  this in this PR.
+[29:26.480 --> 29:30.200]  So there's two dwarf expressions that account for 50% of all the expressions that we have
+[29:30.200 --> 29:32.280]  seen in most distributions.
+[29:32.280 --> 29:38.160]  They are the expressions used by, well, the dynamic linker needs some, basically, and they
+[29:38.160 --> 29:42.960]  are the expressions for procedure linkage tables or PLTs.
+[29:42.960 --> 29:46.880]  The other good news, as I said before, is that RBP and RSP offsets rarely occur, and
+[29:46.880 --> 29:50.160]  all the other possibilities that I haven't talked about, they almost never occur.
+[29:50.160 --> 29:53.160]  Like, we've seen them very, very, very few times.
+[29:53.160 --> 29:54.160]  The indexes are useful.
+[29:54.160 --> 29:55.160]  Oh, good question.
+[29:55.160 --> 29:56.160]  So.
+[29:56.160 --> 30:01.160]  We're playing with AR64, because the GCC has 64 backend generates CFA expressions.
+[30:01.160 --> 30:04.640]  That's what I was talking about, yeah, yeah, yeah.
+[30:04.640 --> 30:09.240]  So but right now we only support X64, but I'm also going to talk about this later, sorry.
+[30:09.240 --> 30:10.240]  But anyways.
+[30:10.240 --> 30:11.240]  We don't know.
+[30:11.240 --> 30:12.240]  Oh.
+[30:12.240 --> 30:13.240]  Okay.
+[30:13.240 --> 30:14.240]  Done.
+[30:14.240 --> 30:15.240]  Okay, well.
+[30:15.240 --> 30:17.240]  But we have the minutes buffer for the next one, right?
+[30:17.240 --> 30:18.240]  Five minutes.
+[30:18.240 --> 30:19.240]  Five minutes.
+[30:19.240 --> 30:20.240]  Okay.
+[30:20.240 --> 30:21.240]  I have two more slides.
+[30:21.240 --> 30:24.840]  Well, anyways, our BPR program, we tried to make it as fast as possible.
+[30:24.840 --> 30:29.520]  So this was running on my machine with a bunch of applications that have 90 frames or more.
+[30:29.520 --> 30:33.720]  So even the maximum time that it takes is 0.5 milliseconds, which is not terrible on
+[30:33.720 --> 30:39.280]  my CPU, which is from late 2017.
+[30:39.280 --> 30:43.680]  And this is in a big part because we have optimized everything for memory.
+[30:43.680 --> 30:47.320]  So everything's aligned properly.
+[30:47.320 --> 30:54.240]  And we try to fit as many things as possible in the CPU cache.
+[30:54.240 --> 30:55.240]  What about high level languages?
+[30:55.240 --> 30:59.000]  So there's a project that I happen to work on, which is called RB Perf.
+[30:59.000 --> 31:02.040]  So this is something that we're going to be adding in the future, basically for dynamic
+[31:02.040 --> 31:03.040]  languages.
+[31:03.040 --> 31:05.800]  You have the knowledge of the ABI of every interpreter version.
+[31:05.800 --> 31:07.880]  And then the Stackwalker is also implemented in BPF.
+[31:07.880 --> 31:11.440]  But instead of getting the return addresses, because you have no return addresses there
+[31:11.440 --> 31:15.960]  that are meaningful to you, you have to directly extract the function names and other information
+[31:15.960 --> 31:20.160]  of the process heap.
+[31:20.160 --> 31:21.520]  Our project is called PARCA.
+[31:21.520 --> 31:24.480]  So there's a couple of things that we're going to be doing, like mix and why mode, that as
+[31:24.480 --> 31:29.000]  far as we know, no one else does this in profiling, in the baggers for sure, but not in profiling,
+[31:29.000 --> 31:32.440]  which is the idea of that different sections will be on wants using different techniques.
+[31:32.440 --> 31:37.080]  And for example, if you have a JIT that will be used, like Node.js, that has frame pointers.
+[31:37.080 --> 31:39.400]  So you will unwind it with frame pointers.
+[31:39.400 --> 31:43.640]  But once you reach the actual code from your interpreter, which is compiled and has some
+[31:43.640 --> 31:46.040]  white information, we will use Dwarf and white information.
+[31:46.040 --> 31:49.080]  RM64 support is coming late this year.
+[31:49.080 --> 31:52.960]  And this feature is now disabled by default, but it is stable enough that we're going
+[31:52.960 --> 31:55.000]  to be enabling it in a month.
+[31:55.000 --> 31:57.720]  And then we're going to add other runtime such as the JVM or Ruby.
+[31:57.720 --> 32:02.960]  And then just to say that we are open source, user space on the Apache 2, BPF on the GPL.
+[32:02.960 --> 32:04.960]  And yeah, all the links are here.
+[32:04.960 --> 32:30.920]  Thanks, yeah, thank you so much.

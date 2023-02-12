@@ -1,0 +1,582 @@
+Detecting language using up to the first 30 seconds. Use `--language` to specify the language
+Detected language: English
+[00:00.000 --> 00:07.000]  Okay, so let's start.
+[00:07.000 --> 00:12.960]  So hi everyone, I'm going to be talking about advanced camera support on all-winner SOCs
+[00:12.960 --> 00:13.960]  today.
+[00:13.960 --> 00:20.760]  So the topic is quite similar to the previous one in that we are also going to talk about
+[00:20.760 --> 00:24.600]  sensors that need particular care and processing.
+[00:24.600 --> 00:29.960]  So unfortunately I will be maybe explaining some of the things that were said by Kirin
+[00:29.960 --> 00:35.280]  just earlier, so sorry about that for the people who just attended the previous talk.
+[00:35.280 --> 00:39.640]  But hopefully you'll also learn a thing or two in addition.
+[00:39.640 --> 00:45.560]  So I'm Paul, I work at a company called Butlin, we are an embedded Linux engineering company,
+[00:45.560 --> 00:47.600]  so we do services around that.
+[00:47.600 --> 00:52.640]  And I have contributed a number of things, especially to the Linux kernel, so I worked
+[00:52.640 --> 00:58.960]  on the Sidrus VPU driver, a little bit of DRM things on the all-winner side, but also
+[00:58.960 --> 00:59.960]  others.
+[00:59.960 --> 01:06.080]  And I made a training that we give about displaying and rendering.
+[01:06.080 --> 01:13.520]  But today I am here to tell you about the camera support for all-winner SOCs using mainline
+[01:13.520 --> 01:14.520]  Linux.
+[01:14.520 --> 01:20.960]  So we are going to talk first about general things related to image capture technology
+[01:20.960 --> 01:24.920]  and just complex camera pipelines in general.
+[01:24.920 --> 01:29.080]  So let's start with kind of an overview of a typical capture chain.
+[01:29.080 --> 01:35.120]  So we start with the optics, of course, where the light is kind of focused on a particular
+[01:35.120 --> 01:38.720]  area where we have our sensor.
+[01:38.720 --> 01:44.360]  So the optics are usually passive from a software perspective, but not necessarily because you
+[01:44.360 --> 01:51.480]  can have coil drivers to change the focus and things like that, so it's not always a
+[01:51.480 --> 01:53.560]  passive thing.
+[01:53.560 --> 02:01.040]  So after that you have the sensor, which actually samples the light and produces data from that.
+[02:01.040 --> 02:08.040]  And we want to transmit that data to something else, typically like your CPU, where you can
+[02:08.040 --> 02:12.200]  do something with the data, like display it or encode it.
+[02:12.200 --> 02:18.920]  But in between the acquisition and actually receiving the data, we need to do some processing.
+[02:18.920 --> 02:23.680]  And that processing can sometimes happen on the sensor itself, in which case we talk about
+[02:23.680 --> 02:29.040]  some embedded processing, or it can be on the other side of the interface.
+[02:29.040 --> 02:38.120]  So on the side that receives the data, typically your SOC or your CPU package or whatever.
+[02:38.120 --> 02:44.480]  So this processing step is really the one that is necessary to produce good looking
+[02:44.480 --> 02:52.600]  pictures from, let's say, just samples coming out of an ADC.
+[02:52.600 --> 03:01.560]  So typically what we call a row or barrier sensor will produce not pixels, but data in
+[03:01.560 --> 03:08.400]  a biopattern, which is a grid of red, green and blue filters that is applied on the sensor.
+[03:08.400 --> 03:13.400]  That gives you information for each of these different channels.
+[03:13.400 --> 03:17.280]  And we kind of need to translate that to pixels.
+[03:17.280 --> 03:21.480]  So this is called debiring, and this is how we get pixels.
+[03:21.480 --> 03:23.520]  But these pixels typically look very bad.
+[03:23.520 --> 03:29.480]  So you need to apply a number of processing, number of operations and enhancements to have
+[03:29.480 --> 03:34.200]  something that looks like a nice picture.
+[03:34.200 --> 03:37.600]  So a number of things need to be done.
+[03:37.600 --> 03:43.040]  For example, the brightness that you get from your ADC is linear, and we want to apply some
+[03:43.040 --> 03:47.400]  gamma curves to that to make it look nice to the human eye.
+[03:47.400 --> 03:54.880]  Typically, there's some dark level current that we have to subtract, for example, because
+[03:54.880 --> 04:01.760]  the zero value that you get from the sensor is not necessarily the, well, the darkest
+[04:01.760 --> 04:05.120]  value that you get from the sensor is not necessarily zero, so you might need to subtract
+[04:05.120 --> 04:08.160]  an offset, things like that.
+[04:08.160 --> 04:12.880]  There's usually a lot of noise, and the colors will be off, so you will need to do some white
+[04:12.880 --> 04:14.920]  balancing, things like that.
+[04:14.920 --> 04:19.200]  So all of these different steps take place in what we call the ISP, the Image Signal
+[04:19.200 --> 04:25.840]  Processor, and there's basically three domains in which we apply these enhancements.
+[04:25.840 --> 04:33.560]  The first one is the Biodomain, so that's really the first step that we apply to the
+[04:33.560 --> 04:37.280]  data coming from the raw sensor.
+[04:37.280 --> 04:42.400]  At the end of that step, we get some RGB data that we also want to enhance, and at the end
+[04:42.400 --> 04:50.800]  of that, we typically convert it to YUV representation, and then we can also apply some enhancements
+[04:50.800 --> 04:57.160]  to that data, and at the end, we get a YUV picture that is, like, ready to be displayed
+[04:57.160 --> 04:59.760]  and encoded, for example.
+[04:59.760 --> 05:05.680]  So yeah, that's kind of a list of the different enhancements that we apply, so I mentioned
+[05:05.680 --> 05:06.680]  a number of them already.
+[05:06.680 --> 05:10.240]  I'm not going to go through the list, but you get some idea that there is really a
+[05:10.240 --> 05:18.000]  lot of things to be done here, and it actually takes quite some processing power to do that.
+[05:18.000 --> 05:22.520]  So that's why typically we consider that it's not something you can do in real time with
+[05:22.520 --> 05:28.200]  a CPU or it's going to fully load your CPU just to produce pictures and let alone encode
+[05:28.200 --> 05:29.940]  them and things like that.
+[05:29.940 --> 05:32.560]  So lots of things to do.
+[05:32.560 --> 05:36.600]  That's really the base that you need to have something that looks right.
+[05:36.600 --> 05:42.640]  There's more advanced stuff that you can have in addition, like the lens shading correction,
+[05:42.640 --> 05:46.520]  so it's about the fact that the lenses will typically be darker on the edges than they
+[05:46.520 --> 05:50.560]  are at the center, so you want to kind of even that out.
+[05:50.560 --> 05:54.200]  That's also an operation to do.
+[05:54.200 --> 06:01.400]  Dewarping, that's when you have, like, a very short focal, and things look, well, the geometry
+[06:01.400 --> 06:03.800]  looks distorted, so you need to kind of readapt that.
+[06:03.800 --> 06:07.560]  That's also very intensive in terms of calculation.
+[06:07.560 --> 06:13.000]  Stabilization can also be involved if you have, like, a very shaky footage, especially
+[06:13.000 --> 06:19.080]  from, like, a smartphone or something like that, so you want to also apply a stabilization
+[06:19.080 --> 06:23.440]  step to your picture, and then, finally, you might also want to apply some style to your
+[06:23.440 --> 06:29.440]  picture, so that will typically be a color lookup table where you can decide that you
+[06:29.440 --> 06:33.120]  want to make it look, I know, like, CPiaton or something like that.
+[06:33.120 --> 06:36.760]  This is also some processing that you will need to apply.
+[06:36.760 --> 06:45.280]  So I mentioned that there's basically two types of ways to deal with this operation.
+[06:45.280 --> 06:51.640]  The first one is to have the ISP in the sensor, in which case it's typically quite simple,
+[06:51.640 --> 06:58.280]  and when it's in the sensor, you get the data directly ready from the sensor, but when it's
+[06:58.280 --> 07:03.240]  not, you get just the raw Bayer data, and you need to do all of these different enhancement
+[07:03.240 --> 07:10.520]  steps on some system on a chip ISP, so that's typically a hardware block that is dedicated
+[07:10.520 --> 07:13.240]  for the purpose in your SoC.
+[07:13.240 --> 07:21.280]  So nowadays, many multimedia-oriented SoCs do have such blocks, and in order to properly
+[07:21.280 --> 07:25.920]  configure that, you might need some specific calibration data that really depends on the
+[07:25.920 --> 07:31.840]  sensor, sometimes on the environment that is used, things like that, so it's kind of
+[07:31.840 --> 07:35.320]  highly specific to the setup that you have.
+[07:35.320 --> 07:39.880]  So it's kind of just an illustration of the different steps, so that's the kind of picture
+[07:39.880 --> 07:47.280]  that you would get as a raw thing from the sensor, and the steps you might apply to have
+[07:47.280 --> 07:52.920]  something in YUV at the end that looks kind of okay.
+[07:52.920 --> 07:59.800]  But it's not just about statically configuring an image processor to produce something good.
+[07:59.800 --> 08:05.520]  Some parameters actually depend on the thing that you are shooting, so there's basically
+[08:05.520 --> 08:09.760]  three things that you need to adjust depending on the situation.
+[08:09.760 --> 08:15.800]  The first one is focus, so of course that implies that you have control over some coil
+[08:15.800 --> 08:20.880]  to change the focus of the lens, but obviously your picture is going to look very different
+[08:20.880 --> 08:25.160]  if it's out of focus or if it's sharply focused, so that's one of the things that the ISP
+[08:25.160 --> 08:32.720]  is also involved with to basically tell you whether an image is sharp or not.
+[08:32.720 --> 08:38.440]  There is white balance, which highly depends on the source light that you are using, especially
+[08:38.440 --> 08:42.680]  the color temperature of that light, so if you are in broad daylight, it's not the same
+[08:42.680 --> 08:49.240]  as being in a room with some particular type of lighting, so it needs to adjust to that.
+[08:49.240 --> 08:53.280]  It will typically have an impact on how the image looks.
+[08:53.280 --> 09:00.800]  And of course exposure, so what is basically the window of luminescence that your sensor
+[09:00.800 --> 09:07.640]  is going to sample, so if you are in a very bright environment, you need to apply a different
+[09:07.640 --> 09:12.400]  gain than when you are in a very dark environment, so that's also something that needs to be
+[09:12.400 --> 09:17.160]  adjusted depending on what you are shooting, and this is also something that the ISP is
+[09:17.160 --> 09:24.840]  going to help for by telling you basically how bright or how dark the scene is.
+[09:24.840 --> 09:32.280]  So yeah, you can adjust those, especially exposure, you can adjust with three parameters,
+[09:32.280 --> 09:35.040]  so if you do like photography, you probably know about that.
+[09:35.040 --> 09:40.320]  You can change the aperture of the lens, you can change the exposure time, so for how long
+[09:40.320 --> 09:47.360]  you are waiting for light to come in to charge yourselves that will be read by the ADC, and
+[09:47.360 --> 09:54.160]  you can increase the gain, which will also increase noise typically.
+[09:54.160 --> 09:58.680]  So advanced users will typically want to control these parameters manually to have exactly
+[09:58.680 --> 10:03.520]  the picture that they want, but in most cases people just want to take their phone out and
+[10:03.520 --> 10:09.680]  shoot at something and just press a button, it just works, so the idea is that we want
+[10:09.680 --> 10:14.960]  all of these different parameters to be adjusted like automatically.
+[10:14.960 --> 10:20.720]  So that's what we call the 3A, so the 3As are automatic exposition, auto focus and auto
+[10:20.720 --> 10:29.600]  white balance, and that is typically again something that will be done with the ISP.
+[10:29.600 --> 10:37.560]  So it works with a feedback loop, okay, there's a number of algorithms in the literature that
+[10:37.560 --> 10:43.640]  exist that are known to be able to do that correctly and efficiently, but the way they
+[10:43.640 --> 10:48.640]  are implemented in the actual ISP hardware really depends, of course, on the hardware
+[10:48.640 --> 10:52.640]  itself and how it was designed and what the like register interface is to configure these
+[10:52.640 --> 11:01.160]  different things, and that is often considered to be the secret source of the manufacturer
+[11:01.160 --> 11:07.480]  of the ISPs, so that's the information that is often kind of difficult to get and that
+[11:07.480 --> 11:12.720]  they don't want to release, and so that's why sometimes you end up with like a big binary
+[11:12.720 --> 11:18.080]  blob that does all of this and you don't really know what's going on.
+[11:18.080 --> 11:25.960]  Okay, so that was for the kind of, yeah, parameters for the image enhancement.
+[11:25.960 --> 11:30.800]  Now let's take a little bit of a look at the hardware interfaces for the capture.
+[11:30.800 --> 11:37.760]  So historically there's been different ways to transmit pictures from one side to another.
+[11:37.760 --> 11:41.920]  There used to be analog interfaces which are now mostly deprecated, so let's not really
+[11:41.920 --> 11:43.800]  focus so much on those.
+[11:43.800 --> 11:50.240]  And then we have typically two types of hardware interfaces that are used for cameras.
+[11:50.240 --> 11:58.160]  First one is the parallel, also called DVP sometimes, and that's when you basically just
+[11:58.160 --> 12:03.960]  have like one line of data per bit, you have some sync signals, so it's a little bit like
+[12:03.960 --> 12:09.200]  a display, a parallel display if you should know about that, and so you just kind of send
+[12:09.200 --> 12:16.440]  the data like that, and there's also more advanced interfaces which are also more robust
+[12:16.440 --> 12:23.840]  to noise that typically work with serial lanes, so there is MyPy CSI2 and other ones like
+[12:23.840 --> 12:27.280]  LVDS, SDI, High Spy.
+[12:27.280 --> 12:31.760]  So those are kind of the high end interfaces that allow you to stream a lot of data, they
+[12:31.760 --> 12:35.600]  typically go pretty high speed, they are more robust to noise, so they are considered to
+[12:35.600 --> 12:39.760]  be like the advanced ones.
+[12:39.760 --> 12:45.760]  So that's the one MyPy CSI2 that we are going to focus on.
+[12:45.760 --> 12:52.120]  Through my particular use case involving the Alwinner platforms, so in case you're not
+[12:52.120 --> 12:58.320]  familiar with the Alwinner platforms, they are ARM SoCs, made by this company called
+[12:58.320 --> 13:04.680]  Alwinner from China, they are widely available, especially on these kind of form factors as
+[13:04.680 --> 13:13.080]  developer boards, and there's a number of these platforms that support MyPy CSI2 and
+[13:13.080 --> 13:18.600]  that have an image signal processor, so it means that we can connect a raw Bayer sensor
+[13:18.600 --> 13:25.200]  and get the data from that, pipe it through the ISP, and then get a picture at the end.
+[13:25.200 --> 13:32.080]  So that was kind of the goal of the project that I had involving these platforms.
+[13:32.080 --> 13:41.440]  So the scope was on the V3 and A83T platforms using two different image sensors, OV8, 865
+[13:41.440 --> 13:52.400]  and OV645648, which are, like I just said, MyPy CSI2 sensors that provide raw Bayer data.
+[13:52.400 --> 13:57.120]  And these sensors don't really have an onboard ISP.
+[13:57.120 --> 14:01.680]  I think one of the two actually has one, but it does very little, so you still need to
+[14:01.680 --> 14:06.520]  do a lot on the receiving end of the interface.
+[14:06.520 --> 14:09.080]  So that was the goal.
+[14:09.080 --> 14:15.080]  That's the state of all-winner camera support in general with the mainline channel, because
+[14:15.080 --> 14:18.760]  we wanted to use the mainline channel, of course.
+[14:18.760 --> 14:21.800]  Let's first take a look at the general all-winner platform support.
+[14:21.800 --> 14:30.320]  So there is a community called Sanxi, or Sanxi, I think, which has been working towards mainline
+[14:30.320 --> 14:35.480]  support for all-winner SOCs, so it's very advanced, there's lots of people involved.
+[14:35.480 --> 14:39.800]  You can check out this link, the Linux mainlining effort, which kind of lists all the features
+[14:39.800 --> 14:45.120]  of the different SOCs and how they are currently supported in mainline Linux, and it's pretty
+[14:45.120 --> 14:47.320]  impressive nowadays.
+[14:47.320 --> 14:52.480]  Many of the features are supported, especially for the older SOCs, because of course it takes
+[14:52.480 --> 14:56.360]  time to get it right.
+[14:56.360 --> 15:01.360]  But the multimedia areas are often the ones that come last in support, because they are
+[15:01.360 --> 15:04.680]  typically a bit complex to implement.
+[15:04.680 --> 15:13.920]  So when I started the project, there were two drivers for capturing data.
+[15:13.920 --> 15:21.080]  The first one is the SunFry CSI driver, which covers the first generation of these all-winner
+[15:21.080 --> 15:22.640]  platforms.
+[15:22.640 --> 15:27.960]  It was the hardware then evolved into a second generation, which is supported in mainline
+[15:27.960 --> 15:32.160]  by a driver called SunSixi CSI.
+[15:32.160 --> 15:37.880]  After that, all-winner made a new generation of platforms, which have a third generation
+[15:37.880 --> 15:42.280]  of CSI, which is currently not supported.
+[15:42.280 --> 15:49.000]  So the devices that I was interested in, so the V3 and A83T, work with the second generation
+[15:49.000 --> 15:50.880]  driver.
+[15:50.880 --> 15:59.000]  So this driver basically allows you to receive images from the parallel interface, but it
+[15:59.000 --> 16:03.600]  didn't support MyPi CSI 2, and it didn't have support for the ISP.
+[16:03.600 --> 16:13.440]  So there was actually some support for these features in the downstream vendor all-winner
+[16:13.440 --> 16:15.040]  kernel.
+[16:15.040 --> 16:20.480]  So they do have some code for that, but the ISP part, especially, was implemented as a
+[16:20.480 --> 16:27.000]  binary blob, so it was like a static library that was linked to the kernel, which is not
+[16:27.000 --> 16:30.240]  necessarily very legal, but never mind.
+[16:30.240 --> 16:40.720]  So there was actually very, very few resources regarding how the ISP works on these platforms.
+[16:40.720 --> 16:44.880]  Okay, right, okay.
+[16:44.880 --> 16:51.000]  So generally speaking, how do we support cameras in Linux, at least at the kernel level?
+[16:51.000 --> 16:59.000]  So there's this API called v4l2 that I think you've all heard of just before, and probably
+[16:59.000 --> 17:01.040]  many people know about.
+[17:01.040 --> 17:10.220]  So it's really about supporting anything that produces pixels that the CPU can receive.
+[17:10.220 --> 17:15.800]  So it supports lots of different types of devices, not only cameras, but also, I don't
+[17:15.800 --> 17:23.720]  know, things like skaters, DVBT receivers, lots of different things, now decoders, encoders,
+[17:23.720 --> 17:29.520]  things like that, so really lots of different devices related to pixels.
+[17:29.520 --> 17:35.920]  And typically the way it works is that you have one device node that corresponds to a
+[17:35.920 --> 17:43.440]  driver, so typically dev video zero, and that device node gives you access to an API from
+[17:43.440 --> 17:48.960]  user space where you can do all the different things that are necessary to get a picture
+[17:48.960 --> 17:52.280]  from user space.
+[17:52.280 --> 17:58.560]  So typically negotiating the pixel format that you want to receive, doing the memory
+[17:58.560 --> 18:04.560]  management like allocating the buffers, how many buffers you want, et cetera, queuing
+[18:04.560 --> 18:05.760]  and decuing buffers.
+[18:05.760 --> 18:10.360]  So user space provides a buffer to the driver which will fill it with pixels and then return
+[18:10.360 --> 18:16.400]  it to the application, and then the application has a buffer that has pixels in it that it
+[18:16.400 --> 18:22.520]  can use to, again, display or encode them or whatever.
+[18:22.520 --> 18:29.600]  So this video device works well for, I would say, all-in-one devices where you basically
+[18:29.600 --> 18:37.240]  just receive the finished data from a device like a USB-UVC camera.
+[18:37.240 --> 18:42.920]  So the camera itself will do all of the processing inside, and it will just give you the final
+[18:42.920 --> 18:49.520]  result over USB, and you get that through this API on Linux.
+[18:49.520 --> 18:55.440]  And yeah, typically you need some DMA interface to do that transfer.
+[18:55.440 --> 19:01.040]  But in the case of a more complex pipeline, especially when you have multiple components
+[19:01.040 --> 19:07.760]  involved, like with the ISP, with the Mypy CSI2 receiver, with a particular sensor that
+[19:07.760 --> 19:12.520]  you can control directly, then you end up with a situation where you have multiple devices
+[19:12.520 --> 19:17.600]  in the pipeline, and you kind of need to configure each one of these devices individually.
+[19:17.600 --> 19:26.640]  So this called for a more advanced API, which is the subdev API, which allows not only to
+[19:26.640 --> 19:32.240]  have one big device for receiving the data, but also side devices that you can use to
+[19:32.240 --> 19:35.840]  configure each component in the chain.
+[19:35.840 --> 19:41.680]  And there is also the Media Controller API that allows you to kind of control the topology
+[19:41.680 --> 19:43.960]  between these devices.
+[19:43.960 --> 19:52.160]  So the subdevs typically just represent one of the parts of the pipeline, and they typically
+[19:52.160 --> 19:53.360]  cannot do DMA.
+[19:53.360 --> 20:00.640]  So they will be connected from and to other devices through some interfaces that don't
+[20:00.640 --> 20:02.960]  involve writing the data to memory.
+[20:02.960 --> 20:11.080]  So it could be a FIFO, or it could be an actual hardware interface like Mypy CSI2.
+[20:11.080 --> 20:19.760]  And basically, the top-level video device will be in charge of kind of calling the next
+[20:19.760 --> 20:24.320]  subdev in the chain, which we'll call the next one it's touch to, and et cetera.
+[20:24.320 --> 20:29.200]  So that, for example, you can coordinate starting the stream and starting all the elements at
+[20:29.200 --> 20:35.400]  the same time to start receiving an image.
+[20:35.400 --> 20:41.120]  But these subdevs still need to be parented to the V4L2 device.
+[20:41.120 --> 20:49.640]  So basically, they need to be all controlled under the same top-level entity to be able
+[20:49.640 --> 20:54.200]  to, let's say, coordinate between one another.
+[20:54.200 --> 21:04.560]  So for that, there is an API in V4L2 that allows you to register the subdevs with V4L2
+[21:04.560 --> 21:05.560]  device.
+[21:05.560 --> 21:13.080]  So again, that's the parent controlling entity, which is easy to do if all of the support
+[21:13.080 --> 21:19.520]  for the subdevs are in the same driver, because you have access to that V4L2 dev pointer.
+[21:19.520 --> 21:25.240]  But it can also happen that you have multiple drivers involved throughout the tree.
+[21:25.240 --> 21:29.760]  So for example, you have one driver for your sensor, one driver for your DMA interface
+[21:29.760 --> 21:35.760]  to transfer the data, one driver for your ISP, and you could even have more.
+[21:35.760 --> 21:41.200]  So in that case, the drivers don't know exactly which other driver they should be attached
+[21:41.200 --> 21:42.280]  to.
+[21:42.280 --> 21:48.520]  So in that case, there is a asynchronous subdev registration interface, which allows
+[21:48.520 --> 21:55.520]  you when basically you have, for example, a sensor driver to just make that subdev available
+[21:55.520 --> 22:00.760]  to whichever driver is going to need it later.
+[22:00.760 --> 22:07.960]  So the subdev drivers will just make the subdev available to the rest of the world.
+[22:07.960 --> 22:13.960]  And then the top-level drivers will need a way to identify which subdevs they actually
+[22:13.960 --> 22:20.040]  need and to get a handle of them, which will allow registering these subdevs with the top-level
+[22:20.040 --> 22:22.600]  V4L2 device.
+[22:22.600 --> 22:31.120]  So the way that this kind of linking is done is through the FW node graph, which is typically
+[22:31.120 --> 22:33.960]  implemented in device tree.
+[22:33.960 --> 22:39.160]  So it uses the port and endpoint representation that maybe you've seen in some device trees
+[22:39.160 --> 22:47.440]  implementing this, and this description also allows describing some characteristics of
+[22:47.440 --> 22:48.520]  the interface.
+[22:48.520 --> 22:56.560]  For example, if you have a sensor that is on a MyPyCSI interface, it can use a different
+[22:56.560 --> 22:57.720]  number of lanes.
+[22:57.720 --> 23:03.360]  So in MyPyCSI 2, you can have up to four lanes, but maybe the sensor only uses two.
+[23:03.360 --> 23:07.080]  So you have to kind of be able to share this information.
+[23:07.080 --> 23:11.680]  And this is also done through this FW node graph description.
+[23:11.680 --> 23:16.160]  So you have some device tree properties that you had to indicate that.
+[23:16.160 --> 23:22.960]  And then the drivers can call these endpoint pass helper to actually retrieve the information
+[23:22.960 --> 23:24.380]  about the interface.
+[23:24.380 --> 23:30.600]  So to illustrate, on the left side, we have some sensor here.
+[23:30.600 --> 23:34.680]  So we have the port and endpoint representation.
+[23:34.680 --> 23:40.200]  The remote endpoint allows you to connect two sides together, and you have these extra
+[23:40.200 --> 23:46.120]  properties here like the data lane and link frequencies that really describe the characteristics
+[23:46.120 --> 23:52.200]  of the bus, so at which frequency it should be running and how many lanes it should have.
+[23:52.200 --> 23:56.040]  And then on the other side, you have the same thing.
+[23:56.040 --> 23:59.280]  In this case, the link frequency is controlled by the sensor, so you only need to provide
+[23:59.280 --> 24:03.120]  it there, but the data lanes is present on both sides.
+[24:03.120 --> 24:13.240]  So that's how you can link basically different devices and allow the top level driver to
+[24:13.240 --> 24:18.360]  retrieve access to the sub devs that you want to use.
+[24:18.360 --> 24:21.840]  So this is very flexible, of course, because then the same, for example, sensor driver
+[24:21.840 --> 24:26.280]  can be connected to lots of different platforms and lots of different situations.
+[24:26.280 --> 24:31.640]  So it's really the driver itself doesn't know about how it's connected.
+[24:31.640 --> 24:38.040]  It's really the device tree and the FWU node graph that tells you how it works.
+[24:38.040 --> 24:44.880]  So back to async notification, just quickly to illustrate how the top level driver would
+[24:44.880 --> 24:47.160]  gain access to a sub dev.
+[24:47.160 --> 24:52.400]  So first, it has to match using that FWU node graph representation.
+[24:52.400 --> 25:05.200]  It has to match a particular sub dev and the top level driver registers a notifier which
+[25:05.200 --> 25:09.720]  has a number of callbacks that will be called when a particular device becomes available
+[25:09.720 --> 25:17.320]  and then it can pretty much bind to that device and then the matching sub dev will be registered
+[25:17.320 --> 25:23.400]  with the top level vfoil to device and then everything can be linked together and the
+[25:23.400 --> 25:28.880]  top level driver actually has a pointer to a vfoil to sub dev that it can use to apply
+[25:28.880 --> 25:35.360]  some actions like stop streaming, stop streaming or configure the format or things like that.
+[25:35.360 --> 25:39.960]  So this is how it kind of all works together.
+[25:39.960 --> 25:43.440]  So yeah, that's also when the media controller API comes in.
+[25:43.440 --> 25:48.880]  So the media controller API is there to control the topology of how these different devices
+[25:48.880 --> 25:52.520]  are actually connected between one another.
+[25:52.520 --> 25:56.240]  So it also implements particular functions.
+[25:56.240 --> 26:04.280]  So you can say this block attached to this sub dev is an entity of this kind, okay?
+[26:04.280 --> 26:14.160]  And each sub dev has an associated media entity which lists pads which are basically in and
+[26:14.160 --> 26:19.240]  out points that you can use to connect other devices.
+[26:19.240 --> 26:23.640]  And then you can create links between these pads which represent the actual connection
+[26:23.640 --> 26:24.640]  in the hardware.
+[26:24.640 --> 26:28.280]  So for example, you could have multiple links that are possible for one device and then
+[26:28.280 --> 26:31.800]  you could decide to enable one at runtime.
+[26:31.800 --> 26:35.960]  So for example, if you have a multiplexer or something like that, that would be a typical
+[26:35.960 --> 26:39.760]  case where you would just select one of the inputs and have just one output.
+[26:39.760 --> 26:45.760]  So this is really the API that allows you to configure the topology of the whole pipeline
+[26:45.760 --> 26:50.000]  and how everything is connected together.
+[26:50.000 --> 26:53.920]  There's also some runtime validation to make sure that when you connect two entities, they
+[26:53.920 --> 26:59.080]  are configured with the same pixel format so that everyone agrees on what the data will
+[26:59.080 --> 27:03.320]  be, the data that will be transferred.
+[27:03.320 --> 27:08.280]  And there is a user space utility called media CTL that you can use to configure these links.
+[27:08.280 --> 27:14.440]  So for example, here I'm configuring pad number one of this sub dev to be connected to pad
+[27:14.440 --> 27:20.840]  number zero of this sub dev and the one indicates that the link should be enabled.
+[27:20.840 --> 27:22.400]  So yeah, it's a bit blurry.
+[27:22.400 --> 27:30.600]  This is kind of just to give you some kind of big idea or kind of a head start on that,
+[27:30.600 --> 27:36.240]  but it's definitely complex, so it's normal that it seems a little bit blurry, it's just
+[27:36.240 --> 27:42.160]  in case you have to work on that, then you know what are the things involved in this.
+[27:42.160 --> 27:45.280]  So in the end, we can end up with very complex pipelines, okay?
+[27:45.280 --> 27:48.360]  So each of the green blocks are sub devs, okay?
+[27:48.360 --> 27:53.760]  So they represent a specific functionality that can be connected in different ways.
+[27:53.760 --> 28:01.680]  And the yellow blocks are the actual DMA engine, so the video nodes that are visible from user
+[28:01.680 --> 28:07.240]  space that programs can connect to to receive the data.
+[28:07.240 --> 28:10.720]  But of course, if you haven't configured the rest of the chain properly, then there will
+[28:10.720 --> 28:12.000]  be no data available.
+[28:12.000 --> 28:16.200]  So this is really what you use at the end when everything is configured and everything
+[28:16.200 --> 28:20.360]  is ready and it works.
+[28:20.360 --> 28:23.920]  Okay, so that was for the general pipeline integration thing.
+[28:23.920 --> 28:26.760]  Now let's talk about ISPs more specifically.
+[28:26.760 --> 28:34.880]  So ISPs are just a kind of sub dev and media entity.
+[28:34.880 --> 28:40.560]  And they typically have an internal pipeline with multiple things in it, so we don't necessarily
+[28:40.560 --> 28:43.360]  represent the internal pipeline unless it's relevant.
+[28:43.360 --> 28:48.160]  So there will normally just be one sub dev for the ISP.
+[28:48.160 --> 28:54.120]  But this sub dev will have highly specific parameters.
+[28:54.120 --> 28:56.880]  Like I said, it depends on the hardware implementation.
+[28:56.880 --> 29:03.480]  So the representation of the parameters that you give to the hardware will differ from
+[29:03.480 --> 29:07.920]  one implementation to another.
+[29:07.920 --> 29:13.000]  So it means that it's actually very hard to have like a generic interface that will work
+[29:13.000 --> 29:16.800]  for every ISP and that would be the same.
+[29:16.800 --> 29:25.960]  So instead of that, in V4L2, there is actually driver-specific or hardware-specific structures
+[29:25.960 --> 29:30.040]  that are used to configure the ISP sub devs.
+[29:30.040 --> 29:40.120]  So the way it works is that we have, so one or more capture video devices that's the same
+[29:40.120 --> 29:47.640]  as the dev video zero where you get the typical data, the final data that you want.
+[29:47.640 --> 29:55.720]  And we have extra video devices that we can use to configure the ISP and to get side information
+[29:55.720 --> 29:57.240]  from the ISP.
+[29:57.240 --> 30:03.680]  So these are the meta output and meta capture video devices.
+[30:03.680 --> 30:06.480]  So the meta output is there for parameters.
+[30:06.480 --> 30:10.680]  So in V4L2, output is when you provide something to the driver, not when you get something
+[30:10.680 --> 30:14.840]  from it, which is a bit confusing, but that's where it is.
+[30:14.840 --> 30:19.880]  So with that, basically, you will also use the same Q interface as you have with a video
+[30:19.880 --> 30:20.880]  device.
+[30:20.880 --> 30:25.400]  But instead of having pixels in the buffers, you will have particular structures that correspond
+[30:25.400 --> 30:29.880]  to the parameters of the ISP that you are going to fill with a particular configuration.
+[30:29.880 --> 30:35.280]  And then you can push that as a buffer to the video device, and the ISP will be configured
+[30:35.280 --> 30:37.760]  to use those parameters.
+[30:37.760 --> 30:46.960]  For the meta capture, which is the data provided by the ISP, you get the typical feedback information
+[30:46.960 --> 30:52.680]  from the ISP, so essentially it will be statistics about how sharp the picture is, how dark the
+[30:52.680 --> 30:58.040]  picture is, things like that, so that you can use this information to create a feedback
+[30:58.040 --> 31:05.800]  loop and then provide new parameters in the output video device to properly configure the
+[31:05.800 --> 31:10.360]  ISP to respond to a change in the scene or something like that.
+[31:10.360 --> 31:17.120]  So for example, if you switch off a light and turn a different one on that has a different
+[31:17.120 --> 31:22.280]  color temperature, for example, then you will get the information from this statistics,
+[31:22.280 --> 31:27.480]  and you will be able to adjust the parameters to respond to that change.
+[31:27.480 --> 31:30.360]  So that's how it works.
+[31:30.360 --> 31:38.200]  Here is an example from the RK ISP, the Rockchip ISP1, where you can typically find this same
+[31:38.200 --> 31:39.200]  topology.
+[31:39.200 --> 31:41.440]  So the ISP is here.
+[31:41.440 --> 31:50.840]  It actually has extra sub-devs before having the video devices for capturing the pixels.
+[31:50.840 --> 31:55.440]  But you also find this statistic video device and params video device.
+[31:55.440 --> 32:01.400]  So the params will take a particular structure here that you can configure, and the statistics
+[32:01.400 --> 32:08.560]  will take another one with the information provided by the ISP.
+[32:08.560 --> 32:16.840]  Okay, so that gives you kind of a big overview of how all of this is supported in V4L2 in
+[32:16.840 --> 32:18.640]  Mainline Linux.
+[32:18.640 --> 32:23.600]  So now let's take a look at the thing I actually worked on for the all-winner cameras.
+[32:23.600 --> 32:32.200]  So using, again, these same interfaces for the particular use case of all-winner cameras,
+[32:32.200 --> 32:36.120]  or cameras, you know, interfaced with all-winner SoCs.
+[32:36.120 --> 32:48.000]  So in the all-winner second-generation hardware implementation, we have MiPy CSI2 controllers,
+[32:48.000 --> 32:54.200]  which are really the components connected to the actual bus, the actual MiPy CSI2 bus,
+[32:54.200 --> 33:01.360]  which are separate hardware blocks that are connected through a FIFO to the CSI controller,
+[33:01.360 --> 33:06.480]  which is really just a DMA engine that will get some pixels in and write them to memory,
+[33:06.480 --> 33:09.880]  basically, with some formatting and timing things.
+[33:09.880 --> 33:12.200]  But essentially, that's what it does.
+[33:12.200 --> 33:21.320]  So this CSI controller again was already supported in Mainline, but not the MiPy CSI2 controllers.
+[33:21.320 --> 33:25.640]  So the CSI controller actually also needs to be configured specifically to take its
+[33:25.640 --> 33:30.920]  input from the MiPy CSI2 controller instead of the parallel interface, which is the only
+[33:30.920 --> 33:33.040]  choice that was supported before.
+[33:33.040 --> 33:36.160]  So that's one of the things I had to add support for.
+[33:36.160 --> 33:42.960]  So there was a lot of kind of reworking of the CSI code to support that, even though
+[33:42.960 --> 33:47.400]  the biggest rework was actually to support the ISP.
+[33:47.400 --> 33:53.240]  We need to get some information from the sensor to properly configure the MiPy CSI2 interface
+[33:53.240 --> 33:55.280]  on the receiving side.
+[33:55.280 --> 34:00.920]  So for that, we use a V4L2 control that the MiPy CSI2 controller is going to retrieve
+[34:00.920 --> 34:04.960]  from the sensor driver through the subdev interface again.
+[34:04.960 --> 34:13.800]  So it knows what the clock frequency of the bus will be.
+[34:13.800 --> 34:24.840]  And we also use a part of the GenericLinux-Phi API to do that, because MiPy CSI2 works with
+[34:24.840 --> 34:33.000]  a physical, let's say, protocol or physical implementation called DeFi from MiPy, which
+[34:33.000 --> 34:37.760]  is kind of like the physical layer implementation that is used by this interface.
+[34:37.760 --> 34:42.240]  So there needs to be some configuration about that.
+[34:42.240 --> 34:46.000]  And yeah, for that, we use the Linux-Phi API.
+[34:46.000 --> 34:54.720]  Now if we look more closely at the platforms that I got interested in, first, for the A83T,
+[34:54.720 --> 35:00.400]  there was actually some source code provided in the all-winner vendor releases that we
+[35:00.400 --> 35:06.440]  could use as a base to implement a driver, a proper mainline driver.
+[35:06.440 --> 35:11.880]  So it has lots of magic values in registers, so sometimes it's just writing things to registers
+[35:11.880 --> 35:16.800]  and we have no idea what it means, but we basically just took that in and did the same
+[35:16.800 --> 35:18.320]  and it just worked.
+[35:18.320 --> 35:24.200]  So there's still some magic involved, but that's unfortunately not so uncommon, so we
+[35:24.200 --> 35:26.600]  just have to deal with it.
+[35:26.600 --> 35:32.240]  The DeFi part is separate, so it has different control registers, but that was also supported
+[35:32.240 --> 35:39.640]  in that all-winner SDK downstream code, so we could also just reuse the same thing and
+[35:39.640 --> 35:41.720]  it worked.
+[35:41.720 --> 35:47.640]  For the A31 and V3 supports, so it's like, again, the second generation of all-winner
+[35:47.640 --> 35:54.920]  SOCs, we have a different MiPy CSI2 controller from the A83T, so it was necessary to write
+[35:54.920 --> 35:58.560]  a separate driver for that one.
+[35:58.560 --> 36:03.040]  There was also reference source code available and some documentation in one of the user
+[36:03.040 --> 36:10.600]  manuals of the platforms, so that was, again, sufficient to write a driver.
+[36:10.600 --> 36:16.120]  It turns out that the DeFi part is actually the same controller that is already used for
+[36:16.120 --> 36:24.000]  MiPy DSI, which is a display interface that uses the same physical layer encapsulation,
+[36:24.000 --> 36:25.400]  I would say.
+[36:25.400 --> 36:31.560]  So there was actually already a driver for the DeFi block used for MiPy DSI, in which
+[36:31.560 --> 36:36.840]  case it's in transmit mode, because when you want to drive a display, you push pixels
+[36:36.840 --> 36:44.960]  out, but in that case, we reused that driver but configured it instead in receive mode
+[36:44.960 --> 36:49.080]  for MiPy CSI2, so we could get pixels in.
+[36:49.080 --> 36:55.160]  So that was also a change in this driver.
+[36:55.160 --> 37:01.680]  But it was then necessary to indicate in which direction it should be running, so there were
+[37:01.680 --> 37:09.040]  different approaches that were possible for that.
+[37:09.040 --> 37:21.160]  So I think at the end, we settled for a particular device tree property to configure this mode.
+[37:21.160 --> 37:29.520]  So the kind of outcome of this work was first some series to support the MiPy CSI2 controllers,
+[37:29.520 --> 37:40.360]  so about 2,600 added lines, so pretty big, that's two new drivers here and here, some
+[37:40.360 --> 37:46.560]  changes to the DeFi, like I just mentioned, and some device tree changes, so that's most
+[37:46.560 --> 37:47.560]  of it.
+[37:47.560 --> 37:55.100]  I started this work in October 2020, and it was merged in the next 6.0 in June 2022.
+[37:55.100 --> 38:00.440]  So now these drivers are upstream, and you can use them, and they work, and I actually
+[38:00.440 --> 38:06.960]  got a number of people writing to me and saying that they actually have been using this in
+[38:06.960 --> 38:12.640]  different situations, and apparently it works pretty well, so I'm pretty glad about that.
+[38:12.640 --> 38:15.800]  It's pretty nice.
+[38:15.800 --> 38:21.400]  So that was for the MiPy CSI2 part, and let's say the big part of the work was supporting
+[38:21.400 --> 38:24.240]  the ISP.
+[38:24.240 --> 38:32.200]  So the ISP is connected to the CSI controller as well, but on the other side, meaning that
+[38:32.200 --> 38:37.560]  the data will flow from MiPy CSI2 to the CSI controller to the ISP.
+[38:37.560 --> 38:45.160]  So there also needed to be some configuration to be able to support that, especially big
+[38:45.160 --> 38:50.560]  rework was required because when you start using the ISP, the DMA engine that is used
+[38:50.560 --> 38:56.200]  to write the data to memory is no longer the DMA engine of the CSI controller.
+[38:56.200 --> 38:59.600]  So the CSI has to act like a regular subdev, okay?
+[38:59.600 --> 39:05.720]  It's no longer the final, let's say the final sync for the data, but it's just one more
+[39:05.720 --> 39:06.880]  element in the chain.
+[39:06.880 --> 39:12.840]  So the driver had to be reworked to support this different mode of working, where it will
+[39:12.840 --> 39:18.400]  basically not register itself as the parent V4L2 device, but instead it will register
+[39:18.400 --> 39:25.160]  itself as a subdev and the parent V4L2 device will be the ISP driver, which is again a separate
+[39:25.160 --> 39:26.600]  driver.
+[39:26.600 --> 39:33.720]  So that required quite some rework, and also to support both modes, obviously, because
+[39:33.720 --> 39:39.760]  not everyone is interested in using the ISP or not every platform even has an ISP.
+[39:39.760 --> 39:50.720]  So yeah, so there needed to be some, yeah, some rework to support that.
+[39:50.720 --> 39:59.440]  What else to say, it has, I don't know if I put it here, but it has some weird way of
+[39:59.440 --> 40:07.400]  configuring it, basically, in a typical hardware, you would just like have some registers and
+[40:07.400 --> 40:13.400]  configure them, and then the effects will be applied on the next frame or something
+[40:13.400 --> 40:14.400]  like that.
+[40:14.400 --> 40:19.320]  But in that hardware, it actually has a DMA buffer, where you write the new values of
+[40:19.320 --> 40:23.880]  the register, and then you trigger some update bits, and the hardware itself will go and
+[40:23.880 --> 40:30.680]  read from the DMA buffer and copy that data to its registers synchronously with the virtual
+[40:30.680 --> 40:33.560]  synchronization, so when you receive a new frame.
+[40:33.560 --> 40:38.000]  So it's very odd as a way of working, but that's how it does.
+[40:38.000 --> 40:41.520]  So like if you write directly to the registers, it won't actually do anything.
+[40:41.520 --> 40:46.720]  You need to write to a side buffer, and then tell the hardware to update its registers
+[40:46.720 --> 40:47.800]  from that buffer.
+[40:47.800 --> 40:49.800]  So yeah, it's a little bit weird.
+[40:49.800 --> 40:54.520]  If you look at the driver, you'll see that there is this buffer that is allocated for
+[40:54.520 --> 41:00.120]  that, so that's the reason why, that's how it works, and that's what the old winner code
+[41:00.120 --> 41:01.120]  is doing.
+[41:01.120 --> 41:04.240]  So that's how it's done.
+[41:04.240 --> 41:09.680]  So that's the final pipeline that we have with the sensor here, connected to the Mypy
+[41:09.680 --> 41:14.560]  CSI 2 subdev, which is a separate driver.
+[41:14.560 --> 41:21.880]  Then it goes through the CSI driver, which in this case is configured as a subdev only.
+[41:21.880 --> 41:28.640]  And then it goes to the ISP subdev, which provides a DMA capture interface where you
+[41:28.640 --> 41:34.000]  have the final data that was processed, and that should look good.
+[41:34.000 --> 41:38.040]  And it also has another video device for the parameters.
+[41:38.040 --> 41:42.080]  Like I described with the RockTip ISP, this one is implemented the same way.
+[41:42.080 --> 41:45.880]  So we also have a specific structure to configure it.
+[41:45.880 --> 41:50.840]  Currently, there is no support for the statistics, but in the future, when such support is added,
+[41:50.840 --> 41:57.680]  there will be another video device connected to this ISP subdev to be able to provide the
+[41:57.680 --> 42:02.800]  feedback data out.
+[42:02.800 --> 42:07.040]  OK, so yeah, that's pretty much what I just said.
+[42:07.040 --> 42:14.680]  Few details about the currently supported features in that config parameters buffer.
+[42:14.680 --> 42:20.080]  Currently, we support the buyer coefficients, so we can translate from the buyer raw data
+[42:20.080 --> 42:26.120]  to actual RGB data, and we can tweak how much of each color channel we put in.
+[42:26.120 --> 42:33.160]  So that will typically allow different color temperatures, basically.
+[42:33.160 --> 42:38.200]  We also support 2D noise filtering, which is called BDNF, so it's bi-directional noise
+[42:38.200 --> 42:48.600]  filtering, which basically is like a low-pass filter, so it will remove the high-frequency
+[42:48.600 --> 42:53.600]  stuff in your picture, and that will make it look smoother and nicer.
+[42:53.600 --> 43:01.040]  And also easier to encode, which is one of the big reasons why you need to do noise filtering.
+[43:01.040 --> 43:04.760]  And yeah, that's the main two features, so there's still a lot to be added.
+[43:04.760 --> 43:09.520]  That's just the scope of what our project was at the time, but there's definitely a
+[43:09.520 --> 43:16.920]  lot of room for improvement, so the ISP itself has numerous hardware capabilities, and so
+[43:16.920 --> 43:20.680]  those could be added later in the driver.
+[43:20.680 --> 43:25.680]  So it was, for that reason, submitted to staging in Linux, because we don't yet support all
+[43:25.680 --> 43:31.160]  the features, so we don't yet have a complete description of that structure, and since it's
+[43:31.160 --> 43:38.000]  part of the API, we want to make it clear that it's not finalized yet, so there will
+[43:38.000 --> 43:46.040]  be some additions to this structure to support other features that are currently not implemented.
+[43:46.040 --> 43:51.840]  So this code was submitted in September 2021, and it was merged in November 2022.
+[43:51.840 --> 44:01.520]  So this is also in Linux 6.2, so you can get that with the update, so that's pretty nice.
+[44:01.520 --> 44:02.880]  This change was much bigger.
+[44:02.880 --> 44:09.880]  You can see it's 8,000 lines of additions, so it's a whole new driver, and a big rework
+[44:09.880 --> 44:18.960]  of the previous 6 ICSI driver, which was more or less a complete rewrite of the driver,
+[44:18.960 --> 44:23.000]  so it's pretty big.
+[44:23.000 --> 44:30.680]  Just to finish on what is left to do in this area, so currently the ISP only supports the
+[44:30.680 --> 44:38.040]  V3 platform, but the same hardware is found on the AT3T, and there's a few other chips
+[44:38.040 --> 44:44.080]  that have previous versions of the same hardware, so they could be supported in the same driver,
+[44:44.080 --> 44:47.960]  so that's something that could be done in the future.
+[44:47.960 --> 44:53.120]  I mentioned that there is no statistics currently, so that is also something that could be added
+[44:53.120 --> 44:55.360]  in the future.
+[44:55.360 --> 45:01.160]  It has numerous other features that we could support, scaling rotation, and of course all
+[45:01.160 --> 45:09.600]  of the modules inside the ISP for all the different features that I mentioned, and we
+[45:09.600 --> 45:16.800]  don't have any 3A algorithm support in user space to do this feedback loop implementation,
+[45:16.800 --> 45:20.960]  so that is also something to be worked on.
+[45:20.960 --> 45:27.600]  And of course, doing that would be a great fit for Lib Camera, so Teran has just talked
+[45:27.600 --> 45:34.200]  about it, so I won't go over it again, but that's definitely a good fit for supporting
+[45:34.200 --> 45:42.160]  an ISP with Mainline Linux, so hopefully it will soon be well integrated in Lib Camera.
+[45:42.160 --> 45:48.920]  Someone recently submitted patches about this, so it's like going towards this direction,
+[45:48.920 --> 45:52.280]  so that's pretty nice.
+[45:52.280 --> 45:53.840]  That's pretty much the end of this talk.
+[45:53.840 --> 45:59.120]  I just wanted to mention that Bootlin is hiring, so if you are interested in this kind of stuff,
+[45:59.120 --> 46:04.240]  how to support everything, you can reach out to us and we have positions available, also
+[46:04.240 --> 46:07.520]  internships, so feel free if you're interested.
+[46:07.520 --> 46:12.360]  And that is pretty much it for me, so thanks everyone, and now I'll have questions if there's
+[46:12.360 --> 46:13.360]  any.
+[46:13.360 --> 46:24.920]  Hi there, that was fantastic, thank you, who knew it was so complicated.
+[46:24.920 --> 46:29.120]  The last time I looked at some of this with NXP free scale parts, we were using GStreamer
+[46:29.120 --> 46:33.680]  with V4L sources coming into it, and a lot of the headache was that there was loads of
+[46:33.680 --> 46:38.280]  buffer copying all over the place, and there were different memory maps and different access
+[46:38.280 --> 46:41.080]  for different components to different memory maps.
+[46:41.080 --> 46:46.080]  So with what you're explaining here, typical use case might be, we do this image processing,
+[46:46.080 --> 46:51.640]  then I want to encode it with H.264265, maybe I want to push it into a GPU to do some kind
+[46:51.640 --> 46:55.360]  of image analysis with AI machine learning techniques.
+[46:55.360 --> 47:00.880]  Could you say something about how that hangs together with buffer copying and so forth?
+[47:00.880 --> 47:07.720]  So basically nowadays the V4L2 framework has great support for DMA buff, which is a technology
+[47:07.720 --> 47:10.460]  used for buffer sharing across different devices.
+[47:10.460 --> 47:16.200]  So with that driver you could absolutely reuse the same memory where the ISP is producing
+[47:16.200 --> 47:22.200]  the picture and use that as the source for an encoder or even the GPU, because DRM also
+[47:22.200 --> 47:24.680]  supports DMA buff pretty well.
+[47:24.680 --> 47:29.480]  So you could do all of that with zero copy, that's definitely all supported, and I didn't
+[47:29.480 --> 47:34.300]  have to do anything special to have that work, it's just the V4L2 framework has that now.
+[47:34.300 --> 47:39.800]  So unless your hardware has weird constraints like the GPU can access this part of memory
+[47:39.800 --> 47:45.120]  or things like that, which are not really well represented currently, but in the general
+[47:45.120 --> 47:47.480]  case it should work pretty well.
+[47:47.480 --> 47:53.000]  So yeah, basically when we have an encoder driver for these all-winner platforms we will
+[47:53.000 --> 47:59.000]  definitely be able to directly import ISP output to encoder input and no copy and low
+[47:59.000 --> 48:00.000]  latency.
+[48:00.000 --> 48:01.000]  Yeah.
+[48:01.000 --> 48:02.000]  So.
+[48:02.000 --> 48:03.000]  Anyone else?
+[48:03.000 --> 48:11.720]  Yeah, thanks for your talk and for supporting, hopefully, more mainline Linux so we have
+[48:11.720 --> 48:14.360]  more phones available.
+[48:14.360 --> 48:23.240]  I have a question about the support for artificial network declarators.
+[48:23.240 --> 48:28.520]  Do you have any idea if this is somehow integrated into the kernel stack in this way?
+[48:28.520 --> 48:34.000]  I mean, it's a lot of work like this as is, but well.
+[48:34.000 --> 48:40.880]  Yeah, so the AI accelerator stuff, that's not really the same scope as the camera stuff,
+[48:40.880 --> 48:43.840]  but that is definitely moving forward.
+[48:43.840 --> 48:49.640]  There is an axle subsystem that was added to the kernel quite recently, which is based
+[48:49.640 --> 48:52.880]  of DRM for some aspects.
+[48:52.880 --> 49:00.040]  And I think more and more drivers are being contributed towards that, so the main issue
+[49:00.040 --> 49:05.920]  currently with that would be that the compilers to compile the models into the hardware representation
+[49:05.920 --> 49:10.960]  are typically non-free and probably going to remain so in a number of cases.
+[49:10.960 --> 49:18.920]  So feel free to push for free compilers for these models to your hardware provider or
+[49:18.920 --> 49:21.120]  whatever.
+[49:21.120 --> 49:26.480]  Any more questions?
+[49:26.480 --> 49:30.720]  You mentioned patches for the camera for the ISP.
+[49:30.720 --> 49:31.960]  Could you point them to me?
+[49:31.960 --> 49:32.960]  Sorry?
+[49:32.960 --> 49:36.960]  Could you point me to the patches you mentioned, and do you have plenty of work on the camera?
+[49:36.960 --> 49:37.960]  It's Adam Pig, right?
+[49:37.960 --> 49:38.960]  Sorry?
+[49:38.960 --> 49:39.960]  It's Adam Pig's.
+[49:39.960 --> 49:45.440]  That's just for the CISAs receiver as far as I'm aware, just not for the ISP.
+[49:45.440 --> 49:47.360]  Maybe I went a bit fast over that.
+[49:47.360 --> 49:54.520]  So it's actually patches on the driver, the SunSix ICSI driver side to implement things
+[49:54.520 --> 49:56.800]  that Leap Camera expects.
+[49:56.800 --> 49:59.400]  So I think you know the one thing I'm talking about.
+[49:59.400 --> 50:02.280]  So do you plan to work on the ISP support, the Leap Camera?
+[50:02.280 --> 50:06.600]  So personally, I would be very happy to do so, so we're just looking for someone to fund
+[50:06.600 --> 50:07.600]  that effort.
+[50:07.600 --> 50:12.600]  So if, you know, someone with lots of money and interest, please come and talk to us.
+[50:12.600 --> 50:16.480]  No, but seriously, I know that people would definitely be interested in that, so it's
+[50:16.480 --> 50:20.600]  good to spread the word that we are available to do that.
+[50:20.600 --> 50:26.200]  We just need someone interested and serious about funding this, but we would definitely
+[50:26.200 --> 50:28.720]  be very happy to do it.
+[50:28.720 --> 50:29.720]  So yeah.
+[50:29.720 --> 50:30.720]  Okay.
+[50:30.720 --> 50:31.720]  Cool.
+[50:31.720 --> 50:32.720]  Thank you for a great talk.
+[50:32.720 --> 50:33.720]  And that's the end of the question.
+[50:33.720 --> 50:47.840]  Thank you.

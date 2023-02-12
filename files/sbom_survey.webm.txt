@@ -1,0 +1,260 @@
+[00:00.000 --> 00:11.000]  Good afternoon, everybody. Thanks for coming to our session.
+[00:11.000 --> 00:18.000]  Yeah, I don't know. It's on.
+[00:18.000 --> 00:25.000]  All right. Okay, so mine, I try to speak loud so that the people even in the rows in the back can understand me.
+[00:25.000 --> 00:36.000]  My name is Henrik. That's my colleague Joseph. Both of us are publishing and working on open source dependency management security topics for a couple of years already.
+[00:36.000 --> 00:47.000]  And so, yeah, recently we started looking into S-bombs more maybe compliance and topics that we are not so familiar with.
+[00:47.000 --> 00:56.000]  So we are looking forward to your questions. All right, so the agenda of our session will be like follows.
+[00:56.000 --> 01:04.000]  I think the first session agenda item can be very quick, seeing that you already spent like four hours on that topic.
+[01:04.000 --> 01:21.000]  We will then present a small case study where we basically tried to, where we ran different S-bomb generators at different points in time on an open source solution in order to see whether those tools agree on the S-bombs generated,
+[01:21.000 --> 01:30.000]  whether the results produced are comparable, whether the results change over time, and to also pinpoint a couple of what we believe are deficiencies.
+[01:30.000 --> 01:45.000]  And then Joseph will explain why it is beneficial and helpful to go from the granularity of entire components to the code level to look at functions and methods and call graphs.
+[01:45.000 --> 01:55.000]  All right, so that is a software bill of material in the Cyclone DX format, which is one of the, let's say, prominent standards in this space.
+[01:55.000 --> 02:00.000]  Cyclone DX has a little bit of a security background. That's why we kind of choose this.
+[02:00.000 --> 02:04.000]  It seemed more natural to our previous works.
+[02:04.000 --> 02:08.000]  At the very top is kind of the S-bomb format and version.
+[02:08.000 --> 02:14.000]  Here in the middle you have the software product for which the S-bomb is generated.
+[02:14.000 --> 02:17.000]  Here you have the S-bomb generator tool.
+[02:17.000 --> 02:26.000]  We anonymized those solutions. We didn't think it is necessary to point out problems in individual open source solutions,
+[02:26.000 --> 02:30.000]  but we wanted to more raise awareness for the general problem of comparability and so forth.
+[02:30.000 --> 02:38.000]  And then at the bottom here you have an array of components that the S-bomb generator found in the software analyzed.
+[02:38.000 --> 02:46.000]  And of course there will be many, and I highlighted a couple of fields that we will be looking at in much more detail.
+[02:46.000 --> 02:53.000]  So there is the name, there is a CPE, there is a Perl, a package URL, or a group and a version.
+[02:53.000 --> 03:02.000]  So these are all different fields belonging to naming schemes in order to describe or identify the component that was found.
+[03:02.000 --> 03:10.000]  And then they have properties that can be all kind of proprietary properties the S-bomb generator decided to include.
+[03:10.000 --> 03:13.000]  Why do we need S-bombs?
+[03:13.000 --> 03:19.000]  I think in the interest of time I just skip this altogether and go to the case study right away.
+[03:19.000 --> 03:27.000]  The idea of this, the motivation for this came basically by reading through a couple of documents.
+[03:27.000 --> 03:33.000]  The first, and I have cited them here at the bottom, is a research paper that was done recently.
+[03:33.000 --> 03:36.000]  There is I think a couple of interviews and surveys.
+[03:36.000 --> 03:44.000]  And there were some statements from the survey participants who said that an S-bomb is not something that is static, that you create at a given point in time,
+[03:44.000 --> 03:51.000]  and then you assume it to be stable, but that is something that is evolving throughout the software development lifecycle.
+[03:51.000 --> 03:58.000]  And then a corresponding information is also provided in this guidance from the NTIA,
+[03:58.000 --> 04:03.000]  the minimum elements for a software bill of materials on pages 6 to 7 they say,
+[04:03.000 --> 04:09.000]  you can generate an S-bomb at different points on the sources, after the build, maybe at the docker image,
+[04:09.000 --> 04:14.000]  and the S-bomb should actually contain this information when it has been created.
+[04:14.000 --> 04:17.000]  That would be important for the consumer.
+[04:17.000 --> 04:25.000]  So we looked at different S-bomb generators and then of course, but in order to do a proper comparison,
+[04:25.000 --> 04:28.000]  we need to kind of a software to be analyzed.
+[04:28.000 --> 04:39.000]  And so as sample software, we have chosen Eclipse Steady, which is a security solution that I've been contributing to over many years,
+[04:39.000 --> 04:45.000]  so one that I know very well because I thought that would be helpful to understand the quality of what is generated.
+[04:45.000 --> 04:50.000]  In particular, we looked at one of the modules of that solution.
+[04:50.000 --> 04:55.000]  It's a spring boot REST service that is developed with Java and Maven.
+[04:55.000 --> 05:01.000]  It will be deployed using a docker image that is downloadable from Docker Hub.
+[05:01.000 --> 05:11.000]  And the ground truth, which is the information that we will take later on to say whether the S-bomb generators perform good or bad,
+[05:11.000 --> 05:13.000]  is what you see here.
+[05:13.000 --> 05:17.000]  So there are 114 compile time dependencies.
+[05:17.000 --> 05:21.000]  So they are required for compiling the Java sources to runtime dependencies.
+[05:21.000 --> 05:25.000]  They should be present where the production software runs.
+[05:25.000 --> 05:30.000]  There are 41 test dependencies, JUnit and other stuff.
+[05:30.000 --> 05:32.000]  Good.
+[05:32.000 --> 05:39.000]  Before showing the results or walking through the results, a little bit of background because that is very important.
+[05:39.000 --> 05:42.000]  How do we name those components, right?
+[05:42.000 --> 05:48.000]  And it is important to understand there are context-specific component identifiers.
+[05:48.000 --> 05:51.000]  So, for example, Maven.
+[05:51.000 --> 05:53.000]  So Maven coordinates.
+[05:53.000 --> 05:55.000]  This is what is used by the Java developers.
+[05:55.000 --> 06:01.000]  It is consisting of a group identifier, artifact identifier and a version.
+[06:01.000 --> 06:05.000]  This is typically the graph of the coordinates of a Maven artifact.
+[06:05.000 --> 06:07.000]  You would download from Maven Central.
+[06:07.000 --> 06:11.000]  There are some optional identifier elements.
+[06:11.000 --> 06:15.000]  An example here is org DOM4J, DOM4J version 213.
+[06:15.000 --> 06:20.000]  Another context-specific component identifier is the common platform enumeration,
+[06:20.000 --> 06:25.000]  which is comprised of a part, a vendor, a product, a version and a couple of other fields.
+[06:25.000 --> 06:31.000]  And they are used by the NVD in order to say what are the components affected by a given vulnerability.
+[06:31.000 --> 06:38.000]  So, for example, CVE 2020 something is affecting a component CPE 2.3,
+[06:38.000 --> 06:42.000]  which is the version of the CPE naming scheme.
+[06:42.000 --> 06:45.000]  The vendor is DOM4J project.
+[06:45.000 --> 06:48.000]  It's not exactly the same than before, a pity.
+[06:48.000 --> 06:50.000]  DOM4J is the product name.
+[06:50.000 --> 06:54.000]  And then, besides, there are universal component identifiers.
+[06:54.000 --> 06:59.000]  One that got a lot of traction in recent years is the Perl package URL.
+[06:59.000 --> 07:04.000]  It has seven elements that I put here.
+[07:04.000 --> 07:12.000]  And, you know, using S-bombs in order to use it for understanding whether there are known vulnerabilities,
+[07:12.000 --> 07:16.000]  what is the quality of the projects used and so forth,
+[07:16.000 --> 07:19.000]  requires to map all those names.
+[07:19.000 --> 07:23.000]  Names that are given by people somehow.
+[07:23.000 --> 07:31.000]  And that this can go wrong becomes evident by picking one example that I generated later on.
+[07:31.000 --> 07:37.000]  So, this is a copy paste from one of the S-bombs, the Cyclone DX S-bombs.
+[07:37.000 --> 07:44.000]  And you see here that the Perl here, this universal component identifier
+[07:44.000 --> 07:49.000]  that was put in by the S-bomb generator says it's DOM4J.
+[07:49.000 --> 07:55.000]  Too bad it doesn't map to org DOM4J, which is the identifier on Maven Central.
+[07:55.000 --> 08:01.000]  So, if you want to look up a new version of that component, well, bad luck you don't have the right identifier.
+[08:01.000 --> 08:06.000]  If you want to compare this CPE to search for known vulnerabilities,
+[08:06.000 --> 08:08.000]  well, it's not the same identifier.
+[08:08.000 --> 08:12.000]  They found DOM4J, but it's DOM4J project.
+[08:12.000 --> 08:15.000]  Too bad.
+[08:15.000 --> 08:20.000]  So, the approach we have taken is we selected three open source S-bomb generators.
+[08:20.000 --> 08:26.000]  A and B are generic solutions. You can basically throw anything at them.
+[08:26.000 --> 08:30.000]  A directory, an image, a tarball, a single, whatever.
+[08:30.000 --> 08:35.000]  And then C is a Maven plug-in that hooks into Maven's build process.
+[08:35.000 --> 08:39.000]  And we ran those three tools at three different points in time.
+[08:39.000 --> 08:43.000]  After cloning the open source project, after getting cloned,
+[08:43.000 --> 08:54.000]  after creating the Maven package, or after running Maven package to create the self-contained spring boot application that you can run,
+[08:54.000 --> 08:57.000]  and after finally on the Docker image.
+[08:57.000 --> 09:06.000]  On the Docker image, we could just run A and B because C is dedicated to be integrated into the Maven build tool.
+[09:06.000 --> 09:13.000]  And so we collected basically eight different S-bombs from those eight runs.
+[09:13.000 --> 09:19.000]  And the color coding will stay the same for the Venn diagrams I will be showing on the next slides.
+[09:19.000 --> 09:21.000]  And then we did three things.
+[09:21.000 --> 09:25.000]  We computed precision and recall of those tools.
+[09:25.000 --> 09:31.000]  So, which means we compared what they found with the ground truth.
+[09:31.000 --> 09:36.000]  And so precision says basically how many false positives are there in.
+[09:36.000 --> 09:41.000]  False positives is the thing tells me there is a component which I know is not there.
+[09:41.000 --> 09:43.000]  Not so useful.
+[09:43.000 --> 09:51.000]  Recall is for measuring false negatives, which is the tool didn't generate a component even though it is there.
+[09:51.000 --> 09:55.000]  Also not so helpful, especially for vulnerable dependencies.
+[09:55.000 --> 10:08.000]  And then with those S-bombs, so this is kind of the quality, the accuracy of the tools judged independently against the ground truth.
+[10:08.000 --> 10:12.000]  And then we created a couple of Venn diagrams to see how much do they actually agree.
+[10:12.000 --> 10:19.000]  So how much, what is the overlap of S-bomb A and B and C in those different times?
+[10:19.000 --> 10:24.000]  And then we looked at some additional properties.
+[10:24.000 --> 10:36.000]  All right, so this is the first, let's say, result running the three tools right after having cloned the open source project.
+[10:36.000 --> 10:42.000]  And let me start from the bottom of the slide with the tool C, which is easy, because that is actually perfect.
+[10:42.000 --> 10:47.000]  That integrated in the Maven dependency life cycle in this built tool.
+[10:47.000 --> 10:53.000]  Perfect precision, perfect recall, no false positives, no false negatives, right? Very good.
+[10:53.000 --> 11:03.000]  And it has a couple of additional properties such as SHA-1, SHA-250-6, digest, license, information, descriptions, a lot of useful stuff.
+[11:03.000 --> 11:13.000]  Now then let's look at tool A. You see the blue bubble is much smaller, because it basically failed identifying many, many, many components.
+[11:13.000 --> 11:18.000]  And the reason, I think, I mean, I need to speculate a little bit how the internals work.
+[11:18.000 --> 11:27.000]  But the reason, I guess, is that it looked at the POM.xml, which is where the developers declare dependencies, but it didn't resolve any dependencies.
+[11:27.000 --> 11:30.000]  So meaning it doesn't build a complete dependency tree.
+[11:30.000 --> 11:34.000]  So it lacked a lot of transitive dependencies on top of that.
+[11:34.000 --> 11:40.000]  For the direct ones that are in the POM, it didn't have any version information, because that was specified elsewhere.
+[11:40.000 --> 11:50.000]  So we have components like with this Perl, org spring framework boot, spring boot starter, without a version.
+[11:50.000 --> 11:55.000]  They included test dependencies, which is also interesting.
+[11:55.000 --> 11:58.000]  The other tools didn't include test dependencies.
+[11:58.000 --> 12:04.000]  But the funny thing is, they included it, but if you looked at the S-Bomb, you wouldn't know that it's a test dependency.
+[12:04.000 --> 12:10.000]  You can't tell, is this really something only used for developing, or is it really in my production system?
+[12:10.000 --> 12:14.000]  Also not so helpful.
+[12:14.000 --> 12:20.000]  And they had a couple of CPE combinations supposedly for mapping known vulnerabilities.
+[12:20.000 --> 12:22.000]  I think I need to speed up a little bit, right?
+[12:22.000 --> 12:29.000]  Okay, now we, this is, this Venn diagram I was mentioning.
+[12:29.000 --> 12:35.000]  So here, so the Venn diagram I didn't explain. So here, in fact, this is the overlap of those Perls.
+[12:35.000 --> 12:39.000]  So we looked at those Perls and tried, do they match to each other?
+[12:39.000 --> 12:48.000]  And you see that, to see, even though they had all perfectly identified, Tool B had a good number, but they still don't overlap.
+[12:48.000 --> 12:57.000]  And this is because those Perls contain additional elements, qualifiers, like the type, it's a Java archive,
+[12:57.000 --> 13:04.000]  or for open source, for operating system components, could be the platform, the target platform, which makes they don't overlap.
+[13:04.000 --> 13:12.000]  Now, if we only look at one of the naming elements, then the overlap is much bigger, because the fact that A is lacking versions,
+[13:12.000 --> 13:19.000]  B has wrong version identifiers, and the fact that C adds additional details, it all vanishes and looks like it's all converging.
+[13:19.000 --> 13:28.000]  But it is, again, important to understand the name alone is not so useful for looking at vulnerabilities or new versions.
+[13:28.000 --> 13:32.000]  Good, so let me hurry up a little bit.
+[13:32.000 --> 13:38.000]  This is the same thing, run after Maven package. Tool A improved.
+[13:38.000 --> 13:44.000]  They were finding more, but still the precision and recall are not as good as for the other solutions.
+[13:44.000 --> 13:51.000]  The other tools didn't change at all, so for them it didn't make a difference that Maven package ran or not.
+[13:51.000 --> 13:58.000]  Here, again, is the difference in terms of Perls, which is resulting in the lack of overlap.
+[13:58.000 --> 14:06.000]  Here, this is the same component. Tool A has it as DOM4J, DOM4J, Tool B has it at ORC DOM4J, DOM4J,
+[14:06.000 --> 14:18.000]  and Type equal to JAR, so they added this additional information, which made that they don't overlap.
+[14:18.000 --> 14:26.000]  Good, and then last, after running, now we ran it also on the Docker image.
+[14:26.000 --> 14:40.000]  The first two tools, and maybe one finding here is what we observed in terms of lack of overlap on Maven components also happened for operating system components.
+[14:40.000 --> 14:50.000]  So here we have Dibyan Udbuntu, the package dash, but again they, one tool added a little bit of more information, the target architecture.
+[14:50.000 --> 14:59.000]  For the consumer of the bomb, who knows whether this is important information in terms of security? I don't know.
+[14:59.000 --> 15:11.000]  And then again, if you only look at the name, the overlap is much bigger, but even though it looks like they only disagree on very few components,
+[15:11.000 --> 15:25.000]  too bad for Tool B, I think, had a big miss, it was lacking the complete Java runtime, and those people being in security, they know how many security issues there are in the Java runtime.
+[15:25.000 --> 15:40.000]  Good, lessons learned. The reason for getting different S-bombs is a big one, tools integrated into the dependency manager seem to work much better, at least on the result of that small case study,
+[15:40.000 --> 15:55.000]  because generic tools that are supposed to judge the bill of material from the outside, they will need to apply some heuristics, and they don't have the same level of detailed knowledge about the dependency graph.
+[15:55.000 --> 16:05.000]  Production versus test components are sometimes included, sometimes not, there are different defaults, and in the S-bomb generated you don't see the difference any longer.
+[16:05.000 --> 16:12.000]  And of course, there is also this difference depending on when you run it, there will be different components included.
+[16:12.000 --> 16:20.000]  There is a standard format, but the tools include different fields, some include license and digest, others not.
+[16:20.000 --> 16:32.000]  And even if they all include a Perl, Perl itself is a complex naming scheme with seven elements, and the tools decide differently on what to include in a Perl.
+[16:32.000 --> 16:40.000]  And other reasons that we didn't discuss here, it also depends on the time of the dependency resolution, in case your version ranges,
+[16:40.000 --> 16:56.000]  and some tools also generate platform-specific S-bombs, so if you create an S-bomb on a Mac and on a Windows machine, maybe with different hardware architectures beneath, you would have different S-bombs.
+[16:56.000 --> 17:03.000]  Right, and I think I don't have so much time to look into this.
+[17:03.000 --> 17:16.000]  What I wanted to say, identifying vulnerabilities only on names is rather flawed, because names keep on changing, projects are renamed, there are rebundles, there are forks,
+[17:16.000 --> 17:26.000]  and so which is why we advocate for enriching such information with call graph information and code-level information.
+[17:26.000 --> 17:28.000]  And with that, I hand over to Joseph.
+[17:28.000 --> 17:30.000]  Yeah, thank you, Henrik.
+[17:30.000 --> 17:35.000]  So this will be a bit shorter version. We're running out of time here.
+[17:35.000 --> 17:37.000]  I guess that's all it.
+[17:37.000 --> 17:46.000]  All right, so why do we want to go for more like a call graph view? So with the current S-bomb format, so in general with dependency trees,
+[17:46.000 --> 17:55.000]  if you view from that perspective, we typically have the application and the list of dependencies of how it is dependent, right?
+[17:55.000 --> 18:05.000]  And if you instead try to think from a call graph perspective of looking into the source code, you could have something like this instead.
+[18:05.000 --> 18:16.000]  If we see, for example, like those small sort of like, almost like Lego pieces, if each of them are function calls from like the application to the API,
+[18:16.000 --> 18:22.000]  we can see, for example, at lib4, and if lib4 would have a vulnerability or some other type of problem,
+[18:22.000 --> 18:30.000]  we see that there are actually no function calls to it from the application down to lib4 via lib2.
+[18:30.000 --> 18:37.000]  So I mean, the interesting part here is that if you start looking from like a code perspective,
+[18:37.000 --> 18:45.000]  we can quickly see whether we can pinpoint or like see how we're utilizing source code.
+[18:45.000 --> 18:53.000]  And another interesting part is that when, so I looked for example like into the Rust ecosystem.
+[18:53.000 --> 18:58.000]  So if we have a couple of dependencies, so for example, maplit here,
+[18:58.000 --> 19:06.000]  if you run like a grep over here, you can see that only like this one is let's say like, I mean important,
+[19:06.000 --> 19:10.000]  but we don't see any usage of it in the package.
+[19:10.000 --> 19:14.000]  So this is like a case where there's no code reuse.
+[19:14.000 --> 19:22.000]  And I was generally like interested to know like in the Rust ecosystem to see like how we are like doing,
+[19:22.000 --> 19:28.000]  like how many dependency we're actually calling or not calling in general.
+[19:28.000 --> 19:34.000]  And when I did the study and looked into like how many dependencies are declared and resolved
+[19:34.000 --> 19:39.000]  versus how many are actually being reused in the code,
+[19:39.000 --> 19:48.000]  I found that for using only package information, it would for example report around 17 dependencies.
+[19:48.000 --> 19:52.000]  Whereas in the case when you looked into the like full graph information,
+[19:52.000 --> 19:55.000]  we found that only six dependencies are used.
+[19:55.000 --> 20:01.000]  And that was quite interesting why there was such a big difference.
+[20:01.000 --> 20:08.000]  And the reason why there is such a big difference is that if you look into this example over here,
+[20:08.000 --> 20:14.000]  we see that main calls full and then from app to lib1, full calls bar.
+[20:14.000 --> 20:21.000]  And then further down we see that from bar it goes calls to intern in lib2.
+[20:21.000 --> 20:25.000]  But then we see that there are actually no calls from lib2 to lib3.
+[20:25.000 --> 20:32.000]  And this shows that why it is quite important to think about context in general
+[20:32.000 --> 20:37.000]  because depending on how app is using its direct dependency,
+[20:37.000 --> 20:43.000]  it also directly impacts what transit dependencies are also being called.
+[20:43.000 --> 20:47.000]  And the assumption that we usually have when we are building an SPOM
+[20:47.000 --> 20:52.000]  or we are looking into a dependency tree is that we are assuming that all direct,
+[20:52.000 --> 20:56.000]  I mean all APIs of direct dependencies are being utilized.
+[20:56.000 --> 21:01.000]  And then we are also assuming that all APIs of transit dependencies are being used as well.
+[21:01.000 --> 21:10.000]  So we need to also start thinking a bit about what kind of context is being used in general.
+[21:10.000 --> 21:16.000]  And so a little bit what would be the lessons here with trying to integrate something
+[21:16.000 --> 21:21.000]  like call graphs or other levels apart from just using package information
+[21:21.000 --> 21:25.000]  is that if you start having information around source code,
+[21:25.000 --> 21:28.000]  we can directly try to pinpoint and understand, for example,
+[21:28.000 --> 21:31.000]  if there is a vulnerability in one function,
+[21:31.000 --> 21:36.000]  we can see that AOK is being either quite utilized in my source code
+[21:36.000 --> 21:39.000]  or not utilized at all.
+[21:39.000 --> 21:44.000]  And another thing, so this is a problem that we also see as well
+[21:44.000 --> 21:48.000]  that we might declare dependencies on 20 components
+[21:48.000 --> 21:52.000]  where you get an SPOM from like a vendor or someone else.
+[21:52.000 --> 21:58.000]  They have five different components, but which one is the most critically used one in that project?
+[21:58.000 --> 21:59.000]  That's also not very clear.
+[21:59.000 --> 22:06.000]  And if you know, for example, usage of APIs, you can kind of get an idea around that.
+[22:06.000 --> 22:13.000]  And this was also a little bit the second point that I was like highlighting on that.
+[22:13.000 --> 22:19.000]  We need a few more layers of information that serve different uses of SPOM.
+[22:19.000 --> 22:25.000]  For developers, if I have access to SPOM, I would rather not look into metadata information.
+[22:25.000 --> 22:30.000]  I want to go look into call phrases and call information in general.
+[22:30.000 --> 22:34.000]  Whereas for security management people or other layers,
+[22:34.000 --> 22:37.000]  they probably don't want to look into the source code.
+[22:37.000 --> 22:42.000]  They rather want to look to get like an overview of seeing which packages
+[22:42.000 --> 22:48.000]  that are being used rather than the source code.
+[22:48.000 --> 22:52.000]  And so this sort of wraps up or talks.
+[22:52.000 --> 22:56.000]  We have like a couple of takeaways here.
+[22:56.000 --> 23:03.000]  And we see that going towards having some type of standard around SPOM formats
+[23:03.000 --> 23:08.000]  is, I mean, it's being necessary, but not fully sufficient.
+[23:08.000 --> 23:12.000]  Based on the previous slides, like we need a bit more context
+[23:12.000 --> 23:15.000]  so that we can have better actionable insights.
+[23:15.000 --> 23:20.000]  One way of doing that could be, for example, including call graph information.
+[23:20.000 --> 23:26.000]  As a consumer of SPOM, it is very difficult to verify the correctness of them
+[23:26.000 --> 23:30.000]  because as Henrik was showing earlier, if you are using different tools
+[23:30.000 --> 23:34.000]  and we are getting different results, which one is the correct one
+[23:34.000 --> 23:41.000]  and how can we even validate that they are correct in what they are doing.
+[23:41.000 --> 23:48.000]  And the last point, and this is something that both me and Henrik think is extremely important,
+[23:48.000 --> 23:54.000]  is that we need to create some form of independent SPOM benchmark
+[23:54.000 --> 24:02.000]  where different SPOM generators or others could evaluate on how accurate
+[24:02.000 --> 24:12.000]  the generated SPOM are against a set of manually validated projects in general.
+[24:12.000 --> 24:15.000]  This concludes our talk.
+[24:15.000 --> 24:19.000]  We are happy to take questions.
+[24:19.000 --> 24:26.000]  Thank you.
+[24:26.000 --> 24:32.000]  It shows Java and that's got an ecosystem.
+[24:32.000 --> 24:36.000]  So I presume you've probably found something similar with Python or Rust.
+[24:36.000 --> 24:40.000]  What about language applications that don't have an ecosystem?
+[24:40.000 --> 24:43.000]  I'm thinking about C++.
+[24:43.000 --> 24:45.000]  What would you say about that?
+[24:45.000 --> 24:49.000]  Basically there are standard languages there and I like the core graph there.
+[24:49.000 --> 24:53.000]  How would you tackle that?
+[24:53.000 --> 24:57.000]  You can probably take it.
+[24:57.000 --> 25:06.000]  The question is how would we do this core graph analysis for C languages
+[25:06.000 --> 25:12.000]  and that of course is a very different game and I don't think there is an easy...
+[25:12.000 --> 25:15.000]  It will just not be possible to be honest.
+[25:15.000 --> 25:21.000]  Because with all the core graph generator, you don't agree?
+[25:21.000 --> 25:27.000]  We need to do this for safety.
+[25:27.000 --> 25:36.000]  Building a core graph for C code is more difficult than it is for languages like Java and Python.
+[25:36.000 --> 25:45.000]  So maybe the amount of information that is contained in such core graphs is less helpful
+[25:45.000 --> 25:51.000]  for taking any actions or it's less actionable.
+[25:51.000 --> 25:57.000]  We were using this originally for those core graphs where it's for reachability of vulnerable methods.
+[25:57.000 --> 26:04.000]  The idea was there is method ABC affected by log4j is this really callable from my application context.
+[26:04.000 --> 26:06.000]  But this required kind of...
+[26:06.000 --> 26:13.000]  You could map the source code where the vulnerable function is identified to what is in the bytecode
+[26:13.000 --> 26:15.000]  where this identifier is basically the same.
+[26:15.000 --> 26:20.000]  So the core graph generated from bytecode could be used for this purpose.
+[26:20.000 --> 26:28.000]  And I don't think this is possible in at least this application in C.
+[26:28.000 --> 26:34.000]  Is this possible at some point?

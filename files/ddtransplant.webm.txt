@@ -1,0 +1,440 @@
+[00:00.000 --> 00:09.000]  Can you hear me?
+[00:09.000 --> 00:12.000]  Okay, fine.
+[00:12.000 --> 00:13.000]  Stefan, please.
+[00:13.000 --> 00:14.000]  Yes.
+[00:14.000 --> 00:16.000]  Good morning.
+[00:16.000 --> 00:18.000]  Hello and welcome to my talk.
+[00:18.000 --> 00:19.000]  I'm Stefan Krakowski.
+[00:19.000 --> 00:24.000]  I'm a genote developer since 2009.
+[00:24.000 --> 00:28.000]  And today I want to present you how to transplant Linux kernel
+[00:28.000 --> 00:33.000]  drivers into the genote OS framework much more faster
+[00:33.000 --> 00:38.000]  than before and hopefully precisely.
+[00:38.000 --> 00:45.000]  So let me start with the motivation behind this.
+[00:45.000 --> 00:52.000]  Of course, you might ask why we use monolithic kernel drivers
+[00:52.000 --> 00:55.000]  when we talk in a microkernel death room.
+[00:55.000 --> 00:59.000]  Of course, there are good reasons to implement drivers from scratch
+[00:59.000 --> 01:02.000]  and we also have several drivers which are written from scratch
+[01:02.000 --> 01:06.000]  but the ever increasing complexity of modern hardware
+[01:06.000 --> 01:12.000]  for single devices but also for the pure number of devices
+[01:12.000 --> 01:19.000]  inside a system one ship is not easy to handle for a small team.
+[01:19.000 --> 01:21.000]  That's the one reason.
+[01:21.000 --> 01:26.000]  And often it's poorly documented even if at all.
+[01:26.000 --> 01:30.000]  And we also have hardware bugs inside
+[01:30.000 --> 01:32.000]  and you have to find those bugs
+[01:32.000 --> 01:34.000]  because they typically are not documented
+[01:34.000 --> 01:37.000]  and then you have to find work around for it.
+[01:37.000 --> 01:41.000]  And all of this is mostly part of the Linux kernel
+[01:41.000 --> 01:47.000]  and you can reuse it because it's free and open source software.
+[01:47.000 --> 01:50.000]  And so to sum it up, it's simply an economic decision.
+[01:50.000 --> 01:53.000]  So if you want to enable a modern device
+[01:53.000 --> 01:58.000]  and you have limited time, then this is the way to go.
+[01:58.000 --> 02:04.000]  Okay, we have collected a lot of experiences in the last decade
+[02:04.000 --> 02:10.000]  to port drivers from Linux to the Geno.S framework
+[02:10.000 --> 02:15.000]  and you have in general two extreme approaches
+[02:15.000 --> 02:19.000]  and the reality is somewhere in between always.
+[02:19.000 --> 02:23.000]  So either you use just the pure driver code.
+[02:23.000 --> 02:25.000]  What I mean by this?
+[02:25.000 --> 02:28.000]  I mean code which directly interacts with the hardware
+[02:28.000 --> 02:30.000]  by writing to some IO registers
+[02:30.000 --> 02:37.000]  or by setting up a DMA transfer or something like this.
+[02:37.000 --> 02:42.000]  And in that case, you of course have to implement
+[02:42.000 --> 02:47.000]  each Linux kernel function that is called by this driver code.
+[02:47.000 --> 02:52.000]  But the good thing is you don't have to implement the whole semantic
+[02:52.000 --> 02:55.000]  which the original function is implementing.
+[02:55.000 --> 03:00.000]  You only have to match this single driver needs.
+[03:00.000 --> 03:06.000]  This leads to a more low complex function than the original ones
+[03:06.000 --> 03:13.000]  and in sum to a more minimal Linux kernel driver.
+[03:13.000 --> 03:19.000]  But of course you cannot share this emulated code
+[03:19.000 --> 03:21.000]  in between different code bases.
+[03:21.000 --> 03:24.000]  So if you have not only one driver but several,
+[03:24.000 --> 03:27.000]  they will have slightly different semantic needs.
+[03:27.000 --> 03:32.000]  And so reusing the same emulation code might be a problem
+[03:32.000 --> 03:34.000]  and therefore the whole effort,
+[03:34.000 --> 03:37.000]  if you don't only port one driver but several ones,
+[03:37.000 --> 03:41.000]  can increase if you ever and ever again have to implement
+[03:41.000 --> 03:44.000]  the whole emulation code base for the driver.
+[03:44.000 --> 03:48.000]  And of course you need the actual needs of that driver.
+[03:48.000 --> 03:52.000]  So you need a deep knowledge of the driver itself.
+[03:52.000 --> 03:54.000]  On the one hand, this is the one approach.
+[03:54.000 --> 03:59.000]  On the other hand, you can use as much as possible
+[03:59.000 --> 04:02.000]  from the original code base.
+[04:02.000 --> 04:06.000]  Thereby you might gain more or less the same runtime behavior
+[04:06.000 --> 04:08.000]  than the original one.
+[04:08.000 --> 04:13.000]  And you can of course then better share resulting emulation code
+[04:13.000 --> 04:19.000]  because it's already stressed by this whole bunch of code running on top.
+[04:19.000 --> 04:26.000]  Thereby you get less manual work to do for having more than one driver.
+[04:26.000 --> 04:31.000]  But of course the code base for the single driver increases
+[04:31.000 --> 04:34.000]  because you have much more of the original Linux kernel.
+[04:34.000 --> 04:39.000]  And if a problem arises, then you have to know a lot of the whole Linux kernel itself
+[04:39.000 --> 04:44.000]  because it might be in the timing subsystem and whatever.
+[04:44.000 --> 04:46.000]  You can name it.
+[04:46.000 --> 04:51.000]  So in the recent past we were more on this side,
+[04:51.000 --> 04:55.000]  on the taking the pure driver approach.
+[04:55.000 --> 05:01.000]  But the high effort for each driver was also leading to the situation
+[05:01.000 --> 05:05.000]  that you keep your old code base, that you are not that good
+[05:05.000 --> 05:11.000]  and maintain the code and getting a new kernel version and driver updates.
+[05:11.000 --> 05:17.000]  So, and at some point there was a need for action.
+[05:17.000 --> 05:22.000]  For me this was at the beginning of the pandemic situation
+[05:22.000 --> 05:26.000]  when I was trying to enable the display engine of this device,
+[05:26.000 --> 05:32.000]  which is M&T Reformed 2 from M&T RE,
+[05:32.000 --> 05:36.000]  a small company from Berlin, so a completely open hardware.
+[05:36.000 --> 05:40.000]  And yeah, I tried to enable the display engine
+[05:40.000 --> 05:45.000]  and it includes some NXP IMX8 SoC.
+[05:45.000 --> 05:47.000]  And we already had a driver for this
+[05:47.000 --> 05:51.000]  because a colleague of me, he enabled in three months
+[05:51.000 --> 05:57.000]  on the early evolution kit the HDMI connected display.
+[05:57.000 --> 06:01.000]  So this was one part.
+[06:01.000 --> 06:07.000]  And then another colleague of me wanted to have a touch screen
+[06:07.000 --> 06:14.000]  which is connected via DSi connector and not via HDMI.
+[06:14.000 --> 06:18.000]  And again he had to spend three months into this work
+[06:18.000 --> 06:23.000]  because on the one hand there are more devices involved now.
+[06:23.000 --> 06:26.000]  On the other hand there you had all this bureaucracy
+[06:26.000 --> 06:29.000]  for device tree management and it was all hard coded
+[06:29.000 --> 06:34.000]  for this first use case of using HDMI for the specific board.
+[06:34.000 --> 06:40.000]  So there was a lot of manual tweaking to do to enable the touch screen.
+[06:40.000 --> 06:43.000]  And then I wanted to, I thought, yeah, I don't have to do this,
+[06:43.000 --> 06:45.000]  someone else did it.
+[06:45.000 --> 06:48.000]  And now we use it for the M&T reform for the panel
+[06:48.000 --> 06:50.000]  because it's also connected via DSi.
+[06:50.000 --> 06:54.000]  But actually there's another device in between
+[06:54.000 --> 06:58.000]  and EDP bridge in between the DSi connector and the panel.
+[06:58.000 --> 07:03.000]  So yeah, I had to do work again and then I recognized,
+[07:03.000 --> 07:06.000]  oh no, the code base we used for porting
+[07:06.000 --> 07:10.000]  is a different one than the one of the M&T reform
+[07:10.000 --> 07:12.000]  and it's a totally different kernel version.
+[07:12.000 --> 07:15.000]  You have to back port stuff, you cannot correlate it.
+[07:15.000 --> 07:17.000]  No, I give up.
+[07:17.000 --> 07:23.000]  So that was a turning point for me to start a new way of porting.
+[07:23.000 --> 07:26.000]  And of course it was not only me,
+[07:26.000 --> 07:31.000]  but we had a lot of discussions formerly in the kitchen,
+[07:31.000 --> 07:34.000]  you and coffee breaks, what we want to change.
+[07:34.000 --> 07:37.000]  And so number one requirement for the new approach
+[07:37.000 --> 07:42.000]  was to reduce the manual work for tailoring a driver-specific environment.
+[07:42.000 --> 07:46.000]  And we wanted to meet as close as possible
+[07:46.000 --> 07:48.000]  the original semantic of the driver
+[07:48.000 --> 07:50.000]  so that whenever you change the context,
+[07:50.000 --> 07:53.000]  like with this display engine, it just works.
+[07:53.000 --> 07:56.000]  You don't have to do much more.
+[07:56.000 --> 08:02.000]  And because formally we all,
+[08:02.000 --> 08:05.000]  at some points we have the impression
+[08:05.000 --> 08:10.000]  that you cannot be deterministic in knowing
+[08:10.000 --> 08:14.000]  when you will finish your porting work
+[08:14.000 --> 08:17.000]  because when some problem arises,
+[08:17.000 --> 08:23.000]  you could not correlate it to the original runtime often.
+[08:23.000 --> 08:26.000]  So it was somehow hard and we wanted to change this.
+[08:26.000 --> 08:31.000]  So it should be an easy way to correlate it to the original runtime.
+[08:31.000 --> 08:37.000]  And last but not least, we wanted to share more of this resulting emulation code
+[08:37.000 --> 08:39.000]  which is more semantic complete
+[08:39.000 --> 08:42.000]  so that we can maintain the code better.
+[08:42.000 --> 08:46.000]  Okay, so this is the story beforehand
+[08:46.000 --> 08:50.000]  and now I come to the actual work.
+[08:50.000 --> 08:54.000]  So I want to introduce you to this approach
+[08:54.000 --> 08:58.000]  for those of you who like to port drivers to Genote
+[08:58.000 --> 09:02.000]  or like doing the same approach somewhere else.
+[09:02.000 --> 09:08.000]  So we typically start now by configuring
+[09:08.000 --> 09:10.000]  a minimal executable Linux kernel.
+[09:10.000 --> 09:13.000]  Let me just call it tiny kernel, so to say.
+[09:13.000 --> 09:16.000]  So you have to do some manual work here.
+[09:16.000 --> 09:22.000]  You have to use the Linux kernel build system itself.
+[09:22.000 --> 09:26.000]  It has a tiny config, some small configuration
+[09:26.000 --> 09:30.000]  which is at least compilable for your architecture,
+[09:30.000 --> 09:32.000]  but it won't run any device.
+[09:32.000 --> 09:38.000]  And then you just enable certain configuration options
+[09:38.000 --> 09:43.000]  and of course you have to find them by looking at the configurations.
+[09:43.000 --> 09:48.000]  And in the end, this might take some time,
+[09:48.000 --> 09:52.000]  but in the end you will have something which you can correlate laterally
+[09:52.000 --> 09:56.000]  if you run the driver in your ported environment
+[09:56.000 --> 09:59.000]  and you want to look at why doesn't it work,
+[09:59.000 --> 10:02.000]  then you really have a minimal Linux kernel
+[10:02.000 --> 10:06.000]  which just drives this device and this is the first thing to do.
+[10:06.000 --> 10:11.000]  And another aspect of this is that you gain
+[10:11.000 --> 10:14.000]  a minimal kernel configuration for your codebase
+[10:14.000 --> 10:17.000]  which just calls those kernel functions
+[10:17.000 --> 10:22.000]  that you really actually need to drive that device.
+[10:22.000 --> 10:26.000]  So you don't have to emulate that much.
+[10:26.000 --> 10:29.000]  Okay, kernel configuration is only one part.
+[10:29.000 --> 10:32.000]  If you take an ARM device today,
+[10:32.000 --> 10:35.000]  then you have of course these device trees
+[10:35.000 --> 10:38.000]  which name what kind of devices you actually have in hardware
+[10:38.000 --> 10:43.000]  and which also contain additional driver information.
+[10:43.000 --> 10:47.000]  So it's a bit of configuration is also inside of these device trees.
+[10:47.000 --> 10:51.000]  And this is the device tree for the M&T reform.
+[10:51.000 --> 10:54.000]  You see it's quite complex.
+[10:54.000 --> 10:58.000]  So you have to identify what kind of devices are interesting
+[10:58.000 --> 11:02.000]  for my tiny kernel to execute those.
+[11:02.000 --> 11:08.000]  And this is again some work to do, some manual work to do,
+[11:08.000 --> 11:14.000]  but at least you start to know more about the dependencies
+[11:14.000 --> 11:16.000]  of your hardware.
+[11:16.000 --> 11:21.000]  And we have developed some tooling for it.
+[11:21.000 --> 11:26.000]  So you can, this is a small tickle shell script
+[11:26.000 --> 11:29.000]  which pauses the device resources
+[11:29.000 --> 11:33.000]  and then you can name device nodes that should be extracted
+[11:33.000 --> 11:36.000]  and it will take them and the transitive closure
+[11:36.000 --> 11:39.000]  to give you something like this.
+[11:39.000 --> 11:41.000]  And then you can take that device tree of course
+[11:41.000 --> 11:43.000]  with your tiny kernel and start it
+[11:43.000 --> 11:46.000]  and it will just drive that device.
+[11:46.000 --> 11:50.000]  And we also take that for our own ported drivers
+[11:50.000 --> 11:53.000]  as input value.
+[11:53.000 --> 11:58.000]  Of course you won't implement everything which is seen here.
+[11:58.000 --> 12:02.000]  So powering, reset pins,
+[12:02.000 --> 12:06.000]  IEQ stuff like GPIO or something like this
+[12:06.000 --> 12:09.000]  would be part of other drivers in the system
+[12:09.000 --> 12:13.000]  like the platform driver or some dedicated GPIO driver
+[12:13.000 --> 12:15.000]  in the GenoDOS framework.
+[12:15.000 --> 12:19.000]  So those highlighted ones are the ones that we actually need
+[12:19.000 --> 12:21.000]  for porting.
+[12:21.000 --> 12:23.000]  And this is the starting point for you
+[12:23.000 --> 12:28.000]  to identify the first compilation set that you need.
+[12:28.000 --> 12:30.000]  So each of those device drivers
+[12:30.000 --> 12:32.000]  has some compatibility string
+[12:32.000 --> 12:35.000]  and those are used in Linux to identify
+[12:35.000 --> 12:38.000]  the concrete driver of the Linux kernel.
+[12:38.000 --> 12:41.000]  And so you can take those strings
+[12:41.000 --> 12:45.000]  and grab in the Linux kernel sources
+[12:45.000 --> 12:48.000]  and then you get something like this.
+[12:48.000 --> 12:51.000]  So you have your first compilation set units
+[12:51.000 --> 12:55.000]  and you can put them into a make file,
+[12:55.000 --> 12:57.000]  into a build environment
+[12:57.000 --> 13:03.000]  and then we combine it with the unmodified Linux kernel headers.
+[13:03.000 --> 13:09.000]  So we take the original include path of the Linux kernel.
+[13:09.000 --> 13:14.000]  Formally we always define the whole definitions
+[13:14.000 --> 13:16.000]  you needed by hand.
+[13:16.000 --> 13:19.000]  So this was a lot of work to do.
+[13:19.000 --> 13:25.000]  I would say initially the most work you had to do.
+[13:25.000 --> 13:30.000]  And now we just take the original Linux headers
+[13:30.000 --> 13:33.000]  and then you can just compile those compilation units
+[13:33.000 --> 13:35.000]  you already have seen.
+[13:35.000 --> 13:38.000]  So it's really a work which is done by this.
+[13:38.000 --> 13:43.000]  But of course there are some exceptions.
+[13:43.000 --> 13:46.000]  So we had to tweak some headers.
+[13:46.000 --> 13:51.000]  We shadow some few headers to prevent the system
+[13:51.000 --> 13:56.000]  from trying to enable, disable interrupts or something like this.
+[13:56.000 --> 14:00.000]  And especially to define init calls in the Linux kernel.
+[14:00.000 --> 14:04.000]  So each subsystem in the kernel including any driver
+[14:04.000 --> 14:06.000]  has some init call definition
+[14:06.000 --> 14:13.000]  and those are the order of the init calls is important.
+[14:13.000 --> 14:17.000]  Even if you have one init call priority level
+[14:17.000 --> 14:20.000]  there are dependencies in between the different compilation units
+[14:20.000 --> 14:23.000]  and they are solved by linking order.
+[14:23.000 --> 14:27.000]  So the Linux kernel uses some weird linking magic
+[14:27.000 --> 14:30.000]  to put them all into one order
+[14:30.000 --> 14:35.000]  and later when starting the kernel it takes that order.
+[14:35.000 --> 14:38.000]  So we didn't want it to infect our linking script with this.
+[14:38.000 --> 14:42.000]  Thereby we have built some tooling again
+[14:42.000 --> 14:46.000]  which uses this tiny kernel you built in the very beginning
+[14:46.000 --> 14:49.000]  and just extracts the order of the init calls
+[14:49.000 --> 14:51.000]  and puts it into a header
+[14:51.000 --> 14:54.000]  and you can just include it in this built environment
+[14:54.000 --> 14:57.000]  and then you run and it will,
+[14:57.000 --> 15:01.000]  the emulation code environment of us
+[15:01.000 --> 15:05.000]  will just call the init calls by the correct order.
+[15:05.000 --> 15:08.000]  So when we do all of this
+[15:08.000 --> 15:11.000]  then you of course get a lot of undefined references
+[15:11.000 --> 15:14.000]  for all the functions which are not implemented yet.
+[15:14.000 --> 15:18.000]  And this is a lot of error messages from the compiler.
+[15:18.000 --> 15:22.000]  So we made a small tool to identify those undefined symbols
+[15:22.000 --> 15:25.000]  help you to identify the original compilation unit
+[15:25.000 --> 15:27.000]  which implements them
+[15:27.000 --> 15:32.000]  and then you can try to find a correct setup for this.
+[15:32.000 --> 15:35.000]  And I want to show you this shortly.
+[15:35.000 --> 15:54.000]  Okay, so I've prepared some makefile like here.
+[15:54.000 --> 15:57.000]  So here you see the compilation units we identified.
+[15:57.000 --> 16:02.000]  There's some inclusion of the general emulation code base
+[16:02.000 --> 16:05.000]  and if you now use this tool
+[16:10.000 --> 16:13.000]  it will build the target which you name
+[16:13.000 --> 16:16.000]  so it will try to build the driver
+[16:16.000 --> 16:19.000]  and it will collect all the undefined symbols
+[16:19.000 --> 16:22.000]  and here it just shows you the symbols
+[16:22.000 --> 16:26.000]  and the overall count of the undefined symbols.
+[16:26.000 --> 16:30.000]  Typically you can also have what I said
+[16:30.000 --> 16:33.000]  the compilation unit which is responsible
+[16:33.000 --> 16:35.000]  but I've skipped this here
+[16:35.000 --> 16:41.000]  because on this machine it's a bit slow.
+[16:41.000 --> 16:47.000]  So we can now identify, okay, there are symbols
+[16:47.000 --> 16:53.000]  for DRM mode which we want to solve and we see, okay,
+[16:53.000 --> 16:56.000]  let's try to add the original one.
+[16:56.000 --> 17:01.000]  Oh, sorry.
+[17:01.000 --> 17:05.000]  And yeah, you just run the tool again
+[17:05.000 --> 17:10.000]  and it will show you in a few seconds.
+[17:10.000 --> 17:13.000]  So on the PC this is quite quick
+[17:13.000 --> 17:17.000]  but this is just one gigahertz or whatever, I don't know.
+[17:17.000 --> 17:20.000]  So it's a bit lame
+[17:20.000 --> 17:23.000]  and it has to recompile the driver of course
+[17:23.000 --> 17:26.000]  in the background.
+[17:26.000 --> 17:29.000]  Okay, and now you see it's seven symbols less
+[17:29.000 --> 17:32.000]  and in the end I think because of the time
+[17:32.000 --> 17:35.000]  we will skip this, in the end you can generate
+[17:35.000 --> 17:38.000]  with the tool the missing symbols
+[17:38.000 --> 17:42.000]  and it will give you per function
+[17:42.000 --> 17:45.000]  the correct declaration of the function of course
+[17:45.000 --> 17:49.000]  and it calls a function which gives you the backtrace
+[17:49.000 --> 17:54.000]  till then and just loops endlessly
+[17:54.000 --> 17:57.000]  so you have a no returning function
+[17:57.000 --> 18:02.000]  therefore you don't have to get a valid value back
+[18:02.000 --> 18:03.000]  or something like this.
+[18:03.000 --> 18:06.000]  So if you now take the driver it will link,
+[18:06.000 --> 18:08.000]  you can start to execute it
+[18:08.000 --> 18:10.000]  and you will always get the point
+[18:10.000 --> 18:14.000]  where something is not implemented yet.
+[18:14.000 --> 18:23.000]  Okay, so let me just switch back.
+[18:23.000 --> 18:29.000]  So, okay.
+[18:29.000 --> 18:34.000]  So this is the overview of the APIs involved.
+[18:34.000 --> 18:36.000]  I don't want to explain them in detail now
+[18:36.000 --> 18:39.000]  but what you should take from that is
+[18:39.000 --> 18:43.000]  we have a very strict layering
+[18:43.000 --> 18:48.000]  there is this layer where there's only C
+[18:48.000 --> 18:53.000]  and assembly code which is actually the Linux kernel code
+[18:53.000 --> 18:55.000]  and the shadow copies of the Linux kernel code.
+[18:55.000 --> 19:00.000]  Those are the only ones which can include Linux kernel headers
+[19:00.000 --> 19:02.000]  and then you have this emulation code base
+[19:02.000 --> 19:05.000]  which is just the C abstraction
+[19:05.000 --> 19:08.000]  for the Linux kernel code above
+[19:08.000 --> 19:12.000]  and then you have all this C++ stuff from us
+[19:12.000 --> 19:15.000]  which abstracts the genome services
+[19:15.000 --> 19:18.000]  and the concrete driver services.
+[19:18.000 --> 19:22.000]  And the good thing is you have those abstractions here
+[19:22.000 --> 19:25.000]  from the device services
+[19:25.000 --> 19:29.000]  and you have their Pondong here
+[19:29.000 --> 19:35.000]  and then if there's one, let's say for an Ethernet class
+[19:35.000 --> 19:37.000]  you can just reuse it.
+[19:37.000 --> 19:40.000]  So if you already have this in our emulation code base
+[19:40.000 --> 19:43.000]  you just need to implement
+[19:43.000 --> 19:45.000]  or port the concrete driver
+[19:45.000 --> 19:47.000]  but you have all this glue code
+[19:47.000 --> 19:50.000]  which connects with the actual APIs and services
+[19:50.000 --> 19:54.000]  it's always there.
+[19:54.000 --> 20:03.000]  Okay, so now let's see this in practice.
+[20:03.000 --> 20:08.000]  Okay, I just skip this here
+[20:08.000 --> 20:13.000]  and once you shut down the Fitching Machine Monitor
+[20:18.000 --> 20:24.000]  Okay, so you actually see the whole time genome in action
+[20:24.000 --> 20:27.000]  and what you see here on this mount reform
+[20:27.000 --> 20:31.000]  is actually everything the device brings with it
+[20:31.000 --> 20:33.000]  except audio.
+[20:33.000 --> 20:37.000]  So all other drivers are already in place
+[20:37.000 --> 20:44.000]  and this also is valid for the GPU for instance.
+[20:44.000 --> 20:49.000]  So here you can see the GL mark demo again.
+[20:49.000 --> 20:52.000]  Those of you who have seen Normans presentation yesterday
+[20:52.000 --> 20:54.000]  already knows it.
+[20:54.000 --> 20:57.000]  So I think I run out of time.
+[20:57.000 --> 20:58.000]  No, you have five minutes.
+[20:58.000 --> 20:59.000]  Okay, good.
+[20:59.000 --> 21:02.000]  If you have any questions about two more minutes, it's okay.
+[21:02.000 --> 21:05.000]  Anyway, I think this is enough.
+[21:05.000 --> 21:11.000]  I've had more or less everything runs on this device.
+[21:11.000 --> 21:13.000]  Yeah, so what are the results?
+[21:13.000 --> 21:18.000]  So this is the list of drivers we have ported within one year now
+[21:18.000 --> 21:20.000]  besides of course doing other stuff.
+[21:20.000 --> 21:23.000]  So we don't just port drivers all the time
+[21:23.000 --> 21:27.000]  but this is really a significant change.
+[21:27.000 --> 21:33.000]  So we have taken new drivers for our whole x86 code base
+[21:33.000 --> 21:35.000]  for instance.
+[21:35.000 --> 21:38.000]  And you see a lot of ARM drivers for the pine phone
+[21:38.000 --> 21:42.000]  and for the MNT reform are also,
+[21:42.000 --> 21:48.000]  we're also added like the Mali and the Vante GPU for instance.
+[21:48.000 --> 21:51.000]  And this was done by a very small team
+[21:51.000 --> 21:54.000]  and we also had some architecture independent porting
+[21:54.000 --> 21:55.000]  of wire guard.
+[21:55.000 --> 21:59.000]  So something which doesn't even use any device at all.
+[21:59.000 --> 22:05.000]  Okay, so in numbers, the initial driver porting,
+[22:05.000 --> 22:10.000]  so nowadays to compare to the initial approach,
+[22:10.000 --> 22:15.000]  we have something like 15% of the time that it takes to do this.
+[22:15.000 --> 22:18.000]  Of course it's a bit hard to measure
+[22:18.000 --> 22:25.000]  because we don't track all the times we do in spending porting work
+[22:25.000 --> 22:28.000]  but approximately this is the number.
+[22:28.000 --> 22:33.000]  And this is especially because of this tooling
+[22:33.000 --> 22:35.000]  which reduces the manual work.
+[22:35.000 --> 22:40.000]  Of course you have to find semantic backs
+[22:40.000 --> 22:44.000]  but here this tiny kernel correlation helps a lot.
+[22:44.000 --> 22:47.000]  So you can instrument the original code
+[22:47.000 --> 22:51.000]  then just run it on original Linux and on your ported code
+[22:51.000 --> 22:54.000]  and you can see the difference.
+[22:54.000 --> 22:58.000]  Driver updating, we also did this within that year
+[22:58.000 --> 23:03.000]  because the first port was done for this display engine
+[23:03.000 --> 23:05.000]  and then there was a new version available,
+[23:05.000 --> 23:08.000]  two kernel versions later and we made an update.
+[23:08.000 --> 23:12.000]  So it's significantly faster than the initial driver port,
+[23:12.000 --> 23:13.000]  of course.
+[23:13.000 --> 23:19.000]  And the drivers meet a better all purpose.
+[23:19.000 --> 23:21.000]  This is what I meant with,
+[23:21.000 --> 23:25.000]  for instance it took one day to enable the HDMI connector
+[23:25.000 --> 23:28.000]  for the M&T reform once the panel worked.
+[23:28.000 --> 23:33.000]  So it's much better matching the different contexts.
+[23:33.000 --> 23:39.000]  And of course there's something bad on the other hand,
+[23:39.000 --> 23:41.000]  so the code base for a single driver
+[23:41.000 --> 23:48.000]  explodes like two or three times more than before.
+[23:48.000 --> 23:53.000]  But on the other hand, the code to maintain by ourselves
+[23:53.000 --> 24:00.000]  decreased to the count of 20% than before.
+[24:00.000 --> 24:04.000]  Okay, so I think that's it.
+[24:04.000 --> 24:06.000]  If you want to read more about this,
+[24:06.000 --> 24:13.000]  I can reference this book, the second genote book
+[24:13.000 --> 24:16.000]  about how to enable a platform.
+[24:16.000 --> 24:19.000]  There's a lot of this stuff already written by Norman.
+[24:19.000 --> 24:22.000]  And we have also much details
+[24:22.000 --> 24:25.000]  in different genotian block articles.
+[24:25.000 --> 24:28.000]  So thank you for your attention
+[24:28.000 --> 24:30.000]  and I'm open for questions.
+[24:30.000 --> 24:35.000]  Thank you.
+[24:35.000 --> 24:36.000]  Thanks, Stefan.
+[24:36.000 --> 24:37.000]  Any questions?
+[24:37.000 --> 24:38.000]  Yeah, please.
+[24:38.000 --> 24:41.000]  Yeah, first of all, awesome work, by the way.
+[24:41.000 --> 24:42.000]  Thank you.
+[24:42.000 --> 24:47.000]  Linus is known for not having a stable driver API.
+[24:47.000 --> 24:50.000]  I think there's a Linux developer from Red Hat who once says
+[24:50.000 --> 24:53.000]  we do not do hardware extraction layers in Linux.
+[24:53.000 --> 24:56.000]  I did say that the initial port is the hardest
+[24:56.000 --> 25:00.000]  and then it's a lot less work maintaining back ports going forward
+[25:00.000 --> 25:02.000]  but there's still some work involved.
+[25:02.000 --> 25:05.000]  So I was wondering, wouldn't it be less painful
+[25:05.000 --> 25:08.000]  to, for instance, support drivers from BSD?
+[25:08.000 --> 25:09.000]  Because I'm not mistaken,
+[25:09.000 --> 25:12.000]  we have a more stable hardware extraction layer.
+[25:12.000 --> 25:14.000]  That might be probably the case
+[25:14.000 --> 25:18.000]  but actually we want to have this first argument,
+[25:18.000 --> 25:20.000]  Linux runs on all kind of hardware
+[25:20.000 --> 25:23.000]  and all kind of different situations.
+[25:23.000 --> 25:28.000]  You have, for instance, we have a BSD ported driver for audio
+[25:28.000 --> 25:33.000]  but for today's Intel HD audio devices,
+[25:33.000 --> 25:36.000]  it's somehow, yeah, that device might work
+[25:36.000 --> 25:38.000]  but on that device, the microphone doesn't work
+[25:38.000 --> 25:40.000]  and that device doesn't, this and this.
+[25:40.000 --> 25:45.000]  So it's more about we just want to have the functionality
+[25:45.000 --> 25:48.000]  and therefore we need to look at this.
+[25:48.000 --> 25:52.000]  And of course, we were not, yeah,
+[25:52.000 --> 25:56.000]  we didn't like to get kernel experts, Linux kernel experts
+[25:56.000 --> 25:59.000]  but now we had to do it and, yeah,
+[25:59.000 --> 26:04.000]  if you once dived into it then maybe we just take that advantage.
+[26:04.000 --> 26:05.000]  Thank you.
+[26:05.000 --> 26:07.000]  Another question here for Malik.
+[26:07.000 --> 26:10.000]  Hi, great talk and so I was just wondering,
+[26:10.000 --> 26:14.000]  I wonder if I might be able to use your tooling
+[26:14.000 --> 26:18.000]  to introduce NVMe driver into OSV
+[26:18.000 --> 26:22.000]  but I also wonder if maybe similar approach could be used
+[26:22.000 --> 26:27.000]  to also port file system drivers into operating system.
+[26:27.000 --> 26:31.000]  Like OSV is missing EXT to driver
+[26:31.000 --> 26:34.000]  and I wonder if I could do something like that.
+[26:34.000 --> 26:36.000]  I'm pretty sure you can.
+[26:36.000 --> 26:40.000]  I mean, we already used this RAM kernel approach
+[26:40.000 --> 26:45.000]  from Antikanta who was also in the step room in the past years
+[26:45.000 --> 26:49.000]  and the support BSD port of the protocol stack
+[26:49.000 --> 26:54.000]  and we also used the Linux IP stack in the past from Linux
+[26:54.000 --> 26:57.000]  and we will of course use this approach again
+[26:57.000 --> 27:00.000]  to renew that version.
+[27:00.000 --> 27:05.000]  And there's, as I said, we already used WireGuard for this
+[27:05.000 --> 27:10.000]  so something which is not at all connected
+[27:10.000 --> 27:12.000]  to any device driver code.
+[27:12.000 --> 27:14.000]  Yeah, it's possible.
+[27:14.000 --> 27:15.000]  Okay, thank you.
+[27:15.000 --> 27:16.000]  I have a question on licensing.
+[27:16.000 --> 27:20.000]  Is it okay because GPL, BSD?
+[27:20.000 --> 27:23.000]  It's all under GPL then only, of course.
+[27:23.000 --> 27:26.000]  Each driver report has to be under GPL.
+[27:26.000 --> 27:29.000]  And there's no problem with having the link together.
+[27:29.000 --> 27:31.000]  I'm not sure about the license of GNode.
+[27:31.000 --> 27:36.000]  No, it's not a problem because this code then is only GPL code
+[27:36.000 --> 27:39.000]  and GNode itself is also under GPL.
+[27:39.000 --> 27:41.000]  It's possible.
+[27:41.000 --> 27:42.000]  Thank you very much.
+[27:42.000 --> 27:43.000]  Okay, thank you so much, Stefan.
+[27:43.000 --> 28:02.000]  Let's take it again.

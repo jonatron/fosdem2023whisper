@@ -1,0 +1,153 @@
+[00:00.000 --> 00:12.120]  Yeah, hi, I'm Ludwig from SUSE. I'm a research engineer there working in the so-called future
+[00:12.120 --> 00:17.640]  technologies team and today I'm presenting some crazy idea. Not because we're going
+[00:17.640 --> 00:22.920]  to build a product with that, but just because we can. So, first let's take a look what's
+[00:22.920 --> 00:27.880]  the difference between package-based and image-based. I mean, I'm from the package-based world,
+[00:27.880 --> 00:33.040]  so I don't have too many insights into actual image-based systems like I'm embedded world,
+[00:33.040 --> 00:38.520]  so that's just my view. Anyway, packages are known by all of you, I guess, from your desktop
+[00:38.520 --> 00:46.120]  Linux installation, so you have individual components pre-built, the vendor ships your
+[00:46.120 --> 00:51.360]  packages and the client side decides which one to install, so there's some kind of dependency
+[00:51.360 --> 00:56.800]  resolver that takes the components, puts them on your local system. Usually you don't need
+[00:56.800 --> 01:02.160]  to reboot for that. This has advantages and disadvantages, so the advantages, if you need
+[01:02.160 --> 01:07.200]  a new VIM version, you just get it and it works right away. The disadvantages, if it breaks,
+[01:07.200 --> 01:14.520]  it's broken. On image-based systems, on the other hand, you get a full Linux system pre-built by
+[01:14.520 --> 01:21.360]  the operating system vendor. That means it's a ready-made file system that is typically downloaded
+[01:21.360 --> 01:27.960]  and DD to some partition, for example, or it's a table that gets extracted somewhere. Installing
+[01:27.960 --> 01:34.440]  that one or activating the install requires a reboot, so that's an advantage because it wouldn't
+[01:34.440 --> 01:40.520]  break into intermediate states, but it just either works or doesn't. The disadvantage is that it's
+[01:40.520 --> 01:44.720]  typically not extendable, at least not the original image, so you would have to have some other
+[01:44.720 --> 01:53.240]  mechanism like system desizics nowadays that plays some tricks to get extra layers on top. So,
+[01:53.240 --> 01:59.800]  let's first take a look at the file-stem layout of a typical image-based system, or one, I think,
+[01:59.800 --> 02:05.360]  our system, the envisions it. So, we have the operating system in slash user for Linux systems
+[02:05.360 --> 02:13.240]  after user merge. Then the EDC partition at the EDC volume is on slash, which is writable. The boot
+[02:13.240 --> 02:18.120]  partition nowadays should be the ESP, no matter where it's mounted actually, and your data is in
+[02:18.120 --> 02:25.240]  var on a separate volume again. So, how do you do updates? Usually you have separate partitions
+[02:25.240 --> 02:33.840]  for user, so the standard case is AP, so two versions, and then you DD your operating system
+[02:33.840 --> 02:39.920]  into one, while the other one runs, and on reboot you just switch. That's quite an easy
+[02:39.920 --> 02:45.720]  technology because it's just a regular partition table. It's actually read-only if the file-stem
+[02:45.720 --> 02:52.160]  you use is a read-only one. You could use our single CAsync to download deltas and getting it
+[02:52.160 --> 02:57.240]  from the server, and the signing is also pretty easy because it's one image, so you can put some
+[02:57.240 --> 03:01.320]  GPG signature on it, and that's it, and you can even verify it afterwards because the image is
+[03:01.320 --> 03:08.000]  unmodified on your partition. Disadvantages, there's no deduplication, so you always consume
+[03:08.000 --> 03:14.520]  twice the space basically, or however big your user partition is. Even if your updates are small,
+[03:14.520 --> 03:22.840]  you still need all that space. The amount is limited, so usually if you have only two partitions,
+[03:22.840 --> 03:27.600]  you have two versions of the operating system, and the space is pre-allocated. Again, that could
+[03:27.600 --> 03:33.760]  be an advantage because there's no surprises, the space is just there, and if it's there,
+[03:33.760 --> 03:38.520]  you can put the image, period. The disadvantages, your image can't grow, and the updates are always
+[03:38.520 --> 03:46.640]  of a fixed size basically. So I can be optimized that. You could actually use butterfaces to our
+[03:46.640 --> 03:53.000]  operating system, that's how the micro-S works, some more details on that later in Ignite's talk.
+[03:53.000 --> 04:00.960]  Anyway, we use a sub-volume for the operating system. That means you get the copy and write
+[04:00.960 --> 04:07.520]  semantics automatically, so deduplication means your updated system does not automatically need
+[04:07.520 --> 04:13.320]  twice the space, but only the changed amount. You can still use rsync or casync to only apply
+[04:13.320 --> 04:19.000]  deltas. The amount of versions you can store is basically infinite, only depends on how big your
+[04:19.000 --> 04:26.160]  updates are. So if you only have updates on text files, it could be a lot of versions. Disadvantages,
+[04:26.160 --> 04:32.120]  it's not really read-only, it's just a butterfaces flag, and that can be changed of course. Also,
+[04:32.120 --> 04:37.560]  put a question mark on verification. So previously with image, we could just run GPG for example,
+[04:37.560 --> 04:43.520]  and you can verify whether the image was modified or not. Here we have to take a look how to solve
+[04:43.520 --> 04:50.160]  that later. But how do distributions actually build those images? At least an operating system
+[04:50.160 --> 04:56.480]  vendor like OpenSUSE would use packages to build the image, just on server side. We learned that
+[04:56.480 --> 05:02.200]  we can even use this technology for building any of these, and the way the image would be shipped
+[05:02.200 --> 05:06.800]  would be just install packages somewhere on a server system and then throw away everything that is
+[05:06.800 --> 05:14.080]  not in user. That means all the scriptlets that run in packages are just modifying something that's
+[05:14.080 --> 05:19.600]  not relevant. Like in EDC and VAR, it doesn't make any sense to have a scriptlet doing something
+[05:19.600 --> 05:24.800]  there. So when, for example, a package needs to add a user, it can't just call user add. It needs to
+[05:24.800 --> 05:30.600]  use SystemDISUS users. Same if you don't enable a service, you can't just call SystemControlEnable,
+[05:30.600 --> 05:37.600]  you need to ship presets. And that way packages also can't just put the kernel in slash boot
+[05:37.600 --> 05:42.320]  anymore because that's not in user. That means there needs to be some extra tool that somehow
+[05:42.320 --> 05:52.080]  makes a system bootable when there's a new kernel, for example. So back to verification. Actually
+[05:52.080 --> 06:00.560]  packages, at least RPM packages, have signed headers, and the headers have check sums for each
+[06:00.560 --> 06:11.200]  file. So in the end, an image is a list of RPMs with signed headers, and by verifying each header,
+[06:11.200 --> 06:16.920]  you can also verify each file. So in the end, you have a tree that could be verified, you can
+[06:16.920 --> 06:22.320]  check that there's no file added, no file removed, and no file modified, just by looking at the
+[06:22.320 --> 06:29.320]  RPM headers. Disadvantages and images that you ship, you typically remove the RPM database
+[06:29.320 --> 06:34.360]  because it's this ugly binary blob. Even if it's a SQLite database, it's still an ugly binary
+[06:34.360 --> 06:40.480]  blob with more binary blobs in there. So that's why people really hate having the RPM database
+[06:40.480 --> 06:46.280]  there. This is something that nobody wants to see in an image. So how can we fix that? We could
+[06:46.280 --> 06:54.200]  actually store the RPM headers as files. So we just dump the header part of the package into a
+[06:54.200 --> 07:00.400]  directory. That means the directory is the RPM database that looks much less ugly. Different
+[07:00.400 --> 07:07.400]  two file directory listings to actually see which packages could update it. That is quite useful
+[07:07.400 --> 07:13.240]  if you already use Microsoft, for example, and do some snapper compare, then it tells you this
+[07:13.240 --> 07:19.040]  RPM database and this RPM database change, but you don't know what. If the database is a listing
+[07:19.040 --> 07:26.720]  of files, it's naturally visible what changed. And still we have the RPM header, so users fully
+[07:26.720 --> 07:35.040]  verifiable because they're signed. So the question now is, what do we actually need an image for?
+[07:35.040 --> 07:41.800]  So you don't need to take those RPMs, put them into some file system, and then download the whole
+[07:41.800 --> 07:49.160]  file system or this image or table. You could actually define an image as a text file that lists
+[07:49.160 --> 07:57.520]  RPMs. And then you download those RPMs, which are bits of your image, and just put them into this
+[07:57.520 --> 08:05.640]  file system or partition that is user. Disadvantage of this method again would be that with nowadays
+[08:05.640 --> 08:11.280]  RPMs you would lose the ability to do easy deltas because the payload is actually a CPO that is
+[08:11.280 --> 08:17.000]  compressed with some compression. So if you don't want to use delta RPMs or other fancy things,
+[08:17.000 --> 08:23.040]  you need to find a solution for the payload of RPMs. So the payload doesn't actually have to be a
+[08:23.040 --> 08:29.560]  CPO that is compressed. It could be actually completely uncompressed. So you just concatenate
+[08:29.560 --> 08:35.120]  all the file contents at the end of the RPM header. And because RPM header contains also the file
+[08:35.120 --> 08:45.240]  sizes, you know which file is where. Now if we do another trick and align those file datas to
+[08:45.240 --> 08:51.960]  page size, you actually get reflinkable packages. That means you could download this uncompressed
+[08:51.960 --> 08:57.120]  RPM, for example by means of CAsync, which would compress it actually on the server side. Then
+[08:57.120 --> 09:03.280]  you have the RPM on disk. And then instead of copying the payload to some other location,
+[09:03.280 --> 09:10.720]  you just use reflinks as a file system feature that reuses the blocks. So you have this one big
+[09:10.720 --> 09:17.120]  chunk of data as the RPM. And to create your actual files, you just link the data into there.
+[09:17.120 --> 09:25.240]  That means user bin bash is not actually a copy, it's just sharing the same data that is in this
+[09:25.240 --> 09:30.160]  RPM that is stored there, which conveniently is at the same time your RPM database. So it's not
+[09:30.160 --> 09:37.120]  just the headers that are in this directory, it is the full package. So in the end, in this example,
+[09:37.120 --> 09:45.480]  I put userLibsusImagePackages. UserLibsusImagesPackages would be your image. That means users just
+[09:45.480 --> 09:51.560]  a view. And if you would map this into ButterFS, like in this example, that means you have several
+[09:51.560 --> 09:56.880]  versions of this image directory as a snapshot. And then you could create other ButterFS volumes
+[09:56.880 --> 10:05.600]  that just link into those RPM headers. Or you could even omit this user completely, a colleague
+[10:05.600 --> 10:11.000]  of mine Fabian, even wrote a fuse plugin that just creates a file system from looking at RPM,
+[10:11.000 --> 10:19.880]  RPM's in the directory. Quite crazy. So to summarize, we could build an image-like system by
+[10:19.880 --> 10:26.400]  leveraging ButterFS. So instead of using AP partitions, we just use snapshots. The behavior
+[10:26.400 --> 10:30.680]  would be exactly the same because you prepare this new snapshot, put all your data in there,
+[10:30.680 --> 10:35.920]  and then you have to reboot to activate it. But since it's still packages, you retain the
+[10:35.920 --> 10:41.240]  flexibility to actually change it on client side. You could ship the image as a list of RPM's on
+[10:41.240 --> 10:46.480]  text file, but you could also add RPM's locally in this directory, and you have them installed.
+[10:46.480 --> 10:52.640]  So best of both worlds. And this is not just completely crazy in my head. I actually built
+[10:52.640 --> 10:59.800]  a prototype that kind of works. So it uses busybox because it was easy to modify the RPM
+[10:59.800 --> 11:04.560]  implementation in there, to work with those raffle link in the packages. This is our sync for
+[11:04.560 --> 11:11.520]  updates, and it uses SystemD's kernel installed to make this system actually bootable. So you
+[11:11.520 --> 11:17.800]  can try it out. There's also pull request open for RPM, I think, to have this raffle linkable
+[11:17.800 --> 11:22.480]  stuff and send a patch to busybox, but I don't expect it to be accepted. It's just a proof of
+[11:22.480 --> 11:27.680]  concept. Of course, to make this work in practice, there's lots of to-do's. So in existing distros
+[11:27.680 --> 11:32.760]  like OpenSUSE, we have to fix all the packages to no longer use scriptlets. We need to talk about
+[11:32.760 --> 11:37.160]  the butterfly sub volumes. The naming should be standardized. There was actually a discussion
+[11:37.160 --> 11:43.040]  like two years ago already on the list. RPM raffle link payload would be nice to have upstream.
+[11:43.040 --> 11:48.880]  There are other stakeholders that also would like to have that. I'm already working on SystemD's
+[11:48.880 --> 11:56.960]  kernel installed to make it usable for this use case. In case of micro-as-like systems,
+[11:56.960 --> 12:02.960]  we want to have roll-baggles of slash and just the operating system. For installing deltas, I would
+[12:02.960 --> 12:08.520]  like to use the async, which we revisited. And last but not least, all of that should be native
+[12:08.520 --> 12:16.240]  in RPM or SIP, and in my opinion, not just some extra tool. And that's it already. So any questions
+[12:16.240 --> 12:29.000]  for this crazy stuff? Okay, me first. So how did you handle the timestamp AC? Because if you're
+[12:29.000 --> 12:34.800]  using BTRFS and doing an RPM minus I, you get the A time, M time, and C time in the i-node. And
+[12:34.800 --> 12:41.040]  an image-based system is supposed to hash end to end the same. And if it has different timestamps,
+[12:41.040 --> 12:46.040]  it doesn't hash end to end. Yeah, well, you can't modify the timestamps. You can't modify. You can
+[12:46.040 --> 12:52.120]  only look at the ones that are under your control. But then doesn't that mean that effectively we
+[12:52.120 --> 12:58.080]  can't use this to reconstruct image-based systems? Well, it's not a bit-to-bit identical. What is
+[12:58.080 --> 13:03.200]  on disk is not bit-to-bit identical, of course. Only the actual RPM payload. But you know that
+[13:03.200 --> 13:11.120]  the payload that is linked is actually the same. So I don't think, I mean, maybe there's a use case
+[13:11.120 --> 13:16.320]  why the timestamps need to be exact. But in my view, it's not important because the, like,
+[13:16.320 --> 13:22.960]  user bin bash is user bin bash, no matter what the timestamp is. Well, the use case is just for
+[13:22.960 --> 13:28.320]  image-based systems. The end-to-end hash tells you that you've done the right thing. And it's
+[13:28.320 --> 13:33.440]  simple to compute. With your system, you basically have to do a tree hash down all the packages
+[13:33.440 --> 13:38.400]  to prove that this is what you're supposed to have installed. It's, semantically, they are
+[13:38.400 --> 13:42.720]  equivalent. It's just the latter is more difficult to do than the former, which is why people like
+[13:42.720 --> 13:50.600]  image-based. I mean, you only need to hash the directory with all the RPMs in them, right? So
+[13:50.600 --> 13:56.160]  if the RPMs, you have to check some of all the RPMs, and then you can verify the RPMs. Yeah,
+[13:56.160 --> 13:59.840]  I'm not disputing. Exactly. You're just saying it's more complicated. Yeah, it's, of course,
+[13:59.840 --> 14:04.000]  there's always a trade-off. Of course, yeah, yeah. And depends on how you construct this user view.
+[14:04.000 --> 14:07.840]  I mean, if it's really a butterfly, it's a real file system tree, then you have to walk it. But if
+[14:07.840 --> 14:12.640]  it's only a view, like with a view stingy, then it doesn't actually exist on disk. It's just,
+[14:13.280 --> 14:17.600]  you know, looking at the RPMs. So it cannot be modified. You need to walk, don't need to walk
+[14:17.600 --> 14:28.240]  the tree. You just hash the RPMs. Okay. Yeah. So how would you integrate that into what we have
+[14:28.240 --> 14:35.120]  heard in the previous talks? So during boot, I specify something similar to my dm-varity root
+[14:35.120 --> 14:40.800]  hash, so that I know that I'm actually booting from an unmodified root of s. That's a good question.
+[14:40.800 --> 14:48.080]  That problem is not solved yet. Yeah. So far, the challenges are already at the point, how do you
+[14:48.080 --> 14:55.440]  actually specify which version of the user tree do you want to boot. But now all the models assume
+[14:55.440 --> 14:59.600]  that if you ship a new image, like a new user version, it also comes with a new kernel and a
+[14:59.600 --> 15:07.120]  new init.d. So this init.d knows what disk to boot. But in the Butterfest use case, there is
+[15:07.120 --> 15:13.840]  a kernel that can have a number of init.d.s and those init.d.s match with a number of snapshots
+[15:13.840 --> 15:19.760]  that they can actually boot. So then I'm already struggling with this part. So the verification
+[15:19.760 --> 15:34.480]  comes later. So dm-varity gives you authenticity of the blocks at runtime. So the device cannot
+[15:34.480 --> 15:41.280]  switch them underneath. And I guess that if you verify the kernel headers, the RPM headers,
+[15:43.600 --> 15:48.800]  I don't know, when loading the image, this wouldn't give you the same runtime properties.
+[15:50.320 --> 15:55.680]  I haven't played with those technologies yet, to be honest. So another interesting thing would be
+[15:55.680 --> 16:03.760]  this FA policy daemon. Only with a bit about it, it uses the audit subsystem to actually block access
+[16:03.760 --> 16:09.360]  to modified files by comparing them with the information in the RPM header. So
+[16:10.000 --> 16:16.160]  it would be another area to just explore how to integrate some verification technologies into
+[16:16.160 --> 16:35.680]  this model. Any more questions? If not, then I guess we'll wrap up this talk. Thank you very much.

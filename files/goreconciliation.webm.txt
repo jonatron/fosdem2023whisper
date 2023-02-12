@@ -1,0 +1,280 @@
+[00:00.000 --> 00:27.600]  We still have one minute before the game starts, ready to go?
+[00:27.600 --> 00:30.480]  Thank you.
+[00:30.480 --> 00:35.800]  Our next talk is by Sachin, and he's going to talk about a thing that I use every day
+[00:35.800 --> 00:39.800]  in Go, but it's kind of weird because it's only existing in this language, as far as
+[00:39.800 --> 00:40.800]  I know.
+[00:40.800 --> 00:44.080]  But it's how Kubernetes is built, which is the reconciliation pattern.
+[00:44.080 --> 00:45.080]  Go ahead.
+[00:45.080 --> 00:46.080]  Thank you.
+[00:46.080 --> 00:47.080]  Thank you.
+[00:47.080 --> 00:48.080]  Thank you all.
+[00:48.080 --> 00:49.080]  Thanks for coming.
+[00:49.080 --> 00:50.080]  Welcome to Forstium.
+[00:50.080 --> 00:58.880]  Today, I'm going to talk about control theories, reconciliation pattern, and how do we use that
+[00:58.880 --> 00:59.880]  in Cluster API?
+[00:59.880 --> 01:02.000]  So a little bit about me.
+[01:02.000 --> 01:04.640]  I work at Canonical, particularly the MicroKStream.
+[01:04.640 --> 01:06.640]  Previously, I used to work at VMware.
+[01:06.640 --> 01:12.680]  Then I got to know about Cluster API, BIOH, and I try to contribute to Cluster API upstream
+[01:12.680 --> 01:13.680]  too.
+[01:13.680 --> 01:17.880]  And I'm very much interested in distributed system and cloud-native technologies, so ping
+[01:17.880 --> 01:19.880]  me with your favorite tech.
+[01:19.880 --> 01:23.120]  So the agenda is like this.
+[01:23.120 --> 01:27.400]  So we start with the first basic principles, like what is control theory and PID control
+[01:27.400 --> 01:28.400]  system.
+[01:28.400 --> 01:29.400]  Then we go up this tech.
+[01:29.400 --> 01:35.520]  So L0, L2, just simulate tech, we're going up this tech, one more layer of abstraction.
+[01:35.520 --> 01:39.680]  Then we'll see about reconciliation pattern and how they are using Kubernetes.
+[01:39.680 --> 01:46.600]  We then see how we extend those reconciliation patterns, and finally, we'll take a look into
+[01:46.600 --> 01:52.280]  those patterns in Cluster API and a short demo to come to play with it.
+[01:52.280 --> 01:56.000]  So a quick one-on-one of control theory.
+[01:56.000 --> 01:57.160]  I'm talking to you.
+[01:57.160 --> 02:02.880]  You folks are taking a feedback, and that's like 90% of control theory right there.
+[02:02.880 --> 02:09.000]  So control theory is like a branch of mathematics, engineering.
+[02:09.000 --> 02:15.800]  So there's a lot of folks who are in trying to find a common theme for dynamic systems,
+[02:15.800 --> 02:20.520]  and they were all like, wait, we are all talking about the same things, let's just unify it.
+[02:20.520 --> 02:23.040]  So that's how control theory was.
+[02:23.040 --> 02:29.440]  It's just a study of how dynamic systems work, particularly the main fundamental crux of
+[02:29.440 --> 02:35.160]  it to bring a desired state, a final state into a desired state.
+[02:35.160 --> 02:39.280]  So this is kind of what control theories are about.
+[02:39.280 --> 02:42.560]  Let's take a very simple example to know more about it.
+[02:42.560 --> 02:45.000]  And open-loop controllers, what is it?
+[02:45.000 --> 02:49.520]  A simple example will be you have some wet clothes you want to dry them.
+[02:49.520 --> 02:53.000]  You put them in a dryer, you set the timer on.
+[02:53.000 --> 02:58.520]  Now the clothes are in no way dependent on if they will be dried or not.
+[02:58.520 --> 03:01.200]  The only function that is variable is the timer.
+[03:01.200 --> 03:06.800]  It times the duration that it needs to shut down the dryer to.
+[03:06.800 --> 03:09.520]  It doesn't matter if the clothes are dry or wet.
+[03:09.520 --> 03:13.880]  So it's not a good approach to take this.
+[03:13.880 --> 03:19.440]  Before I introduce closed-loop controllers, there are a few terms that we need to see.
+[03:19.440 --> 03:22.920]  A system is the entity that we want to control.
+[03:22.920 --> 03:27.000]  Set point is our desired state, process variable will be observed state.
+[03:27.000 --> 03:32.600]  Error is the difference of how overshot or undershot we are from the set point and the
+[03:32.600 --> 03:34.720]  process variable.
+[03:34.720 --> 03:42.080]  Controller is a simple finite state machine which drives essentially your process variable
+[03:42.080 --> 03:44.640]  to the set point.
+[03:44.640 --> 03:48.680]  A very favorite example of mine is thermostat.
+[03:48.680 --> 03:55.080]  So we are in the room, we have an air conditioner and we have set the thermostat to maintain
+[03:55.080 --> 04:01.040]  the temperature at T1, let's say, and currently the temperature is T0.
+[04:01.040 --> 04:04.920]  So the thermostat says, no, no, no, the temperature I want is T1.
+[04:04.920 --> 04:12.280]  So it produces some processes to the machine, to the AC and it does like an adiabatic process
+[04:12.280 --> 04:15.840]  or something to achieve that state.
+[04:15.840 --> 04:20.360]  So in that case, our thermostat will be the controller, T0 will be our process variable,
+[04:20.360 --> 04:25.480]  T1 is the set point and the error is the difference between the temperature that we want and the
+[04:25.480 --> 04:30.080]  room is our system in that case.
+[04:30.080 --> 04:36.000]  But it's not always this ideal, this change takes time.
+[04:36.000 --> 04:41.960]  It's not like instantly you do, instantly the thermostat says, okay, make the temperature
+[04:41.960 --> 04:44.040]  T1 and the AC does that.
+[04:44.040 --> 04:47.160]  It takes a gradual amount of time to do that.
+[04:47.160 --> 04:51.200]  And so we need a non-ideal situation.
+[04:51.200 --> 04:53.880]  What would be an ideal controller look like?
+[04:53.880 --> 04:58.280]  So it needs to do these three things essentially.
+[04:58.280 --> 05:04.720]  It needs to see, okay, how far am I undershooting or undershooting from the set variable.
+[05:04.720 --> 05:11.440]  It needs to do the compensation for large changes and try to adjust based on it.
+[05:11.440 --> 05:18.360]  And also it needs to make prediction of how to minimize this error based on previous experiences
+[05:18.360 --> 05:19.360]  it has.
+[05:19.360 --> 05:24.640]  A very good example of this will be cruise control in your car system.
+[05:24.640 --> 05:30.960]  When you're going you turn on the cruise control and it identifies, okay, now I'm going straight
+[05:30.960 --> 05:37.080]  but I need to, and there's a turn coming up, I need to apply this amount of turn essentially
+[05:37.080 --> 05:43.000]  to make that, to avoid an accident or something.
+[05:43.000 --> 05:52.600]  So PID controller is essentially what these three accumulate to, the P is the positional.
+[05:52.600 --> 05:57.720]  It's essentially the amount of, for example, in the case of cruise control, it's essentially
+[05:57.720 --> 06:03.680]  the amount of turn that the car needs to take to make that curve.
+[06:03.680 --> 06:08.240]  It is the linear component, the P is the proportional or the linear component.
+[06:08.240 --> 06:14.560]  In the graph we see that it is defined by, if the set point is like a straight line and
+[06:14.560 --> 06:22.360]  PV just fluctuates all around, it's the magnitude of the point from the set point to the process
+[06:22.360 --> 06:25.200]  variable.
+[06:25.200 --> 06:28.920]  The I is the integral component, it is the compensator.
+[06:28.920 --> 06:35.000]  So it adjusts based on what the current state is and how I need to set to the desired state
+[06:35.000 --> 06:38.000]  but also it needs to compensate fastly.
+[06:38.000 --> 06:43.320]  So you're going on a straight road, you need to quickly make the curve.
+[06:43.320 --> 06:47.640]  So you cannot, the car cannot go like, okay, I'll make the turn right away when the turn
+[06:47.640 --> 06:50.080]  comes up, it needs to gradually make that change.
+[06:50.080 --> 06:55.920]  And so for that it uses, the integral component just signifies that gradual curve that it
+[06:55.920 --> 06:56.920]  needs to take.
+[06:56.920 --> 07:04.360]  And it is defined by the area under the curve in the magnitude versus time graph.
+[07:04.360 --> 07:08.520]  D is actually really interesting.
+[07:08.520 --> 07:17.240]  It's the predictor, it's how previous experiences that it has, it applies the previous experience
+[07:17.240 --> 07:22.800]  that it has and tries to control the state it is trying to achieve.
+[07:22.800 --> 07:29.680]  In our cruise control example, it will be as simple as, it sees the curve, it slowly
+[07:29.680 --> 07:35.920]  gradually starts to make that adjustment based on like previous experiences that it has,
+[07:35.920 --> 07:42.200]  that I should not just overshoot when the curve comes but start gradually differentiating
+[07:42.200 --> 07:43.200]  that.
+[07:43.200 --> 07:50.000]  The other controllers that we have fall under PID, the D is not much used but it's a really
+[07:50.000 --> 07:54.120]  interesting one if you look at it.
+[07:54.120 --> 07:59.720]  This funny looking diagram is just a block diagram of how the PID controller tries to
+[07:59.720 --> 08:09.960]  manage the process and like it has a sensor in it, which just takes the state of it.
+[08:09.960 --> 08:15.680]  This example R is the set point, the signal that we are sending into the controller.
+[08:15.680 --> 08:22.920]  The Y becomes the Y function, that becomes the process variable, E is obviously the error
+[08:22.920 --> 08:29.840]  and U becomes the signal that is sent to the process here.
+[08:29.840 --> 08:36.160]  This fancy looking thing is just a state of the process that we are in.
+[08:36.160 --> 08:40.680]  So U takes the signal that we are sending into it, which was as in our previous slide,
+[08:40.680 --> 08:47.320]  the set point, sorry, U was the, yeah, the controller, the signal that was sent to the
+[08:47.320 --> 08:48.320]  process.
+[08:48.320 --> 08:53.240]  YT is the measured output, as you can see from there.
+[08:53.240 --> 08:56.400]  The error is the difference between RT and YT.
+[08:56.400 --> 09:00.840]  So RT was our set variable from this previous example.
+[09:00.840 --> 09:06.560]  And so this, this simple differential equation is just tries to find the particular state
+[09:06.560 --> 09:12.040]  of the controller that is written and how is it trying to achieve that state.
+[09:12.040 --> 09:18.520]  The coefficients K0, K1, and K2 totally depend on the system that we are in.
+[09:18.520 --> 09:21.200]  So reconciliation patterns in Kubernetes.
+[09:21.200 --> 09:27.120]  How do Kubernetes incorporate these patterns that we see and use it to make controllers
+[09:27.120 --> 09:29.240]  and you can silence it?
+[09:29.240 --> 09:33.680]  So on a very high level, this is what a simple reconciliation look like.
+[09:33.680 --> 09:39.400]  It's a forever loop, which has a desired and a current state, which are set points and
+[09:39.400 --> 09:42.880]  process variables, and actuator that makes this change.
+[09:42.880 --> 09:49.320]  Let's try to take the current state into a desired state.
+[09:49.320 --> 09:55.120]  And this is like available on, this is like from the controller, and you can check it out
+[09:55.120 --> 09:59.080]  it has a very good specification of how to make a controller.
+[09:59.080 --> 10:04.040]  Let's take a very simple example to see how it actually works in a one node cluster.
+[10:04.040 --> 10:08.960]  So we have a one node cluster, we have deployment that is deployed, which has a replica set
+[10:08.960 --> 10:13.080]  which provisions two pods on a single node cluster.
+[10:13.080 --> 10:19.240]  The node talks to the API server, the API server talks to HCD, and it has a bunch of
+[10:19.240 --> 10:21.640]  controllers that it needs to run that state.
+[10:21.640 --> 10:23.800]  So everything is fun.
+[10:23.800 --> 10:29.560]  Now, pod decides to bail out, it's gone, just like that.
+[10:29.560 --> 10:37.480]  And so there is now, the state is not maintained, the desired state is lost.
+[10:37.480 --> 10:42.840]  So what the Kubelet does, it talks to, it mostly talks to the API server, API server
+[10:42.840 --> 10:48.960]  that says, talks to the HCD, it says, okay, I need two pods, but there is no pod here.
+[10:48.960 --> 10:55.160]  So there is the, API server talks to the controllers, it's the scheduler, the deployments and the
+[10:55.160 --> 11:00.760]  scheduler and replica set controllers, she gives a new pod to that node, it is mentioned
+[11:00.760 --> 11:06.600]  in the HCD server, and finally a pod to its provision on node zero.
+[11:06.600 --> 11:13.240]  So this is a very simple example of how controllers works in Kubernetes.
+[11:13.240 --> 11:15.800]  Now how do we extend the reconciliation pattern?
+[11:15.800 --> 11:19.680]  How do we use it to make CRDs and stuff?
+[11:19.680 --> 11:25.800]  So first of all, how many of you folks have used Kubernetes cluster API, CRDs, all these
+[11:25.800 --> 11:27.600]  fancy words?
+[11:27.600 --> 11:30.560]  Quite a lot.
+[11:30.560 --> 11:40.600]  So most of these frameworks, CubeBuilder, Operator SDK, these have this basic structure
+[11:40.600 --> 11:42.680]  to make a controller.
+[11:42.680 --> 11:50.960]  You create a spec which is set point in this case, we have a status which will, which will
+[11:50.960 --> 11:55.400]  the process variable in this case, which is the desired state that we, which is the observed
+[11:55.400 --> 12:01.080]  state that we want at any point of time, and it will, and we have a schema that is just
+[12:01.080 --> 12:07.280]  defines this object foo in this case, and it has all these spec and status, this I mean,
+[12:07.280 --> 12:15.520]  the meta objects, like the name, type, and all that stuff, information in that side that.
+[12:15.520 --> 12:22.280]  We create, and we need to fulfill the reconciled interface, so we create a foo reconciler object,
+[12:22.280 --> 12:29.960]  and we, we essentially provide it with, with all these business logic that we need to reach
+[12:29.960 --> 12:33.840]  that desired state from the current state at any given point of time.
+[12:33.840 --> 12:42.560]  The way we do that is we define a CRD, our CRD has a spec which is the desired state,
+[12:42.560 --> 12:48.840]  and the controller continuously looks at the CRD to check, okay, this is a desired spec,
+[12:48.840 --> 12:52.960]  but we don't have a desired spec right now, so it needs to change, and it's called the,
+[12:52.960 --> 13:00.520]  it calls the reconciler, and it does, it executes the business logic that we want it to do.
+[13:00.520 --> 13:07.760]  And so that is how we use the, the reconcilation pattern that we've seen earlier in, and extend
+[13:07.760 --> 13:12.200]  this for other custom-made objects that we have.
+[13:12.200 --> 13:17.600]  Now how do we use these patterns that we saw, and incorporate them in Cluster API?
+[13:17.600 --> 13:25.480]  So first of all, Cluster API is a Kubernetes project which tries to declaratively use Cluster
+[13:25.480 --> 13:30.960]  APIs to create and figure, manage the life cycle of other clusters that you have.
+[13:30.960 --> 13:37.240]  So in a very crude example, the user applies a spec to the cluster, there's a management
+[13:37.240 --> 13:43.560]  cluster which is kind of a cluster of clusters, it manages all these other clusters that we
+[13:43.560 --> 13:44.560]  have.
+[13:44.560 --> 13:52.000]  So a spec defines all those, what those other clusters need to be do, and the management
+[13:52.000 --> 13:56.240]  cluster basically has these four kind of things, it has Cluster API CRDs, infrastructure
+[13:56.240 --> 14:00.640]  provider CRDs, control plane, and bootstrap provider CRDs.
+[14:00.640 --> 14:05.600]  So all these need to be present in the management cluster, and based on these, these specs that
+[14:05.600 --> 14:13.760]  it has in CRDs, it will try to maintain the state of all these other, all these other
+[14:13.760 --> 14:19.040]  clusters that we have, sorry.
+[14:19.040 --> 14:25.480]  So what do these different CRDs do, these different objects, what is the purpose?
+[14:25.480 --> 14:32.680]  The Cluster API is basically all these copy objects, like machine set clusters, all this
+[14:32.680 --> 14:37.280]  stuff that we, the upstream Cluster API provides us.
+[14:37.280 --> 14:43.520]  The bootstrap provider does the job of turning your VM or any default server into a Kubernetes
+[14:43.520 --> 14:44.520]  node.
+[14:44.520 --> 14:49.360]  You can utilize logic to that, and convert it to the particular Kubernetes node that
+[14:49.360 --> 14:54.040]  we want, for EC2, for OpenStack, whatever your cloud provider is.
+[14:54.040 --> 15:02.280]  The control plane provider, it provides you with the objects that the control plane of
+[15:02.280 --> 15:07.880]  the, like the simple control plane in Cluster API, in Kubernetes, it provides you with all
+[15:07.880 --> 15:12.720]  those reconciliation loops and controllers that the control plane needs to mark those
+[15:12.720 --> 15:14.280]  states.
+[15:14.280 --> 15:20.440]  And the infrastructure provider is basically how particular infrastructure, like EC2, OpenStack,
+[15:20.440 --> 15:24.640]  whatever infrastructure you have, and how they will be incorporated into bootstrap or
+[15:24.640 --> 15:28.440]  control plane providers.
+[15:28.440 --> 15:35.840]  So this is kind of like how these different CRDs go into, CRDs interact with each other,
+[15:35.840 --> 15:42.200]  so Cluster, Cluster is from Cluster API, but we need to provide an infrastructure cluster
+[15:42.200 --> 15:45.160]  which comes from infrastructure provider to that, and then it will manage.
+[15:45.160 --> 15:50.400]  So all of these are very much dependent on which cloud you're using.
+[15:50.400 --> 15:54.120]  We'll see an example of this in a few minutes.
+[15:54.120 --> 15:58.800]  So a control plane directly comes from control plane provider, machine deployment, machine
+[15:58.800 --> 16:04.360]  set, it's all Cluster API stuff, but we need to provide it bootstrap and infrastructure,
+[16:04.360 --> 16:10.280]  and similarly bootstrap config and infrastructure machine for it to work, machine health check
+[16:10.280 --> 16:15.480]  comes directly from Cluster API, its job essentially is to keep checking the state of the machines
+[16:15.480 --> 16:19.360]  and if it's working fine or not.
+[16:19.360 --> 16:24.800]  A bit about microcades, because we're going to use microcades, control plane and bootstrap
+[16:24.800 --> 16:26.200]  provider.
+[16:26.200 --> 16:32.840]  So what happens, so microcades is lightweight communities we have, we have been working on,
+[16:32.840 --> 16:37.640]  it is one touch communities highly available, it has all the same configs, you don't need
+[16:37.640 --> 16:46.080]  to do much, and it has a very good add-on ecosystem that you can call your own tools,
+[16:46.080 --> 16:52.360]  you don't need to rely on us to do all this stuff, you can bring your own custom tools
+[16:52.360 --> 16:57.600]  that you need for your clusters.
+[16:57.600 --> 17:05.080]  So for the demo, it's a small demo, we need three essential things, so the Cluster API
+[17:05.080 --> 17:15.160]  comes from the upstream step, but we need to provide these other three things, and then
+[17:15.160 --> 17:22.000]  for this, for bootstrap provider, we'll use our microcades bootstrap provider for control
+[17:22.000 --> 17:29.760]  plane, same thing, and from infrastructure we will use open stack providers that we have.
+[17:29.760 --> 17:51.160]  So for the demo, let's go, let's see if it works, so like I said, these clusters, these
+[17:51.160 --> 17:58.040]  are from upstream cluster API, we just take these CRDs, but then we need to apply what
+[17:58.040 --> 18:01.680]  control plane reference will be using, what infrastructure will be using, and it's all
+[18:01.680 --> 18:04.560]  like custom based on what you want to do.
+[18:04.560 --> 18:11.720]  Similarly to that, we have open stack cluster, open stack cluster that is specific for open
+[18:11.720 --> 18:20.680]  stack cluster, we have different projects for that, AWS, Azure, EC2.
+[18:20.680 --> 18:24.840]  Then we see microcades control plane, it's specific to microcades, it defines all these
+[18:24.840 --> 18:34.320]  specs that a particular instance of microcades will have, and this is a thing to see a bit.
+[18:34.320 --> 18:39.920]  So we define a particular version that this particular control plane will have, open stack
+[18:39.920 --> 18:46.760]  machine template that we saw before, that is needed for that, and machine deployments,
+[18:46.760 --> 18:53.280]  and machine deployments will also have a version that is essential for our demo.
+[18:53.280 --> 18:59.800]  So and then there are all these stuff that comes from template, whatever template you
+[18:59.800 --> 19:10.520]  apply, it comes from that, so it's quite default, so without trying to actually go into entirety,
+[19:10.520 --> 19:15.600]  I have screenshots of it because the entire demo took like an R2 issue.
+[19:15.600 --> 19:23.080]  So if I apply this cluster, I'll get this too, so I don't know if you can see, but
+[19:23.080 --> 19:32.040]  I'll have six machines in an open stack cluster, which will have a version of 1.24 each.
+[19:32.040 --> 19:36.360]  As the time progresses, it provides a provider ID, and at a certain point in time, they're
+[19:36.360 --> 19:44.480]  all in ready state and good to go with all of them with 124 communities version.
+[19:44.480 --> 19:50.960]  I think to note that is both of them are controlled by different providers, so the machine deployments
+[19:50.960 --> 19:56.200]  are controlled by the bootstrap provider, and the control plane takes care of all these
+[19:56.200 --> 20:00.720]  control plane nodes.
+[20:00.720 --> 20:09.000]  So we'll see how, what happens when we try to update this cluster, what reconciliation
+[20:09.000 --> 20:11.240]  is happening when we try to do that.
+[20:11.240 --> 20:26.600]  So if I go there, I'll change it to six, and then again to six, as soon as I apply this
+[20:26.600 --> 20:33.400]  manifest back, I have changed the desired state for me to have version 126 on both of
+[20:33.400 --> 20:36.160]  the control plane and the machine nodes.
+[20:36.160 --> 20:42.480]  So as and when I apply that, both the controllers, the bootstrap and the control plane controllers,
+[20:42.480 --> 20:49.440]  we'll see 124 is now not what we want, we want 126, so it will start provisioning these
+[20:49.440 --> 20:53.400]  machines at 126 version.
+[20:53.400 --> 20:57.960]  It goes through the entire place of, so these are the rollout updates, so what happens is
+[20:57.960 --> 21:04.920]  a new node is provisioned, a old node is depleted, and this happens until all the nodes are in
+[21:04.920 --> 21:05.920]  the desired state.
+[21:05.920 --> 21:10.160]  So it's also in place updates, which is a very cool idea, so rather than depleting
+[21:10.160 --> 21:16.760]  the nodes, it just does the upgrade in place without having to drain nodes each time it
+[21:16.760 --> 21:22.360]  comes and go, and it is a very good use case for when you have a stateful application like
+[21:22.360 --> 21:24.880]  a database or something.
+[21:24.880 --> 21:31.200]  So it does that, it does the deletion, it does all that stuff, until the entire cluster
+[21:31.200 --> 21:35.760]  will be 126, which was the desired state.
+[21:35.760 --> 21:43.200]  So all of this we see, we go from basic first principles is like what was control theory,
+[21:43.200 --> 21:49.360]  how it gives us controller, then we apply, then we see how we applied it to our communities
+[21:49.360 --> 21:59.000]  ecosystem, and then how we extended that, extended those patterns for our cluster API,
+[21:59.000 --> 22:04.960]  and finally how can we, how we can have a feature from that first principles.
+[22:04.960 --> 22:09.520]  These are some of the talks that I took inspiration from, I definitely recommend control theory
+[22:09.520 --> 22:15.560]  in Fitment Rewind by Valerie, it has lots and lots to say about this.
+[22:15.560 --> 22:20.880]  Control theory and all these stuff, control theory is dope, it's a very good article that
+[22:20.880 --> 22:22.400]  you should definitely check it out.
+[22:22.400 --> 22:28.680]  It also talks about reactive patterns, which is cool stuff, lots more use in AI and stuff,
+[22:28.680 --> 22:34.880]  so it is cool, and these are all references that I use from other sources as well.
+[22:34.880 --> 22:41.880]  So yeah, thank you, thank you for coming, I hope you didn't come in for me.
+[22:41.880 --> 22:42.880]  Thank you.
+[22:42.880 --> 22:48.800]  I'll take questions if you have, yeah.
+[22:48.800 --> 22:53.560]  Are there any questions about Kubernetes, I'm just going to try to get the microphone
+[22:53.560 --> 22:57.960]  to you, not any questions about Kubernetes, about the talk, thank you.
+[22:57.960 --> 23:04.040]  Can you pass the microphone along, thank you.
+[23:04.040 --> 23:06.480]  Hey Guruji, thank you for your talk.
+[23:06.480 --> 23:12.480]  In the theory you have the state, the desired state and the current state of the system,
+[23:12.480 --> 23:15.440]  and then when you're talking about the thermostat, this is the desired temperature and this is
+[23:15.440 --> 23:22.000]  the current temperature, how do you accommodate for when, can the system predict when this
+[23:22.000 --> 23:27.480]  is not going to happen, oh I've been pumping the heater for 48 hours and I see that the
+[23:27.480 --> 23:32.720]  temperature is not raising, not a single degree, like how do you cater for that?
+[23:32.720 --> 23:40.120]  So first of all it means that the system has a fault if it does not reach the desired state,
+[23:40.120 --> 23:48.680]  but it will take it as an experience, so if I go to here, the predictor component is what
+[23:48.680 --> 23:54.680]  predicts it, it will see okay, the derivative is the predictor component, it will see okay,
+[23:54.680 --> 24:00.040]  at some point of time previously this did not work, this change was not working, so
+[24:00.040 --> 24:04.360]  it will take that into account and the next time it does that it will take it as an experience,
+[24:04.360 --> 24:09.000]  so if it was not working and how did we try to make it work, it will try to take that
+[24:09.000 --> 24:15.440]  experience and incorporate it into the next time it tries to do that.
+[24:15.440 --> 24:18.440]  Thank you, any other questions?
+[24:18.440 --> 24:33.480]  I'll take it as a note, thank you very much again, we have a small 5 minute break so you
+[24:33.480 --> 24:50.520]  can stand up, stretch a bit.

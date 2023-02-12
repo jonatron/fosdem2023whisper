@@ -1,0 +1,282 @@
+[00:00.000 --> 00:07.840]  Okay, we're ready for our next talk.
+[00:07.840 --> 00:10.880]  Daniel is going to talk about MetaNet devices.
+[00:10.880 --> 00:11.880]  Thanks.
+[00:11.880 --> 00:12.880]  All right.
+[00:12.880 --> 00:13.880]  Thanks a lot.
+[00:13.880 --> 00:14.880]  So, yeah.
+[00:14.880 --> 00:15.880]  So, this talk is about MetaNet devices.
+[00:15.880 --> 00:19.960]  This work has been done by my colleague and myself.
+[00:19.960 --> 00:24.680]  We are at ISO Wayland software engineers working on the kernel and also Cilium.
+[00:24.680 --> 00:29.200]  So, really, the goal is what we were, the question we were asking ourselves, like what
+[00:29.200 --> 00:35.120]  about, how can we leverage the BPF infrastructure in the kernel and also the networking features
+[00:35.120 --> 00:40.360]  to really achieve maximum performance for Kubernetes parts.
+[00:40.360 --> 00:46.720]  And before I go into the kernel bits, just a really quick recap around Kubernetes and
+[00:46.720 --> 00:48.280]  parts and what it is.
+[00:48.280 --> 00:51.440]  So, basically, what you can see here is a host.
+[00:51.440 --> 00:54.360]  The host can have one or many parts.
+[00:54.360 --> 01:00.240]  In Kubernetes, it's an orchestration system, essentially, and a part is usually defined
+[01:00.240 --> 01:07.200]  as a network namespace, and it is connected to, typically, to Weave devices to get traffic
+[01:07.200 --> 01:09.320]  in and out of them.
+[01:09.320 --> 01:14.480]  A part can have one or many containers that are sharing this network namespace.
+[01:14.480 --> 01:22.760]  So, yeah, and CNI is basically a networking plug-in which will set up various things.
+[01:22.760 --> 01:28.520]  When a part comes up, for example, it will set up net devices, assign IP addresses.
+[01:28.520 --> 01:33.640]  It has an IPAM infrastructure to manage pool of addresses.
+[01:33.640 --> 01:36.480]  It will install routes.
+[01:36.480 --> 01:42.760]  In the case of Cilium, which is a CNI, it will also set up the BPF data path to basically
+[01:42.760 --> 01:45.280]  route traffic in and out.
+[01:45.280 --> 01:50.720]  It has various features on top as well, such as policy enforcement, load balancing, bandwidth
+[01:50.720 --> 01:53.040]  management, and so on and so forth.
+[01:53.040 --> 02:00.080]  But I don't want to make this talk about all the different features about Cilium, but rather
+[02:00.080 --> 02:02.080]  about performance.
+[02:02.080 --> 02:07.640]  There was an interesting keynote last year at the SAEcon from Brandon Craig, where he
+[02:07.640 --> 02:13.160]  talked about computing performance and what's on the horizon, and he had a couple of predictions
+[02:13.160 --> 02:21.360]  and one was quite interesting when he was talking about OS performance, and the statement
+[02:21.360 --> 02:27.040]  that he made is that, well, given the kernel, it's becoming increasingly complex.
+[02:27.040 --> 02:30.680]  The performance defaults are getting worse and worse.
+[02:30.680 --> 02:37.960]  Yeah, so he stated that it basically takes the whole US team to make the operating system
+[02:37.960 --> 02:39.920]  perform well.
+[02:39.920 --> 02:48.120]  And the problem is, given all these performance teams, they are trying to optimize at the
+[02:48.120 --> 02:54.600]  larger scale, nobody's actually looking at the defaults anymore and how they can be optimized.
+[02:54.600 --> 02:57.200]  So this was quite interesting.
+[02:57.200 --> 03:04.440]  So yeah, in case of defaults, we were wondering, given two Kubernetes nodes with part to part
+[03:04.440 --> 03:09.960]  and they're connected with 100 gigabit NIC, we wanted to look at the single flow, like
+[03:09.960 --> 03:18.680]  a single TCP stream, and we asked, like, what's the default baseline you can get to?
+[03:18.680 --> 03:19.680]  Where are bottlenecks?
+[03:19.680 --> 03:22.600]  How can they become, how can they be overcome?
+[03:22.600 --> 03:27.400]  And actually, can we provide better defaults out of that, what we figure out?
+[03:27.400 --> 03:30.280]  Why bothering with single stream performance?
+[03:30.280 --> 03:36.360]  Well, first of all, it's interesting for the kernel to be able to cope with growing
+[03:36.360 --> 03:39.800]  NIC speeds, so 100, 200 gigabit or more.
+[03:39.800 --> 03:43.040]  How can this be maxed out with the single stream?
+[03:43.040 --> 03:49.400]  There are lots of data intensive workloads from user and customer sites around machine
+[03:49.400 --> 03:51.280]  learning, AI, and so on.
+[03:51.280 --> 03:57.160]  But generally, it's also interesting to be able to free up the resources and give them
+[03:57.160 --> 04:02.200]  to the application instead of the kernel having to block them.
+[04:02.200 --> 04:06.920]  So the assumptions for our test is basically, like, usually the Kubernetes worker nodes
+[04:06.920 --> 04:11.160]  that users run, they are quite generic, they can run any kind of workloads.
+[04:11.160 --> 04:15.120]  What we are also seeing is a large number of users typically just stick to defaults,
+[04:15.120 --> 04:19.360]  they don't tune specifically the kernel.
+[04:19.360 --> 04:27.160]  There's an interesting cloud-native usage report where they tried to get some insights
+[04:27.160 --> 04:33.360]  into how Kubernetes deployments usually look like.
+[04:33.360 --> 04:39.000]  There's definitely an increasing trend to have a higher density of containers per host.
+[04:39.000 --> 04:46.160]  So like around 50 or more is expected these days and the number of pods per node is also
+[04:46.160 --> 04:48.560]  increasing.
+[04:48.560 --> 04:55.640]  So yeah, the question now is, okay, so like a basic, very basic compatibility setting,
+[04:55.640 --> 05:02.680]  for example, for the case of Silium, we use the, like if you deploy it in a basic mode,
+[05:02.680 --> 05:06.680]  we just use the upper stack for routing and forwarding.
+[05:06.680 --> 05:10.680]  There are various reasons why people might want to use that.
+[05:10.680 --> 05:15.440]  For example, in case of Kubernetes, there's a component called Qproxy which uses net
+[05:15.440 --> 05:22.720]  filter IP tables for service management, for service load balancing.
+[05:22.720 --> 05:27.720]  Some people stick to that or they have custom net filter rules, so maybe they require to
+[05:27.720 --> 05:33.720]  use the upper stack for that or just simply they for now just went with defaults and might
+[05:33.720 --> 05:37.520]  look into more tuning at the later point in time.
+[05:37.520 --> 05:41.760]  So when we try to look at the performance for that, what you can see here is on the
+[05:41.760 --> 05:49.360]  yellow bar is the host-to-host performance for a single stream, so we got to 44 gigabit
+[05:49.360 --> 05:59.080]  per second, but then if you do the pod-to-pod connectivity, it's really reduced dramatically.
+[05:59.080 --> 06:07.080]  And so yeah, like one of the reasons is, and I will get into this in a bit, is because
+[06:07.080 --> 06:16.800]  the upper stack is giving false feedback to the TCP stack.
+[06:16.800 --> 06:24.040]  One thing that we did like a year ago or so is to introduce a feature where we can, which
+[06:24.040 --> 06:32.000]  is called BPF host routing, where we don't use the upper stack and for BPF itself, given
+[06:32.000 --> 06:37.180]  we attach to physical devices, but also to Veef devices, we added a couple of new helper
+[06:37.180 --> 06:38.560]  functions there.
+[06:38.560 --> 06:41.440]  One is called BPF redirect peer.
+[06:41.440 --> 06:47.360]  What this basically is doing is adding a fast switch into the network namespace for the
+[06:47.360 --> 06:48.360]  ingress traffic.
+[06:48.360 --> 06:55.440]  So basically we're just like, instead of going the usual X-MID route to the Veef devices,
+[06:55.440 --> 07:04.280]  we can retrieve the Veef device inside the pod and just scrub the packet to remove the
+[07:04.280 --> 07:08.480]  necessary data that we typically remove in switching network namespaces, but then also
+[07:08.480 --> 07:12.880]  to just set the device to the device inside the pod.
+[07:12.880 --> 07:18.520]  And then circle that around in the main receive loop without going to a per-CPU backlog queue
+[07:18.520 --> 07:24.640]  that you would normally do when you transfer data through Veef devices, and we don't need
+[07:24.640 --> 07:32.840]  to use the upper stack because there's all the information already available in BPF context.
+[07:32.840 --> 07:38.160]  And for the way out, we added a helper which is called BPF redirect neighbor.
+[07:38.160 --> 07:47.760]  So that one will basically insert the packet into the neighboring subsystem of the kernel.
+[07:47.760 --> 07:52.240]  So usually we can do a FIP lookup out of BPF, so there's a helper for this as well, and
+[07:52.240 --> 07:57.720]  then combined with this for the resolution of neighbors.
+[07:57.720 --> 08:03.560]  It will allow that you don't need to go to the upper stack, so the nice benefit you get
+[08:03.560 --> 08:10.800]  as well with this is that the socket context for the network packet for the SKB is retained
+[08:10.800 --> 08:15.920]  all the way to the physical device until the packet is actually sent out.
+[08:15.920 --> 08:19.560]  And this is not the case when you normally go to the upper stack.
+[08:19.560 --> 08:26.200]  So then the TCP stack actually thinks that once you go to the upper stack that it already
+[08:26.200 --> 08:30.720]  left the node, but it's actually not the case.
+[08:30.720 --> 08:34.080]  And this way it can be retained.
+[08:34.080 --> 08:37.600]  And this is how the complete picture looks like.
+[08:37.600 --> 08:40.960]  And if you look at the performance, it's already much better.
+[08:40.960 --> 08:46.600]  So we were able to get almost a 40 gigabit per second under 1.5K MTU.
+[08:46.600 --> 08:48.840]  So this was interesting.
+[08:48.840 --> 08:55.640]  Now the question is, how could we close the remaining gap?
+[08:55.640 --> 09:03.320]  Under 8K MTU, we also did some tests, and one thing to note here is that we were able
+[09:03.320 --> 09:09.440]  for a single TCP stream to get to 98 gigabit per second for the host-to-host case, but
+[09:09.440 --> 09:14.560]  still the situation looks quite the same for the weave with the BPF host routing.
+[09:14.560 --> 09:18.920]  So there's still a small gap that we want to close here as well.
+[09:18.920 --> 09:26.520]  And that's where we introduce a new device type as a weave replacement.
+[09:26.520 --> 09:34.320]  So we call this meta device because it's programmable to BPF, and you can implement various, like
+[09:34.320 --> 09:36.960]  your own business logic into this.
+[09:36.960 --> 09:38.360]  So it's flexible.
+[09:38.360 --> 09:45.040]  And this time, the main difference is that this also gets a faster switch on the egress
+[09:45.040 --> 09:50.600]  side for the egress traffic, so it doesn't need to go to the per-CPU or back-lock-U for
+[09:50.600 --> 09:53.880]  the egress as well.
+[09:53.880 --> 09:59.960]  So if you look at the flame graphs, so that's the worst-case scenario where we compared
+[09:59.960 --> 10:02.320]  the weave and the meta device.
+[10:02.320 --> 10:09.160]  So what you can see here on the weave device, like on X-MID, it will basically scrub the
+[10:09.160 --> 10:15.360]  packet data, it will un-CUE the packet to a per-CPU back-lock-U, and then at some point
+[10:15.360 --> 10:16.560]  there's a network's action.
+[10:16.560 --> 10:22.120]  It will pick up the packets from the queue again, and in the worst case, it can be deferred
+[10:22.120 --> 10:27.160]  to the kernel software QDemon, and then you see this rescheduling where you have a new
+[10:27.160 --> 10:31.840]  stack where this is processed again.
+[10:31.840 --> 10:39.960]  And then from the BPF side, it will reach BPF on the TC egress on the host weave, where
+[10:39.960 --> 10:45.960]  we then can only forward this to the physical device to leave the node, right?
+[10:45.960 --> 10:52.600]  And all of this can be done in one go without rescheduling through this meta device.
+[10:52.600 --> 10:55.960]  So it will scrub the packet, it will switch the network namespace, it will reset the device
+[10:55.960 --> 11:01.360]  pointers, and it will then directly call the BPF program.
+[11:01.360 --> 11:07.400]  And if the BPF program says that based on the FIP lookup and so on, that it will forward
+[11:07.400 --> 11:16.640]  the packet directly to the physical device, then it will avoid this rescheduling scenario.
+[11:16.640 --> 11:21.080]  So on the right side, I mean, it's really straightforward.
+[11:21.080 --> 11:24.880]  That's how the implementation of the driver X-MID routine looks like.
+[11:24.880 --> 11:30.920]  So it will basically just call into BPF, and then based on the verdict, push it out.
+[11:30.920 --> 11:33.960]  It's really just like 500 lines of code.
+[11:33.960 --> 11:36.080]  So it's very simple and straightforward.
+[11:36.080 --> 11:41.440]  I think it's just one-fifth of the weave driver that we have right now.
+[11:41.440 --> 11:45.840]  And the other focus that we wanted to put into is compatibility as well, so that, like
+[11:45.840 --> 11:54.880]  given in Solium, we need to support multiple kernels, the ideal case would be that we don't
+[11:54.880 --> 11:59.720]  need to change much of the BPF program and can keep it as is.
+[11:59.720 --> 12:07.280]  And in case of XTP, we didn't want to implement it because for the weave case, it really is
+[12:07.280 --> 12:08.280]  very complex.
+[12:08.280 --> 12:14.280]  It even adds multi-q support, which you normally would not need on a virtual device.
+[12:14.280 --> 12:19.440]  So we wanted to keep it as simple as possible and to have the flexibility that this can
+[12:19.440 --> 12:22.080]  be added as a single or a paired device.
+[12:22.080 --> 12:25.880]  So for the weave replacement, it would be a paired device, but you could also do it
+[12:25.880 --> 12:34.680]  as a single device and then implement whatever logic you would want in BPF for that.
+[12:34.680 --> 12:41.160]  So looking at the performance, again, like the TCP stream under 8K, so this is really
+[12:41.160 --> 12:50.600]  able to reach through this approach the full 98 gigabit per second, and in terms of latency,
+[12:50.600 --> 12:56.400]  so we did some net-perf TCP or R measurements as well, where you get the minimum, the P90,
+[12:56.400 --> 12:58.240]  99 latency and so on.
+[12:58.240 --> 13:04.600]  So this is really on par with the host.
+[13:04.600 --> 13:07.640]  So now we were asking ourselves, so can we push this even further?
+[13:07.640 --> 13:14.320]  I mean, well, so we were able to get to 98 gigabit per second, but like the cost for
+[13:14.320 --> 13:19.920]  like a megabyte to transfer, can this pushed even more?
+[13:19.920 --> 13:24.960]  And there's a relatively recent kernel feature which is called Big TCP.
+[13:24.960 --> 13:32.800]  It landed for IPv6 only in 5.19 and was developed by Google, and the whole idea behind Big
+[13:32.800 --> 13:39.160]  TCP is to even more aggressively aggregate for GEO and GSO.
+[13:39.160 --> 13:45.000]  So normally the aggregation, the kernel will try it basically out of the incoming packet
+[13:45.000 --> 13:49.160]  stream, create a super packet and then we'll push it up to the networking stack so it only
+[13:49.160 --> 13:51.520]  needs to be traversed once.
+[13:51.520 --> 13:57.920]  And the limit up until that point was for 64K packets, simply because in the IP header
+[13:57.920 --> 14:02.000]  that's the maximum packet size that you can do.
+[14:02.000 --> 14:10.040]  And the idea for Big TCP for IPv6 was that, well, maybe we could create a hop-by-hop header
+[14:10.040 --> 14:16.560]  in the GEO layer and then add, and then like the 16-bit packet length field can be overcome
+[14:16.560 --> 14:23.760]  because there's a jumbo-gram extension in there which allows for a 32-bit field.
+[14:23.760 --> 14:28.440]  So you can do much more aggressive aggregation.
+[14:28.440 --> 14:35.140]  And yeah, so this is also now supported with the new studio release where this will be
+[14:35.140 --> 14:40.200]  set up for all the devices underneath automatically for IPv6.
+[14:40.200 --> 14:44.560]  Actually like this week, that was also merged for IPv4 now.
+[14:44.560 --> 14:50.240]  So this will end in kernel 6.3, which is exciting.
+[14:50.240 --> 14:58.160]  And when we looked at the performance again under Big TCP, turns out like using the upper
+[14:58.160 --> 15:01.960]  stack is currently broken in the kernel, so that still needs to be fixed.
+[15:01.960 --> 15:04.800]  We will look into that.
+[15:04.800 --> 15:07.880]  So forwarding there wouldn't work.
+[15:07.880 --> 15:16.680]  And with the host routing cases, it will basically bump up the regular Veef one to get this
+[15:16.680 --> 15:25.400]  on par with the meta and also the host, so it will basically hide those glitches.
+[15:25.400 --> 15:37.400]  The latency is still better in terms of like the short packet response type workloads for
+[15:37.400 --> 15:41.680]  the meta, so that's still on par with the host.
+[15:41.680 --> 15:47.880]  So what is the remaining offender like when you run all these features together?
+[15:47.880 --> 15:53.080]  It's basically the copying to users, so like between 60 and 70% of the cycles is really
+[15:53.080 --> 15:57.560]  spent on copying all this data to user space.
+[15:57.560 --> 16:03.720]  So the next question we ask ourselves actually in this experiment, so what if we combine
+[16:03.720 --> 16:10.840]  the whole Big TCP stuff with TCP0 copy, so what if we could leverage the memory map TCP?
+[16:10.840 --> 16:14.360]  And it turns out that's currently not possible in the kernel.
+[16:14.360 --> 16:20.200]  That's a limitation because in the GRO layer, Big TCP will create a frag list, which is essentially
+[16:20.200 --> 16:26.200]  like a list of SKBs as a single big one that is being pushed up the stack.
+[16:26.200 --> 16:31.920]  And TCP0 copy only works on the SKB frags, so that's like an internal.
+[16:31.920 --> 16:40.040]  So basically you have a single SKB and it has like the pages as read only attached in
+[16:40.040 --> 16:41.800]  the non-linear section.
+[16:41.800 --> 16:45.560]  So that currently does not work.
+[16:45.560 --> 16:50.520]  Combining those two would probably have like really big potential, but what we now try
+[16:50.520 --> 16:57.120]  to do is we just looked at just using the TCP0 copy to see how it looks without the
+[16:57.120 --> 17:00.480]  Big TCP.
+[17:00.480 --> 17:05.000]  Actually speaking it's not as straightforward to deploy because first of all you need to
+[17:05.000 --> 17:11.040]  rewrite your application in order to leverage memory map TCP.
+[17:11.040 --> 17:14.560]  This can be done for RX but also for TX or both.
+[17:14.560 --> 17:21.520]  And it needs driver changes and in particular driver changes to be able to split the header
+[17:21.520 --> 17:27.560]  from the data because the data you want to memory map to user space.
+[17:27.560 --> 17:32.360]  Some Nix might do this with the hardware and some others you would have to do some kind
+[17:32.360 --> 17:40.080]  of pseudo header data splits where you basically just copy the header into a linear section.
+[17:40.080 --> 17:41.880]  So this is how it would look like.
+[17:41.880 --> 17:46.760]  We tried this for 4K and 8K MTU.
+[17:46.760 --> 17:52.720]  There's a great talk from Eric Dumasay, the TCP maintainer in terms of what all the all
+[17:52.720 --> 17:57.880]  those things you need to do in order to be able to make use of this for example you also
+[17:57.880 --> 18:06.560]  need to align the TCP window scale to 12 segments so that you fill exactly those pages.
+[18:06.560 --> 18:14.240]  And yeah the driver support can be very different like we had in our lab MLX500 gigabit Nix
+[18:14.240 --> 18:17.840]  and they did not implement the header data splits.
+[18:17.840 --> 18:24.840]  So my colleague Nikolai did the POC implementation in the like to change the driver to be able
+[18:24.840 --> 18:28.680]  to do that so that we could get some measurements out of this.
+[18:28.680 --> 18:33.040]  And if you want to look into an application like an example application and how you can
+[18:33.040 --> 18:38.120]  implement that there's one in the networking self-test in the upstream tree called TCP
+[18:38.120 --> 18:41.440]  M-MAP which is useful also for the benchmarking.
+[18:41.440 --> 18:48.600]  So you really need to align various different settings like for our test implementation
+[18:48.600 --> 18:53.480]  we used like for MLX5 the non-striding mode so like the legacy mode so you need to switch
+[18:53.480 --> 18:59.520]  that off and EVE tool first because I mean for the POC it was easier to do the way like
+[18:59.520 --> 19:07.640]  the packet layout is done there then you need to align the MTU to either one page or two
+[19:07.640 --> 19:14.120]  pages and you need to do various other settings like for the course of time I will not go
+[19:14.120 --> 19:17.280]  into all of the details.
+[19:17.280 --> 19:23.680]  And generally I would think it would be useful addition to the kernel to have like a configuration
+[19:23.680 --> 19:30.360]  framework for that and to be able to have more drivers supporting the header data split.
+[19:30.360 --> 19:34.320]  There's actually one in Windows kernel turns out so there's some documentation around
+[19:34.320 --> 19:37.800]  there that we found while preparing for the talk.
+[19:37.800 --> 19:43.760]  The other thing is the caveat is like the TCP-0 copy may like the benefits might be
+[19:43.760 --> 19:48.200]  limited if you then actually go in your application and then touch the data because then they need
+[19:48.200 --> 19:52.160]  to be pulled into the cache which they would be if like if you would have to copy things
+[19:52.160 --> 19:59.480]  to user but they may not be like if you just memory map so the applications there is mostly
+[19:59.480 --> 20:04.760]  like on the for example storage side where you wouldn't have to do that.
+[20:04.760 --> 20:12.800]  And looking at the data for 4K MTU we tried with the implementation we got to 81 gigabit
+[20:12.800 --> 20:18.920]  per second so that's a bit limiting.
+[20:18.920 --> 20:25.480]  Could also be that this is mostly because the implementation was you know POC with lots
+[20:25.480 --> 20:31.400]  of optimization potential that can still be there but we looked at the 8K MTU and there
+[20:31.400 --> 20:37.640]  we were able to get to 98 gigabit per second but the interesting piece here is the cost
+[20:37.640 --> 20:44.400]  per megabyte we could we were able to reduce from 85 down to 27 microseconds per megabyte
+[20:44.400 --> 20:53.640]  so this really is significant and yeah because of the avoidance that you don't copy anymore.
+[20:53.640 --> 21:03.080]  So as a summary so we started with the default and then you know switch to the 8K MTU then
+[21:03.080 --> 21:07.920]  we went to the host routing that we covered then the addition of the meta device where
+[21:07.920 --> 21:13.560]  we can avoid where we can do the slow latency you know for ingress and egress then the big
+[21:13.560 --> 21:20.280]  TCP and that all works without changes to the application and with that you can already
+[21:20.280 --> 21:26.680]  get like a 2x improvement and then it gets even more dramatic but it's of course dependent
+[21:26.680 --> 21:30.000]  on your application for the zero copy.
+[21:30.000 --> 21:34.640]  Some of the future directions as I mentioned earlier it would be useful to have like a
+[21:34.640 --> 21:40.480]  generic header data split framework for NIC drivers that they can implement that and expose
+[21:40.480 --> 21:42.880]  it to this setting.
+[21:42.880 --> 21:49.400]  There's potential here as well to optimize for example like the header pages could be
+[21:49.400 --> 21:56.960]  the head page could be packed with the headers it could get recycling which we didn't implement
+[21:56.960 --> 22:04.760]  here and in future big TCP would be interesting to combine with the zero copy so that this
+[22:04.760 --> 22:10.720]  covers the frag list in GRO and the other thing that is at some point on the horizon
+[22:10.720 --> 22:17.200]  is to push the big TCP actually onto the wire as well if the hardware supports that and
+[22:17.200 --> 22:24.840]  yeah so with that I'm done with the talk and the prototype for the meta device is currently
+[22:24.840 --> 22:31.080]  you can find on this branch we are working on pushing this upstream in the coming months
+[22:31.080 --> 22:37.080]  and there's also the prototype public for the MLX5 header data split and yeah so the
+[22:37.080 --> 22:41.840]  plan is basically to get this into upstream kernel and then also to get this integrated
+[22:41.840 --> 22:54.400]  into Syllium for the next release yeah thank you are there any questions?
+[22:54.400 --> 22:59.360]  Thanks we already have two questions in the chat so we can start with them if there are
+[22:59.360 --> 23:01.680]  no one in the room.
+[23:01.680 --> 23:05.760]  Alright so the first question we got was can we well not really a question as much as a
+[23:05.760 --> 23:10.640]  comment I think which is can we please come up with a better name than meta for this just
+[23:10.640 --> 23:15.040]  call it BPF or BPFDF or something like that.
+[23:15.040 --> 23:22.120]  The other thing was if the perf benefit comes from calling through from inside the network
+[23:22.120 --> 23:28.360]  namespace can we just make VIF do that instead?
+[23:28.360 --> 23:34.120]  I think we could but the question is like I haven't looked into the like how it would
+[23:34.120 --> 23:40.320]  affect the XDP related bits so it felt easier to do something simple and start from scratch
+[23:40.320 --> 23:45.600]  like one thing I don't really like about the VIF devices to be honest how complex it got
+[23:45.600 --> 23:52.520]  with all the XDP additions and it's not even that beneficial and it added like multi queue
+[23:52.520 --> 23:57.440]  support and all of that which was not needed at all for a virtual device so I really wanted
+[23:57.440 --> 24:06.640]  to have something simple and yeah it's easier so.
+[24:06.640 --> 24:19.160]  Any more questions from the audience here?
+[24:19.160 --> 24:26.200]  I have a question you're about big TCP and TCP zero copy it's you're in your lab you
+[24:26.200 --> 24:32.720]  only did benchmarks host to host right because so but also part to part so we tried both
+[24:32.720 --> 24:33.720]  yeah.
+[24:33.720 --> 24:38.360]  Because do you know how it would work with the switches do you need special switch support
+[24:38.360 --> 24:39.360]  for this?
+[24:39.360 --> 24:43.600]  No no so the big TCP is only local to the node so like the packets on the wire they
+[24:43.600 --> 24:49.360]  will still be your MTU size packets it's just that the aggregation on like for the local
+[24:49.360 --> 24:56.960]  stack is much bigger so it's it doesn't affect anything on the wire that's a nice thing.
+[24:56.960 --> 24:59.840]  And for the zero copy?
+[24:59.840 --> 25:03.960]  I mean like for the zero copy you need to change definitely the MTU which also affects
+[25:03.960 --> 25:10.560]  the rest of your network of course so that's one thing that would be required for that.
+[25:10.560 --> 25:30.120]  Thank you.

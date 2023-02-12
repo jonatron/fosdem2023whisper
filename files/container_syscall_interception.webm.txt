@@ -1,0 +1,450 @@
+[00:00.000 --> 00:12.520]  Our next talk is by Stefan, he's the project leader for LexD, a container manager, a former
+[00:12.520 --> 00:17.160]  teammate of mine as well, and he's going to talk about safe containers through system
+[00:17.160 --> 00:18.160]  call interception.
+[00:18.160 --> 00:19.160]  Hello.
+[00:19.160 --> 00:20.160]  It starts working well.
+[00:20.160 --> 00:21.160]  Thanks, sir.
+[00:21.160 --> 00:22.160]  All right.
+[00:22.160 --> 00:24.160]  So, you can edit the intro.
+[00:24.160 --> 00:25.160]  I'm Stefan.
+[00:25.160 --> 00:26.160]  I work at County Call.
+[00:26.160 --> 00:32.760]  I'm the project leader for LexD, LexEFS, and a bunch of other stuff that we do, effectively
+[00:32.760 --> 00:33.760]  system container guide.
+[00:33.760 --> 00:37.960]  And, yeah, we're going to be talking about system call interception today.
+[00:37.960 --> 00:42.880]  First, just a tiny bit of going back to the basics.
+[00:42.880 --> 00:47.120]  We can't need to explain what we're trying to achieve.
+[00:47.120 --> 00:49.280]  So there are two main kind of containers out there.
+[00:49.280 --> 00:52.480]  We've got privileged containers and unprivileged containers.
+[00:52.480 --> 00:55.520]  The ones you want are the unprivileged guide.
+[00:55.520 --> 01:01.600]  Privileged is bad, and just to clarify there, too, we don't mean privileged as in dash dash
+[01:01.600 --> 01:02.880]  privileged in Docker.
+[01:02.880 --> 01:05.040]  That's extra, extra bad.
+[01:05.040 --> 01:08.680]  Docker by default is privileged, and the definition of privileged is whether you're using a user
+[01:08.680 --> 01:11.080]  namespace or not.
+[01:11.080 --> 01:15.520]  So in the case of LexD, which is a container manager that I'm working on these days, with
+[01:15.520 --> 01:18.240]  default to unprivileged containers, that's great.
+[01:18.240 --> 01:20.880]  It means that root in the container is not root on the host.
+[01:20.880 --> 01:25.040]  If there's a container escape of any kind, you don't, you get as much permission as a
+[01:25.040 --> 01:28.320]  nobody user on the system, that's great.
+[01:28.320 --> 01:35.120]  Problem is, not being real root also means you don't get to do stuff that real root can
+[01:35.120 --> 01:36.120]  do.
+[01:36.120 --> 01:40.360]  A lot of stuff have been enabled now inside the user namespace that you can do yourself.
+[01:40.360 --> 01:41.360]  You can create network devices.
+[01:41.360 --> 01:42.360]  You can reconfigure.
+[01:42.360 --> 01:43.960]  A lot of stuff is great.
+[01:43.960 --> 01:45.840]  But there are still things you can't do.
+[01:45.840 --> 01:49.720]  You can't change your process priority to something higher than what you would be allowed
+[01:49.720 --> 01:51.440]  to do as a normal user on the system.
+[01:51.440 --> 01:55.280]  Otherwise, a user on the system can just create a new user namespace, go in it, and bump their
+[01:55.280 --> 02:00.320]  process priority to whatever they want, and bypass all kind of settings on the system.
+[02:00.320 --> 02:03.960]  So there's a lot of things that are not quite possible.
+[02:03.960 --> 02:07.920]  In general, we want to eradicate privileged containers because having real root is very,
+[02:07.920 --> 02:08.920]  very bad.
+[02:08.920 --> 02:14.640]  And it's kind of a game of, like, welcome all, as far as trying to prevent nasty things
+[02:14.640 --> 02:15.640]  from happening.
+[02:15.640 --> 02:16.640]  We've got Apama.
+[02:16.640 --> 02:17.640]  We've got SecComp.
+[02:17.640 --> 02:20.800]  We've got a whole bunch of things that are all trying to prevent you from doing bad things.
+[02:20.800 --> 02:25.560]  So that's done by us thinking about what all the bad things are and trying to block them.
+[02:25.560 --> 02:28.240]  And someone just needs to find another bad thing we didn't think of.
+[02:28.240 --> 02:30.080]  And then there goes the entire system.
+[02:30.080 --> 02:31.080]  So we don't want those.
+[02:31.080 --> 02:33.440]  We'd like to get rid of them completely.
+[02:33.440 --> 02:38.400]  But for that, we need to find ways to allow for unprivileged environments to do things
+[02:38.400 --> 02:43.480]  that are normally only allowed to be done by privileged environments in a way that's
+[02:43.480 --> 02:44.480]  still safe.
+[02:44.480 --> 02:45.480]  All right.
+[02:45.480 --> 02:53.040]  So all I'm going to be talking about today relies on SecComp, which is the system call
+[02:53.040 --> 02:55.880]  interception mechanism in Linux.
+[02:55.880 --> 02:59.520]  It lets you do a bunch of nice policies.
+[02:59.520 --> 03:03.520]  You can just put policies for, like, this system code with those arguments, just deny
+[03:03.520 --> 03:11.000]  them or return this return code or return, yeah, this particular error number, for example.
+[03:11.000 --> 03:14.720]  But it also grew the ability with Linux 5.0 in 2019.
+[03:14.720 --> 03:19.400]  It grew the ability to notify user space instead.
+[03:19.400 --> 03:26.280]  So you can put a policy in SecComp that says, if this is called and the arguments are so
+[03:26.280 --> 03:33.440]  insert, instead of doing, taking action right now, go and notify this file descriptor that
+[03:33.440 --> 03:34.840]  something happened.
+[03:34.840 --> 03:39.920]  And then the whole system can have a privileged demon monitoring that notification mechanism
+[03:39.920 --> 03:43.360]  and take actions.
+[03:43.360 --> 03:47.760]  There is some complexity around security that I'm going to get into very shortly because
+[03:47.760 --> 03:50.320]  you can do very, very bad things with that.
+[03:50.320 --> 03:56.480]  But if you do it correctly, it lets you run a more privileged action kind of on behalf
+[03:56.480 --> 04:02.080]  of a less privileged container after going through some kind of a list or that kind of
+[04:02.080 --> 04:07.280]  logic on the host to make sure that this is actually fine.
+[04:07.280 --> 04:15.080]  Now for the nasty issues, time of check, time of use is a very, very common issue in security.
+[04:15.080 --> 04:20.400]  And this mechanism has definitely got some issues around that.
+[04:20.400 --> 04:24.360]  User space gets notified that a system code was made.
+[04:24.360 --> 04:30.440]  The system code can have pointers to a bunch of different arguments and structures.
+[04:30.440 --> 04:34.840]  And there's nothing preventing the caller from technically changing the value at those
+[04:34.840 --> 04:36.000]  pointers.
+[04:36.000 --> 04:38.880]  So you need to be a bit careful when you're processing those messages.
+[04:38.880 --> 04:43.360]  You effectively need to start by copying everything, evaluating it.
+[04:43.360 --> 04:45.600]  If everything looks good, then you can take actions.
+[04:45.600 --> 04:50.160]  But by taking actions, we mean you can run the thing on behalf of the user with the original
+[04:50.160 --> 04:55.760]  arguments, never putting them again because otherwise they could change.
+[04:55.760 --> 05:00.040]  Or you could just say, I don't want this reject.
+[05:00.040 --> 05:05.280]  What you shouldn't do is say, oh, based on those arguments, it seems fine.
+[05:05.280 --> 05:06.920]  Let it continue.
+[05:06.920 --> 05:10.560]  Because there's absolutely nothing that prevents the caller process from just racing you and
+[05:10.560 --> 05:14.120]  immediately changing the arguments to something else before it goes back to the kernel and
+[05:14.120 --> 05:17.800]  then running with a value you would not have allowed.
+[05:17.800 --> 05:21.000]  So you need to be careful in your design so that this doesn't happen.
+[05:21.000 --> 05:25.960]  Otherwise you're literally allowing people to run stuff as full route privilege inside
+[05:25.960 --> 05:29.720]  of imperial containers, which would be very bad.
+[05:29.720 --> 05:34.200]  So what do we actually do with this stuff?
+[05:34.200 --> 05:36.440]  So far we've implemented quite a few things.
+[05:36.440 --> 05:40.240]  I'm going to go into more details about each of those.
+[05:40.240 --> 05:44.680]  The first thing we implemented, actually, I don't know if they are in the right order.
+[05:44.680 --> 05:48.440]  One of the first things we implemented is make node.
+[05:48.440 --> 05:51.800]  Then we followed that, which is useful for save device nodes creation.
+[05:51.800 --> 05:54.160]  I'm going to go into more detail shortly.
+[05:54.160 --> 05:57.360]  Set X adder, we also added pretty early on.
+[05:57.360 --> 06:02.000]  We've got support for eBPF, so we can allow some specific eBPF programs.
+[06:02.000 --> 06:07.560]  We've got support for set scheduler, which is used to change some of the process priorities.
+[06:07.560 --> 06:11.840]  We've got support for mount, which was a real pain in the ass to implement, but we've got
+[06:11.840 --> 06:12.840]  support for mount.
+[06:12.840 --> 06:19.800]  And we've got support for this info, which was also reasonably fun to implement.
+[06:19.800 --> 06:26.720]  Now kind of going over those things directly, make node, what do we use that for?
+[06:26.720 --> 06:32.560]  One of the things we wanted to enable is for running Docker inside of lexd containers.
+[06:32.560 --> 06:35.640]  As I said, lexd containers are on privilege, they are nice and safe.
+[06:35.640 --> 06:38.720]  Docker, by and large, not safe.
+[06:38.720 --> 06:42.560]  But Docker running inside of a privileged lexd container safe.
+[06:42.560 --> 06:44.800]  So we figured we'd try and make that work.
+[06:44.800 --> 06:47.160]  And we did manage to get it working.
+[06:47.160 --> 06:50.600]  The main driver at the time was Travis CI.
+[06:50.600 --> 06:57.800]  The Travis CI platform was using lexd containers on m64, IBM Z series, as well as IBM power
+[06:57.800 --> 06:59.320]  at the time.
+[06:59.320 --> 07:03.160]  And they wanted the same behavior as they were getting on Intel.
+[07:03.160 --> 07:08.160]  And on Intel, they were using full VMs that you could do whatever you wanted them.
+[07:08.160 --> 07:10.600]  So we wanted to make sure that Docker worked properly in there.
+[07:10.600 --> 07:15.400]  And what we noticed is that Docker layers, especially the directory white out files and
+[07:15.400 --> 07:24.200]  five white out files, rely on either, I think it's C00 device nodes, or they rely on specific
+[07:24.200 --> 07:29.200]  excellent attributes that just say that this is like a directory that was removed, effectively
+[07:29.200 --> 07:32.560]  in the underlay, using that as white out.
+[07:32.560 --> 07:34.400]  Both cases, those things were not allowed.
+[07:34.400 --> 07:37.640]  Device creation in a container is a big, big, big no go usually.
+[07:37.640 --> 07:42.440]  Because if you can create, say, the device node for dev SDA, then there's nothing preventing
+[07:42.440 --> 07:46.520]  your own previous container from rewriting your disk, which would be bad.
+[07:46.520 --> 07:48.160]  So that's usually not allowed.
+[07:48.160 --> 07:50.760]  But some specific device nodes are fine.
+[07:50.760 --> 07:55.600]  And the work we did there also allows for things like creating a new dev null device
+[07:55.600 --> 08:01.160]  or new dev zero device or those kind of devices which are inherently safe.
+[08:01.160 --> 08:05.000]  And making that possible means that you can now do things like running the bootstrap or
+[08:05.000 --> 08:09.160]  similar tools inside of an underprivileged container, because the few devices that are
+[08:09.160 --> 08:15.640]  needed to be created as part of an image creation process are safe devices and this allows it.
+[08:15.640 --> 08:20.040]  We generally consider this particular interception to be safe, as in you can pretty much turn
+[08:20.040 --> 08:25.800]  it on on any complexity container without having to think too much about who's in that
+[08:25.800 --> 08:30.240]  container, like do we actually trust the workloads on that kind of stuff.
+[08:30.240 --> 08:33.720]  The other piece to that puzzle was set XSATA.
+[08:33.720 --> 08:36.920]  As mentioned, same deal with Docker and the white out files.
+[08:36.920 --> 08:39.040]  We needed to implement that one.
+[08:39.040 --> 08:41.080]  Similarly, it does not allow all of the XSATA.
+[08:41.080 --> 08:46.560]  It just allows very safe namespaces of XSATA attributes.
+[08:46.560 --> 08:50.520]  It will not let you do things like setting a security XSATA attribute, because that would
+[08:50.520 --> 08:53.520]  let you do some really, really bad things, for example.
+[08:53.520 --> 08:57.920]  And this is similarly considered to be safe on our side.
+[08:57.920 --> 09:02.760]  Then got the pretty interesting one, mount.
+[09:02.760 --> 09:09.960]  Also, again, mount is a bit of a problem, because usually, well, first of all, usually
+[09:09.960 --> 09:11.560]  it relies on having a block device.
+[09:11.560 --> 09:16.160]  You kind of need to have that allowed in the container, which is already a bit fishy in
+[09:16.160 --> 09:17.160]  many cases.
+[09:17.160 --> 09:21.480]  You've got to be careful that any block device exposed to the container, you consider as
+[09:21.480 --> 09:25.760]  entrusted from that portal and you never mount it as real roots somewhere else, or they could
+[09:25.760 --> 09:27.320]  try and attack you.
+[09:27.320 --> 09:33.480]  And by attack you, what I mean is the kernel has a super block parser that will process
+[09:33.480 --> 09:36.160]  a new device as it gets mounted.
+[09:36.160 --> 09:38.600]  And this is not guaranteed to be bug free.
+[09:38.600 --> 09:45.240]  So a user that can craft a very specific block device might be able to trick something
+[09:45.240 --> 09:49.880]  like X4, XFS, BarFS, or any of the other file systems into either crashing the entire
+[09:49.880 --> 09:53.040]  system or doing arbitrary code execution in the kernel.
+[09:53.040 --> 09:55.800]  Both cases not very good.
+[09:55.800 --> 09:59.720]  But we still enable, so we still enable support for that.
+[09:59.720 --> 10:05.200]  If you have a container that you trust, that you don't want to give full access for everything,
+[10:05.200 --> 10:15.320]  but that you still trust, you can technically do this, and it will let you mount inside
+[10:15.320 --> 10:16.560]  of the container.
+[10:16.560 --> 10:21.240]  We added an extra layer on top of that, which lets us do a shift, because if you do the
+[10:21.240 --> 10:26.600]  amounts, the ownership information on that device are probably not landing at the container.
+[10:26.600 --> 10:31.440]  So we allow stacking shift effects, which is a fact-send that's hopefully dying soon,
+[10:31.440 --> 10:36.600]  but that we implemented for Ubuntu, that we can stack on top and that fixes the permissions.
+[10:36.600 --> 10:38.240]  So we support that as well.
+[10:38.240 --> 10:42.920]  The really cool thing with this stuff is we also support redirecting to Fuse instead,
+[10:42.920 --> 10:44.600]  which then becomes safe.
+[10:44.600 --> 10:49.000]  So what we can do is say, Ernie attempt at mounting EXT4 inside of the container called
+[10:49.000 --> 10:51.840]  defuse 2FS binary instead.
+[10:51.840 --> 10:53.160]  And yeah, that's safe.
+[10:53.160 --> 10:56.520]  That actually does work pretty well.
+[10:56.520 --> 10:59.280]  And I'll show that in just a tiny bit.
+[10:59.280 --> 11:04.080]  And then we worked on the BPF, not allowing all of the BPF programs, but specifically
+[11:04.080 --> 11:10.040]  allowing those that we need to do nested containers and doing device permission management throughout.
+[11:10.040 --> 11:14.160]  So we can review what the program is, if it matches what we expect, then we load it, otherwise
+[11:14.160 --> 11:18.560]  we just reject entirely, and that's also considered to be safe.
+[11:18.560 --> 11:23.480]  Then for an unsafe one, SCAD set scheduler is not super-duper safe, because it lets you
+[11:23.480 --> 11:25.480]  reconfigure scheduler options.
+[11:25.480 --> 11:29.680]  It was needed to be able to run Android inside of an entry-registerly container.
+[11:29.680 --> 11:32.280]  They were doing some slightly wonky stuff on startup.
+[11:32.280 --> 11:34.320]  That needed that.
+[11:34.320 --> 11:38.440]  But we know that effectively the container could make itself unkillable, for example,
+[11:38.440 --> 11:42.720]  or could raise its priority enough to slow down the rest of the system.
+[11:42.720 --> 11:43.720]  So it's something to keep in mind.
+[11:43.720 --> 11:48.720]  There's no way to escape that we're aware of by enabling this thing, but there's definitely
+[11:48.720 --> 11:52.520]  some ability to affect the entire system.
+[11:52.520 --> 11:53.520]  And then we had this info.
+[11:53.520 --> 11:59.320]  That was kind of led by Alpine deciding not to use Proc Mem Info to figure out the memory
+[11:59.320 --> 12:01.640]  usage in the free command.
+[12:01.640 --> 12:05.320]  So you would run a container with a limit of, like, a gig of RAM and run free, and you
+[12:05.320 --> 12:09.200]  would see 128 gigs, because it would just show you the host value directly.
+[12:09.200 --> 12:13.640]  And that's because you look like CFS, which is another project we run, that overlays on
+[12:13.640 --> 12:15.840]  top of Proc to show the right values.
+[12:15.840 --> 12:18.160]  They don't work, because they were not reading the file system.
+[12:18.160 --> 12:22.240]  They were going straight to the kernel with a system call using CS Info.
+[12:22.240 --> 12:25.680]  So we've implemented Interception for that, and we've filled it with the same values as
+[12:25.680 --> 12:31.520]  you would be getting from, like, CFS, and that gets us the right behavior.
+[12:31.520 --> 12:38.920]  And so just switching to the demo, I'm also just rechecking something here real quick.
+[12:38.920 --> 12:43.920]  Okay, I was just making sure that Christian was wrong with the time.
+[12:43.920 --> 12:44.920]  That's good.
+[12:44.920 --> 12:45.920]  I've got until 3.
+[12:45.920 --> 12:49.920]  You showed me at 10 minutes.
+[12:49.920 --> 12:51.760]  All right.
+[12:51.760 --> 12:57.040]  So let's just move here to the terminal.
+[12:57.040 --> 13:03.960]  And the first thing I'll do is play with Makenode, so, and that should be, yep, that's all right.
+[13:03.960 --> 13:17.200]  It's launching a new container, Ubuntu 22.04, and let's try Makenode, I'm sure I'm getting
+[13:17.200 --> 13:22.840]  those wrong again, because I always get them wrong, Makenode.
+[13:22.840 --> 13:23.840]  Depending on the kernel.
+[13:23.840 --> 13:24.840]  Makenode name, then type.
+[13:24.840 --> 13:27.040]  Depending on the kernel, this might work.
+[13:27.040 --> 13:30.960]  Yeah, it actually does work now.
+[13:30.960 --> 13:35.440]  Let me figure out DevNode, this one shouldn't work, 1, 3.
+[13:35.440 --> 13:36.440]  C5, 1.
+[13:36.440 --> 13:40.920]  Yeah, C1, 3, for example, for DevNode does not work out of the box.
+[13:40.920 --> 13:58.760]  But if we stop this, then set demo, makenode, security, calls, intercept, makenode, true.
+[13:58.760 --> 14:01.800]  In this case, we do need to restart the container, because the entire second policy needs to
+[14:01.800 --> 14:02.800]  change.
+[14:02.800 --> 14:05.520]  For smaller changes, we don't need to, but for that we do.
+[14:05.520 --> 14:06.520]  And now that works properly.
+[14:06.520 --> 14:11.640]  So that's the Makenode piece.
+[14:11.640 --> 14:12.760]  Then we've got Docker.
+[14:12.760 --> 14:17.640]  For that one, I did prepare a tiny bit, because I did not feel like downloading Docker on
+[14:17.640 --> 14:18.640]  the Wi-Fi here.
+[14:18.640 --> 14:23.880]  I mean, actually, I did, but it took an hour, so happy I didn't do it during the talk.
+[14:23.880 --> 14:27.040]  So for Docker, actually, let me show you the config first.
+[14:27.040 --> 14:31.520]  So the container here has security nesting enabled, which allows for running containers
+[14:31.520 --> 14:32.520]  in containers.
+[14:32.520 --> 14:38.160]  And it has intercept of both Makenode and setExider that are set up.
+[14:38.160 --> 14:45.400]  And in there, that part does use the network, so I'm just hoping that it's tiny enough.
+[14:45.400 --> 14:46.600]  There we go.
+[14:46.600 --> 14:48.280]  So that works properly.
+[14:48.280 --> 14:52.080]  And the issue before was that unpacking the layers would just blow up.
+[14:52.080 --> 14:53.840]  All right.
+[14:53.840 --> 15:02.520]  So that was Docker, then to the more, to the fancier one, which is mount.
+[15:02.520 --> 15:05.240]  All right.
+[15:05.240 --> 15:08.360]  So for mount, launch the container here.
+[15:08.360 --> 15:10.880]  I'm going to go and pass it a block device.
+[15:10.880 --> 15:15.800]  So I'm passing it dev loop 11 on my system as dev SDA inside of the container.
+[15:15.800 --> 15:19.200]  Yeah, your signs are still wrong.
+[15:19.200 --> 15:22.200]  I've got 15.
+[15:22.200 --> 15:25.720]  I mean, it's until three.
+[15:25.720 --> 15:26.960]  Okay.
+[15:26.960 --> 15:38.480]  So demo mount, make FS, EXT4 on the SDA, yes.
+[15:38.480 --> 15:41.720]  So just formatting, that you can always do, like there's nothing preventing you from creating
+[15:41.720 --> 15:42.720]  a file system.
+[15:42.720 --> 15:44.240]  Normally, that works just fine.
+[15:44.240 --> 15:49.680]  What doesn't work is this, like you're not allowed to actually mount it inside of a container.
+[15:49.680 --> 15:52.640]  But now we can make that work, actually.
+[15:52.640 --> 16:00.560]  So what we're going to be doing here is turning on mount interception.
+[16:00.560 --> 16:05.480]  And then we need to set an extra one, which is the one allowing specific file system.
+[16:05.480 --> 16:08.040]  So in this case, EXT4.
+[16:08.040 --> 16:12.160]  And then restarting the container here.
+[16:12.160 --> 16:13.160]  Okay.
+[16:13.160 --> 16:19.160]  Exit back in there and try mounting again, and that works.
+[16:19.160 --> 16:26.640]  And if we look at this, and we look at DF, it's mounted normally, it's fine.
+[16:26.640 --> 16:30.480]  Other than it actually did this as your route, and I could have done very nasty things by
+[16:30.480 --> 16:33.040]  crafting a particular device ahead of time.
+[16:33.040 --> 16:35.880]  It works as expected.
+[16:35.880 --> 16:41.840]  Now, what we can do to make things a bit more interesting here, actually, we did back in
+[16:41.840 --> 16:48.440]  there, let's unmount it, and then install fuse to FS.
+[16:48.440 --> 16:53.640]  That's a fuse implementation of EXT234.
+[16:53.640 --> 16:55.520]  That's pretty readily available.
+[16:55.520 --> 16:57.320]  You can install that.
+[16:57.320 --> 17:01.840]  And then what we need to do is remove the config key that allowed straight up mounting
+[17:01.840 --> 17:02.840]  of EXT4.
+[17:02.840 --> 17:09.200]  And we replace it with another config key that instead says EXT4 is fuse to FS.
+[17:09.200 --> 17:17.960]  So we put that in there, go back in, and then do SDA back to M&T.
+[17:17.960 --> 17:22.400]  And the funny thing is that you won't actually notice any difference whatsoever.
+[17:22.400 --> 17:28.320]  It actually looks completely identical unless you go look at proc mounts at which point
+[17:28.320 --> 17:34.160]  you're going to notice that the file system here is not EXT4, it's fuse.exe4.
+[17:34.160 --> 17:36.760]  And if you look at the process list, you're going to notice that there's an extra process
+[17:36.760 --> 17:39.840]  running in your container now.
+[17:39.840 --> 17:44.880]  So that's pretty sweet, because it means we can literally forward any file system to
+[17:44.880 --> 17:50.960]  fuse, because it's done at the Cisco layer, the container doesn't really need to be aware
+[17:50.960 --> 17:51.960]  of it.
+[17:51.960 --> 17:53.600]  Like it is not doing anything to the mount command.
+[17:53.600 --> 17:57.600]  You can just call the mount Cisco at any point, and it will just forward it to fuse
+[17:57.600 --> 18:01.440]  and do the right thing for you, which means no chance you work yours whatsoever.
+[18:01.440 --> 18:03.320]  It just works.
+[18:03.320 --> 18:06.320]  So that is pretty cool.
+[18:06.320 --> 18:14.240]  And the last thing I wanted to show in the demo is for launch a Alpine Edge container.
+[18:14.240 --> 18:16.480]  So that's going to be the most info.
+[18:16.480 --> 18:20.160]  And I'm going to set a memory limit of one gig.
+[18:20.160 --> 18:29.680]  So if I go in there now, and I look at the free memory, we can see I've got 16 gigs,
+[18:29.680 --> 18:32.240]  which is considerably more than one gig.
+[18:32.240 --> 18:34.400]  The enforcement is in place.
+[18:34.400 --> 18:37.600]  So that's where problems happen, is that the enforcement is in place.
+[18:37.600 --> 18:42.040]  Now if you run something that will look at the free memory output to figure out how much
+[18:42.040 --> 18:45.920]  memory it can claim, it's going to claim the wrong amount of memory, and it will get
+[18:45.920 --> 18:48.200]  killed by the out-of-memory killer.
+[18:48.200 --> 18:55.280]  So that's a problem, which is why we did the work to fix that shoe system call interception.
+[18:55.280 --> 19:02.560]  So you can do security, syscall, intercept, sys, info, sure.
+[19:02.560 --> 19:19.960]  And then bounce that container.
+[19:19.960 --> 19:22.800]  And if I go in there and I look at free, now we've got a gig.
+[19:22.800 --> 19:24.840]  So that actually works properly.
+[19:24.840 --> 19:26.560]  It also fixes a bunch of other things.
+[19:26.560 --> 19:31.000]  It doesn't just do the memory, but it also does CPU load, uptime, and a bunch of other
+[19:31.000 --> 19:32.000]  things.
+[19:32.000 --> 19:34.640]  So that's how StrapSysInfo is now properly handled.
+[19:34.640 --> 19:38.920]  It's just the easiest use case we have is free on uptime, because we know that this
+[19:38.920 --> 19:43.080]  command has been changed to use sysinfo instead of the five system, so it's a very easy one
+[19:43.080 --> 19:45.600]  to just prove the concept works.
+[19:45.600 --> 19:48.320]  But that particular piece of work fixed a lot of other things.
+[19:48.320 --> 19:52.960]  I think it also improved Java, was using the wrong interface and the wrong amount of memory
+[19:52.960 --> 19:54.640]  sometimes, so that fixed that.
+[19:54.640 --> 19:55.840]  It fixed a bunch of other stuff.
+[19:55.840 --> 19:58.840]  That was pretty good to have.
+[19:58.840 --> 20:08.960]  So looking forward, where do we want to take this?
+[20:08.960 --> 20:13.320]  We've got most of what we wanted covered, really.
+[20:13.320 --> 20:18.560]  The big items that are really problematic have been resolved.
+[20:18.560 --> 20:23.520]  Docker was a big one that we really wanted to solve, and it's working fine.
+[20:23.520 --> 20:25.280]  Alpine behaving, that's really nice.
+[20:25.280 --> 20:26.280]  We're happy with it.
+[20:26.280 --> 20:29.840]  The monitor section allows for a lot of different stuff now.
+[20:29.840 --> 20:32.840]  It's possible to do things like image building instead of an previous container.
+[20:32.840 --> 20:35.200]  You can really do a lot.
+[20:35.200 --> 20:40.440]  And Android seems to be happy, too, with the tiny bit of stuff we added for that.
+[20:40.440 --> 20:45.360]  The things we'd like to add now are kind of weird stuff, really.
+[20:45.360 --> 20:49.320]  The one I've got in mind mostly for the sake of it, but also because I'm sure we found
+[20:49.320 --> 20:53.880]  a use case for it, is to implement init module and finit module.
+[20:53.880 --> 20:58.760]  So the ability to do kernel module loading from inside of an previous container, which
+[20:58.760 --> 21:04.640]  is as terrifying as it sounds, but the idea there is that we would not actually allow
+[21:04.640 --> 21:09.320]  for the container to feed us the actual object file that we would then store at the counter.
+[21:09.320 --> 21:12.720]  What we would do is we would receive that object file, we'd look at what the kernel module
+[21:12.720 --> 21:18.040]  name is, look against an alias that we have of kernel modules that are finitely loaded
+[21:18.040 --> 21:23.720]  on the system, and if it's in that list, then we'll do the loading using the module from
+[21:23.720 --> 21:26.840]  the host system that we know is correct.
+[21:26.840 --> 21:30.480]  This might help quite a bit with things like firewalls in containers that might need to
+[21:30.480 --> 21:35.280]  load custom IP tables or net filter modules, and potentially some other things like file
+[21:35.280 --> 21:37.600]  systems and other things.
+[21:37.600 --> 21:42.520]  So that would be an interesting one to implement, and I'm sure we're going to have to explain
+[21:42.520 --> 21:45.240]  to a lot of people exactly how it is that we're doing it, because otherwise we're going
+[21:45.240 --> 21:49.200]  to be absolutely terrified.
+[21:49.200 --> 21:54.360]  Before eBPF program handling, I think it's also in our plans, as I said, we currently
+[21:54.360 --> 22:01.920]  only intercept the eBPF program that's used for device management, so for allowing device
+[22:01.920 --> 22:06.520]  creation, device mapping, that kind of stuff within containers.
+[22:06.520 --> 22:13.000]  That's because C Group 2 removed the device's C Groups file interface and moved to eBPF
+[22:13.000 --> 22:16.200]  instead, so we implemented it that way.
+[22:16.200 --> 22:21.080]  We seem to have some interest for other programs, like I think SystemD and some other pretty
+[22:21.080 --> 22:26.480]  common pieces of software now generate eBPF hook that they hook either globally or on
+[22:26.480 --> 22:30.160]  two specific interfaces, and some of those should be saved.
+[22:30.160 --> 22:34.720]  That should be things that we can effectively pull, validate, that they match the expected
+[22:34.720 --> 22:40.880]  pattern, and if they do, then show that to the camera, this is fine, and that should
+[22:40.880 --> 22:46.480]  actually make a lot more newer software that make use of a lot of eBPF stuff to just start
+[22:46.480 --> 22:47.480]  working.
+[22:47.480 --> 22:51.840]  I don't think we're anywhere near getting something like a eBPF trace working safely
+[22:51.840 --> 22:52.840]  inside a container.
+[22:52.840 --> 22:56.280]  That's absolutely terrifying, because it's got access to all of the candle constructs,
+[22:56.280 --> 23:04.400]  and that's not something we do, but some subsets of those interfaces should definitely be fine.
+[23:04.400 --> 23:11.240]  I think eBPF will solve a lot of those problems, probably, because then you can load unprivileged
+[23:11.240 --> 23:13.600]  programs.
+[23:13.600 --> 23:19.080]  And the other thing that I've had in mind for a while, and it's mostly a cool thing,
+[23:19.080 --> 23:25.480]  not something I've actually had the use case for yet, SecComp has an interesting property
+[23:25.480 --> 23:28.200]  in that it runs extremely early.
+[23:28.200 --> 23:36.240]  It runs in the system called entry time in the kernel, before the system call is resolved.
+[23:36.240 --> 23:39.760]  That means we can intercept system calls that don't exist.
+[23:39.760 --> 23:44.480]  So we can intercept system call numbers that have not yet been allocated, and that means
+[23:44.480 --> 23:50.160]  we get to actually implement new system calls purely in user space, that you can access
+[23:50.160 --> 23:53.720]  through the normal kernel system call API.
+[23:53.720 --> 23:58.800]  That's super interesting because it lets you do very easy prototype and testing of potential
+[23:58.800 --> 23:59.800]  system calls.
+[23:59.800 --> 24:03.600]  If you want to try specific interfaces, see how they look, the layout, what kind of arguments
+[24:03.600 --> 24:09.440]  you want, you can pretty quickly implement system calls through that, and already show
+[24:09.440 --> 24:13.400]  user space software added until you're happy with it, at which point you go back and you
+[24:13.400 --> 24:16.560]  do the actual kernel implementation of the system call.
+[24:16.560 --> 24:18.000]  So that might be pretty interesting.
+[24:18.000 --> 24:23.160]  I don't think anyone has actually done that yet, but that's a nice property of how SecComp
+[24:23.160 --> 24:28.760]  works, that it works before any kind of resolution, any kind of validity of the system call number.
+[24:28.760 --> 24:32.520]  All that SecComp tells us is actually a system call number and all of the pointers through
+[24:32.520 --> 24:33.920]  the arguments.
+[24:33.920 --> 24:36.240]  It doesn't care whether the thing exists or not.
+[24:36.240 --> 24:43.280]  So it means we get to actually intercept things that don't exist.
+[24:43.280 --> 24:44.960]  And that's it.
+[24:44.960 --> 24:47.560]  So we can start getting a few questions.
+[24:47.560 --> 24:50.760]  Also on your way out, if you're interested, we do have legacy stickers on the table over
+[24:50.760 --> 24:51.760]  there.
+[24:51.760 --> 24:54.640]  If you want to help yourself, there's a question over there.
+[24:54.640 --> 24:56.920]  I think this was the first one.
+[24:56.920 --> 25:02.040]  Yeah, there's one here, there's one over there.
+[25:02.040 --> 25:09.560]  When will we see the sysinfo system call being intercepted by default on LXD or other distributions?
+[25:09.560 --> 25:10.640]  Sorry.
+[25:10.640 --> 25:15.480]  When will we see sysinfo calls being default intercepted?
+[25:15.480 --> 25:17.720]  This is going to roll out?
+[25:17.720 --> 25:22.200]  Yeah, we've currently not decided to do any of that by default.
+[25:22.200 --> 25:26.400]  Please leave quietly while we are answering questions.
+[25:26.400 --> 25:31.840]  Yeah, so we've not decided to intercept anything by default yet.
+[25:31.840 --> 25:33.280]  We consider it to be safe.
+[25:33.280 --> 25:36.800]  The main problem we have is it depends on the kernel version that you're running, whether
+[25:36.800 --> 25:38.800]  it's going to be working or not.
+[25:38.800 --> 25:43.200]  And it's still recent enough, even though it's 5.1, which has been around a while now,
+[25:43.200 --> 25:46.960]  it's still recent enough that a bunch of distros would not work properly.
+[25:46.960 --> 25:51.040]  So we want to wait until we can generally assume that all of the distros that are like all
+[25:51.040 --> 25:55.480]  the long term support releases are still supported before we can start doing that kind of stuff
+[25:55.480 --> 25:57.880]  by default.
+[25:57.880 --> 26:00.280]  Please keep it down while we are answering questions.
+[26:00.280 --> 26:01.280]  Thank you.
+[26:01.280 --> 26:02.280]  Hello.
+[26:02.280 --> 26:03.960]  Thanks for the great talk.
+[26:03.960 --> 26:05.400]  So I have two questions.
+[26:05.400 --> 26:11.000]  First of all, you said there is this time of check versus time of use issue.
+[26:11.000 --> 26:12.000]  And so how do you solve it?
+[26:12.000 --> 26:16.360]  It's still trying to give a question, but I can't hear anything, hold on.
+[26:16.360 --> 26:20.840]  So first of all, how do you fix this time of check versus time of use issue, where you
+[26:20.840 --> 26:27.320]  know you call a syscall, the syscall gets notified, and you can, well, raise it with
+[26:27.320 --> 26:30.680]  another thread and change some arguments, right?
+[26:30.680 --> 26:34.280]  I didn't really get that, but if Christian did, you can answer instead, because you probably
+[26:34.280 --> 26:42.280]  know it.
+[26:42.280 --> 26:44.720]  It's extremely noisy.
+[26:44.720 --> 26:47.600]  Now, okay, I'm going to try this.
+[26:47.600 --> 26:51.480]  Stefan, how do you fix the time of check, time of use issue?
+[26:51.480 --> 26:57.200]  Okay, so the time of check, time of use issue, you fix it by never letting the kernel execute
+[26:57.200 --> 26:59.320]  after the check.
+[26:59.320 --> 27:04.280]  So you never continue a system call after the check, effectively.
+[27:04.280 --> 27:09.880]  If you want to intercept a system call, you are now in charge of running it.
+[27:09.880 --> 27:14.520]  And so you copy the arguments as they are, you do the check on your copy of them.
+[27:14.520 --> 27:19.560]  You never, ever reuse the pointer that the user gave you, and you go with your own copy
+[27:19.560 --> 27:22.440]  of it, and that's perfectly safe.
+[27:22.440 --> 27:26.200]  But if the argument is a pointer to a string, you need to copy the string, and when you
+[27:26.200 --> 27:28.880]  are copying the string, it may be changed under the hood.
+[27:28.880 --> 27:33.720]  So are you actually freezing the process with something like the C group, the freezer C
+[27:33.720 --> 27:35.320]  group, for example?
+[27:35.320 --> 27:39.920]  So technically the calling thread is frozen by the kernel, but it doesn't prevent another
+[27:39.920 --> 27:44.400]  parallel thread to modify it, which is why we effectively map the memory of the process
+[27:44.400 --> 27:48.200]  with the, we copy the entire thing that we care about.
+[27:48.200 --> 27:52.200]  The entire, like if there's pointer of pointers, we just travel start, we copy it.
+[27:52.200 --> 27:55.840]  Once we've copied that, that's what we check policy against.
+[27:55.840 --> 28:00.840]  And that's what the, those are the arguments we're going to be passing to the actual kernel.
+[28:00.840 --> 28:05.680]  And we just never look back at what came from the process, which means if they try to raise
+[28:05.680 --> 28:07.720]  us at that point, it doesn't matter.
+[28:07.720 --> 28:11.720]  We create full copies, we create full copies of everything, we never continue the system
+[28:11.720 --> 28:17.280]  call, although that's an ability that I added a while back, so you can even say, continue
+[28:17.280 --> 28:21.560]  the system call if I come to the conclusion that it's fine to do so.
+[28:21.560 --> 28:29.240]  But if you do that, then you need to be, the kernel needs to guarantee you that it's safe.
+[28:29.240 --> 28:34.280]  For example, continuing the make not system call after you inspected the arguments is
+[28:34.280 --> 28:42.160]  safe because the kernel will just allow the creation of any device.
+[28:42.160 --> 28:51.040]  So I have another question, because you said about MK not that if you MK not add like this
+[28:51.040 --> 28:57.640]  device that nothing protects you against reading or writing into this, right?
+[28:57.640 --> 29:03.760]  But there is this devices C group where you can actually protect this device from being
+[29:03.760 --> 29:05.200]  written to or read from.
+[29:05.200 --> 29:07.960]  And this is what Docker does, for example.
+[29:07.960 --> 29:11.280]  So are you doing this in LXC?
+[29:11.280 --> 29:13.960]  I'm sorry, I only get about 20% of what you're saying.
+[29:13.960 --> 29:17.200]  Well of times what we'll do is that I'm going to be outside and we can just talk because
+[29:17.200 --> 29:19.000]  you also have questions.
+[29:19.000 --> 29:22.040]  So just follow me and we'll chat, it's going to be easier.
+[29:22.040 --> 29:33.480]  Thank you very much.

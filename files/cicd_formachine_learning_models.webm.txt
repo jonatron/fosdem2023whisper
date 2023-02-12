@@ -1,0 +1,220 @@
+[00:00.000 --> 00:16.120]  Hello, everyone. Do you hear me well? Thanks, pretty large audience. If I may ask a quick
+[00:16.120 --> 00:22.200]  show of hands, who among you have some experience, just any level of experience with machine
+[00:22.200 --> 00:32.800]  learning? Okay, cool. Awesome. So, I'll be talking today about how to run testing on
+[00:32.800 --> 00:38.960]  machine learning systems. So, there are different keywords, CICD, quality assurance. A few words
+[00:38.960 --> 00:46.480]  about us. So, I'm one of the founders of Giscard. We are building a collaborative and open
+[00:46.480 --> 00:52.760]  source software platform to precisely ensure the quality of AI models. And I'll be explaining
+[00:52.760 --> 01:01.080]  in this presentation a bit how it works. In terms of agenda, I prepared kind of two sections
+[01:01.080 --> 01:07.120]  on the why, like why a project on testing machine learning systems is needed, why we
+[01:07.120 --> 01:15.840]  personally, I personally decided to work on that problem. Some of the risks and why classical
+[01:15.840 --> 01:22.760]  software testing methods don't quite work on AI. And then I'll do some more concrete
+[01:22.760 --> 01:30.840]  examples on two important quality criteria that you might want to test for machine learning.
+[01:30.840 --> 01:36.440]  One is robustness and the other is furnace. And if we have the time, it's just 30 minutes.
+[01:36.440 --> 01:44.280]  I hope that we can do a quick demo of an example use case where we run the full CICD pipeline
+[01:44.280 --> 01:53.120]  on a machine learning model. So, to kind of start off easy, I put together a series of
+[01:53.120 --> 02:03.000]  memes to explain my personal story of why I came to create a company around, and a project
+[02:03.000 --> 02:09.280]  around this machine learning testing thing. So, about 10 years ago, I started in machine
+[02:09.280 --> 02:16.480]  learning, statistics, data science, and you know, you had this, you start using the scikit
+[02:16.480 --> 02:21.960]  learn API, and you're like, yeah, it's super easy, right? Anybody can be a data scientist,
+[02:21.960 --> 02:29.960]  you just dot fit, dot predict, and that's it. You're a data scientist. And probably if
+[02:29.960 --> 02:37.880]  you're here today, you're like, yeah, have you tested your model? Yeah, sure. Train test,
+[02:37.880 --> 02:49.320]  yeah. Reality, if you've deployed in production, is quite different. So, if you've deployed
+[02:49.320 --> 02:58.200]  through production, often you'll have this painful discovery where you have your product
+[02:58.200 --> 03:04.160]  manager, business stakeholders to whom you said, look, I worked really hard on the fine
+[03:04.160 --> 03:12.680]  tuning and the grid search to get to 85% accuracy, and you push your first version to production,
+[03:12.680 --> 03:21.160]  and things don't quite work out. You don't reproduce these good accuracy numbers.
+[03:21.160 --> 03:30.800]  So, well, this was me. I hope it's not you. It was one of these, my first experience deploying
+[03:30.800 --> 03:37.360]  machine learning through production was on a fraud detection system. So, frauds are notoriously
+[03:37.360 --> 03:42.360]  difficult as a use case for machine learning because what you're trying to detect doesn't
+[03:42.360 --> 03:49.440]  quite want to be detected. There are people behind it who have a vested interest not to
+[03:49.440 --> 03:56.560]  have your machine learning system detect them. So, often in terms of performance, that's
+[03:56.560 --> 04:07.680]  at least what I ended up doing a lot of hot fixes in production. It's bad. So, kind of
+[04:07.680 --> 04:16.080]  like five years ago, this was my stance on machine learning in production, a very painful
+[04:16.080 --> 04:23.520]  grueling experience where you never know when you're going to be a complain, where you're
+[04:23.520 --> 04:31.360]  going to be on call to solve something in production. So, that's when I decided to buff
+[04:31.360 --> 04:43.240]  up and switch roles to join a software engineering team. I was a data crew back then, so I moved
+[04:43.240 --> 04:53.240]  internally from data science to the product team, and here are some of the things to summarize
+[04:53.240 --> 05:01.320]  that as someone with a machine learning background, but no real software engineering experience
+[05:01.320 --> 05:08.840]  that these were kind of like what I was told, like you must learn the ways of a CI CD, otherwise
+[05:08.840 --> 05:15.880]  your project will not come to production. And for context, so I was specifically at
+[05:15.880 --> 05:25.160]  that time in charge of creating like an open source layer to federate all the NLP and computer
+[05:25.160 --> 05:33.400]  vision APIs that vendors in the cloud provide, and then to do the same for pre-trained NLP
+[05:33.400 --> 05:41.400]  and time series models. So, what was difficult in this context is I was not even the one
+[05:41.400 --> 05:46.480]  in charge of the models, and the models will be retrained fine-tuned, so the guarantees
+[05:46.480 --> 05:55.160]  into the properties of that system as an engineer, that's more difficult. There are some elements
+[05:55.160 --> 06:03.960]  in the stack that you don't have control of. So, yeah, this is a bit of a repeat of a previous
+[06:03.960 --> 06:12.520]  meme, and I really wanted to say one does not simply ship an ML product without tests.
+[06:12.520 --> 06:21.360]  The challenge I had then is that from an engineering management standpoint, I was told, yeah, but
+[06:21.360 --> 06:27.040]  you know, it's easy, no engineers, they all write their test cases, so you do machine
+[06:27.040 --> 06:34.720]  learning, just write them all, just write all the test cases. So, this was me being
+[06:34.720 --> 06:40.760]  kind of a square one. It's like, okay, so you're telling me, I just need to write unit
+[06:40.760 --> 06:49.000]  tests, okay, that will not really solve the issue, and that's kind of the beginning of
+[06:49.000 --> 06:56.240]  a quest that set me on to build something to solve that gap between, okay, I want to
+[06:56.240 --> 07:02.800]  test my models, I need to test my models, and how do, how can I do that? Because clearly,
+[07:02.800 --> 07:12.720]  and I'll explain why, unit testing, your model is really not enough. So, a different angle
+[07:12.720 --> 07:19.120]  on the Y, I'll try to take a step back and talk about quality in general. I think in
+[07:19.120 --> 07:29.280]  this track, we all agree that quality matters, and if you look at AI, it's an industry that's
+[07:29.280 --> 07:35.920]  an engineering practice that is far younger than software engineering or civil engineering,
+[07:35.920 --> 07:42.880]  and it's just riddled with incidents. I encourage you, if you don't know that resource already,
+[07:42.880 --> 07:52.040]  it's an open source database, it's incidentdatabase.ai, and it's a public collection of reports,
+[07:52.040 --> 07:59.760]  mostly in the media, of AI models that have not worked properly, and it's a really great
+[07:59.760 --> 08:07.240]  work that has been going on for about two years and a half. It's a global initiative,
+[08:07.240 --> 08:15.200]  and just in this time, they collected more than 2,000 incidents. Since these are public
+[08:15.200 --> 08:21.440]  reports, think of it as the tip of the iceberg, of course. There are a lot of incidents internal
+[08:21.440 --> 08:28.800]  to companies that are not necessarily spoken out in the media. The incident database has
+[08:28.800 --> 08:37.000]  a very interesting taxonomy of the different types of incidents. It's very multifaceted.
+[08:37.000 --> 08:46.120]  I took the liberty to simplify it in three big categories of incidents. One is FX, the
+[08:46.120 --> 08:53.160]  other is business economic impact, and the third one is on security. We're talking about
+[08:53.160 --> 09:01.360]  really, if they happen at a global company scale, incidents that are very, very severe.
+[09:01.360 --> 09:10.200]  In FX, you can have a sexist credit scoring algorithm that exposes the company to lawsuits,
+[09:10.200 --> 09:19.400]  to brand image damages, et cetera. These are notoriously hard to identify. In a way, machine
+[09:19.400 --> 09:25.000]  learning is precisely about discrimination. It's hard to tell a machine that is learning
+[09:25.000 --> 09:30.200]  to discriminate, not to discriminate against certain sensitive groups. I'll speak on some
+[09:30.200 --> 09:35.160]  methods that can be used precisely on this problem, but Apple was working with at the
+[09:35.160 --> 09:41.880]  time Goldman Sachs on deploying this algorithm and probably some tests and safeguards were
+[09:41.880 --> 09:50.800]  unfortunately skipped. It was actually discovered on Twitter that in a simple case, a male loan
+[09:50.800 --> 10:00.960]  applicant would get 10x their loan limit compared to his wife. That sparked a huge controversy
+[10:00.960 --> 10:10.000]  that probably exposed Apple to some lawsuits. In another area, that is not with sensitive
+[10:10.000 --> 10:20.440]  features such as gender. There was a huge catastrophe a year and a half ago that happened
+[10:20.440 --> 10:30.600]  to Zillow, a real estate company, where there was a small bias that was overestimating the
+[10:30.600 --> 10:40.960]  prices of homes. They decided to put this algorithm live to buy and sell houses. It
+[10:40.960 --> 10:47.600]  turned out that this tiny bias, which was left unchecked, was exploited by the real
+[10:47.600 --> 10:59.120]  estate agents in the US. Literally, this created a loss of nearly half a billion dollars. Again,
+[10:59.120 --> 11:06.480]  maybe if going back to testing, this could have been unseapated and avoided. Now on a
+[11:06.480 --> 11:13.080]  more cybersecurity spectrum, there's a lot of good research from cybersecurity labs showing
+[11:13.080 --> 11:20.080]  that you can hack, for example, a computer vision system in an autonomous driving context.
+[11:20.080 --> 11:26.680]  Here you put a special tape on the road and you can crash a Tesla. We don't quite know
+[11:26.680 --> 11:31.920]  if these types of vulnerabilities have been exploited in real life yet, but as AI becomes
+[11:31.920 --> 11:36.760]  super ubiquitous, and obviously there are some bad actors out there that might want
+[11:36.760 --> 11:43.880]  to hack these systems and introduces a new type of attack vectors. That's also something
+[11:43.880 --> 11:54.840]  we need to care about. Both from the practitioners of AI and from a regulatory standpoint, testing
+[11:54.840 --> 12:02.680]  just makes sense. Yanlequin, chief AI scientist at META, was actually taking a stance at the
+[12:02.680 --> 12:10.320]  beginning of last year on Twitter saying that if you won't trust in a system, you need tests.
+[12:10.320 --> 12:15.600]  Also making a slight criticism towards some of the explainability methods, because two
+[12:15.600 --> 12:20.680]  years ago, if you've followed that realm, people were saying, oh, you just need explainability
+[12:20.680 --> 12:28.520]  and then your problems will go away. Well, that's just part of the answer. Lastly, and
+[12:28.520 --> 12:33.320]  this was covered in some of the talks this morning on the big auditorium, there's a
+[12:33.320 --> 12:40.400]  growing regulatory requirement to put some checks and balances in place. That also says
+[12:40.400 --> 12:47.000]  that you need specifically in case your AI system is high risk, you need to put quality
+[12:47.000 --> 12:52.720]  measures in place. The definition of high risk AI systems is pretty large. Obviously,
+[12:52.720 --> 12:59.240]  you have anything related to infrastructure, like critical infrastructure, defense, et cetera,
+[12:59.240 --> 13:06.440]  but you also have all AI systems that are involved in human resources and public service
+[13:06.440 --> 13:10.880]  and financial services, because these are considered, obviously, critical components
+[13:10.880 --> 13:22.760]  of society. Now that we kind of agreed that it's an important problem, these are some
+[13:22.760 --> 13:31.000]  of the challenges, because if you've encountered some of these issues, you probably looked
+[13:31.000 --> 13:39.720]  at some easy solutions, taking some analogies on what you might do to do this. There are
+[13:39.720 --> 13:46.360]  three points that make this problem of testing machine learning a bit special, meaning it's
+[13:46.360 --> 13:53.920]  still a big work in progress. Point one is that it is really not enough to check the
+[13:53.920 --> 14:01.600]  data quality to guarantee the quality of a machine learning system. One of my co-founders
+[14:01.600 --> 14:08.360]  doing his PhD proved experimentally, you can run experiments, you can have really clean
+[14:08.360 --> 14:16.680]  data in a bad model. So you cannot just say it's an upstream problem, it's technically
+[14:16.680 --> 14:22.440]  like systems engineering, you have to take the data, the machine learning model, and
+[14:22.440 --> 14:31.000]  the user into context to analyze its properties. Moreover, the errors of the machine learning
+[14:31.000 --> 14:40.160]  systems are often caused by pieces of data that did not exist when the model was created,
+[14:40.160 --> 14:51.680]  they were clean, but they did not exist. Second point, it's pretty hard just to copy-paste
+[14:51.680 --> 15:00.200]  some of the testing methods from software into AI. One is like, yes, you can do some
+[15:00.200 --> 15:07.720]  unit tests on machine learning models, but they won't prove much. Because the principle
+[15:07.720 --> 15:14.160]  is that it's a transactional system and things are moving quite a lot. So that's a good baseline.
+[15:14.160 --> 15:17.760]  If you have a machine learning system and you have some unit tests, that's really like step
+[15:17.760 --> 15:24.520]  one. It's better to have that than to have nothing. But you have to embrace the fact
+[15:24.520 --> 15:32.880]  that there has got to be a large number of test cases. So you cannot just test on three,
+[15:32.880 --> 15:39.640]  five, hundred, even a thousand cases will not be enough. The models themselves are probabilistic.
+[15:39.640 --> 15:47.000]  So you have to take into account statistical methods of tests. And lastly, and I think
+[15:47.000 --> 15:53.080]  this is specific to, because there has been some systems that were heavily dependent on
+[15:53.080 --> 16:01.200]  data, but with AI, AI also came with a fact that you increase the number of data inputs
+[16:01.200 --> 16:07.640]  compared to traditional systems. So you very quickly come into issues of, well, it's a
+[16:07.640 --> 16:15.320]  combinatorial problem, and it's factually impossible to generate all the combinations.
+[16:15.320 --> 16:25.120]  Very simple example of that. How can you test an NLP system? Lastly, like AI touching a lot
+[16:25.120 --> 16:30.160]  of different points. If you want to have a complete test coverage, you really need to
+[16:30.160 --> 16:36.560]  take into account multiple criteria. So performance of a system, but also robustness, robustness
+[16:36.560 --> 16:45.920]  to errors, fairness, privacy, security, reliability. And also, and that's becoming an increasingly
+[16:45.920 --> 16:51.320]  important topic with green AI, it's like what is the carbon impact of this AI? Do you really
+[16:51.320 --> 16:59.040]  need that many GPUs? Can you make your system a bit more energy efficient? So today I'll
+[16:59.040 --> 17:04.760]  focus on the, because I see we have 10 more minutes, I'll focus on two aspects, the robustness
+[17:04.760 --> 17:17.000]  and the effects. So I'll start with robustness. Who has read or heard about this paper? Quick
+[17:17.000 --> 17:27.320]  show of hands. Okay, one. So who has heard of behavioral testing? Because that's not
+[17:27.320 --> 17:36.440]  machine learning specific. Yeah, cool. So Ribeiro three years ago, along with other co-writers
+[17:36.440 --> 17:46.480]  of this paper, did I think a fantastic job to see how to adapt behavioral testing, which
+[17:46.480 --> 17:53.120]  is a really good practice from software engineering, to the context of machine learning. And specifically
+[17:53.120 --> 18:07.720]  wrote something for NLP models. The main problem that this research paper aimed to solve was
+[18:07.720 --> 18:14.680]  test case generation. Because really NLP is by a sense a problem, NLP, a natural language
+[18:14.680 --> 18:26.640]  processing. So you have an input text, it's just raw text. So you need to test this. But
+[18:26.640 --> 18:39.880]  what you can do is to generate test cases that rely on mapping the input and the input
+[18:39.880 --> 18:48.640]  changing changes in the text to expectations. I'll give three examples from very, very simple
+[18:48.640 --> 18:57.640]  to a bit more complex. One is like the principle of minimum functionality. For example, if
+[18:57.640 --> 19:04.200]  you are building a sentiment prediction machine learning system, you could just have a test
+[19:04.200 --> 19:12.960]  that says if you have extraordinary in the sentence, you should always predict that the
+[19:12.960 --> 19:20.160]  model will say it's a positive message. Now you will probably tell me, yeah, but what
+[19:20.160 --> 19:30.120]  about if the user has written it's not extraordinary or absolutely not extraordinary? And that
+[19:30.120 --> 19:37.920]  actually brings me to the concept of test template. And the fact that probably for NLP,
+[19:37.920 --> 19:42.480]  what you need to do, and this is obviously language specific, is start to have templates
+[19:42.480 --> 19:49.800]  where you change the text by, for example, adding negations. And then so you might want
+[19:49.800 --> 19:57.080]  to test if your system, if you're adding negation, if you have a certain direction. Because normally
+[19:57.080 --> 20:03.040]  if the machine learning model has understood, it should, if it's about sentiment, understand
+[20:03.040 --> 20:10.760]  that putting not an extraordinary or not good, you have then synonyms, will not affect the
+[20:10.760 --> 20:20.040]  system too much. Or actually either your system, you want it to move to a certain direction
+[20:20.040 --> 20:26.120]  or there are cases where you want actually the opposite behavior. You want robustness.
+[20:26.120 --> 20:35.120]  So that's called invariance. So for instance, you will want a system that is robust to typos
+[20:35.120 --> 20:46.120]  to just changing like a location name, just putting synonyms, et cetera, et cetera.
+[20:46.120 --> 20:54.280]  So we've created this diagram to explain it. And it's a really thriving field in the research.
+[20:54.280 --> 20:59.640]  There is a lot of research going on these days about testing machine learning systems.
+[20:59.640 --> 21:07.680]  And metamorphic testing is one of the leading methods to do that. The principle is, if I
+[21:07.680 --> 21:14.880]  take an analogy, is very similar to if you've worked in finance or if you have some friends
+[21:14.880 --> 21:24.720]  who work there, the principle of backtesting an investment strategy. You simulate different
+[21:24.720 --> 21:30.920]  changes in the market conditions and you see how your strategy, your algorithm behaves,
+[21:30.920 --> 21:42.960]  what is the variance of that strategy. This concept applies very well to machine learning.
+[21:42.960 --> 21:55.400]  So you need two things. You need one to define a perturbation. So what I was explaining earlier
+[21:55.400 --> 22:02.800]  in NLP, perturbation might be adding typos, adding negation. In another context, like
+[22:02.800 --> 22:10.760]  let's say it's more in an industrial case, it might be about doubling the values of some
+[22:10.760 --> 22:21.320]  sensors or adding noise to an image. And then, pretty simply, you define a test expectation
+[22:21.320 --> 22:27.800]  in terms of the metamorphic relation between the output of a machine learning model and
+[22:27.800 --> 22:34.800]  the distribution of the output after perturbation. And once you have that, and if you have enough
+[22:34.800 --> 22:40.000]  data, then you can actually have, like you can do actual statistical tests, see there's
+[22:40.000 --> 22:47.440]  a difference in distribution, et cetera. So I won't have too much time to dive into all
+[22:47.440 --> 22:54.000]  the details of this, but we have wrote a technical guide on this topic and you have a link in
+[22:54.000 --> 23:03.680]  QR code up there. Next, I'll talk a bit about a really tricky topic, which is AI fairness.
+[23:03.680 --> 23:08.760]  And I want to emphasize that it's, at least our recommendation, is not to come at the
+[23:08.760 --> 23:18.040]  problem of AI ethics with a closed mind or a top-down definition of this is an ethical
+[23:18.040 --> 23:26.640]  system or no, this is an unethical system. My co-founder did his PhD on precisely on
+[23:26.640 --> 23:35.080]  this topic and wrote a full paper on this, looking at the philosophical and sociological
+[23:35.080 --> 23:45.880]  implications of this. And the gist of it is that, yes, to a certain extent, you can adopt
+[23:45.880 --> 23:53.280]  a top-down approach to AI fairness, saying, well, for instance, as an organization, we
+[23:53.280 --> 24:01.560]  want to test the fairness on explicitly free, sensitive categories. You can say, well, we
+[24:01.560 --> 24:09.680]  want to check for gender balance. We want to check for race balance. That means if the
+[24:09.680 --> 24:15.480]  country where you deploy a machine learning allows to collect this data, this is not always
+[24:15.480 --> 24:26.200]  the case. But the challenge with these approaches is that, A, you might not have the data to
+[24:26.200 --> 24:33.560]  measure this, and B, you may miss out because often when this exercise of defining the quality
+[24:33.560 --> 24:45.800]  criteria for fairness and for balance are done, you only have a limited sample. So it's,
+[24:45.800 --> 24:53.680]  in taking some sociological analysis, it's really important to have this kind of top-down
+[24:53.680 --> 25:01.200]  definition of AI ethics, meet the reality on the ground, and confront the actual users
+[25:01.200 --> 25:08.280]  and the makers of the systems to get them to define the definition of ethics, rather
+[25:08.280 --> 25:15.680]  than a big organization, if I put a bit of a caricature that says, AI ethics, yeah, we
+[25:15.680 --> 25:22.000]  wrote a charter about this. You follow, you read this, you sign, and then, oops, you're
+[25:22.000 --> 25:33.440]  ethical. Having said that, so there are some good top-down metrics to adopt that are kind
+[25:33.440 --> 25:40.160]  of a baseline, and I'll explain one of them, which is disparate impact. Disparate impact
+[25:40.160 --> 25:49.040]  is actually a metric from the human resources management industry from at least 40 years
+[25:49.040 --> 25:59.480]  ago, so it's not new. That says, so it's probabilities, but essentially it's about setting a rule
+[25:59.480 --> 26:09.320]  of 80%, where you measure the probability of, you define a positive outcome with respect
+[26:09.320 --> 26:18.240]  to a given protected population, and you say, well, I want to the proportion of the probability
+[26:18.240 --> 26:26.360]  of a positive outcome relative to the probability of a positive outcome in the unprotected context
+[26:26.360 --> 26:40.520]  to be above 80%. So, for instance, so if you want to apply that to a, oops, to put more
+[26:40.520 --> 26:48.840]  concrete, yeah, so if, say, you're building a model to predict the churn of customers,
+[26:48.840 --> 26:56.320]  and you want to check whether your model is biased or not for each class, this formula
+[26:56.320 --> 27:08.480]  allows you to really define this metric and write a concrete test case. Right, so I just
+[27:08.480 --> 27:15.600]  have three minutes, so I'll highlight what one of the features of our project enables
+[27:15.600 --> 27:22.080]  is putting human feedback, so really having an interface where users and not only data
+[27:22.080 --> 27:29.000]  scientists can change the parameters, so there's a link to metamorphic testing, and actually
+[27:29.000 --> 27:35.040]  give human feedback to a point art where the biases may be, and the benefit of this approach
+[27:35.040 --> 27:45.960]  is that it allows for the community to precisely define what they think are the risks. So sadly,
+[27:45.960 --> 27:56.240]  we won't have time to do a demo, but this phase, in our project, we call that the inspection
+[27:56.240 --> 28:03.240]  phase, and it's about before you test, and this is super important, and again, one of
+[28:03.240 --> 28:09.480]  the things where it's different from traditional software testing, before you even test, you
+[28:09.480 --> 28:14.960]  need to confront yourself with the data and the model, so that's where actually we think
+[28:14.960 --> 28:20.680]  explainability methods really shine, it's because they allow to debug and to identify
+[28:20.680 --> 28:26.440]  the zones of risks, and this is precisely what helps once you have qualified feedback
+[28:26.440 --> 28:32.240]  to know where you should put your effort in test, so in a nutshell what I'm saying for
+[28:32.240 --> 28:38.240]  testing machine learning systems is it's not a matter of creating hundreds of tests, of
+[28:38.240 --> 28:43.440]  automating everything, but rather to have a good idea of, from a fairness standpoint
+[28:43.440 --> 28:51.760]  and for a performance standpoint, of what are the 10, 15, maybe max 20 tests that you
+[28:51.760 --> 29:00.480]  want in your platform. If you want to get started actually on it, this is our GitHub,
+[29:00.480 --> 29:04.560]  and if you have a machine learning system to test, we're interested in your feedback.

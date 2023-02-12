@@ -1,0 +1,147 @@
+[00:00.000 --> 00:10.000]  Hello everyone, this is Peter Menzik and he will tell you why resolving two names in
+[00:10.000 --> 00:11.000]  the GUI program is hard.
+[00:11.000 --> 00:13.000]  If you've ever tried, you know.
+[00:13.000 --> 00:16.000]  If you've never tried, listen.
+[00:16.000 --> 00:17.000]  Okay.
+[00:17.000 --> 00:18.000]  Good afternoon.
+[00:18.000 --> 00:19.000]  My name is Peter Menzik.
+[00:19.000 --> 00:28.000]  I work for Red Hat, so I took my hat with myself and this is a presentation about why
+[00:28.000 --> 00:32.000]  the resolution of two names in a single program is not simple.
+[00:32.000 --> 00:36.000]  So, how do you resolve names?
+[00:36.000 --> 00:43.000]  The system offers get other info call and it is protocol and family independent, requires
+[00:43.000 --> 00:50.000]  just host name and service name and returns and this is somehow ordered and works on major
+[00:50.000 --> 00:52.000]  OS operating systems.
+[00:52.000 --> 00:55.000]  It is fine, but it blocks.
+[00:55.000 --> 00:58.000]  And we don't want that.
+[00:58.000 --> 01:05.000]  We can work on that by using asynchronous libraries, which are usually DNS only.
+[01:05.000 --> 01:17.000]  That might be good enough, but not always and typical applications should not be limited
+[01:17.000 --> 01:18.000]  by that.
+[01:18.000 --> 01:22.000]  So, good for servers, not for workstations.
+[01:22.000 --> 01:30.000]  Because name resolution can be provided also by different providers than DNS only and some
+[01:30.000 --> 01:33.000]  are obsolete, some are not.
+[01:33.000 --> 01:41.000]  So, I think application should try to use common provider for any aim.
+[01:41.000 --> 01:49.000]  We have, for example, system here is of D, which provides different protocols, but does
+[01:49.000 --> 01:53.000]  not work in a way which breaks, for example, DNS only application.
+[01:53.000 --> 01:57.000]  So, it's not a good solution, I think.
+[01:57.000 --> 02:03.000]  So, how do I make multiple solutions from single program?
+[02:03.000 --> 02:05.000]  I can use second interface.
+[02:05.000 --> 02:17.000]  It works for DCP, UDP, present on any system, but I can handle thousands of connections
+[02:17.000 --> 02:20.000]  from single program without problem.
+[02:20.000 --> 02:28.000]  I just use poll or select and select only socket, which has something ready for me.
+[02:28.000 --> 02:30.000]  So, why is blocking problem?
+[02:30.000 --> 02:43.000]  Because graphic applications use not a blocking loop, but just event-based loops.
+[02:43.000 --> 02:48.000]  And they are non-responsive if any call they use blocks.
+[02:48.000 --> 02:53.000]  We want to avoid that.
+[02:53.000 --> 02:59.000]  So, modern applications are implemented by just callbacks to events they want to handle
+[02:59.000 --> 03:00.000]  and nothing else.
+[03:00.000 --> 03:06.000]  And then spend most of time waiting for something and conserve CPU.
+[03:06.000 --> 03:09.000]  So, why not just working threads?
+[03:09.000 --> 03:17.000]  Because creating a new thread is simple, but receiving result from finish to work in thread
+[03:17.000 --> 03:20.000]  into the main thread is not so simple.
+[03:20.000 --> 03:28.000]  And it increases complexity a lot of any application almost.
+[03:28.000 --> 03:32.000]  So, why that thread is needed anyway?
+[03:32.000 --> 03:45.000]  Name resolution on Linux machine can come from multiple modules.
+[03:45.000 --> 03:48.000]  Some are local only on the machine.
+[03:48.000 --> 03:53.000]  Some need to ask local or remote service.
+[03:53.000 --> 03:58.000]  And fetch, send some request and wait for some response.
+[03:58.000 --> 04:07.000]  It may tie or not and extract fetched addresses and return them to start connecting.
+[04:07.000 --> 04:15.000]  And the most important waiting for timeout or activity or socket activity is implemented
+[04:15.000 --> 04:23.000]  by any framework doing non-trivial applications anyway, because they need it.
+[04:23.000 --> 04:26.000]  So, how can it be made non-blocking?
+[04:26.000 --> 04:39.000]  I think we should make a common code to implement protocol specific plugins and DNS should be
+[04:39.000 --> 04:41.000]  only one of them.
+[04:41.000 --> 04:50.000]  And for example, multicast DNS or so and provide integration with custom loops in different
+[04:50.000 --> 05:00.000]  applications because major graphical applications use Qt or G-Lip, but they may use some custom
+[05:00.000 --> 05:13.000]  loops and it should require relatively small time, small code part to integrate with them quite nice.
+[05:13.000 --> 05:21.000]  So, we should rewrite existing modules to use callbacks like modern applications and not
+[05:21.000 --> 05:30.000]  just blocking because current modules are easy to write and maintain but difficult to use
+[05:30.000 --> 05:33.000]  from normal applications.
+[05:33.000 --> 05:39.000]  I think resolution should be simple even in non-trivial applications.
+[05:39.000 --> 05:43.000]  So, what do we need?
+[05:43.000 --> 05:53.000]  Just ability to add and modify socket into watched list of events and denotified after time is up
+[05:53.000 --> 06:00.000]  and if no activity occurred and provide some code to handle those events.
+[06:00.000 --> 06:10.000]  And we don't care too much about time precision because we measure time out in seconds in DNS anyway.
+[06:10.000 --> 06:15.000]  So, who cares?
+[06:15.000 --> 06:17.000]  So, why non-blocking?
+[06:17.000 --> 06:21.000]  Because it creates no race conditions.
+[06:21.000 --> 06:24.000]  It's almost unlimited.
+[06:24.000 --> 06:32.000]  It's limited by number of socket handled that usually quite high, so we don't care.
+[06:32.000 --> 06:44.000]  And it can allow many queries per thread without any problem.
+[06:44.000 --> 06:52.000]  And resolution would become more easy handled in a single thread only, not scattered over
+[06:52.000 --> 06:55.000]  multiple threads during runtime.
+[06:55.000 --> 07:05.000]  So, we should not care and of course, separate threads would still make sense if this intensive
+[07:05.000 --> 07:13.000]  applications are run but for small fetches of data from network it's not necessary.
+[07:13.000 --> 07:20.000]  I think server software should take advantage too.
+[07:20.000 --> 07:27.000]  So, unfortunately, there is no implementation yet.
+[07:27.000 --> 07:39.000]  I think Pavel Shimada wrote quite good start called NetResolve and it provides separate
+[07:39.000 --> 07:46.000]  load-double modules with different providers which can be used as building start.
+[07:46.000 --> 07:53.000]  But its documentation is quite poor and non-blocking API.
+[07:53.000 --> 08:04.000]  I try to start what is needed is missing and waiting for me, I think, to write.
+[08:04.000 --> 08:12.000]  But I think we need protocol independent API for normal applications.
+[08:12.000 --> 08:23.000]  And if we add just some metadata to stroke the other's info provided by Get Other Info today,
+[08:23.000 --> 08:35.000]  I think we could handle also HTTPS resource records in library and not require common applications
+[08:35.000 --> 08:42.000]  to handle that and implement it in each application.
+[08:42.000 --> 08:48.000]  I guess there are many applications starting HTTPS connection and it should be not
+[08:48.000 --> 08:52.000]  re-implemented in every application doing that.
+[08:52.000 --> 09:04.000]  Of course, some parts are similar and for example, multicast DNS can use the similar parts
+[09:04.000 --> 09:12.000]  and could use the same calls with just asynchronous way.
+[09:12.000 --> 09:16.000]  And that is almost all I had to say.
+[09:16.000 --> 09:22.000]  So, are there questions?
+[09:22.000 --> 09:25.000]  No questions?
+[09:25.000 --> 09:37.000]  So, you want a solution for this? Is there a way for Red Hat to lead this in the free desktop space, maybe?
+[09:37.000 --> 09:43.000]  Well, maybe, yes. Who should lead the initiative?
+[09:43.000 --> 09:47.000]  I am not sure. It's not official Red Hat initiative yet.
+[09:47.000 --> 09:56.000]  It's just my own opinion. So, it's not like Red Hat already has project and involved people and such.
+[09:56.000 --> 10:05.000]  So, it's still what I think should be done, but not yet decided who should lead it or who should cover that.
+[10:05.000 --> 10:12.000]  I definitely want to talk about it in Red Hat, but it's in fact not clear to me
+[10:12.000 --> 10:19.000]  which mailing list or organization should start and should organize this because
+[10:19.000 --> 10:26.000]  it's maybe should be handled by G-Lipsy people or I don't know.
+[10:26.000 --> 10:34.000]  I would like to talk and hear what other thing about it because I'm not sure myself.
+[10:34.000 --> 10:45.000]  It occurs to me that this problem statement is a lot like the get DNS problem statement plus things that aren't DNS.
+[10:45.000 --> 10:57.000]  So, I guess my recommendation would be why not look and see if you can enhance that API to include these non-DNS naming systems?
+[10:57.000 --> 11:04.000]  Which API?
+[11:04.000 --> 11:13.000]  Well, the question was why not enhance existing solutions like get DNS for example?
+[11:13.000 --> 11:24.000]  I'm not sure how can you do that because I think that the problem I have with system D trying to do that
+[11:24.000 --> 11:28.000]  is far away.
+[11:28.000 --> 11:36.000]  This is a good example of how to do that wrong because I think when application wants to talk DNS only and nothing else,
+[11:36.000 --> 11:38.000]  it should be able to.
+[11:38.000 --> 11:48.000]  So, if I use the get DNS library and I think it should do only DNS, it should be able to choose.
+[11:48.000 --> 11:59.000]  So, how do I choose whether it's different protocols and how do I forward from get DNS library?
+[11:59.000 --> 12:03.000]  What do we all do from there?
+[12:03.000 --> 12:14.000]  Because I think get DNS expects DNS record types or such things and those are DNS specific.
+[12:14.000 --> 12:19.000]  Those don't work in other protocols.
+[12:19.000 --> 12:22.000]  Does that answer the question?
+[12:22.000 --> 12:29.000]  Well, not so much question as well as how to get DNS address this.
+[12:29.000 --> 12:34.000]  Get DNS for all its faults is extremely flexible.
+[12:34.000 --> 12:38.000]  So, you can enable and disable extensions.
+[12:38.000 --> 12:44.000]  You can say by default it does DNS only if you say I want to have an DNS that starts doing it.
+[12:44.000 --> 12:48.000]  So, there is a way to extend it and the same thing applies to record types.
+[12:48.000 --> 12:53.000]  If you say I have funky record type, it fits within the framework to have it.
+[12:53.000 --> 12:56.000]  So, I think it's a lot of technical problems.
+[12:56.000 --> 13:02.000]  Yes, but look, it wasn't even a question.
+[13:02.000 --> 13:09.000]  Please repeat the comment.
+[13:09.000 --> 13:17.000]  I think statement get DNS is quite flexible and can adjust to those.
+[13:17.000 --> 13:19.000]  Yes, why not?
+[13:19.000 --> 13:28.000]  I don't say we have to implement it from start, but it should be generic enough so it would be future proof.
+[13:28.000 --> 13:39.000]  And I admit I don't know details of DNS, get DNS library, so I can't comment details.
+[13:39.000 --> 13:46.000]  I just ensure it can do, but why not if it's another library,
+[13:46.000 --> 13:55.000]  but I think it eventually should land in Lipsy or something like that after it proves it works.
+[13:55.000 --> 13:58.000]  So, maybe.
+[13:58.000 --> 14:00.000]  So, you had a slide.
+[14:00.000 --> 14:02.000]  Does anybody else have a question?
+[14:02.000 --> 14:03.000]  No?
+[14:03.000 --> 14:07.000]  You had a slide about callbacks near the beginning.
+[14:07.000 --> 14:13.000]  Callbacks.
+[14:13.000 --> 14:15.000]  But it doesn't matter.
+[14:15.000 --> 14:21.000]  Do you expect every plug-in to handle things like TLS or would TLS be something?
+[14:21.000 --> 14:29.000]  I would like to TLS be. TLS is kind of special machine, but it should be somewhere inside.
+[14:29.000 --> 14:38.000]  And what the user should receive should be ready to use socket to work on.
+[14:38.000 --> 14:48.000]  So, he just puts inside the name and service name and it does the heavy machine inside.
+[14:48.000 --> 14:52.000]  Well, TLS socket is something over it.
+[14:52.000 --> 14:56.000]  It's above normal connection, so I think it should be extended.
+[14:56.000 --> 14:59.000]  I'm not sure what should be.
+[14:59.000 --> 15:03.000]  It's above that.
+[15:03.000 --> 15:06.000]  I'm, yes, I am out of time.
+[15:06.000 --> 15:08.000]  Yes, yes.
+[15:08.000 --> 15:09.000]  That's perfect.
+[15:09.000 --> 15:19.000]  Thank you.

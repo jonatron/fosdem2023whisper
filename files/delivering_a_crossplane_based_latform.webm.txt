@@ -1,0 +1,239 @@
+[00:00.000 --> 00:29.640]  Hi everyone, I'm here today to talk about delivering a cross-plane based platform.
+[00:29.640 --> 00:33.920]  A few words about myself. My name is Maximilian Blatt. I'm a Kubernetes and
+[00:33.920 --> 00:42.000]  cross-plane developer and consultant at Accenture in Germany. I'm using or working
+[00:42.000 --> 00:48.560]  with cross-plane for almost two years or yeah it's two years now and I'm the
+[00:48.560 --> 00:53.040]  maintainer of several cross-plane related open source projects including the
+[00:53.040 --> 00:58.720]  provider for AWS, the provider Styra, provider AguCD and I've contributed to
+[00:58.720 --> 01:06.880]  many more including cross-plane itself. Now since this is the CI CD dev room I
+[01:06.880 --> 01:12.200]  don't know if everyone is familiar with cross-plane so I just want to spend a
+[01:12.200 --> 01:18.640]  minute or two explaining what it is. So cross-plane essentially is an extension
+[01:18.640 --> 01:24.320]  to the Kubernetes API and it allows you to create cloud resources the way you
+[01:24.320 --> 01:31.840]  would create resources in Kubernetes. So the thing on the left is something most
+[01:31.840 --> 01:37.760]  of you probably have seen once or twice which is a Kubernetes pod and it's a
+[01:37.760 --> 01:42.720]  very common resource that you have in Kubernetes and it basically just schedules
+[01:42.720 --> 01:48.360]  and container where you can run an application. And on the right you see a
+[01:48.360 --> 01:54.160]  bucket as you would create it with cross-plane and it represents an actual
+[01:54.160 --> 02:01.240]  bucket on AWS S3. And if you look at both of these objects then you see that
+[02:01.240 --> 02:05.400]  they are very very similar because they are both inside the Kubernetes cluster
+[02:05.400 --> 02:11.160]  and you have both very common or the same kind of structure. You have your API
+[02:11.160 --> 02:16.280]  version and your kind. You have the metadata that comes with every cross-plane
+[02:16.280 --> 02:22.440]  with every Kubernetes object. You have a declarative spec so where you
+[02:22.440 --> 02:27.200]  describe the state of the resources the resource that you want and then you have
+[02:27.200 --> 02:34.080]  the status information about the resource itself. And that is one of the
+[02:34.080 --> 02:39.920]  features that cross-plane does for you so it connects external APIs any kind of
+[02:39.920 --> 02:44.520]  external APIs with Kubernetes and lets you manage your whole cloud
+[02:44.520 --> 02:51.600]  infrastructure through one Kubernetes cluster. And the second very powerful
+[02:51.600 --> 02:55.320]  feature of cross-plane is that it allows you to create your custom
+[02:55.320 --> 03:00.840]  Kubernetes APIs by using something that is called compositions and then it's the
+[03:00.840 --> 03:06.000]  thing that you can see in the middle. It's a very rough and simplified graph
+[03:06.000 --> 03:12.080]  to show the way cross-plane works and it essentially is always works that you
+[03:12.080 --> 03:17.600]  have the user claim for a resource for your API that you have to find using a
+[03:17.600 --> 03:23.720]  so-called XID or a composite resource definition and that is then passed to a
+[03:23.720 --> 03:28.160]  composition and then the composition spawns a number of managed resources.
+[03:28.160 --> 03:31.760]  Managed resources are something that you have seen in this slide before which is
+[03:31.760 --> 03:38.600]  in a bucket or any other kind of external resource on any other kind of
+[03:38.600 --> 03:45.840]  external API. Today I want to talk mostly about XIDs and compositions because
+[03:45.840 --> 03:51.320]  that is what you do most of the time when you are working with cross-plane.
+[03:51.320 --> 03:59.080]  Now developing a platform with cross-plane. If you look at simple CI CD
+[03:59.080 --> 04:04.240]  pipeline then you have usually build, test and then deploy and that is that is
+[04:04.240 --> 04:09.280]  very easy and for most software projects that is also very easy to
+[04:09.280 --> 04:16.840]  understand but because cross-plane is a bit different and you have different
+[04:16.840 --> 04:24.560]  things that you do inside these steps. So what you do with cross-plane is you
+[04:24.560 --> 04:30.520]  are first building and pushing a package and you are you're not writing code
+[04:30.520 --> 04:35.680]  but you are just writing YAML objects which are then applied on the cluster
+[04:35.680 --> 04:42.520]  and then they are handled and treated like data by cross-plane and then when
+[04:42.520 --> 04:47.880]  you are testing your cross-plane platform then you are applying all your
+[04:47.880 --> 04:53.440]  compositions and your XIDs to a test cluster and then you are claiming them
+[04:53.440 --> 04:58.240]  and then you see if they work and then if that is okay then you are deploying
+[04:58.240 --> 05:06.400]  them and you're just doing the same but on a production cluster. I don't want to
+[05:06.400 --> 05:11.080]  talk about the deployment today because that is very simple that is basically
+[05:11.080 --> 05:16.360]  just like doing a Kubernetes deployment you are building an OCI image and then
+[05:16.360 --> 05:20.600]  pushing that and then you are installing that on a cluster using
+[05:20.600 --> 05:24.920]  cross-plane and that's it there's not much to tell about but I want to talk
+[05:24.920 --> 05:33.080]  about the building and the testing. Let's start with the building. If you have
+[05:33.080 --> 05:38.720]  worked with cross-plane before then that is probably very familiar for you. On
+[05:38.720 --> 05:43.000]  the left you see an XID as you would write it and on the right you see a
+[05:43.000 --> 05:50.440]  composition. So an XID I said it basically just defines the API that your
+[05:50.440 --> 05:55.520]  user has applied to and it's very similar to custom resource definitions that
+[05:55.520 --> 06:03.040]  you are writing in plain Kubernetes. So you have your API schema in the spec of
+[06:03.040 --> 06:08.440]  your XID and then in the composition what you do is you define the resource
+[06:08.440 --> 06:14.280]  that should be created when the user claims this API and that can be an
+[06:14.280 --> 06:17.960]  arbitrary number of resources so you don't have to create just one resource
+[06:17.960 --> 06:22.120]  but you can create dozens of them so I've written compositions where you are
+[06:22.120 --> 06:30.040]  creating 30 or more resources at once but that is essentially how it how it
+[06:30.040 --> 06:36.280]  is done you are specifying a base resource and then you can modify this
+[06:36.280 --> 06:43.120]  resource by copying information from the user claim into the resource that you
+[06:43.120 --> 06:47.560]  want to create. That is what you do the whole time you are working with
+[06:47.560 --> 06:51.320]  prospering you are writing an XID and then you are writing a composition or
+[06:51.320 --> 06:55.000]  multiple compositions and then the user can claim it and then choose the
+[06:55.000 --> 07:03.640]  composition that he he wants. That now looks easy at first but when you are
+[07:03.640 --> 07:10.640]  doing this on an enterprise level then you are very easily you end up with
+[07:10.640 --> 07:15.680]  compositions that can be thousands of lines of code where you are creating
+[07:15.680 --> 07:22.680]  dozens of objects and then because you are just dealing with pure YAML then
+[07:22.680 --> 07:27.480]  you really starting to get at the limit because you have a lot of things that
+[07:27.480 --> 07:32.720]  are very repetitive inside compositions you have very similar structures let's
+[07:32.720 --> 07:40.000]  say if you are spawning a lot of similar objects on your cluster but in
+[07:40.000 --> 07:43.760]  different compositions then you sometimes you have the same patches that
+[07:43.760 --> 07:49.760]  you are reusing for example if you just want to patch the name of a resource by
+[07:49.760 --> 07:53.120]  what the user has given to you then you are repeating this patch over and over
+[07:53.120 --> 07:58.720]  for every resource for every file you are writing and sometimes you then have
+[07:58.720 --> 08:03.320]  compositions who only vary in details if you have different environments for
+[08:03.320 --> 08:09.240]  example you are in different AWS accounts and you only want resources to
+[08:09.240 --> 08:15.720]  appear in specific accounts or you have different values like the region or
+[08:15.720 --> 08:21.080]  static resources that you are that you want to connect like the account ID and
+[08:21.080 --> 08:25.840]  then you have to to write the same composition over and over but just with
+[08:25.840 --> 08:29.920]  different values and then you see that you are ending up with something that
+[08:29.920 --> 08:33.640]  gets really really complicated because you're just doing a lot of copy and
+[08:33.640 --> 08:41.200]  paste and so you need something to generate the YAML dynamically and in
+[08:41.200 --> 08:46.680]  these two years I spent a lot of thoughts how to simplify this process and
+[08:46.680 --> 08:53.840]  I have experimented with a bunch of stuff and we've tried out Q which is some
+[08:53.840 --> 09:00.760]  form of JSON like framework that allows you to build structures and have them
+[09:00.760 --> 09:06.960]  validated but it's very complex and not very easy for newcomers so if you have
+[09:06.960 --> 09:11.040]  new developers and teams then it's a bit hard to to onboard them on it on it
+[09:11.040 --> 09:19.080]  because the error messages are not very helpful in many cases and the tool that
+[09:19.080 --> 09:28.480]  we ended up establishing was Helm and not the biggest fan of Helm because it's
+[09:28.480 --> 09:35.440]  a bit quirky to use and sometimes if you have error messages or if you have
+[09:35.440 --> 09:39.600]  errors then it's sometimes hard to detect where the error actually is because it
+[09:39.600 --> 09:42.680]  just tells you all there's something wrong with your YAML but you don't know
+[09:42.680 --> 09:50.720]  where exactly happened but the good thing with Helm is that it can do
+[09:50.720 --> 09:56.880]  everything that we need you can replace common code blocks such as constants
+[09:56.880 --> 10:03.120]  with things that you have written out in your values YAML you can use templates
+[10:03.120 --> 10:11.200]  to parameterize patches and to save lines of code and you can even replace the
+[10:11.200 --> 10:17.960]  the API schemas of XRDs by something that you can generate and that is a
+[10:17.960 --> 10:21.360]  really really cool thing so I just checked the code in our repository and
+[10:21.360 --> 10:28.360]  we have about a hundred lines of code for for Helm I'm sorry 10,000 lines of
+[10:28.360 --> 10:34.200]  code for Helm and we are generating 200,000 lines of code of compositions
+[10:34.200 --> 10:43.480]  that are then applied on our API clusters if you are doing this if you
+[10:43.480 --> 10:49.360]  are generating code for for crossplane with Helm or any other kind of code
+[10:49.360 --> 10:58.160]  generation tool then I recommend you to check these generated YAML bits into
+[10:58.160 --> 11:05.760]  your Git because as it turned out it's very hard to detect unintended changes
+[11:05.760 --> 11:10.080]  that you are doing in Helm with your bare eyes if you are changing one value or
+[11:10.080 --> 11:15.800]  a template somewhere and then it might have some side effects that you're not
+[11:15.800 --> 11:23.080]  seeing so easily and so I really recommend you to check these generated
+[11:23.080 --> 11:30.080]  codes YAML code into your Git and do not treat it as artifacts and then if you
+[11:30.080 --> 11:35.040]  are in your CI then you should what we are doing and that is really helpful is
+[11:35.040 --> 11:39.480]  that you should regenerate all your package and your generated YAML and
+[11:39.480 --> 11:45.080]  see if any diff appears and if that is the case then you should just treat this
+[11:45.080 --> 11:49.920]  as an error and abort and if there is no diff then it's okay and then you can
+[11:49.920 --> 11:59.520]  continue on push your package to the OCI repository. Now so much for the
+[11:59.520 --> 12:07.840]  building now let's look at the testing. The first things that you are doing
+[12:07.840 --> 12:13.000]  probably when you are starting working with crossplane is that you are
+[12:13.000 --> 12:16.240]  writing your composition and then you are applying it on a cluster and then you
+[12:16.240 --> 12:21.680]  are claiming it and then you see if it works if all the resources get
+[12:21.680 --> 12:27.960]  ready and if you can use them and then it's done and that is all manual and
+[12:27.960 --> 12:31.800]  that is very easy to do because it requires no additional setup and you
+[12:31.800 --> 12:38.520]  can just use the cluster that you have but when you are really want to do
+[12:38.520 --> 12:47.600]  automatic testing or enterprise level testing then that is not enough and
+[12:47.600 --> 12:52.720]  because you have manual steps you have an outcome that is not reproducible
+[12:52.720 --> 12:59.920]  because you are doing the things all by yourself then also you don't have to
+[12:59.920 --> 13:04.880]  find what is actually expected outcome because sometimes even if a resource
+[13:04.880 --> 13:09.920]  gets healthy it doesn't mean that the resource is configured the way you want
+[13:09.920 --> 13:20.200]  it. So we also tried and tested a few things and we started with go testing
+[13:20.200 --> 13:23.960]  but it turned out to be much more complicated because you have to write
+[13:23.960 --> 13:32.760]  a lot of Bola plate code stuff and so we ended up using Cuddle. I don't know
+[13:32.760 --> 13:39.640]  if some people know it. It's basically a Kubernetes testing toolkit and that
+[13:39.640 --> 13:46.800]  allows you to define all your test cases in YAML and then just let Cuddle do
+[13:46.800 --> 13:53.400]  all the work all the application of the YAML on the server and then you
+[13:53.400 --> 13:59.160]  can define the resources that you expect afterwards and if you're imagining the
+[13:59.160 --> 14:02.560]  graph that I showed you before where you have the composition and then you
+[14:02.560 --> 14:05.960]  claim it and then you have a number of managed resources that are then spawned
+[14:05.960 --> 14:10.960]  and so you can have the claim as an input and then you can just define the
+[14:10.960 --> 14:14.600]  resources that you want to have created as an output and then you can handle
+[14:14.600 --> 14:22.160]  let Cuddle handle all the rest for you and then it can do things in
+[14:22.160 --> 14:28.040]  parallel and such and this is a really really great thing. So I recommend
+[14:28.040 --> 14:36.200]  Cuddle just to show you an example how these tests look like so you have your
+[14:36.200 --> 14:43.160]  small bucket claim if we are sticking to this simple bucket example then you
+[14:43.160 --> 14:48.440]  have your bucket claim on the left which is your test case and then on the right
+[14:48.440 --> 14:53.240]  you are defining all the objects that you want. You have the bucket claim
+[14:53.240 --> 14:59.000]  itself which has a resource status that should become ready and then you have
+[14:59.000 --> 15:02.960]  composite resource which is an internal resource that gets created by
+[15:02.960 --> 15:07.640]  crossplane where it stores some reconciling information which should
+[15:07.640 --> 15:12.280]  also become ready and then you have your actual bucket managed resource which
+[15:12.280 --> 15:17.360]  also has properties that you are expecting it to have and it also
+[15:17.360 --> 15:25.040]  has a status and so that is all you need to do testing with Cuddle for
+[15:25.040 --> 15:32.480]  crossplane and one thing I want to highlight is because in crossplane the
+[15:32.480 --> 15:37.000]  names of the composite resource are always generated by the Qube API
+[15:37.000 --> 15:44.760]  server so every time you are claiming an API the name is different it's always
+[15:44.760 --> 15:51.440]  different and you cannot influence it so what you can do with Cuddle is
+[15:51.440 --> 15:57.200]  you can let Cuddle identify the objects that you are expecting via the
+[15:57.200 --> 16:00.560]  labels you don't have to pass the name but instead just tell Yammer that you
+[16:00.560 --> 16:05.200]  just want an object with certain properties and label set and then Cuddle
+[16:05.200 --> 16:09.960]  will look for one object for any object on the server and if there is one that
+[16:09.960 --> 16:16.360]  satisfies this constraint then you are good to go.
+[16:20.280 --> 16:28.440]  One other thing that we've experienced is very good is you should run your
+[16:28.440 --> 16:36.720]  tests in separate clusters for every pipeline that you are running so we are
+[16:36.720 --> 16:42.040]  using virtual clusters or B clusters for that that they run inside a physical
+[16:42.040 --> 16:46.760]  cluster of course you can create your your own physical cluster all the time
+[16:46.760 --> 16:51.320]  but if you are spinning up physical clusters at least on EKS it can take
+[16:51.320 --> 16:56.640]  up to 30 minutes and that is not something that you want for every test
+[16:56.640 --> 17:01.880]  and it also costs a lot of money and so you're just spinning up virtual clusters
+[17:01.880 --> 17:06.760]  which are Kubernetes control planes that are running as POTS inside a cluster
+[17:06.760 --> 17:12.120]  where you can then install cross-plane its providers apply the compositions and
+[17:12.120 --> 17:16.040]  then run all the tests with Cuddle and then once you are done with the tests
+[17:16.040 --> 17:21.600]  then you can just delete the cluster and everything is fine and also you don't
+[17:21.600 --> 17:25.640]  have any intervention between two different pipelines because compositions
+[17:25.640 --> 17:34.520]  are cluster scope and they are most likely overriding each other. Now I've
+[17:34.520 --> 17:38.640]  been talking a lot about end-to-end tests and they are really good and I
+[17:38.640 --> 17:43.160]  recommend you to write end-to-end tests when you are building a cross-plane
+[17:43.160 --> 17:48.560]  platform but end-to-end tests also take a lot of time to run if you're
+[17:48.560 --> 17:52.400]  considering that you have an API where you are creating real physical cloud
+[17:52.400 --> 17:57.320]  resources and then you always have to wait for your resource to actually start
+[17:57.320 --> 18:03.560]  and then after some time maybe it says it says that something is misconfigured
+[18:03.560 --> 18:08.480]  and then you have to look for an error and if you're really just doing
+[18:08.480 --> 18:13.600]  development that it really slows you down because you have always this 10, 15, 20
+[18:13.600 --> 18:21.720]  minutes gaps between something happening and there are a lot of
+[18:21.720 --> 18:27.600]  mistakes that you can make when you are writing compositions and so I just want
+[18:27.600 --> 18:30.600]  to highlight a few things so you have these composite type rest that
+[18:30.600 --> 18:34.320]  reference the composition with the XRD they have to match and they are only
+[18:34.320 --> 18:40.240]  validated at runtime then you have the group names which have to match with the
+[18:40.240 --> 18:48.960]  XRD name you have an unstructured open API schema because XRD is because
+[18:48.960 --> 18:56.200]  Kubernetes does not support recursive API schemers yet maybe it will come in the
+[18:56.200 --> 19:00.600]  future but as of now it's not supported the same goes for the resource base
+[19:00.600 --> 19:08.000]  which can also have any kind of field and then you have the resource patches by
+[19:08.000 --> 19:12.520]  default the behavior in cross-plane is if you have if you want to patch from a
+[19:12.520 --> 19:17.680]  field to another field and the path of your source does not exist then cross-plane
+[19:17.680 --> 19:21.640]  cross-plane default behavior is that it will just ignore the patch and it will
+[19:21.640 --> 19:26.240]  not throw an error or anything and if that is the case and you you might
+[19:26.240 --> 19:31.600]  easily swallow any any errors and then it you're wondering why things don't
+[19:31.600 --> 19:36.040]  work but but you just have a typo in your patch and it's really hard to find
+[19:36.040 --> 19:41.440]  these if you have two thousand signs of YAML code and then you have types that
+[19:41.440 --> 19:45.960]  must match so if the user is inputting a string then you have to make sure that
+[19:45.960 --> 19:52.640]  the string is actually expected and not an integer on the on the actually
+[19:52.640 --> 19:58.760]  bucket API for example and then you have the indentation the big thing that if
+[19:58.760 --> 20:03.360]  when you are writing YAML files that is my big problem if I'm writing YAML
+[20:03.360 --> 20:11.280]  files I always mess up the indentation and then things get all messy so we
+[20:11.280 --> 20:16.360]  need something to detect these errors sooner because the sooner you detect an
+[20:16.360 --> 20:22.560]  error the easier it is to fix so what we have done because there is nothing out
+[20:22.560 --> 20:28.280]  there at least we couldn't find anything we've developed a linter for
+[20:28.280 --> 20:35.480]  cross-plane compositions where we are loading actual XID and CRD schemas and
+[20:35.480 --> 20:41.240]  then comparing them with the compositions and then applying a set of
+[20:41.240 --> 20:47.840]  rules like ensuring that the composition actually supports a valid XID type
+[20:47.840 --> 20:52.200]  that you don't have duplicate objects which can sometimes happen especially if
+[20:52.200 --> 20:57.840]  you are generating things with helm and then the most important thing is that
+[20:57.840 --> 21:02.280]  it actually validates the patches that you are running against the CRD and the
+[21:02.280 --> 21:07.360]  XID schemas and that is really really helpful that the first time when we ran
+[21:07.360 --> 21:13.640]  this against our production code it turned out to have I think 800 errors
+[21:13.640 --> 21:24.080]  that nobody noticed but somehow our our platform still worked yeah and other
+[21:24.080 --> 21:29.160]  cool thing about our linter is that it's pure CLI and you don't need a
+[21:29.160 --> 21:32.800]  Kubernetes cluster or a cross-plane installation you can just run this
+[21:32.800 --> 21:38.680]  locally without setting anything else up and you can it really takes maybe one
+[21:38.680 --> 21:43.360]  minute or two and then you have all your your your compositions linter and that
+[21:43.360 --> 21:48.520]  is really really really great you're wondering where to get it and there will
+[21:48.520 --> 21:55.080]  be a link on the last slide where you can find the code yeah summing things up
+[21:55.080 --> 22:02.800]  and so this is our CD CI CD pipeline that we have developed after a couple of
+[22:02.800 --> 22:09.360]  years of testing and failing so we use helm to write and build our compositions
+[22:09.360 --> 22:17.160]  to generate the YAML code dynamically we use our self-written linter to lint
+[22:17.160 --> 22:23.680]  our compositions and we use Cuddle to run all the end-to-end tests and then we
+[22:23.680 --> 22:31.960]  are just pushing things with train or any other kind of OCI tool that that comes
+[22:31.960 --> 22:42.360]  handy yeah so so much here's a QR code for the linter we are actually making
+[22:42.360 --> 22:48.040]  this open source today so you are the first one to actually see the code
+[22:48.040 --> 23:07.520]  except us yeah thank you do we have time for questions okay any questions
+[23:18.040 --> 23:28.840]  so my question is more about crossplane then crossplane this looks really good
+[23:28.840 --> 23:33.880]  though and how does crossplane compare to things like cluster API and the CRDs
+[23:33.880 --> 23:38.080]  that that introduces like where's the distinction between the two of them just
+[23:38.080 --> 23:44.040]  you know if you're familiar with cluster API so crossplane makes use of CRDs
+[23:44.040 --> 23:48.520]  under the hood so if you are if you are applying your XIDs on the cluster then
+[23:48.520 --> 23:55.840]  crossplane will generate CRDs which are then used as the API that can be
+[23:55.840 --> 23:58.960]  the user can claim
+[23:58.960 --> 24:14.320]  if there are no more questions then thank you we're going to make a five
+[24:14.320 --> 24:29.880]  minutes break

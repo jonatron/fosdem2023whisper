@@ -1,0 +1,489 @@
+[00:00.000 --> 00:08.800]  We'll talk about AVX-312 in FFNPEG.
+[00:08.800 --> 00:12.720]  He's also the co-organiser of this dev room.
+[00:12.720 --> 00:14.600]  Please welcome Kirano.
+[00:14.600 --> 00:23.640]  So yes, I'm going to be talking about AVX-512 in FFNPEG.
+[00:23.640 --> 00:25.600]  What is AVX-512?
+[00:25.600 --> 00:28.480]  AVX stands for Advanced Vector Extensions.
+[00:28.480 --> 00:31.200]  There will be a lot of acronyms and jargon, unfortunately,
+[00:31.200 --> 00:35.320]  in this one, but I will try and explain all of them.
+[00:35.320 --> 00:38.320]  So AVX-512 is a relatively new single instruction
+[00:38.320 --> 00:43.960]  multiple data instruction set for Intel CPUs from about 2017
+[00:43.960 --> 00:48.280]  and more recently in the last six months or so with AMD CPUs.
+[00:48.280 --> 00:53.240]  In particular, it has a larger 512-bit register size.
+[00:53.240 --> 00:56.360]  Many new instructions, which we'll talk about in a minute.
+[00:56.360 --> 01:00.360]  Comparisons, which are quite new, and also lots of other things
+[01:00.360 --> 01:02.360]  that are not so interesting in multimedia.
+[01:02.360 --> 01:06.360]  Cryptography, neural networks, and I'm sure there are other people
+[01:06.360 --> 01:10.360]  at Fastem who could talk a lot more about these kind of things.
+[01:10.360 --> 01:13.360]  As I mentioned, lots of fancy words, but the thing to bear in mind
+[01:13.360 --> 01:16.360]  is in FFNPEG, high schoolers have gone and written assembly.
+[01:16.360 --> 01:19.360]  This is heavily jargon-centric.
+[01:19.360 --> 01:22.360]  It sounds complicated, but actually quite a big reasonable chunk
+[01:22.360 --> 01:25.360]  of assembly in FFNPEG has been written by people who are in high school.
+[01:25.360 --> 01:28.360]  Why is this relevant now?
+[01:28.360 --> 01:35.360]  I've mentioned AVX-512 has been around since 2017, so why is it 2023?
+[01:35.360 --> 01:40.360]  Well, Skylake was the first CPU generation from Intel to have AVX-512 support,
+[01:40.360 --> 01:44.360]  but it had very large performance throttling when you used them,
+[01:44.360 --> 01:50.360]  so your effective CPU capability speed went down quite dramatically.
+[01:50.360 --> 01:55.360]  And so this was fine if you were doing high-performance computing in academia,
+[01:55.360 --> 01:58.360]  for example, like fluid dynamics, where you were using these instructions
+[01:58.360 --> 02:01.360]  100% of the time, that was fine.
+[02:01.360 --> 02:04.360]  But in multimedia is a mixture of assembly and C code,
+[02:04.360 --> 02:07.360]  where you're not necessarily always using these instructions.
+[02:07.360 --> 02:12.360]  So this relative main is sort of unused for the last couple of years.
+[02:12.360 --> 02:16.360]  You could still use these new instructions, though, with the smaller register sizes,
+[02:16.360 --> 02:20.360]  and I'll show an example of this later.
+[02:20.360 --> 02:27.360]  But the first Intel CPUs not to have throttling were the Islake 10th and 11th gen Intel CPUs.
+[02:27.360 --> 02:32.360]  They were the first to have no throttling, and this meant these ZMM-based instructions
+[02:32.360 --> 02:36.360]  could be first-class citizens.
+[02:36.360 --> 02:40.360]  How to get started, one of the tricky things as well in the last few years
+[02:40.360 --> 02:44.360]  has been actually getting access to devices that have this,
+[02:44.360 --> 02:47.360]  and unfortunately Intel have not made it easy.
+[02:47.360 --> 02:52.360]  From their 12th generation, CPUs have actually removed support in consumer equipment.
+[02:52.360 --> 02:56.360]  It's still available on AMD as in four CPUs, though.
+[02:56.360 --> 02:59.360]  And if using the cloud is your kind of thing,
+[02:59.360 --> 03:02.360]  available also from many cloud providers in the server CPU range,
+[03:02.360 --> 03:05.360]  such as AWS or others.
+[03:05.360 --> 03:08.360]  Personally, I think the easiest way is to buy an 11th generation Intel NUC.
+[03:08.360 --> 03:10.360]  That's what I did for FMpeg.
+[03:10.360 --> 03:13.360]  I bought two of them for the projects and host them.
+[03:13.360 --> 03:16.360]  The easiest way, it's only a few hundred euros.
+[03:16.360 --> 03:18.360]  It's quiet, it fits under your desk.
+[03:18.360 --> 03:24.360]  And that's the easiest way to get started, you get a full AVX512 stack.
+[03:24.360 --> 03:30.360]  So let's look at some of the existing work in multimedia that's using AVX512.
+[03:30.360 --> 03:34.360]  And probably most importantly, we had the sort of introduction from JB earlier today,
+[03:34.360 --> 03:36.360]  the David project, which is an AV1 decoder.
+[03:36.360 --> 03:42.360]  This added AVX512 support, I think a year or two ago.
+[03:42.360 --> 03:47.360]  It's particularly beneficial in AV1 because AV1 has large block sizes,
+[03:47.360 --> 03:50.360]  sort of in comparison to more traditional standards,
+[03:50.360 --> 03:53.360]  traditional codecs like H264 and others, which are smaller.
+[03:53.360 --> 03:57.360]  So AVX512 in David gave, I think, 10 to 20% overall.
+[03:57.360 --> 03:59.360]  So not just the functions themselves,
+[03:59.360 --> 04:03.360]  the overall decode performance was improved.
+[04:03.360 --> 04:07.360]  And it's actually been a running topic, which is quite interesting over today,
+[04:07.360 --> 04:13.360]  in FMPEG that we use, and David, and also we use this classic FMPEG H264 approach to assembly,
+[04:13.360 --> 04:22.360]  which is no intrinsics, no inline assembly, no special SIMD sort of libraries to make life easier.
+[04:22.360 --> 04:28.360]  It's raw assembly language, and I'll show some examples of that.
+[04:28.360 --> 04:33.360]  And also we don't also compile them in and force you to have a particular CPU generation.
+[04:33.360 --> 04:37.360]  And I know this is quite controversial. I think it's MongoDB, for example.
+[04:37.360 --> 04:44.360]  They forced one-year a particular CPU generation, and this was super controversial because not everybody had that.
+[04:44.360 --> 04:49.360]  So what we do in FMPEG is we detect CPU capabilities, and I'll show you the function in a minute.
+[04:49.360 --> 04:52.360]  And then we use function pointers, so we set them once at the beginning,
+[04:52.360 --> 04:57.360]  and therefore the overhead of doing that measurement is checked once,
+[04:57.360 --> 05:01.360]  and then there's function pointers that are executed after that.
+[05:01.360 --> 05:07.360]  And unfortunately, on Intel, there's a very messy Venn diagram of capabilities.
+[05:07.360 --> 05:11.360]  But in practice, we really, so far, and they may change their mind,
+[05:11.360 --> 05:13.360]  but care about these kind of two things.
+[05:13.360 --> 05:17.360]  So these are the CPU flags you get in FMPEG.
+[05:17.360 --> 05:23.360]  There are others, but the AVX-512-related ones are broadly speaking legacy Skylake,
+[05:23.360 --> 05:26.360]  and the newer ICL are put in bold for Ice Lake.
+[05:26.360 --> 05:30.360]  But you can see there are actually a lot of different subcategories in there.
+[05:30.360 --> 05:33.360]  But in practice, it's at the moment one or the other,
+[05:33.360 --> 05:38.360]  but as I mentioned, Intel are very keen on adding and removing features
+[05:38.360 --> 05:43.360]  and possibly even charging your subscription for certain features is one of their new ideas.
+[05:43.360 --> 05:48.360]  So it could be that newer additions to this are subscription-based,
+[05:48.360 --> 05:52.360]  or you buy and pay for it later, or something much more complicated.
+[05:52.360 --> 05:54.360]  So who knows?
+[05:54.360 --> 06:00.360]  So I guess, unfortunately, there's some sort of dependency
+[06:00.360 --> 06:03.360]  in explaining a few of the topics and some of the benefits
+[06:03.360 --> 06:05.360]  without explaining some of the backstory.
+[06:05.360 --> 06:12.360]  So historically, in old AVX, you had all the 256-bit registers,
+[06:12.360 --> 06:15.360]  and these were split in practice into lanes.
+[06:15.360 --> 06:20.360]  So in practice, you've got 228-bit lanes,
+[06:20.360 --> 06:23.360]  and instructions, broadly speaking, operated in these lanes.
+[06:23.360 --> 06:27.360]  So if you ran a instruction, it worked on data,
+[06:27.360 --> 06:29.360]  and it was actually quite difficult.
+[06:29.360 --> 06:33.360]  It was possible, but difficult to move data between these lanes.
+[06:33.360 --> 06:40.360]  And it's one of the historical limitations on existing AVX and AVX2 code that we have
+[06:40.360 --> 06:44.360]  in FMNPEG is lane crossing and all sorts of trickery
+[06:44.360 --> 06:49.360]  that essentially cost CPU cycles to take up this time,
+[06:49.360 --> 06:53.360]  that takes time to compensate for the lanes.
+[06:55.360 --> 06:57.360]  I have to talk a bit about KMAS registers as well.
+[06:57.360 --> 07:00.360]  So AVX512 has these new set of registers called KMASks,
+[07:00.360 --> 07:07.360]  K0 to K7, and this allows a destination register to remain unchanged.
+[07:07.360 --> 07:10.360]  So, for example, underneath, you could have an addition,
+[07:10.360 --> 07:12.360]  but actually it's a simple case,
+[07:12.360 --> 07:15.360]  and obviously you could just add zero, and it's unchanged,
+[07:15.360 --> 07:19.360]  but you could actually use the KMAS to say,
+[07:19.360 --> 07:22.360]  actually, I don't want addition to be applied to these elements.
+[07:22.360 --> 07:24.360]  I want this to be a pure pass-through,
+[07:24.360 --> 07:28.360]  or you could even force some of the elements to zero if you wanted to.
+[07:28.360 --> 07:32.360]  There's a specific, I think it's a flag that lets you do that.
+[07:32.360 --> 07:35.360]  And there's a whole set of new instructions to go and manipulate these KMAS registers,
+[07:35.360 --> 07:39.360]  and certainly David, in particular, uses, makes good use of KMASks.
+[07:39.360 --> 07:44.360]  So now that I've sort of explained some of the back story,
+[07:44.360 --> 07:48.360]  I think it's fair to say one of the most important instructions,
+[07:48.360 --> 07:53.360]  if not the most important instruction, is our shuffles in multimedia.
+[07:53.360 --> 07:57.360]  Also known as permutes, and there might be a technical difference
+[07:57.360 --> 07:58.360]  between a shuffle and a permute.
+[07:58.360 --> 07:59.360]  Someone might be able to correct me.
+[07:59.360 --> 08:01.360]  There might be some mathematical difference,
+[08:01.360 --> 08:03.360]  but these are the most important,
+[08:03.360 --> 08:06.360]  or one of the most important, instructions in multimedia.
+[08:06.360 --> 08:09.360]  And as you can see on the right, basically it lets you,
+[08:09.360 --> 08:13.360]  shuffles let you have various bits of data
+[08:13.360 --> 08:15.360]  and rearrange them in any way that you want.
+[08:15.360 --> 08:21.360]  Duplicate them, as you can see, or even set individual elements to zero.
+[08:21.360 --> 08:26.360]  And this is, for example, famously one use case of this
+[08:26.360 --> 08:28.360]  is in the zigzag scan of FFMPEG,
+[08:28.360 --> 08:32.360]  which groups larger coefficients in a block together.
+[08:32.360 --> 08:36.360]  But the way that that's done is via a zigzag scan.
+[08:36.360 --> 08:39.360]  The thing about vpermb, which is the new AVX-512 instruction,
+[08:39.360 --> 08:41.360]  is it lets you cross a lane.
+[08:41.360 --> 08:43.360]  This wasn't something that was possible in before.
+[08:43.360 --> 08:49.360]  And as I'll show you later, this makes things substantially faster in many cases.
+[08:49.360 --> 08:52.360]  pshuffb, probably one of the most commonly used instructions
+[08:52.360 --> 08:54.360]  in all of open source multimedia.
+[08:54.360 --> 08:58.360]  You do get grep, pshuffb, there'll be a huge, you know,
+[08:58.360 --> 09:01.360]  that your screen will be full of pshuffb.
+[09:01.360 --> 09:06.360]  They're used everywhere in open source multimedia.
+[09:06.360 --> 09:08.360]  pshuffb had a kind of useful benefit
+[09:08.360 --> 09:10.360]  that if you set the index to minus one,
+[09:10.360 --> 09:12.360]  you had to automatically do the zeroing out.
+[09:12.360 --> 09:14.360]  With vpermb, this isn't the case.
+[09:14.360 --> 09:17.360]  You have to actually use kmasks to do that.
+[09:17.360 --> 09:21.360]  So that just makes things slightly more complicated.
+[09:21.360 --> 09:25.360]  There's all sorts of other interesting permutes that AVX-512 offers.
+[09:25.360 --> 09:28.360]  I think David also, again, makes good use of this vperm2b,
+[09:28.360 --> 09:31.360]  so you can actually not just have one set of data,
+[09:31.360 --> 09:33.360]  you can actually permute from two different registers.
+[09:33.360 --> 09:36.360]  So you could have ijk, et cetera, et cetera in a different register,
+[09:36.360 --> 09:39.360]  and your output could be a mixture of both of those.
+[09:39.360 --> 09:43.360]  So that's kind of interesting.
+[09:43.360 --> 09:45.360]  Variable shifts.
+[09:45.360 --> 09:48.360]  You have now variable right shifts.
+[09:48.360 --> 09:52.360]  So I've given the example of a vpsrlvw logical right shift
+[09:52.360 --> 09:56.360]  and vpslvw variable left shift logical.
+[09:56.360 --> 10:00.360]  Big letter soup, quite confusing.
+[10:00.360 --> 10:04.360]  In fact, when writing this slide, I misspelt the word shift.
+[10:04.360 --> 10:07.360]  You can have a think about how that may have been spelt.
+[10:07.360 --> 10:10.360]  Thankfully, that's the good, thankfully, the rehearsals,
+[10:10.360 --> 10:11.360]  and we'll pick this up.
+[10:11.360 --> 10:13.360]  But this word soup is exceptionally confusing,
+[10:13.360 --> 10:16.360]  both when writing slides and writing code, it seems.
+[10:16.360 --> 10:21.360]  So historically, to do variable shifts,
+[10:21.360 --> 10:23.360]  so if you want to take, obviously, just to step back,
+[10:23.360 --> 10:26.360]  take an element and shift each element by a different amount,
+[10:26.360 --> 10:28.360]  this was quite complicated.
+[10:28.360 --> 10:32.360]  There's various bits of trickery, various idioms that people use
+[10:32.360 --> 10:34.360]  to try and emulate that, but they had limitations.
+[10:34.360 --> 10:38.360]  I think, for example, you were not shifting by zero,
+[10:38.360 --> 10:42.360]  possibly wasn't allowed in one of the various bits of trickery.
+[10:42.360 --> 10:44.360]  And so if you needed a zero shift,
+[10:44.360 --> 10:46.360]  you had to do it a different way, et cetera, et cetera.
+[10:46.360 --> 10:50.360]  But now you have this variable shift, and it's all usable.
+[10:50.360 --> 10:53.360]  Equally on the left shift, the naive way of doing an emulated
+[10:53.360 --> 10:56.360]  left shift is just to multiply, but these instructions
+[10:56.360 --> 10:58.360]  are actually faster than the multiply,
+[10:58.360 --> 11:00.360]  so there's still some benefit.
+[11:02.360 --> 11:05.360]  VP Turnlog D, this is, I think, no presentation
+[11:05.360 --> 11:10.360]  about AVX 512 could not fail to mention VP Turnlog D.
+[11:10.360 --> 11:13.360]  This instruction is literally a kitchen sink.
+[11:13.360 --> 11:16.360]  It's quite remarkable in what it can actually do.
+[11:16.360 --> 11:18.360]  You can literally program a truth table
+[11:18.360 --> 11:20.360]  within an individual instruction itself,
+[11:20.360 --> 11:24.360]  and, in theory, could replace up to eight different instructions.
+[11:24.360 --> 11:29.360]  So you could do a whole presentation on VP Turnlog D.
+[11:29.360 --> 11:33.360]  So I thought it would be best to try and pick one of the simplest ones,
+[11:33.360 --> 11:35.360]  which is a ternary operation.
+[11:35.360 --> 11:41.360]  So this is a bitwise equivalent to the C ternary operation.
+[11:41.360 --> 11:44.360]  So in each register, each bit is iterated through.
+[11:44.360 --> 11:49.360]  And you can see, for example, one, the ternary operation.
+[11:49.360 --> 11:51.360]  So if that bit set choose this or versus this,
+[11:51.360 --> 11:53.360]  and you can see the output of that is that.
+[11:53.360 --> 11:57.360]  And so, essentially, it's a bitwise operation of ZMM
+[11:57.360 --> 12:00.360]  is equal to ZMM0, a question mark, ZMM1, ZMM2,
+[12:00.360 --> 12:02.360]  but on a bitwise level.
+[12:02.360 --> 12:05.360]  And there's all sorts of other interesting things you can do,
+[12:05.360 --> 12:07.360]  and this article is very good.
+[12:07.360 --> 12:11.360]  It shows all sorts of interesting things you can do,
+[12:11.360 --> 12:14.360]  bit selects, all sorts of various different operations
+[12:14.360 --> 12:18.360]  that you can do on multiple XORs, for example.
+[12:18.360 --> 12:22.360]  So, yeah, also very interesting.
+[12:22.360 --> 12:24.360]  So let's look at a real-world example.
+[12:24.360 --> 12:26.360]  I don't know how well you can see that.
+[12:26.360 --> 12:28.360]  I was hoping the dark mode would actually make life easier,
+[12:28.360 --> 12:30.360]  but maybe it's made things worse.
+[12:30.360 --> 12:33.360]  But I'll talk about some of the mouse.
+[12:33.360 --> 12:35.360]  Is it the mouse?
+[12:35.360 --> 12:37.360]  Because the mouse on the Mac is dark.
+[12:37.360 --> 12:41.360]  But anyway, this is v2.10enc.
+[12:41.360 --> 12:43.360]  It's probably one of the most simplest assembly functions
+[12:43.360 --> 12:46.360]  in fmpeg, but what it does is it takes
+[12:46.360 --> 12:49.360]  three 8-bit samples from different memory locations.
+[12:49.360 --> 12:52.360]  It sort of, as part of its work, extends to 10 bits
+[12:52.360 --> 12:57.360]  and then packs those three 10-bit words into 32 bits.
+[12:57.360 --> 13:00.360]  So what's interesting in this function is
+[13:00.360 --> 13:02.360]  we're already starting to do lane crossing
+[13:02.360 --> 13:04.360]  that wasn't possible before.
+[13:04.360 --> 13:08.360]  So we load the y-samples, so the luma samples,
+[13:08.360 --> 13:11.360]  into the lower 256 bits.
+[13:11.360 --> 13:14.360]  We do the u-section of the chroma into the third,
+[13:14.360 --> 13:18.360]  or the second, if zero-indexed, portion of the register,
+[13:18.360 --> 13:23.360]  and then equally the same for v.
+[13:23.360 --> 13:27.360]  And then we do one, excuse me,
+[13:27.360 --> 13:33.360]  and then one single v per mb
+[13:33.360 --> 13:35.360]  can rearrange all of that in one go.
+[13:35.360 --> 13:40.360]  This was a lot more complicated back in the olden days.
+[13:40.360 --> 13:43.360]  P mad sub sw is some trickery
+[13:43.360 --> 13:45.360]  that unfortunately there's not going to be enough time
+[13:45.360 --> 13:48.360]  to explain, but eventually is a multiply and add,
+[13:48.360 --> 13:50.360]  and we use that to emulate a shift.
+[13:50.360 --> 13:54.360]  And then for the second element,
+[13:54.360 --> 13:58.360]  in the three elements, we need to do a d-word shift
+[13:58.360 --> 14:01.360]  because it actually spans the middle.
+[14:01.360 --> 14:05.360]  So therefore then we have sort of conflicting bits
+[14:05.360 --> 14:06.360]  in each register.
+[14:06.360 --> 14:07.360]  So how do we do a bit selection?
+[14:07.360 --> 14:09.360]  And this was quite a, I think it's a two or three,
+[14:09.360 --> 14:14.360]  even up around two through three different instructions
+[14:14.360 --> 14:15.360]  in the previous code.
+[14:15.360 --> 14:19.360]  And this can now be done in a single vpternlogd,
+[14:19.360 --> 14:23.360]  so essentially c ternary b or a.
+[14:23.360 --> 14:26.360]  So if bit c is set, choose the bit from b
+[14:26.360 --> 14:28.360]  or choose it from a otherwise.
+[14:28.360 --> 14:32.360]  And you'll see in a second that actually provides quite a big,
+[14:32.360 --> 14:36.360]  well certainly a measurable speed improvement.
+[14:36.360 --> 14:37.360]  So these are the benchmarks.
+[14:37.360 --> 14:41.360]  So this is, so I wanted to show a bit about how you can
+[14:41.360 --> 14:44.360]  get benefits from AVX 512 even on the older hardware
+[14:44.360 --> 14:46.360]  with the shorter existing registers.
+[14:46.360 --> 14:48.360]  These are not scientifically benchmarked,
+[14:48.360 --> 14:50.360]  I just ran them yesterday.
+[14:50.360 --> 14:52.360]  When you do benchmarking you should run them
+[14:52.360 --> 14:54.360]  10 or 100 of times, average them,
+[14:54.360 --> 14:56.360]  do standard deviations, et cetera.
+[14:56.360 --> 15:00.360]  But just for the simple case,
+[15:00.360 --> 15:05.360]  you can see that the c code versus the AVX 2 code
+[15:05.360 --> 15:06.360]  is around 10 times faster.
+[15:06.360 --> 15:08.360]  And you can see just by replacing,
+[15:08.360 --> 15:10.360]  I think it's a set of two or three different pans
+[15:10.360 --> 15:13.360]  or various boolean functions,
+[15:13.360 --> 15:18.360]  you can get a measurable increase just with one instruction
+[15:18.360 --> 15:23.360]  replacing three, even on the older YMM registers.
+[15:23.360 --> 15:26.360]  But where the big gains come are on Ice Lake,
+[15:26.360 --> 15:34.360]  you can see the c code versus the AVX 512 ICL,
+[15:34.360 --> 15:35.360]  there's a huge difference.
+[15:35.360 --> 15:39.360]  So by using vperm b and the ZMM,
+[15:39.360 --> 15:43.360]  you can already make the legacy AVX 512 twice as fast.
+[15:43.360 --> 15:45.360]  And if something was 10 times faster,
+[15:45.360 --> 15:47.360]  that now becomes 20 times faster.
+[15:47.360 --> 15:50.360]  And I often have to say that's not a multiply,
+[15:50.360 --> 15:51.360]  that's a times.
+[15:51.360 --> 15:53.360]  So it's massive improvement.
+[15:53.360 --> 15:56.360]  This was code that could, if you have a large resolution file,
+[15:56.360 --> 15:58.360]  take up an entire CPU core,
+[15:58.360 --> 16:01.360]  and now it takes essentially 5% of a core.
+[16:01.360 --> 16:05.360]  It's really tiny.
+[16:05.360 --> 16:08.360]  What AVX 512 code is next?
+[16:08.360 --> 16:11.360]  Anything really that's line-based or frame-based,
+[16:11.360 --> 16:13.360]  such as filtering or scaling,
+[16:13.360 --> 16:17.360]  I think the next thing we're working on is deinterlacing.
+[16:17.360 --> 16:18.360]  Anything involving comparisons,
+[16:18.360 --> 16:20.360]  I haven't really talked about comparisons,
+[16:20.360 --> 16:24.360]  but there are bits of code that often need to do comparisons.
+[16:24.360 --> 16:27.360]  That's going to be an obvious place for AVX 512.
+[16:27.360 --> 16:30.360]  Lots of places that do triple booleans,
+[16:30.360 --> 16:34.360]  multiple XORs or multiple XORs on ands,
+[16:34.360 --> 16:37.360]  and I think it's almost always possible
+[16:37.360 --> 16:40.360]  to replace that with a VP10 log D.
+[16:40.360 --> 16:42.360]  Likewise in the code base,
+[16:42.360 --> 16:44.360]  there's various different idioms and trickery
+[16:44.360 --> 16:47.360]  to try and emulate a variable left shift and right shift,
+[16:47.360 --> 16:49.360]  or multiplies for the left shifts
+[16:49.360 --> 16:51.360]  and trickery for the right shifts.
+[16:51.360 --> 16:56.360]  This could be used with the letter soup instructions
+[16:56.360 --> 16:59.360]  to try and produce that.
+[16:59.360 --> 17:01.360]  Intel provides an official manual to all of this.
+[17:01.360 --> 17:04.360]  It's very verbose, which is great in many cases
+[17:04.360 --> 17:06.360]  because it provides really precise detail
+[17:06.360 --> 17:08.360]  of how the instructions work,
+[17:08.360 --> 17:10.360]  but unfortunately is not at all approachable.
+[17:10.360 --> 17:13.360]  There's a few websites that try and simplify things.
+[17:13.360 --> 17:15.360]  I think this website on officedaytime.com
+[17:15.360 --> 17:17.360]  is some kind of Japanese website,
+[17:17.360 --> 17:19.360]  English that explains,
+[17:19.360 --> 17:22.360]  tries to group all the instructions
+[17:22.360 --> 17:25.360]  in some kind of logical ordering,
+[17:25.360 --> 17:28.360]  and that makes it a lot simpler to understand.
+[17:28.360 --> 17:30.360]  Any questions?
+[17:30.360 --> 17:32.360]  Hopefully I'll be able to answer them,
+[17:32.360 --> 17:34.360]  but thankfully at FosterM there's always somebody
+[17:34.360 --> 17:36.360]  with more knowledge than you in the room.
+[17:36.360 --> 17:40.360]  I can't see where they are, but I did see them at one point.
+[17:40.360 --> 17:42.360]  Thanks.
+[17:42.360 --> 17:48.360]  Thank you.
+[17:48.360 --> 17:51.360]  Any questions in the room?
+[17:51.360 --> 17:55.360]  Regarding the direct assembly writing of AVX-5.0,
+[17:55.360 --> 17:59.360]  there's about 7,000 instructions of AVX-5.0.
+[17:59.360 --> 18:01.360]  Why?
+[18:01.360 --> 18:03.360]  If you choose the direct assembly,
+[18:03.360 --> 18:05.360]  then you essentially might miss out
+[18:05.360 --> 18:07.360]  on potential instruction scheduling
+[18:07.360 --> 18:10.360]  between different architectures.
+[18:10.360 --> 18:12.360]  Compilers might schedule better
+[18:12.360 --> 18:15.360]  if you want to get a performance benefit in the future.
+[18:15.360 --> 18:21.360]  But then you have to ship a binary for each version.
+[18:21.360 --> 18:23.360]  Sorry, repeat the question.
+[18:23.360 --> 18:26.360]  You have to write in 3.6, that's what I'm saying.
+[18:26.360 --> 18:28.360]  In order to compile...
+[18:28.360 --> 18:31.360]  The question is the classic question,
+[18:31.360 --> 18:34.360]  can the compiler do a better job than a human question?
+[18:34.360 --> 18:38.360]  In David, certainly the register allocation
+[18:38.360 --> 18:40.360]  has not been very good in compilers historically.
+[18:40.360 --> 18:44.360]  David has shown this quite dramatically
+[18:44.360 --> 18:47.360]  because it has its own custom ABI internally,
+[18:47.360 --> 18:49.360]  and you wouldn't be able to do that with the compiler
+[18:49.360 --> 18:52.360]  like come up with your own internal ABI between functions.
+[18:52.360 --> 18:56.360]  So there's certainly 10% plus on the individual function,
+[18:56.360 --> 18:59.360]  speed gains versus doing it in intrinsics.
+[18:59.360 --> 19:02.360]  Some bits of some instructions are not available in intrinsics
+[19:02.360 --> 19:04.360]  like always.
+[19:04.360 --> 19:07.360]  It's a compromise.
+[19:07.360 --> 19:10.360]  Overall, it's been the way in FM Big X264
+[19:10.360 --> 19:13.360]  for the last 10 years, and I think all intrinsics
+[19:13.360 --> 19:15.360]  and in line assemblies banned,
+[19:15.360 --> 19:17.360]  and there's only one or two bits left,
+[19:17.360 --> 19:21.360]  and there's a very good reason why it needs to be there.
+[19:21.360 --> 19:24.360]  I have mixed experience about this.
+[19:24.360 --> 19:26.360]  I agree on the...
+[19:26.360 --> 19:28.360]  Ideally, assembly is better,
+[19:28.360 --> 19:30.360]  but we had some code in 3.6,
+[19:30.360 --> 19:33.360]  we compiled it with the latest Clang, 15,
+[19:33.360 --> 19:36.360]  and we saw a 15 to 20% speed increase.
+[19:36.360 --> 19:40.360]  But did you try writing it to begin with in...
+[19:40.360 --> 19:42.360]  Yes, it was in 3.6.
+[19:42.360 --> 19:44.360]  Write it in...
+[19:44.360 --> 19:47.360]  Write it originally in assembly and compare,
+[19:47.360 --> 19:49.360]  but it's...
+[19:49.360 --> 19:51.360]  So for example, some of this...
+[19:51.360 --> 19:53.360]  Sorry, you've gone to...
+[19:53.360 --> 19:56.360]  Some of the bit-twizzling in there,
+[19:56.360 --> 20:00.360]  for example, a compiler would never really have the understanding to do...
+[20:00.360 --> 20:02.360]  In fact, I did try chatGPT,
+[20:02.360 --> 20:05.360]  and chatGPT at least sort of understood a few of the concepts.
+[20:05.360 --> 20:08.360]  It's interesting because not quite out of a day job,
+[20:08.360 --> 20:11.360]  but I did ask chatGPT to write this function, actually,
+[20:11.360 --> 20:13.360]  just sort of to see what...
+[20:13.360 --> 20:15.360]  And it did have some vague idea what was going on.
+[20:15.360 --> 20:18.360]  It didn't need to sort of be helped, which is quite interesting.
+[20:18.360 --> 20:20.360]  Yep.
+[20:20.360 --> 20:23.360]  Is there any collaboration between the multimedia,
+[20:23.360 --> 20:26.360]  the people who write the codex,
+[20:26.360 --> 20:29.360]  and the guys writing the compiler who tell them,
+[20:29.360 --> 20:33.360]  look, perhaps you could target certain patterns?
+[20:33.360 --> 20:36.360]  Martin is a collaboration between people writing the compilers
+[20:36.360 --> 20:38.360]  and multimedia community.
+[20:38.360 --> 20:41.360]  Yes, in ARM in particular, I think,
+[20:41.360 --> 20:43.360]  is Martin here?
+[20:43.360 --> 20:46.360]  No, Martin is not here, but Martin spends a lot of time
+[20:46.360 --> 20:49.360]  talking to the compiler community and the linker community
+[20:49.360 --> 20:54.360]  on mostly miscompilations is more his thing.
+[20:54.360 --> 20:56.360]  And I think, yeah,
+[20:56.360 --> 20:59.360]  and I think there is also some sharing of mostly around the C code,
+[20:59.360 --> 21:02.360]  if the C code is badly miscompiled
+[21:02.360 --> 21:07.360]  or thought of the wrong approach,
+[21:07.360 --> 21:09.360]  because you can see, actually,
+[21:09.360 --> 21:12.360]  and in some versions of the compiler will really do a bad job
+[21:12.360 --> 21:15.360]  on the C and the assembly can be 40 times faster,
+[21:15.360 --> 21:17.360]  and that's...
+[21:17.360 --> 21:19.360]  Don't know if that's something you can really trust
+[21:19.360 --> 21:21.360]  if one day you change compiler version
+[21:21.360 --> 21:26.360]  and a function that you thought was immeasurable
+[21:26.360 --> 21:30.360]  is now 40 times slower than it is.
+[21:30.360 --> 21:32.360]  And then the question from the internet is,
+[21:32.360 --> 21:34.360]  did you have the occasion to look at
+[21:34.360 --> 21:36.360]  RVA-SVE vector instructions for FAMPEG?
+[21:36.360 --> 21:38.360]  Wow, that's a surprise for this person,
+[21:38.360 --> 21:42.360]  because the next speaker is going to be talking about this entire topic.
+[21:42.360 --> 21:44.360]  Where is the next speaker?
+[21:44.360 --> 21:46.360]  He's over there, and the next speaker here, Remy,
+[21:46.360 --> 21:49.360]  will be talking about this entire topic.
+[21:49.360 --> 21:51.360]  Another question?
+[21:51.360 --> 21:53.360]  Yeah, I was wondering.
+[21:53.360 --> 21:58.360]  So, obviously, the runtime CPU capability detection
+[21:58.360 --> 22:01.360]  and dispatching of the right functions is desirable,
+[22:01.360 --> 22:04.360]  but I don't think it's necessarily contradictory
+[22:04.360 --> 22:07.360]  to having some amount of abstraction.
+[22:07.360 --> 22:13.360]  Like, have you, for instance, looked into the highway library
+[22:13.360 --> 22:16.360]  that is being used in some places
+[22:16.360 --> 22:19.360]  that is trying to provide some kind of abstraction
+[22:19.360 --> 22:25.360]  while still allowing to do runtime dispatch?
+[22:25.360 --> 22:29.360]  So, the question was, have you looked into some of the abstraction libraries
+[22:29.360 --> 22:33.360]  like highway that's trying to do a sort of compromise
+[22:33.360 --> 22:36.360]  between runtime dispatch and abstraction?
+[22:36.360 --> 22:38.360]  I think this question was already answered,
+[22:38.360 --> 22:40.360]  I think, two presentations ago.
+[22:40.360 --> 22:43.360]  Not with highway, but I think with a different SIMD library,
+[22:43.360 --> 22:45.360]  but there have been various approaches,
+[22:45.360 --> 22:47.360]  LibOil, is it SIMD easy?
+[22:47.360 --> 22:49.360]  Various different approaches.
+[22:49.360 --> 22:53.360]  And again, the result from certain FAMPEG-264,
+[22:53.360 --> 22:56.360]  it has been righted by hand.
+[22:56.360 --> 22:59.360]  It's written once, and you know almost certainly
+[22:59.360 --> 23:02.360]  that it's going to be usable for a long time.
+[23:02.360 --> 23:04.360]  I didn't really talk about it, but the abstraction,
+[23:04.360 --> 23:08.360]  there is a lightweight abstraction layer in X-264 and FAMPEG
+[23:08.360 --> 23:11.360]  to try and basically to handle 32-bit, 64-bit,
+[23:11.360 --> 23:15.360]  and to handle other things like the different ABI cores.
+[23:15.360 --> 23:19.360]  The abstraction layer kind of handles
+[23:19.360 --> 23:22.360]  some of the future-proofing in that respect,
+[23:22.360 --> 23:25.360]  but there's a blog post online from Ronald,
+[23:25.360 --> 23:27.360]  if he's here, but he's not here.
+[23:27.360 --> 23:29.360]  He explains some of this.
+[23:29.360 --> 23:32.360]  It's another presentation in itself, unfortunately.
+[23:32.360 --> 23:38.360]  For your benchmark, do you know which optimization
+[23:38.360 --> 23:41.360]  the C-code was compiled with?
+[23:41.360 --> 23:43.360]  The question was, for the benchmark,
+[23:43.360 --> 23:47.360]  what optimizations were the C-code compiled with?
+[23:47.360 --> 23:54.360]  The GCC-03, varying versions of GCC.
+[23:54.360 --> 23:56.360]  In FAMPEG test suite, there's all sorts.
+[23:56.360 --> 24:00.360]  I think from GCC, there's a whole range,
+[24:00.360 --> 24:05.360]  depending on the build OS, but from 4 to 12, I think,
+[24:05.360 --> 24:07.360]  and maybe some people test nightly.
+[24:07.360 --> 24:09.360]  I think Martin certainly tests nightly for ARM.
+[24:09.360 --> 24:11.360]  I don't know if anyone tests nightly on X-86.
+[24:11.360 --> 24:13.360]  Some are LVM as well.
+[24:13.360 --> 24:16.360]  But again, I would be very surprised
+[24:16.360 --> 24:19.360]  if a compiler would be able to come up with something,
+[24:19.360 --> 24:21.360]  because what a human wrote,
+[24:21.360 --> 24:26.360]  because this is involving bit properties of the actual packing,
+[24:26.360 --> 24:31.360]  and actually the trick with PMAD SW is a kind of trick
+[24:31.360 --> 24:35.360]  to try and do a multiply and a zeroing at the same time,
+[24:35.360 --> 24:38.360]  and it probably doesn't have the level of thinking
+[24:38.360 --> 24:41.360]  to understand the bit patterns internally.
+[24:41.360 --> 24:43.360]  Something like chatGPT might one day,
+[24:43.360 --> 24:46.360]  which would be quite interesting, but I don't think the compiler does.
+[24:46.360 --> 24:48.360]  The last question.
+[24:48.360 --> 24:51.360]  I'm just going to follow up on what you said.
+[24:51.360 --> 24:54.360]  If you have a small algorithm, a small function like 10,
+[24:54.360 --> 24:56.360]  100 clients, maybe,
+[24:56.360 --> 24:58.360]  writing in the assembly might be easy,
+[24:58.360 --> 25:00.360]  but if you have a huge function,
+[25:00.360 --> 25:04.360]  like a filter, a variance filter, or something, a VCT,
+[25:04.360 --> 25:07.360]  writing it directly in the assembly might take a long time.
+[25:07.360 --> 25:09.360]  That's why originally we write it in C,
+[25:09.360 --> 25:13.360]  and then we try to write it in intrinsics.
+[25:13.360 --> 25:15.360]  So the question is,
+[25:15.360 --> 25:21.360]  a longer function might take a longer time to write in assembly
+[25:21.360 --> 25:24.360]  compared to C or intrinsics.
+[25:24.360 --> 25:28.360]  Yes, but there are DCTs and FMPEG,
+[25:28.360 --> 25:30.360]  but they're macroed, right?
+[25:30.360 --> 25:33.360]  Steps have macros to try and help that.
+[25:33.360 --> 25:35.360]  Again, the abstraction layer also adds, I think, macros
+[25:35.360 --> 25:38.360]  on top of what the normal assembler does in terms of macros,
+[25:38.360 --> 25:40.360]  so the blog post explains,
+[25:40.360 --> 25:42.360]  but swap is kind of interesting.
+[25:42.360 --> 25:44.360]  It lets you swap registers,
+[25:44.360 --> 25:46.360]  but then continue with them,
+[25:46.360 --> 25:48.360]  and the layer just handles all of that internally.
+[25:48.360 --> 25:51.360]  There's also just macros for, like, clipping.
+[25:51.360 --> 25:53.360]  I think it was on the example,
+[25:53.360 --> 25:56.360]  but clip is an example.
+[25:56.360 --> 25:58.360]  So clipUB is a macro,
+[25:58.360 --> 26:00.360]  and on the right target set,
+[26:00.360 --> 26:02.360]  it will go and use the right clipping functions
+[26:02.360 --> 26:04.360]  if they're available, for example,
+[26:04.360 --> 26:06.360]  and there's a bunch of these, I think,
+[26:06.360 --> 26:09.360]  that's how to fly. There's a few others like that.
+[26:09.360 --> 26:38.360]  Thank you, Kieran.

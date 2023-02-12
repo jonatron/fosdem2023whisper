@@ -1,0 +1,319 @@
+[00:00.000 --> 00:09.480]  Okay, welcome back.
+[00:09.480 --> 00:13.360]  So while you all have been walking in, I've been quickly reading this book, Efficient
+[00:13.360 --> 00:18.680]  Go, it reads very quickly, and now Bartek has made sure that my code is ten times quicker,
+[00:18.680 --> 00:19.880]  so tell us everything about it.
+[00:19.880 --> 00:20.880]  Thank you.
+[00:20.880 --> 00:28.560]  Thank you very much, everybody.
+[00:28.560 --> 00:29.560]  So welcome.
+[00:29.560 --> 00:31.520]  I hope your travels went well.
+[00:31.520 --> 00:37.520]  Mine were, like, canceled, flight canceled, change of route, so I had lots of adventures,
+[00:37.520 --> 00:41.600]  but generally I'm super happy I made it, and we are at the FOSDEM.
+[00:41.600 --> 00:47.960]  So in this talk, I would like to invite you to learn more about efficiency of our Go programs,
+[00:47.960 --> 00:53.920]  and there are already two talks that I have been on who mentioned, you know, optimizations
+[00:53.920 --> 00:58.200]  in its name, and, like, generally how to make software more efficient.
+[00:58.200 --> 01:02.480]  I wonder where this, I don't know, it's not hype, but it's already three talks about
+[01:02.480 --> 01:08.360]  one topic, why it's so popular, is it because everybody's saving me money, that might be
+[01:08.360 --> 01:15.400]  a reason, but I'm super happy we are really uncovering this for Go, because Go alone might
+[01:15.400 --> 01:20.120]  be fast, but that doesn't mean that we cannot, you know, doesn't need to care about, you
+[01:20.120 --> 01:26.640]  know, making it better, and use these resources when we execute it, right?
+[01:26.640 --> 01:31.240]  So let's learn about that, and turns out that, you know, you can save literally millions
+[01:31.240 --> 01:35.600]  of dollars if you, you know, optimize some code, sometimes in production, long term,
+[01:35.600 --> 01:37.880]  so it really matters, right?
+[01:37.880 --> 01:41.880]  But before we start, short introduction, my name is Bartolome Vodka, I'm an engineer
+[01:41.880 --> 01:50.120]  at Google, normally I work at Google Cloud, Google managed Prometheus service, but generally
+[01:50.120 --> 01:58.000]  I'm open source, I love Go, I love distributed systems, observability topics, I maintain TANOS,
+[01:58.000 --> 02:04.280]  which is like open source scalable Prometheus system, I maintain Prometheus as well, and
+[02:04.280 --> 02:08.960]  generally, yeah, lots of things in open source, I mentor a lot, and I suggest you to check,
+[02:08.960 --> 02:14.560]  you know, also try to mentor others, it's super important to bring new generation of
+[02:14.560 --> 02:20.080]  people up to the speed in the open source, and yeah, I'm active in the CNCF.
+[02:20.080 --> 02:27.480]  And recently, as you see, I published a book, and I think, you know, it's kind of unique,
+[02:27.480 --> 02:31.240]  everybody's doing TikToks now, and, you know, YouTube, and I was like, yeah, let's be old
+[02:31.240 --> 02:35.280]  school, because, you know, you need to be unique sometimes in the world, and I really
+[02:35.280 --> 02:40.000]  enjoyed that, I learned a lot during that, and I would love you to learn as well, so
+[02:40.000 --> 02:46.480]  I'm kind of summarizing of some concepts from my book here in the stock, so let's go.
+[02:46.480 --> 02:52.720]  And I would like to start with this story, and, you know, apparently some of the talks,
+[02:52.720 --> 02:56.200]  one of the best talks, have to start with the story, but this is something that kind
+[02:56.200 --> 03:02.800]  of maybe triggered me to write the book, right, so imagine that, I mean, yeah, that was kind
+[03:02.800 --> 03:07.880]  of five years ago, we just started the project called Thanos Open Source, really it doesn't
+[03:07.880 --> 03:13.360]  matter what it does right now, but, you know, what happens is that it has microservices,
+[03:13.360 --> 03:17.680]  it has, you know, I think, six different microservices written in Golang, you put in communities
+[03:17.680 --> 03:22.440]  or any other cloud, and it's just a distributed database, and one part of this database is
+[03:22.440 --> 03:27.120]  compactor, it's like a component, again, doesn't matter much what it does, what it matters
+[03:27.120 --> 03:32.800]  is that it touches object storage, and it processes, you know, sometimes gigabytes or terabytes
+[03:32.800 --> 03:39.440]  daily of metrics, right, of some data, so what happened is that at the very beginning
+[03:39.440 --> 03:45.880]  of implementation, as you can imagine, you know, we implemented, yeah, MVP, it kind of
+[03:45.880 --> 03:50.400]  functionally worked, but of course, you know, the implementation was kind of naive, definitely
+[03:50.400 --> 03:55.160]  not optimized, we didn't even run any benchmark, right, other than just running on production
+[03:55.160 --> 04:01.320]  and just, yeah, kind of works, so, and you're laughing, but this is usually, you know, what
+[04:01.320 --> 04:07.160]  development in a higher velocity looks like, and it was working very well, until, of course,
+[04:07.160 --> 04:12.560]  more people put load into this, and, you know, we have some issues like Ooms, you know, one
+[04:12.560 --> 04:21.240]  user pointed us to some graphs of, you know, incredibly high spike of memory usage on the
+[04:21.240 --> 04:25.080]  heap, on the Golan heap, right, and you can see it's a drop, which means, you know, there
+[04:25.080 --> 04:30.240]  was a restart or someone killed this, and, yeah, and the numbers are not small, like
+[04:30.240 --> 04:37.520]  15 gates, I mean, for large data set, maybe it's fine, but it was kind of problematic,
+[04:37.520 --> 04:43.000]  right, so it was really interesting to see what different feedback and what different
+[04:43.000 --> 04:47.520]  suggestions community were giving us, and I mean, community, everybody, like users,
+[04:47.520 --> 04:51.760]  other developers, maybe product managers, we don't know sometimes who they role are,
+[04:51.760 --> 04:57.360]  but, you know, probably depending on their background, the answers, the proposals were
+[04:57.360 --> 05:03.880]  totally different, right, so I would like you to kind of, you know, check, and like,
+[05:03.880 --> 05:11.160]  check if you had the same situations in your experience, because, you know, this is kind
+[05:11.160 --> 05:15.960]  of like very ongoing problem, and I would like to, yeah, showcase this, so, you know,
+[05:15.960 --> 05:21.000]  first suggestion was that, can you give me a configuration that doesn't womb, and it's
+[05:21.000 --> 05:26.640]  like, what, do you expect me, like, very new project to have, like, flags, not a womb,
+[05:26.640 --> 05:31.600]  or like, useless memory, this is not as simple as that, yet many, many users are asking us
+[05:31.600 --> 05:35.840]  this question, or person's, or person's project, probably you heard this question, okay, what
+[05:35.840 --> 05:40.600]  configuration I should use, so it uses less memory, right, or like, it just, it's more
+[05:40.600 --> 05:44.520]  optimized, how can I optimize using configuration, it's just, you know, it's not as simple as
+[05:44.520 --> 05:49.080]  that, I guess, you know, maybe in Java, in JVM, you have lots of performance flags, you
+[05:49.080 --> 05:53.240]  sometimes tune things, and it's better, but, you know, it's not so simple, it's a goal,
+[05:53.240 --> 05:59.520]  like, kind of low level, you, I mean, yeah, it's, you need to do more than that, right,
+[05:59.520 --> 06:04.320]  another, you know, interesting approach, but very, very good in some way, is it just, okay,
+[06:04.320 --> 06:09.560]  I will just put this process into bigger machine, and it's that, and that's totally valid,
+[06:09.560 --> 06:14.600]  you know, solution, maybe short term, maybe sometimes it's enough, but, you know, in our
+[06:14.600 --> 06:20.000]  case, it was not sustainable, because of course, you couldn't grow vertically more and more,
+[06:20.000 --> 06:23.760]  and also, even if you would maybe find the big enough machine that was working for your
+[06:23.760 --> 06:29.960]  data set, then, you know, obviously, you were overpaying a lot, if the code is naive and
+[06:29.960 --> 06:35.800]  maybe wasting a lot of memory, right, then finally, you know, the most fun approach, okay,
+[06:35.800 --> 06:40.360]  let's split this one microservice into, you know, like a schedule there, and then, you
+[06:40.360 --> 06:45.960]  know, warcares, and then we'll just replicate in my super nice computer, you know, communities
+[06:45.960 --> 06:50.600]  cluster, and, you know, it will just horizontally scale, so I can use many, many hundreds of
+[06:50.600 --> 06:57.440]  small machines, so it will work, yes, but, you know, you are putting on small, kind of,
+[06:57.440 --> 07:02.480]  microservice so much complexity that it will be, like, more expensive, generally, right,
+[07:02.480 --> 07:08.680]  so the network costs, like, distributed systems, you know, injects, you know, things that you
+[07:08.680 --> 07:14.160]  have to replicate data, finally, so you overpay more and more and more, and you are, kind
+[07:14.160 --> 07:20.520]  of, distributing this non-optimized code to different places, that's not always the solution.
+[07:20.520 --> 07:25.160]  Sometimes the code cannot be optimized more, and we can, you know, we should probably horizontally
+[07:25.160 --> 07:30.080]  scale, but not in the very beginning of the project, right, yet, that was the first suggestion
+[07:30.080 --> 07:34.680]  from the community, right, of course, you can just switch from Thanos to something else,
+[07:34.680 --> 07:38.480]  right, that's also solution, and then, if you have this approach, and probably you would
+[07:38.480 --> 07:43.840]  just jump through project, this is not super efficient, but maybe, you know, some parts
+[07:43.840 --> 07:50.080]  of the project are better or some worse, that's an option, some suggestion, of course, paying
+[07:50.080 --> 07:56.640]  for vendor, right, like, they will solve the problems for me, for real money, so, but yeah,
+[07:56.640 --> 08:01.800]  that's not always a good solution, like, that's just giving up, and also, you know, migration
+[08:01.800 --> 08:10.200]  of data, huge cost of learning new tools, and so on, and, you know, all of this work
+[08:10.200 --> 08:16.640]  we're in the code, we have this, and it's like, you know, it's bumping, and super easy
+[08:16.640 --> 08:24.960]  ways that you could be avoided, right, and, yeah, so, you know, of course, that was Maloch,
+[08:24.960 --> 08:29.880]  so in C++, I mean, in Bugo, we don't have Maloch and so on, but, you know, memory overhead,
+[08:29.880 --> 08:34.240]  memory leaks like that, like, are very common in Golan, like, just imagine how many gorotins
+[08:34.240 --> 08:38.840]  sometimes you put, you created, you forgot to close some kind of abstraction, and the
+[08:38.840 --> 08:43.760]  gorotin is leaking, and so you are leaking memory like this Maloch, right, so, and, you
+[08:43.760 --> 08:52.640]  know, what actually, you know, was the solution, was some contributor finally came up, investigated,
+[08:52.640 --> 08:57.560]  what about this efficiency problem on the code level, algorithm and code level, right,
+[08:57.560 --> 09:02.320]  and we wrote, or like, we wrote small part of the, of the compactor to stream data, right,
+[09:02.320 --> 09:10.080]  so instead of building maybe the kind of resulted object that the compactor is doing in memory,
+[09:10.080 --> 09:15.280]  it was as soon as possible streaming that to file system, easy, generally easy, easy,
+[09:15.280 --> 09:20.920]  easy change, yet there was lots of discussions, lots of stress, lots of weird ideas, and I
+[09:20.920 --> 09:26.280]  would just find it like, over time, amusing that this, this story was repeating in many,
+[09:26.280 --> 09:30.920]  many cases, right, so, and you know, that's not only, you know, of course, experience,
+[09:30.920 --> 09:36.360]  so many, so many kind of nice examples where only small character change, two character
+[09:36.360 --> 09:42.120]  change there, and, you know, so much kind of like improvement over like large system,
+[09:42.120 --> 09:48.440]  so sometimes, sometimes there are like, very easy ways that we can just pick it up and
+[09:48.440 --> 09:54.120]  just do it, right, but we need to know how, right, so kind of two learnings from the story,
+[09:54.120 --> 09:59.920]  one is that software efficiency on code level and algorithms, so changing code, you know,
+[09:59.920 --> 10:06.440]  matters, and learning how to do it can be, can be useful, and second learning is that
+[10:06.440 --> 10:12.680]  there is common pitfall, I think, generally in the, in this years, because in the past
+[10:12.680 --> 10:17.320]  we have premature optimizations, everybody was playing with the code and trying to over-optimize
+[10:17.320 --> 10:22.440]  things, I think now we are lazy and we are more like into DevOps, into changing, you
+[10:22.440 --> 10:27.240]  know, configuration, into horizontal scaling because we have this power, we have cloud,
+[10:27.240 --> 10:31.240]  and this is usually, you know, more chosen solution than actually checking the code,
+[10:31.240 --> 10:36.640]  right, and I call it closed box thinking, and I think this is a threat a little bit
+[10:36.640 --> 10:41.480]  in our ecosystem, so we should acknowledge that there are different levels, we can sometimes
+[10:41.480 --> 10:45.600]  scale, we can sometimes put more bigger machine, we can sometimes throw right to rust, if that
+[10:45.600 --> 10:50.360]  makes sense, but you know, that's not the first solution that should come to your mind,
+[10:50.360 --> 10:51.360]  right?
+[10:51.360 --> 10:55.960]  Okay, before we go forward, I will, I have five books to share, and I will start the
+[10:55.960 --> 11:00.880]  link to quiz at the end, and it will be super simple, but pay attention, right, because
+[11:00.880 --> 11:06.640]  maybe there will be some questions around, and you can answer, send me an email, and
+[11:06.640 --> 11:13.640]  I will just, you know, just choose five people, lucky people, to have my book, so, yeah,
+[11:13.640 --> 11:23.760]  pay attention, all right, five steps, five steps, yeah, for efficiency, efficiency progress.
+[11:23.760 --> 11:28.600]  One thing I want to mention, I don't know if you have been in the previous talk, or like
+[11:28.600 --> 11:37.000]  before previous, he kind of explained a lot of optimization ideas, like I think, and I
+[11:37.000 --> 11:43.440]  might say before, like he mentioned, string optimizations with internings, has just mentioned,
+[11:43.440 --> 11:51.280]  I think, something around, you know, allocations, and many kind of like, I think, padding,
+[11:51.280 --> 11:57.120]  strike padding, and generally, you know, all those kind of ideas, this is fine, but it's
+[11:57.120 --> 12:01.920]  optimizing stuff, it's not like looking through dictionary of things I did in the past, it's
+[12:01.920 --> 12:06.640]  kind of more fuzzy, more involved, so what I would like you to focus, it's not all particular
+[12:06.640 --> 12:12.120]  way of how we optimize an example I would show, because it's super simple and trivial,
+[12:12.120 --> 12:17.040]  but how we get there, right, how we found what to optimize, how we found if we should
+[12:17.040 --> 12:19.800]  even optimize, okay, so focus on that.
+[12:19.800 --> 12:24.280]  So first step, first suggestion I would have, and this is from Book, I kind of found, yeah,
+[12:24.280 --> 12:30.440]  I don't know, like I defined this name TFBO, which is essentially a flow for development,
+[12:30.440 --> 12:34.880]  efficiency aware development that worked for me, and generally I see other professionals
+[12:34.880 --> 12:41.280]  doing that a lot as well, so test, fix, benchmark, optimize, so essentially what it is, it's
+[12:41.280 --> 12:46.760]  like a TDD with something else, and TDD you are probably familiar with, test-driven development,
+[12:46.760 --> 12:52.160]  you test first, as you can see, and only then you kind of like implement or fix it until
+[12:52.160 --> 12:57.320]  the test is passing, right, I would like to kind of do the same for optimizations as
+[12:57.320 --> 13:03.800]  well, so we have benchmark-driven optimizations, because as you can see, we benchmark first,
+[13:03.800 --> 13:09.640]  then we optimize, and then we profile, right, and I will tell you later why, but all of
+[13:09.640 --> 13:15.240]  this is a closed loop, right, so after optimizations we have to test as well, okay, so it feels
+[13:15.240 --> 13:22.080]  complex, but we'll make one loop, actually maybe two, during the stock on a simple code,
+[13:22.080 --> 13:23.360]  so let's do it.
+[13:23.360 --> 13:30.440]  So let's introduce a simple function, super simple, super stupid, we are creating millions
+[13:30.440 --> 13:34.440]  of elements, I mean, a slice with millions of elements, and each of those elements are
+[13:34.440 --> 13:41.800]  just a string, a constant string for them, super simple, it's the first, you know, kind
+[13:41.800 --> 13:47.400]  of first iteration of this program we want to write, so what we do regarding TFBO, okay,
+[13:47.400 --> 13:52.680]  so we test, right, I mean, now we have a code, for example, and we want to maybe improve
+[13:52.680 --> 13:57.160]  it, we test, test-driven development, so let's assume I already had the test, right, but
+[13:57.160 --> 14:03.160]  the test could look like this, and then, you know, I'm ensuring, okay, it's passing,
+[14:03.160 --> 14:08.760]  so nothing functionally I have to fix, so what next?
+[14:08.760 --> 14:12.880]  So next is this measurement, it's a benchmark, and again, has this already mentioned how
+[14:12.880 --> 14:19.800]  to make benchmarks, but I have some additions, extensions to that that you might find helpful,
+[14:19.800 --> 14:24.880]  something I want to mention is that, you know, we were talking about micro benchmarks, because
+[14:24.880 --> 14:30.400]  the same level of testing behavior, like for example, like for this small function, like
+[14:30.400 --> 14:36.960]  we have this create, you know, unit test is totally enough, right, this is on micro level,
+[14:36.960 --> 14:40.000]  we are making just unit test, it's fine, but sometimes if you have a bigger system, you
+[14:40.000 --> 14:45.200]  need to do something on macro level, like integration test, end-to-end test, whatever
+[14:45.200 --> 14:49.560]  bigger, right, and the same happens in a benchmark, right, this is micro benchmark, this is kind
+[14:49.560 --> 14:57.280]  of unit benchmark, there are also micro benchmarks I covered in my book, and then you need to
+[14:57.280 --> 15:02.400]  have more sophisticated kind of setup with low testing, with maybe some automation, with
+[15:02.400 --> 15:07.520]  some observability, like, you know, Prometheus, maybe, which measures over time some resources,
+[15:07.520 --> 15:12.320]  but here we can, we have a simple unit create function, we can just make it simple with
+[15:12.320 --> 15:16.560]  micro benchmarks, and, you know, it has already mentioned, but, you know, there is a special
+[15:16.560 --> 15:22.120]  signature in a test file you have to put, and then there are optional helpers, for example,
+[15:22.120 --> 15:26.880]  that I like actually to put almost everywhere, report allocs, which is by default making
+[15:26.880 --> 15:31.560]  sure that this function will measure allocations as well, and the reset timer, which is super
+[15:31.560 --> 15:37.120]  cool because it resets the measurement, so anything before you allocate, you spend time
+[15:37.120 --> 15:42.320]  on, it will be discarded from benchmark result, so benchmark will only focus on what will
+[15:42.320 --> 15:46.840]  happen within this loop iteration, right?
+[15:46.840 --> 15:50.840]  And then this for loop, you cannot change it, don't try to change it, always copy, this
+[15:50.840 --> 15:54.240]  is a boilerplate that has to be there, right?
+[15:54.240 --> 16:01.960]  Because it allows Go to make repeatable, check the repeatability of your test by running
+[16:01.960 --> 16:04.640]  it, you know, hundreds of times.
+[16:04.640 --> 16:10.120]  Okay, so how we execute it, already, again, has this mentioned, but this is, you know,
+[16:10.120 --> 16:16.240]  how I do it to, like, focus to one test, but this is not enough, in my opinion, right?
+[16:16.240 --> 16:20.160]  By default, it runs only one test, one second.
+[16:20.160 --> 16:25.920]  I recommend to actually make sure you explicitly state some parameters, right?
+[16:25.920 --> 16:33.360]  And I have one liner, one liner in bash, for example, that I often use, so what it is essentially,
+[16:33.360 --> 16:38.360]  I'm kind of creating some variables so I can reference this result later on in a short-term
+[16:38.360 --> 16:47.120]  future, V1, for example, so this will create a V1.txt file in my locale, it will run this
+[16:47.120 --> 16:52.680]  benchmark, it will actually run it, you know, sometime, I specify, again, which is super
+[16:52.680 --> 16:57.040]  amazing because it was like, okay, so I have this V1 file, what I was doing with it, and
+[16:57.040 --> 17:00.440]  then you check in your bash history, okay, oh, that was one second, and then that was
+[17:00.440 --> 17:03.080]  something else, right, so it's kind of useful.
+[17:03.080 --> 17:07.720]  And then this is crucial, this is something I don't know why I didn't learn in the beginning,
+[17:07.720 --> 17:10.560]  maybe you learned the count, dash count, right?
+[17:10.560 --> 17:16.520]  So what it is, is that it runs the same test couple of times, six times, actually, and
+[17:16.520 --> 17:21.160]  so one second, six times, and this is super important because then you can use further
+[17:21.160 --> 17:27.600]  tools you will see to check, you know, how reliable are your results, it will essentially
+[17:27.600 --> 17:32.920]  calculate the variance between the, you know, the timings, for example, so if the variance
+[17:32.920 --> 17:37.400]  is too big, then your environment is not stable, right?
+[17:37.400 --> 17:43.400]  And then I pin to one CPU, this is super important to, generally pinning, not to one, right?
+[17:43.400 --> 17:47.360]  Just pick something that works for you, for concurrency, pick something that runs on production
+[17:47.360 --> 17:51.240]  maybe, or similar, but always between tests, don't change that, right?
+[17:51.240 --> 17:55.840]  So that's super important, and also I recommend to change less than numbers of CPU because
+[17:55.840 --> 17:58.240]  your operating system has to run on something, right?
+[17:58.240 --> 18:04.320]  So those things matter, also don't run this on laptop without power connected because
+[18:04.320 --> 18:06.160]  you will be CPU trolled off.
+[18:06.160 --> 18:09.440]  There are lots of kind of small things that you think, oh, it doesn't matter, no, it matters
+[18:09.440 --> 18:11.880]  because then you cannot rely on your results, right?
+[18:11.880 --> 18:17.720]  So try to make this serious a little bit and at least, you know, don't put, don't benchmark
+[18:17.720 --> 18:20.800]  on your lap, you know, in the bed, you know, because they will be overheating.
+[18:20.800 --> 18:23.960]  So yeah, small things, but it matters, right?
+[18:23.960 --> 18:27.720]  I was doing that all the time, by the way, yeah.
+[18:27.720 --> 18:31.360]  So results, you know, result looks like this.
+[18:31.360 --> 18:33.640]  You can see many of them.
+[18:33.640 --> 18:37.120]  But this is not how I use it or how we supposed to use it, apparently.
+[18:37.120 --> 18:43.960]  There is amazing tool called BenchStat, and it just brings in more human-readable way,
+[18:43.960 --> 18:50.120]  and you can see it also aggregates and have some averages over those runs and tells you
+[18:50.120 --> 18:51.440]  within this percentage.
+[18:51.440 --> 18:57.600]  For example, the time, latency, there is a variance of 1%, which is tolerable, for example,
+[18:57.600 --> 18:58.600]  right?
+[18:58.600 --> 19:02.800]  And you can kind of like customize what exactly, how it calculates this variance and so on.
+[19:02.800 --> 19:08.000]  So we can trust it, like it's within 1% of, I guess, free, you could trust it, depend
+[19:08.000 --> 19:11.680]  on what you do, but generally it's not too bad.
+[19:11.680 --> 19:14.000]  Allocations, fortunately, are super stable, right?
+[19:14.000 --> 19:19.400]  So yeah, so we benchmark, we measure it, okay, we know our function has these numbers, like,
+[19:19.400 --> 19:22.120]  I mean, what's next, right?
+[19:22.120 --> 19:25.360]  Everybody was like, yeah, let's make it faster, let's make it faster, but wait, wait, wait,
+[19:25.360 --> 19:31.880]  why, why should we make it faster, maybe, okay, maybe that's a lot, 100 megabytes of
+[19:31.880 --> 19:36.080]  every, you know, create invocation, but maybe that's fine, right?
+[19:36.080 --> 19:40.080]  So this is where I think we are missing a lot of experience, usually.
+[19:40.080 --> 19:47.080]  I mean, you have to set some expectations, right, like, to what point you are optimizing,
+[19:47.080 --> 19:51.280]  and usually we don't have any expectations, like, okay, yeah, I mean, even from product
+[19:51.280 --> 19:58.600]  management here we have maybe functional requirements, but never really concrete performance requirements.
+[19:58.600 --> 20:02.720]  So we don't know what to do, and honestly, if you don't, you just ignore those requirements,
+[20:02.720 --> 20:07.000]  okay, I don't have, I just want to make it faster, then this premature optimization is
+[20:07.000 --> 20:12.920]  always, right, because it's always premature, because it's a random, a random goal you don't
+[20:12.920 --> 20:17.760]  really understand, right, so maybe, maybe just make it fast, right, that's also like
+[20:17.760 --> 20:20.280]  very fuzzy, obviously, and that's not very helpful.
+[20:20.280 --> 20:21.760]  So what is helpful?
+[20:21.760 --> 20:28.120]  What I will, and I know it's super hard, I know it's kind of uncomfortable, but I suggest
+[20:28.120 --> 20:33.880]  doing some kind of efficiency requirements, spec, super simple, as simple as possible,
+[20:33.880 --> 20:39.600]  I call it rare, so there are efficiency requirements, and what it means is essentially try to find
+[20:39.600 --> 20:44.400]  out some kind of function, right, some kind of, you know, complexity, but not as if it's
+[20:44.400 --> 20:50.080]  very complex, it's just more concrete estimation of the complexity based on inputs, right,
+[20:50.080 --> 20:55.200]  and for simple functions, like for example, our function, we can estimate, you know, what
+[20:55.200 --> 21:01.520]  in our minds we think should happen, roughly, right, so, you know, for runtime, we know
+[21:01.520 --> 21:06.760]  we, one million time we do something, we don't know how many now seconds, let's pick 30,
+[21:06.760 --> 21:11.400]  this is actually pretty big for one iteration of just append, but just really pick some
+[21:11.400 --> 21:15.840]  number, sometimes it's good, it's just, you know, you can iterate over this number, but
+[21:15.840 --> 21:20.920]  if you don't know where you go, then, you know, how you can make any decisions, decisions.
+[21:20.920 --> 21:28.640]  In allocations, it's a little bit bitter, a little bit easier, because we expect a slice
+[21:28.640 --> 21:37.240]  of six, of one million elements of strings, and as we learn from MachiTalk, every string
+[21:37.240 --> 21:44.040]  has these two parts, one part has 16 bits, which has length and capacity, or maybe capacity
+[21:44.040 --> 21:50.160]  not, but then, yeah, length capacity and pointer, and then there's other parts, which
+[21:50.160 --> 21:56.000]  lies in the heap, but for this, you know, 16 bytes, we can assume that we'll be 16,
+[21:56.000 --> 22:00.440]  right, so it's every element is 16 bytes, so now we just multiply, that's our function,
+[22:00.440 --> 22:05.360]  that's what we all expect, right, and with this, we can, you know, kind of expect that
+[22:05.360 --> 22:11.120]  every invocation of create should, you know, kind of allocate 15 megabytes, but what we
+[22:11.120 --> 22:16.640]  see, we allocate 80 megabytes, right, so already we see that, oh, there might be like easy
+[22:16.640 --> 22:21.960]  ways to do, or something I don't understand about this program, and this is what leads
+[22:21.960 --> 22:28.600]  us to better, to spotting maybe easy wins, and spotting, you know, if we need to do anything,
+[22:28.600 --> 22:33.800]  right, in terms of time, latency, it's already kind of like, more than we kind of expected,
+[22:33.800 --> 22:39.120]  right, but this is more of a guessing, like I just guessed this 30 seconds, right, okay,
+[22:39.120 --> 22:47.800]  so what we do, now we know we are, you know, not fast enough, not allocating, we are over
+[22:47.800 --> 22:52.600]  allocating, right, so then we profile, then we check, okay, we have a problem, now let's
+[22:52.600 --> 22:58.320]  find what's going on, and this is where, on micro level, we can, you know, use profiling
+[22:58.320 --> 23:04.000]  very easily by just adding those two flags, it will gather memory profiles and CPU profiles
+[23:04.000 --> 23:10.960]  in the file, like v1.mempprof, on macro level, you can, there are other ways of gathering
+[23:10.960 --> 23:14.720]  profiles, but you can use the same format, the same tools, there are even continuous
+[23:14.720 --> 23:22.080]  profiling tools in open source, like parkadev, I really recommend them, and it's super easy
+[23:22.080 --> 23:28.400]  then to gather those profiles over time, so this, what we want to really learn is that
+[23:28.400 --> 23:33.360]  what causes this problem, and this is like a CPU profile, and we could spot, and the
+[23:33.360 --> 23:40.520]  wider means it spends more CPU cycles, the depth doesn't matter, this is just how many
+[23:40.520 --> 23:46.320]  functions we have, right, so we can see that create, of course, is one of the biggest contributors,
+[23:46.320 --> 23:53.440]  but the growth slice, right, like why we spend so many cycles growing slice, ideally, I know
+[23:53.440 --> 23:59.120]  how many elements I have, kind of why it doesn't grow me once, right, and then we can check,
+[23:59.120 --> 24:04.800]  and by the way, you can use this go tool, pprof.gttp, locally, I kind of use it a lot
+[24:04.800 --> 24:09.560]  on this file to kind of expose this kind of interactive UI, you can do the same for memory,
+[24:09.560 --> 24:14.240]  but honestly, this is not useful because Append is a standard library function, and they are
+[24:14.240 --> 24:18.840]  not very well exposed, right, so they're hidden, so this is not very helpful, actually CPU
+[24:18.840 --> 24:23.160]  profile was more helpful, because it pointed us to the growth slice, and if we just Google
+[24:23.160 --> 24:27.840]  for that, you will notice this comes from Append, and then you can go to documentation
+[24:27.840 --> 24:32.000]  of Append and learn what it actually does, and as you probably are familiar, because
+[24:32.000 --> 24:39.000]  this is like, should be a trivial case, Append resizes the slice, or assizes the underlying
+[24:39.000 --> 24:45.960]  array, whenever it's full, right, and resizing, it's not super simple, it has to kind of create
+[24:45.960 --> 24:53.760]  a new, bigger array, and copy things over, and garbage collection will kill the old one,
+[24:53.760 --> 24:58.960]  but not fast enough because of the garbage collection, so we kind of aggregate that as
+[24:58.960 --> 25:08.960]  another allocation, right, so this is what happens, and kind of the fix is to just preallocate
+[25:08.960 --> 25:13.640]  right, so to tell, you know, when you create the slice, okay, how much capacity you want
+[25:13.640 --> 25:18.240]  to prepare for that, and thanks for that, so what we do now, okay, we did optimize in
+[25:18.240 --> 25:24.640]  our TFBO, now we test, before we're even measuring, because if you are not testing
+[25:24.640 --> 25:30.360]  if this, you know, this code is correct, then, you know, you might be, you know, yeah, we
+[25:30.360 --> 25:33.920]  would be happy that things are faster, but functionally broken, so always test, don't
+[25:33.920 --> 25:39.160]  be, you know, lazy, run those unit tests, easy, and then, you know, once they are passing,
+[25:39.160 --> 25:44.840]  you can comfortably measure, again, I just changed V2, just to specify another variable,
+[25:44.840 --> 25:51.440]  right, on our file system, and then I can do a bunch that V1.txt and then V2.txt, actually,
+[25:51.440 --> 25:56.360]  I can put like 100 of those variables, it will compare all of them, but here we compare
+[25:56.360 --> 26:02.240]  two, and not only we have absolute values of those measurements, but also a diff, right,
+[26:02.240 --> 26:08.280]  so you can see we improved a lot, and if we check absolute value in regards to our efficiency
+[26:08.280 --> 26:14.720]  requirements, you see that we met our threshold roughly, but like we estimated it, so it's
+[26:14.720 --> 26:20.000]  totally good, you know, 15 megabytes, we have 15 megabytes, and then it's faster than our
+[26:20.000 --> 26:25.680]  goal, so now we are good to go and release it, right, so that's kind of the whole loop,
+[26:25.680 --> 26:31.760]  and you kind of do it until you're happy with your results, so yeah, this is it, and learnings,
+[26:31.760 --> 26:37.560]  again, five learnings, follow TFBO, test, fix, benchmark, optimize, use benchmarks, they
+[26:37.560 --> 26:43.520]  are built into GoLang, they are super amazing, GoTest slash bench, set the clear goals, goals
+[26:43.520 --> 26:49.440]  are super important here, right, and then profile, and you can, I mean, GoLang uses
+[26:49.440 --> 26:55.040]  Pprof, which you can Google as well, it's like amazing kind of protocol, kind of set
+[26:55.040 --> 27:00.440]  of tools, integrated with other, you know, clouds and so on, and use it, you know, every
+[27:00.440 --> 27:06.320]  day whenever I have to optimize something, and then finally, the key is to try to understand
+[27:06.320 --> 27:11.160]  what happens, what I expected, and you know, what's wrong, reading documentation, reading
+[27:11.160 --> 27:16.320]  code, this is what you have to do sometimes, and a general tip, whenever you want to optimize
+[27:16.320 --> 27:22.720]  something super, super carefully in some, you know, bottleneck part of your code, I
+[27:22.720 --> 27:27.360]  mean, avoid standard library functions, because they are really built into generic functionality,
+[27:27.360 --> 27:30.960]  it will test, I mean, it will do a lot of things with, you know, different edge cases
+[27:30.960 --> 27:36.200]  that you might not have, so a lot of times, I just implemented my own parsing integer
+[27:36.200 --> 27:40.320]  function, it was much faster, so this is a general tip that always works, but again,
+[27:40.320 --> 27:45.040]  do it only when you need it, because you might have a box in this code, right?
+[27:45.040 --> 27:48.640]  So that's it, thank you, you have a link here, bwplotka.dev.
+[27:48.640 --> 27:58.640]  Thank you.

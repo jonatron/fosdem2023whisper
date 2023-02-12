@@ -1,0 +1,320 @@
+[00:00.000 --> 00:09.440]  All right, our next speaker is Andrew Jeffery from University of Cambridge talking about
+[00:09.440 --> 00:10.440]  LSKB.
+[00:10.440 --> 00:11.440]  Hello.
+[00:11.440 --> 00:18.400]  So yes, I'm Andrew Jeffery from University of Cambridge, emails there if you want to
+[00:18.400 --> 00:21.840]  email me about any questions that I can't answer today.
+[00:21.840 --> 00:26.800]  As a brief kind of precursor, I kind of come from the distributed systems world, not necessarily
+[00:26.800 --> 00:32.000]  confidential computing world, so this is kind of like a hybrid of both worlds here.
+[00:32.000 --> 00:36.960]  So today we're going to talk about LSKB aiming to democratise confidential computing from
+[00:36.960 --> 00:39.040]  the core.
+[00:39.040 --> 00:42.040]  So first of all, we've got to work out what this core actually is that we kind of want
+[00:42.040 --> 00:43.040]  to start replacing.
+[00:43.040 --> 00:48.080]  And so we're going to start working with distributed key value stores.
+[00:48.080 --> 00:50.680]  In particular, we're going to look at CD.
+[00:50.680 --> 00:55.680]  And as the CD website defines itself, it's a distributed, reliable key value store and
+[00:55.680 --> 01:00.760]  importantly, it's for the most critical data of your distributed systems.
+[01:00.760 --> 01:05.920]  So CD runs as a cluster, it's distributed, so you have this one leader node and you might
+[01:05.920 --> 01:09.400]  have some more followers in this setup as well.
+[01:09.400 --> 01:13.960]  CD is also not alone, it's the core, so you have some applications around that.
+[01:13.960 --> 01:17.800]  Some of those applications might be some sort of orchestration, so using Kubernetes on
+[01:17.800 --> 01:19.880]  top is like one of the main candidates.
+[01:19.880 --> 01:26.320]  Otherwise you might use M3 or Rook or Core DNS or other applications that use CD internally
+[01:26.320 --> 01:27.320]  as well.
+[01:27.320 --> 01:34.000]  So effectively, it's really widely used, it's quite a critical piece of a lot of infrastructure.
+[01:34.000 --> 01:38.560]  And so you have to interact with CD in some way, even if you're just using one of these
+[01:38.560 --> 01:39.560]  services.
+[01:39.560 --> 01:46.680]  And so primarily you use some key value operations like you can put, so you might write foo one
+[01:46.680 --> 01:51.520]  equals bar into the data store and it keeps some history so you kind of have this revision
+[01:51.520 --> 01:52.520]  system.
+[01:52.520 --> 01:56.000]  So when you do that first write, it'll be stored as a version five and you write to
+[01:56.000 --> 01:58.680]  be six, seven, eight going on like that.
+[01:58.680 --> 02:03.360]  So you can, after you've written, you can get something back out using the range queries
+[02:03.360 --> 02:09.920]  and with this you can say, I'd like all keys between foo and foo five in history, so you
+[02:09.920 --> 02:11.880]  would be able to get multiple keys at once.
+[02:11.880 --> 02:15.480]  And you can also specify the revision here if you wanted to go back in time just to see
+[02:15.480 --> 02:19.360]  what it was some previous point.
+[02:19.360 --> 02:22.000]  After you've read something, you might no longer need stuff, so you can delete it.
+[02:22.000 --> 02:28.360]  So you can also delete with this range as well, so you can delete say foo to foo five.
+[02:28.360 --> 02:30.800]  Transactions are a nice ability here, so you can do some kind of conditional logic at the
+[02:30.800 --> 02:33.040]  data store side.
+[02:33.040 --> 02:37.560]  So if you can use put range of deletes or more or less the transactions internally to
+[02:37.560 --> 02:42.360]  do kind of bulk operations here, so you can say write foo two and foo three in the same
+[02:42.360 --> 02:43.360]  revision.
+[02:43.360 --> 02:50.120]  Additionally, you can have leases on top of the data store, so these can be used for building
+[02:50.120 --> 02:54.000]  high level primitives and distributed systems, and primarily you might want some like leadership
+[02:54.000 --> 02:56.720]  mechanism.
+[02:56.720 --> 03:01.960]  One final thing here is the watch API that Etsy provides, similar to ranges you can do
+[03:01.960 --> 03:07.520]  a range between a start and an end, and you can also do a watch, a certain point in history.
+[03:07.520 --> 03:10.920]  So for watches, that history is where you start watching from.
+[03:10.920 --> 03:15.160]  So if you start revision five, you'll be notified that foo equals bar, and then you'll be notified
+[03:15.160 --> 03:18.720]  of the things in revision six, foo two and foo three, and everything that kind of comes
+[03:18.720 --> 03:21.560]  in after that as well while you keep the connection open.
+[03:21.560 --> 03:26.280]  And this is just like a really core API that's used by lots of these other systems, so this
+[03:26.280 --> 03:31.360]  is kind of something we might want to mimic if we want to like replace Etsy.
+[03:31.360 --> 03:36.720]  So Etsy is a big system, we want to run it somewhere, primarily lots of people run it
+[03:36.720 --> 03:37.920]  in the cloud.
+[03:37.920 --> 03:42.120]  You don't always want to trust this cloud, because it's run by cloud providers.
+[03:42.120 --> 03:44.840]  They might themselves be trustworthy, but the things that they're operating might not
+[03:44.840 --> 03:45.840]  be.
+[03:45.840 --> 03:49.520]  So if a high provider gets a weakness, then might get attackers going through to the lower
+[03:49.520 --> 03:54.520]  layers and being able to access some of the hardware themselves.
+[03:54.520 --> 03:57.600]  Clients that are interacting with your service might be within the cloud themselves, they
+[03:57.600 --> 04:01.760]  might have already accepted some of the cloud primitives, they might also just be outside
+[04:01.760 --> 04:05.120]  of the cloud and just having to use your service for some reason, so they might not be wanting
+[04:05.120 --> 04:06.800]  to use the cloud directly themselves.
+[04:06.800 --> 04:12.160]  Additionally, they might not necessarily speak directly to your data store.
+[04:12.160 --> 04:15.520]  Lots of things they talked through a proxy, so if you're in Kubernetes as well, you might
+[04:15.520 --> 04:20.960]  have Cubelets and Kube CTL, they speak through the API server, which basically terminates
+[04:20.960 --> 04:26.920]  the CLS connections before passing and doing some logic back on the data store itself.
+[04:26.920 --> 04:29.520]  And so today we're going to speak about two problems.
+[04:29.520 --> 04:32.840]  Problem one here is this LCD cluster that's running in the cloud.
+[04:32.840 --> 04:37.280]  If we're not trusting in this cloud, then all of the data in memory is currently unencrypted
+[04:37.280 --> 04:40.040]  and so we want to be able to do something about that.
+[04:40.040 --> 04:43.080]  And problem two is this proxy.
+[04:43.080 --> 04:47.280]  If this proxy is terminating some CLS connections, we don't really want that to be able to happen.
+[04:47.280 --> 04:53.800]  We'll actually see how the proxy can be a bit distrustful with our interactions.
+[04:53.800 --> 04:58.160]  We want to be able to show when it's not being very trustworthy.
+[04:58.160 --> 04:59.160]  So diving into problem one.
+[04:59.160 --> 05:04.320]  So we've got this XED cluster, XED like any kind of storage service has some storage,
+[05:04.320 --> 05:06.920]  it has some memory and some processing application.
+[05:06.920 --> 05:10.600]  It's also distributed, so we have some CLS connections between the peers.
+[05:10.600 --> 05:15.200]  And effectively, as you can see in yellow here, we have some level of security.
+[05:15.200 --> 05:20.840]  So recommended setups have XED communicating for XED nodes over TLS.
+[05:20.840 --> 05:25.040]  And we also can have this optional sort of file system encryption that gets put down
+[05:25.040 --> 05:27.320]  to storage.
+[05:27.320 --> 05:30.040]  One main problem with this, all of those keys are in memory.
+[05:30.040 --> 05:36.360]  So the TLS key that we were using for TLS is now in memory, so the attackers got that.
+[05:36.360 --> 05:39.200]  And they've also got the private key for any file system encryption.
+[05:39.200 --> 05:43.760]  So basically renders our TLS connections and our storage encryption pretty much worthless
+[05:43.760 --> 05:48.160]  if we're not trusting that someone can't access our memory.
+[05:48.160 --> 05:54.080]  So if we actually swap out CD for LSKV, which is our data store, we run LSKV inside of
+[05:54.080 --> 05:57.960]  an SGX enclave, which gives us those confidentiality properties that we just mentioned in the
+[05:57.960 --> 06:04.000]  previous talk, then we can build some of these privileges to be a bit more trustworthy.
+[06:04.000 --> 06:08.520]  So now that our memory is encrypted and integrity protected, we can store our TLS keys and file
+[06:08.520 --> 06:12.720]  system keys there and trust that they're not going to be able to be accessed.
+[06:12.720 --> 06:16.600]  The actual application itself is running in a secure enclave, so we can show you that
+[06:16.600 --> 06:20.280]  it's not going to be able to be modified.
+[06:20.280 --> 06:24.160]  While TLS connections, we can be sure that they're actually secure TLS because our TLS
+[06:24.160 --> 06:28.680]  keys are in memory, and we can actually upgrade those to a tested TLS where rather than just
+[06:28.680 --> 06:31.760]  trusting the other application to ever end, we can make sure the other application is
+[06:31.760 --> 06:35.960]  running in a secure enclave as well, so it's in the same environment that we trust.
+[06:35.960 --> 06:40.600]  And finally, we've got this file system key in memory, so we can trust that anything we
+[06:40.600 --> 06:45.160]  write to disk is actually going to be encrypted properly as well and safe.
+[06:45.160 --> 06:48.000]  So this is like one nice solution to that problem one.
+[06:48.000 --> 06:51.800]  So if we delve into a bit of what LSKV is a bit more, we can see that it builds on something
+[06:51.800 --> 06:52.800]  called CCF.
+[06:52.800 --> 06:58.200]  It runs in the SJX enclave, and like most services in the cloud, it will run on top
+[06:58.200 --> 07:03.360]  of a hypervisor and has some memory and storage and other resources attached as well.
+[07:03.360 --> 07:08.720]  So if we quickly jump into CCF, which is the confidential consortium framework, it's
+[07:08.720 --> 07:14.360]  a pretty nice project that basically splits up the interactions and the management of
+[07:14.360 --> 07:18.080]  it into three distinct roles.
+[07:18.080 --> 07:19.920]  So the first role is the operator.
+[07:19.920 --> 07:23.480]  So this is the kind of cloud provider, the person who's standing up VMs for you.
+[07:23.480 --> 07:28.920]  You might say, I'd like one LSKV node to run with, and then you might later want more
+[07:28.920 --> 07:30.800]  to join into the network.
+[07:30.800 --> 07:35.240]  And so this operator is untrusted, so all they can do is stand those nodes up.
+[07:35.240 --> 07:40.000]  They can't do any sort of giving those nodes access to the data in the cluster.
+[07:40.000 --> 07:42.720]  They don't auto join the cluster.
+[07:42.720 --> 07:45.920]  That's the responsibility of the governance, who we partly trust.
+[07:45.920 --> 07:49.840]  There's a few of them, and so any interactions they do have to be done in some sort of majority
+[07:49.840 --> 07:51.240]  way.
+[07:51.240 --> 07:55.880]  And so these people will be responsible for things like once a node has been stood up,
+[07:55.880 --> 07:59.120]  except checking the configuration of it, and finally accepting it into the network
+[07:59.120 --> 08:04.280]  so it can start serving application requests and handle some of the data in the cluster.
+[08:04.280 --> 08:08.160]  And finally, we have users that need to actually access the application that we're running.
+[08:08.160 --> 08:12.440]  And so these are treated as kind of trusted towards the application, but the application
+[08:12.440 --> 08:16.480]  itself can have internal access controls inside.
+[08:16.480 --> 08:24.920]  And all the data is stored on an encrypted ledger that gets written to the disks.
+[08:24.920 --> 08:29.640]  Governance requests are stored publicly in this ledger, and they're also signed so that
+[08:29.640 --> 08:32.560]  everyone can see those and verify those.
+[08:32.560 --> 08:37.520]  User interactions that go through the application are normally stored encrypted by default.
+[08:37.520 --> 08:42.000]  You can make them public if you have certain use cases for those.
+[08:42.000 --> 08:45.440]  So LSKV actually has an HCD-compatible API.
+[08:45.440 --> 08:48.880]  This slide might look pretty familiar.
+[08:48.880 --> 08:51.680]  It's basically the same API at the core.
+[08:51.680 --> 08:55.520]  One asterisk is that this watch is at the bottom, is currently requiring a patch on
+[08:55.520 --> 09:01.200]  CCF because it hasn't got around to being merged in yet, but that's something that should
+[09:01.200 --> 09:03.960]  be fixed and should be expected to work.
+[09:03.960 --> 09:09.640]  So effectively, this basically means that we can switch out HCD for LSKV in most cases,
+[09:09.640 --> 09:11.880]  solving problem one.
+[09:11.880 --> 09:16.640]  So before we quickly go into problem two, we've just swapped out HCD and LSKV, and
+[09:16.640 --> 09:19.000]  it might not always be as simple as this.
+[09:19.000 --> 09:21.840]  So some quick trade-offs.
+[09:21.840 --> 09:27.520]  LSKV is actually optimistically consistent in the way it replicates data rather than
+[09:27.520 --> 09:32.000]  HCD is strongly consistent, and otherwise we have the normal things we might expect
+[09:32.000 --> 09:37.520]  that LSKV actually gives us confidentiality properties of our data, makes more operations
+[09:37.520 --> 09:40.000]  transparent so those governance operations we can see.
+[09:40.000 --> 09:42.600]  It also has this HCD API at its core.
+[09:42.600 --> 09:45.960]  It also has some extra features that we're not going to cover too much here.
+[09:45.960 --> 09:47.560]  There's one later.
+[09:47.560 --> 09:54.880]  So quickly on this optimistic sense, rather than replicating data in a synchronous way,
+[09:54.880 --> 09:59.440]  when you write to LSKV, it will replicate asynchronously, and in turn, you get an ID
+[09:59.440 --> 10:00.440]  back.
+[10:00.440 --> 10:04.760]  You can later follow up with this ID to say, was this replicated properly or was it not
+[10:04.760 --> 10:05.760]  allowed?
+[10:05.760 --> 10:11.720]  And this basically puts the decision at the client's side, so they can either be optimistic
+[10:11.720 --> 10:14.800]  and say, I'm going to trust that that's fine, or they can come back later and say, no,
+[10:14.800 --> 10:17.560]  I wanted to make sure that was replicated first.
+[10:17.560 --> 10:20.280]  So this is just a key difference.
+[10:20.280 --> 10:24.080]  If we go quickly on to problem two, we have this proxy that we might want to communicate
+[10:24.080 --> 10:31.080]  to the data store too, but in this instance, Alice wants to write 500 pounds into an account,
+[10:31.080 --> 10:34.720]  but the proxy is going to intercept that and write that money into Bob's account instead.
+[10:34.720 --> 10:36.160]  LSKV is none the wiser here.
+[10:36.160 --> 10:37.160]  It's just gone on the request.
+[10:37.160 --> 10:40.280]  It's going to process that request and handle the response.
+[10:40.280 --> 10:45.680]  The proxy in turn has an opportunity to return to the client and say, OK, Alice, we've written
+[10:45.680 --> 10:48.480]  your money into the account.
+[10:48.480 --> 10:52.320]  Now hopefully you can see here that Alice is not equal to Bob, and so she hasn't actually
+[10:52.320 --> 10:54.040]  got the money.
+[10:54.040 --> 10:59.440]  So LSKV gives us this receipt functionality where we can actually kind of expose untrustworthy
+[10:59.440 --> 11:00.800]  proxies.
+[11:00.800 --> 11:05.080]  So when the client first does the request to write money into Alice's account, they
+[11:05.080 --> 11:07.800]  can also ask for a receipt for that operation.
+[11:07.800 --> 11:08.800]  This goes through the proxy.
+[11:08.800 --> 11:13.040]  The proxy can rewrite the normal, write request as normal, so the LSKV actually puts the money
+[11:13.040 --> 11:18.040]  into Bob's account, but we still want to get that receipt back.
+[11:18.040 --> 11:23.880]  So when the receipt actually comes back from LSKV, the client can actually detect that
+[11:23.880 --> 11:28.040]  either the proxy's manipulated this receipt in some way, so it's no longer valid because
+[11:28.040 --> 11:32.160]  it's a signature, or it is valid, and in which case it says that the money went into Bob's
+[11:32.160 --> 11:34.920]  account, which is not what they wanted.
+[11:34.920 --> 11:39.320]  So you can use this to kind of flag to someone else that this proxy's not trustworthy and
+[11:39.320 --> 11:44.720]  you'd probably stop talking to it.
+[11:44.720 --> 11:51.840]  So that's also how we can kind of solve problem two quickly with LSKV.
+[11:51.840 --> 11:57.400]  Just a quick summary of things here is now that we don't think current data stores are
+[11:57.400 --> 12:02.520]  really suited for confidential operation, primarily looking at CD.
+[12:02.520 --> 12:06.880]  We don't think that lifting and shifting them into confidential environments gets you all
+[12:06.880 --> 12:09.680]  the properties that you necessarily want.
+[12:09.680 --> 12:14.920]  You get some kind of memory encryption integrity just by running them in enclaves, but you don't
+[12:14.920 --> 12:18.200]  get some of the other properties that we kind of get from building on the ledger, and also
+[12:18.200 --> 12:23.040]  like having a different trust model compared to what some systems have.
+[12:23.040 --> 12:27.320]  We've introduced LSKV, which is a new confidentiality store we've built on CCF, and it actually
+[12:27.320 --> 12:31.160]  has an HD compatible API, which basically means that you can swap out HD for LSKV in
+[12:31.160 --> 12:32.160]  most cases.
+[12:32.160 --> 12:38.760]  LSKV is also able to highlight these untrustworthy proxies using receipts, and yeah, it's kind
+[12:38.760 --> 12:39.760]  of fast.
+[12:39.760 --> 12:43.200]  Thanks to that optimism, it basically has a higher throughput and lower latency than
+[12:43.200 --> 12:46.560]  an HDD, so if you do replace an HDD with it, hopefully your performance of stuff will
+[12:46.560 --> 12:49.320]  start increasing as well.
+[12:49.320 --> 12:53.560]  And that's pretty much me, so I'm around for a few questions, and please check out the
+[12:53.560 --> 12:56.200]  GitHub repo, its open source and everything.
+[12:56.200 --> 13:03.200]  And yeah, my email is there if you have any questions after the talk, so thank you.
+[13:03.200 --> 13:10.200]  We definitely have time, so feel free to go ahead and answer your first question.
+[13:10.200 --> 13:17.200]  On the proxy side, the receipts, is that an API extension, or is that an API change?
+[13:17.200 --> 13:24.200]  If I'm using the proxy lab, I switch it to LSKV, do I need to change my application?
+[13:24.200 --> 13:33.000]  So that's a question about the HDD API, does that include the write receipts by default?
+[13:33.000 --> 13:34.200]  No, it does not.
+[13:34.200 --> 13:39.560]  They're a separate GRPC service on top, so your clients would need to be manipulated
+[13:39.560 --> 13:40.560]  with that.
+[13:40.560 --> 13:44.400]  Either your clients or you'll build that into a proxy, so you could say, because the idea
+[13:44.400 --> 13:48.040]  of the proxy is that it's a different kind of exposing different API to a client, right?
+[13:48.040 --> 13:51.680]  So if you do a write request to a proxy, your proxy, you could by default ask for a receipt
+[13:51.680 --> 13:55.200]  and present that to the user as well, they might need some extra functionality to be
+[13:55.200 --> 13:56.200]  able to verify that.
+[13:56.200 --> 14:02.200]  Is that because it's, I don't know how the receipt works, with extending the HDD API
+[14:02.200 --> 14:09.200]  to have some sort of, I don't know, a non-source or a request for signature, is that something
+[14:09.200 --> 14:15.200]  that you're planning to, would it make sense to extend the actual HDD API?
+[14:15.200 --> 14:19.720]  Questions, would it make sense to extend the HDD API for receipts?
+[14:19.720 --> 14:23.760]  We don't really think so, we're not really planning on doing changes directly in HDD,
+[14:23.760 --> 14:27.280]  just primarily because HDD has a different kind of threat model and trust model, so some
+[14:27.280 --> 14:30.880]  of the things that we have, HDD doesn't necessarily support against.
+[14:30.880 --> 14:35.320]  So that's one reason we're not going to stop putting some of this back into HDD itself.
+[14:35.320 --> 14:37.320]  It's kind of designed to be a separate service.
+[14:37.320 --> 14:38.320]  Yeah.
+[14:38.320 --> 14:39.320]  Yeah.
+[14:39.320 --> 14:50.000]  I'm wondering how the authentication would work, like if I have confidential services
+[14:50.000 --> 14:53.560]  that and only those should be able to access the confidential storage, how would the mutual
+[14:53.560 --> 14:56.320]  authentication work here?
+[14:56.320 --> 15:01.840]  Between, so do you mean, the HDD should just give out secrets to those confidential services
+[15:01.840 --> 15:07.960]  and the confidential service should know that they access the correct HDD storage essentially.
+[15:07.960 --> 15:10.480]  By HDD storage, do you mean a key or?
+[15:10.480 --> 15:15.960]  I mean the LSKV as an HDD replacement in the Kubernetes state.
+[15:15.960 --> 15:16.960]  Okay.
+[15:16.960 --> 15:19.880]  So I think the question is about how do you make sure you access the right HDD cluster
+[15:19.880 --> 15:21.200]  from a confidential client?
+[15:21.200 --> 15:22.200]  Yes.
+[15:22.200 --> 15:23.200]  Yeah.
+[15:23.200 --> 15:26.680]  So you'd be speaking through the API server right in Kubernetes?
+[15:26.680 --> 15:27.680]  Yeah.
+[15:27.680 --> 15:29.960]  Or you're saying you want to connect directly?
+[15:29.960 --> 15:33.480]  Maybe you have a confidential controller or you connect directly, I guess.
+[15:33.480 --> 15:34.480]  Okay.
+[15:34.480 --> 15:36.680]  So we wouldn't, I'm not sure if we can do that directly in LSKV.
+[15:36.680 --> 15:41.520]  It has a cluster ID like a normal HDD cluster, so you can go about trusting that.
+[15:41.520 --> 15:45.680]  But we don't, I don't think we've really worked through that use case directly.
+[15:45.680 --> 15:49.360]  The main thing is that if you want to write a proxy around it, then you might want that
+[15:49.360 --> 15:50.360]  in a proxy.
+[15:50.360 --> 15:51.360]  Okay.
+[15:51.360 --> 15:52.360]  Thanks.
+[15:52.360 --> 15:59.280]  What are the things that LSKV have to be careful of as compared to like HDD?
+[15:59.280 --> 16:00.360]  In what context?
+[16:00.360 --> 16:06.880]  Like, what are the things that LSKV need to be taken care of that GTC don't take care
+[16:06.880 --> 16:07.880]  of?
+[16:07.880 --> 16:08.880]  Okay.
+[16:08.880 --> 16:09.880]  Why do you need to do that?
+[16:09.880 --> 16:10.880]  Yeah, yeah.
+[16:10.880 --> 16:15.080]  So the question is about why do we, well, some things that LSKV kind of supports that
+[16:15.080 --> 16:17.000]  doesn't, HDD doesn't.
+[16:17.000 --> 16:19.440]  So one of the main things is storage.
+[16:19.440 --> 16:24.240]  In HDD, everything gets written to disks right away and that's part of the consensus
+[16:24.240 --> 16:25.240]  process.
+[16:25.240 --> 16:27.480]  You won't get returned until it's written to disk.
+[16:27.480 --> 16:32.600]  In LSKV, that's not the case, we don't write to disk synchronously, which basically means
+[16:32.600 --> 16:38.040]  that we're not trusting this host to necessarily persist our data or even give it back to us
+[16:38.040 --> 16:39.600]  correctly when we ask for it.
+[16:39.600 --> 16:43.920]  It's only used for like disaster recovery scenarios.
+[16:43.920 --> 16:52.600]  So that's like one primary difference, which basically means that HDD is open to rollback
+[16:52.600 --> 16:53.600]  attacks.
+[16:53.600 --> 16:57.600]  So if you trust the host to do the data, they can cut some off and when you load back, you've
+[16:57.600 --> 17:00.600]  got a subset of what you had before.
+[17:00.600 --> 17:01.600]  Okay.
+[17:01.600 --> 17:02.600]  Yeah?
+[17:02.600 --> 17:15.360]  So I saw in the trade-offs that LSKV cannot have a strong replication like HDD.
+[17:15.360 --> 17:25.480]  So what was the cause of LSKV, what's the case to have to do that trade-off?
+[17:25.480 --> 17:26.480]  Yeah.
+[17:26.480 --> 17:31.280]  So the question is about why does LSKV not have strongly consistent replication?
+[17:31.280 --> 17:36.120]  Primarily, if we're not trusting the host, then A, we don't want to write things to disk,
+[17:36.120 --> 17:37.120]  like we just said.
+[17:37.120 --> 17:38.480]  So that's one reason for that part.
+[17:38.480 --> 17:42.600]  And then on the replication side, we're not trusting the host, so we don't want to block
+[17:42.600 --> 17:45.720]  everyone on wanting to replicate everything.
+[17:45.720 --> 17:52.640]  And so it does do the replication, and you can follow up again with that ID from your
+[17:52.640 --> 17:53.640]  operation.
+[17:53.640 --> 17:56.440]  So if you do care about it being strongly replicated, you can just follow up the ID and
+[17:56.440 --> 17:57.440]  wait until it's committed.
+[17:57.440 --> 18:01.880]  It's just kind of giving the users a bit more flexibility in that operation choice.
+[18:01.880 --> 18:02.880]  Okay.
+[18:02.880 --> 18:08.600]  So I have one more, so Tom will set up while we're in the last session, but I have one
+[18:08.600 --> 18:09.600]  more.
+[18:09.600 --> 18:12.680]  So I'm going to write for your performance numbers, because 50% latency loss I expect,
+[18:12.680 --> 18:16.160]  but then three and a half times gain in performance, something I didn't expect.
+[18:16.160 --> 18:19.160]  Can you say why that is, or how well it keeps them consistent?
+[18:19.160 --> 18:20.160]  It's actually consistent.
+[18:20.160 --> 18:21.160]  I mean, maybe I missed that.
+[18:21.160 --> 18:22.160]  Yeah, of course you don't see the slide anymore.
+[18:22.160 --> 18:23.160]  Oh, that's a good slide, yes.
+[18:23.160 --> 18:24.160]  Yes.
+[18:24.160 --> 18:25.160]  Great.
+[18:25.160 --> 18:26.160]  Yes.
+[18:26.160 --> 18:28.160]  So the question is about why it's so fast.
+[18:28.160 --> 18:29.160]  Unfortunately, it was a consistency slide, but I think I missed it, but thank you.
+[18:29.160 --> 18:30.160]  Yeah.
+[18:30.160 --> 18:31.160]  I kind of won.
+[18:31.160 --> 18:32.160]  Yeah.
+[18:32.160 --> 18:43.680]  Even the slides are confidential now, but yeah, slides are on there for some pitch.
+[18:43.680 --> 18:44.680]  One minute, second question.
+[18:44.680 --> 18:45.680]  Otherwise.
+[18:45.680 --> 18:46.680]  Yeah.
+[18:46.680 --> 18:51.680]  So one of the first slides, when you get an example of a typical architecture, there
+[18:51.680 --> 18:52.680]  were like simple types.
+[18:52.680 --> 18:53.680]  Mm-hmm.
+[18:53.680 --> 19:18.320]  Yeah, so primarily you can replace ETD with LSKV at the moment, if you took the clusters
+[19:18.320 --> 19:23.080]  and swap them, because the ETD API is still there, your things will still work.
+[19:23.080 --> 19:26.080]  If you wanted to take advantage of the extra things like the receipts for the proxies
+[19:26.080 --> 19:29.880]  and things, you would need to add some logic into your proxy or into your client's fave
+[19:29.880 --> 19:30.880]  route.
+[19:30.880 --> 19:36.880]  There are, I think, apps that support the specificity support as well.
+[19:36.880 --> 19:41.360]  No, there's not currently apps that support those receipts and extra bits at the moment.
+[19:41.360 --> 19:43.640]  That's, we haven't got to add a bit.
+[19:43.640 --> 19:46.680]  It's just on the data store focus at the moment.
+[19:46.680 --> 19:47.680]  Cool.
+[19:47.680 --> 20:00.560]  All right.

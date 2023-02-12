@@ -1,0 +1,349 @@
+[00:00.000 --> 00:14.120]  Hi, how are you doing? Welcome to FOSDOM. Congratulations on managing to get inside a room. This is the
+[00:14.120 --> 00:18.920]  largest one I've ever seen. Usually it's just looking at the doors of ones that are full.
+[00:18.920 --> 00:26.520]  So yeah, my name's Daniel Stone. I'm here to just give a relatively high level overview
+[00:26.520 --> 00:34.200]  of the graphic stack. My hope with this, like I said, it's fairly high level, is to give you a
+[00:34.200 --> 00:40.440]  decent understanding of all the different components that go into the modern graphic stack,
+[00:40.440 --> 00:48.360]  how they fit together. So if you're trying to work with it anyway, you won't be trying to
+[00:48.360 --> 00:55.800]  debug it because it's already perfect, but just being able to give you a good understanding
+[00:55.800 --> 01:02.280]  of how everything does fit together. And now we have graphics output working, so that's a good
+[01:02.280 --> 01:11.040]  start for this talk because that wasn't looking likely five minutes ago. Right, so the graphic
+[01:11.040 --> 01:22.760]  stack looks like this. Any questions? That's the simplified version as well. More sensibly,
+[01:22.760 --> 01:31.440]  if we try to build it up incrementally, just try and work through all of the different pieces
+[01:31.440 --> 01:41.920]  and different components in essentially the order of near to far, which is, you know,
+[01:41.920 --> 01:47.680]  in networking you think of upstream and downstream, usually in the graphics for the lot of what we
+[01:47.680 --> 01:54.960]  think of is what's close to your eye and what's far from your eye. So in our case, the display
+[01:54.960 --> 02:04.040]  is closest to your eyes, and this one's incredibly bright. In between, just underneath the display,
+[02:04.040 --> 02:12.760]  controlling the display and giving you determining what should be shown, we have the window system
+[02:12.760 --> 02:21.920]  layer, so that's your Wayland. It can be X11, but we don't talk about that. And then at the very
+[02:21.920 --> 02:28.080]  back end, at the upstream side, you've got the clients, which are actually presenting the thing
+[02:28.080 --> 02:37.880]  that you want to show. But then it turns out that your window system also uses the GPU to render,
+[02:37.880 --> 02:46.280]  so it's not just OpenGL games that use accelerated graphics. It's the window system, so the nice
+[02:46.280 --> 02:53.960]  diagram already gets a bit muddied because we're breaking the layers. And then maybe the window
+[02:53.960 --> 03:02.920]  system uses some media output because you want to stream stuff onto it or, you know, to stream a
+[03:02.920 --> 03:14.200]  conference talk, hello. And maybe one of your clients is also a window system because it turns
+[03:14.200 --> 03:23.160]  out that even Chrome is a Wayland server these days, so our lovely little, we have three classes
+[03:23.160 --> 03:33.320]  of three main components of our graphic stack. This illusion's already disappeared. But, you know,
+[03:33.320 --> 03:45.600]  let's pretend that everything is fine and let's just try to build it up. So for us, DOM and KMS,
+[03:45.600 --> 03:54.360]  the acronyms you mostly see, the direct rendering manager is anything to do with graphics or display
+[03:54.360 --> 04:03.520]  inside the kernel. It's a weird legacy name. And those are all of the GPU and display drivers.
+[04:03.520 --> 04:12.480]  And KMS is very specifically the part of DRM that actually controls the display. So when you're
+[04:12.480 --> 04:22.120]  talking about HDMI output or something like that, then it's going to be KMS. And KMS is that very
+[04:22.120 --> 04:28.880]  last step in the pipeline, the one that's closest to your eye. Its job is to turn pixels into light.
+[04:28.880 --> 04:37.600]  Some people will tell you that there's a thing called FB Dev as well, but that's not right. FB Dev
+[04:37.600 --> 04:49.240]  doesn't exist. And, yeah, in the division of responsibility as we go one step further back
+[04:49.240 --> 04:57.000]  from your eye, the Windows system's job is to fundamentally to take a bunch of images from
+[04:57.000 --> 05:02.720]  clients, combine them into a single image or multiple images if you have multiple displays,
+[05:02.720 --> 05:11.440]  get them out to the eye and bring input events back. So, you know, Wayland is a protocol and
+[05:11.440 --> 05:20.760]  nothing else. There's a very, there's a very small C layer in Wayland, which is really just IPC.
+[05:20.760 --> 05:28.480]  And apart from that, it's just protocols and conventions. So, you know, MATA, the GNOME users
+[05:28.480 --> 05:36.040]  is a Wayland server. Other popular ones would be KWIN, Western, WL routes. That's where all the
+[05:36.040 --> 05:44.120]  implementation actually lies. And, yeah, like I say, they just combine window images together,
+[05:44.120 --> 05:49.200]  get them out to the output device in the reverse direction they're bringing input back.
+[05:49.200 --> 06:03.800]  X11 doesn't exist either. So, that's, we'll move on. Yeah. So, OpenGL and Vulkan, in a way they fit
+[06:03.800 --> 06:12.600]  in. Their APIs, as we know for accelerated 3D, so you provide them a mesh and some textures and
+[06:12.600 --> 06:20.680]  some shaders. Run this thing, make it fast. Great. But they only handle rendering. So,
+[06:20.680 --> 06:30.240]  GL and Vulkan themselves have no concept of I want to be able to display to Wayland. That comes in
+[06:30.240 --> 06:40.080]  with EGL and what we call the Vulkan WSI for window system integration layer. Their job is to
+[06:40.080 --> 06:48.000]  bridge the two worlds. So, with OpenGL, you have EGL on the side that's the bridge between GL and
+[06:48.000 --> 06:57.720]  say Wayland. With Vulkan, you have Core Vulkan and then the WSI on the side is that bridge
+[06:57.720 --> 07:08.160]  bringing all the content across to the window system. And then there's GBM as well, which is
+[07:08.160 --> 07:19.000]  maybe the most ill-fitting part of what we have. GBM is kind of a side channel to bridge EGL to
+[07:19.000 --> 07:30.240]  KMS. So, right now, I mean, this is all happening through GNOME shell and MOTA. It's using GL to
+[07:30.240 --> 07:38.920]  render my image with the next slide as a bonus preview and this one that you can see. MOTA,
+[07:38.920 --> 07:49.040]  yeah, it uses GL to render and it uses EGL plus GBM to be able to pull images out to
+[07:49.040 --> 08:01.000]  kernel mode setting. And GBM is a really, really strange and idiosyncratic bridge. Some people
+[08:01.000 --> 08:07.600]  will tell you that GBM stands for the generic buffer manager. That's definitely not true.
+[08:07.600 --> 08:17.200]  Yeah, we had an idea that GBM would be the thing that let people kind of peek under the hood of
+[08:17.200 --> 08:25.400]  what EGL does as an implementation and be able to generically allocate buffers. We got as far as
+[08:25.400 --> 08:31.480]  making it work for kernel mode setting and then realized how terrible the whole problem space was.
+[08:31.480 --> 08:37.680]  So, we just pretended that it was never an acronym, that it's not generic and moved on with our
+[08:37.680 --> 08:49.000]  words. So, at the end of all that, before we get into something more meaty, we've got clients
+[08:49.000 --> 08:54.960]  rendering the content, maybe with the GPU, maybe just on the CPU, maybe it's just doing mem copy.
+[08:54.960 --> 09:02.760]  It will pass a handle to that content over to the Wayland compositor with some metadata,
+[09:02.760 --> 09:11.520]  some context. The compositor is going to pull it all together, choose how it's going to display it,
+[09:11.520 --> 09:19.800]  apply any kind of policy or what have you. And then it's going to just push that final image
+[09:19.800 --> 09:29.280]  out to KMS, which is going to turn it into electrons. So, we've got the diagram that's back
+[09:29.280 --> 09:41.680]  to making sense. So, if we're looking at how KMS is actually put together, every single discrete
+[09:41.680 --> 09:47.600]  device in your system is its own. I just have an Intel up top here. I have one DRM device,
+[09:47.600 --> 09:55.800]  which is the entire Intel GPU and display complex. If you're on ARM systems usually,
+[09:55.800 --> 10:03.000]  you're going to have two devices. The display and GPU are separate IP blocks from separate
+[10:03.000 --> 10:10.920]  vendors who aren't really on speaking terms. So, you'll have one DRM device for your display
+[10:10.920 --> 10:18.120]  controller and another DRM device for your GPU and they're completely separate. So, yeah,
+[10:18.120 --> 10:28.360]  four KMS devices. We've got connectors representing real displays. So, we've got an embedded
+[10:28.360 --> 10:35.320]  display port connector here and various display ports and HDMI connectors from my external outputs.
+[10:35.320 --> 10:45.360]  CRTCs, that does stand for CRT controller because that's how long ago it was when we
+[10:45.360 --> 10:57.480]  designed all this. CRTCs are the thing immediately upstream from connectors. They generate a pixel
+[10:57.480 --> 11:07.200]  stream for the displays. So, any kind of scaling, cropping, compositing is done in the CRTC space.
+[11:07.200 --> 11:20.520]  And CRTCs are just a combination of planes. So, planes, they take frame buffers. They
+[11:20.520 --> 11:28.160]  can scale. They can be positioned within the CRTC. They can be stacked. And then the CRTC
+[11:28.160 --> 11:34.760]  is the one that combines them. So, in quite a poor diagram, because for a graphics person,
+[11:34.760 --> 11:42.800]  I can't actually draw very well, more of a text person, to be honest. Yeah, it's the
+[11:42.800 --> 11:50.200]  frame buffer is just the client content. The plane is the one that's going to do any format
+[11:50.200 --> 11:57.800]  conversion or scaling or what have you. Then the CRTC combines them all together, pushes
+[11:57.800 --> 12:04.160]  them out to the connector. Then I think the important thing to bear in mind if you're
+[12:04.160 --> 12:11.160]  trying to reason about graphics pipelines is that timing flows backwards. Timing never
+[12:11.160 --> 12:18.520]  flows forwards. Because when you've got a physical display, it's going to refresh at
+[12:18.520 --> 12:24.360]  a certain point in time. Unless it's VRR, no one asked about VRR. We don't quite know
+[12:24.360 --> 12:35.120]  how that works yet. But timing flows backwards because this HDMI output is ticking at 60
+[12:35.120 --> 12:40.880]  hertz. That's happening at a very, very fixed point in time. And so that's the beginning
+[12:40.880 --> 12:48.360]  of our reference. When we know that we want to present stuff to HDMI, we know exactly
+[12:48.360 --> 12:54.720]  when the next refresh cycle is going to start, the next one after that, so on and so forth.
+[12:54.720 --> 13:01.760]  So timing is always flowing backwards. This goes right the whole way from the connector
+[13:01.760 --> 13:09.480]  back to the CRTC, back to the Windows system, and then back to the clients. It's always
+[13:09.480 --> 13:18.480]  starting from that fixed hardware source. So yeah, you want to use DRM and KMS. Good
+[13:18.480 --> 13:27.680]  for you. I'd recommend it. It's just a set of objects, like everything that turns out
+[13:27.680 --> 13:35.800]  in computer science. It's objects with properties, and that's it. So you open your KMS device,
+[13:35.800 --> 13:42.640]  you enumerate a list of objects, your CRTCs, your connectors, your planes, you look into
+[13:42.640 --> 13:51.680]  their properties. So this connector type is DisplayPort, this one's HDMI, whatever. And
+[13:51.680 --> 13:59.040]  then any time you want to actually affect something, so display new content, change
+[13:59.040 --> 14:05.720]  resolution, whatever, that's all done through what we call Atomic Mode Setting, which is
+[14:05.720 --> 14:13.920]  about 10 years old now, and it's a very low-level property-based interface. I wouldn't really
+[14:13.920 --> 14:23.360]  recommend trying to drive it yourself, but it is possible. So Atomic is just a list of
+[14:23.360 --> 14:30.920]  properties. So you've got all of your different objects and their different types. You know
+[14:30.920 --> 14:37.520]  how you want to put them together. You know that I want this plane to go to this CRTC,
+[14:37.520 --> 14:45.640]  to this connector, and so you take all of those objects, you do a massive property set,
+[14:45.640 --> 14:52.280]  and then you do an atomic check before you commit just to see if the configuration is
+[14:52.280 --> 14:59.960]  going to be accepted. One of the things about display hardware is that it's weird. It's
+[14:59.960 --> 15:07.160]  really, really weird. There are infinite constraints on what you can actually do with the display
+[15:07.160 --> 15:12.880]  hardware. So you might have three or four planes that you can use to composite content
+[15:12.880 --> 15:20.520]  without using the GPU, but you can only use a couple of them at a time, or only one of
+[15:20.520 --> 15:28.960]  them can have compressed content, or only two of them can be scaled. So because we don't
+[15:28.960 --> 15:36.120]  have a good generic way of expressing these constraints and of constraint solving within
+[15:36.120 --> 15:43.920]  the kernel, we do the dumbest possible thing. It's brute force. We just try every possible
+[15:43.920 --> 15:50.920]  configuration that will get us to where we want to and see which one's going to stick.
+[15:50.920 --> 15:57.760]  Then yeah, once you've gone through all that, you've done your atomic commit, you've got
+[15:57.760 --> 16:06.160]  a frame on screen, it lives there until you change it. Because DRM is, it's a frame by
+[16:06.160 --> 16:16.960]  frame API. It's not a producer-consumer where you connect a camera to an output and magic
+[16:16.960 --> 16:23.560]  things occur and you get a video stream. You know, that's the domain of high-level frameworks
+[16:23.560 --> 16:32.680]  like say PipeWire and Gstreamer have that pipeline concept. DRM is quite dumb. It just
+[16:32.680 --> 16:38.840]  does what you tell it to, and it doesn't do anything else until you tell it to do something
+[16:38.840 --> 16:50.600]  else. So yeah, we've essentially summing up, you know, we've enumerated all of our devices,
+[16:50.600 --> 16:56.920]  we've used the DRM to do that, all of the objects. And again, as with timing, we're
+[16:56.920 --> 17:05.040]  working backwards from the starting point of a connector. So we know that HDMI1 is the
+[17:05.040 --> 17:10.720]  thing that we want to light up, so you always work backwards from that when you're building
+[17:10.720 --> 17:21.200]  up your object tree. And then, you know, you are going to need a way to allocate some memory
+[17:21.200 --> 17:31.080]  to display. It's not just a malloc pointer. So we have Gem, the graphics execution manager.
+[17:31.080 --> 17:38.120]  It doesn't manage execution of any graphics jobs, it's just a memory allocator. This was
+[17:38.120 --> 17:43.840]  about the point where we stopped actually naming acronyms because we've got almost all
+[17:43.840 --> 17:53.560]  of them wrong. So Gem, you see a lot of, because that's the base of our kernel allocator for
+[17:53.560 --> 18:01.600]  all graphics and display memory. And BO is something you see a lot of as well. So really,
+[18:01.600 --> 18:10.880]  I told you about it, acronyms. So Gem BO is just, like a malloc pointer, it's untyped,
+[18:10.880 --> 18:19.360]  it's a raw bucket of bytes. It can be pixel buffers, it can be shaders, it can be geometry
+[18:19.360 --> 18:26.160]  meshes, whatever you want it to be. It doesn't have any properties or metadata, just a length
+[18:26.160 --> 18:35.560]  and some content. But you can't allocate them generically because hardware is really that
+[18:35.560 --> 18:41.360]  weird. We gave up on that a long time ago. So you're going to need some kind of hardware
+[18:41.360 --> 18:49.960]  specific API to come up with a Gem BO. And you might be quite disappointed about that,
+[18:49.960 --> 19:01.520]  which is reasonable. So we came up with dumb buffers as a specific class of Gem BOs designed
+[19:01.520 --> 19:07.760]  specifically for CPU rendering when you're displaying KMS. So if you have something like
+[19:07.760 --> 19:15.080]  Plymouth for your early start splash screen, that's not going to be using the GPU. It's
+[19:15.080 --> 19:22.280]  just going to be doing CPU rendering, no device dependent code. And dumb buffers are the path
+[19:22.280 --> 19:28.640]  to that there. I just wanted to get something up on the screen. I don't care if it's amazingly
+[19:28.640 --> 19:35.600]  fast or efficient, I just need it to work and work everywhere. So this is actually a
+[19:35.600 --> 19:41.320]  generic API inside KMS dumb buffers. Gives you a Gem BO, you can map it, you can fill
+[19:41.320 --> 19:48.080]  it up with some nice pixels. And then wrap that in a KMS frame buffer is what annotates
+[19:48.080 --> 19:54.360]  the BO with stuff like format and width and height and stuff that people think might be
+[19:54.360 --> 20:00.720]  important. So yeah, like I said, you can use it for splash screens. Please don't try to
+[20:00.720 --> 20:07.360]  use it for other stuff. It's not a generic memory allocation API either. It's just the
+[20:07.360 --> 20:15.680]  thing that works. So yeah, with all that being said, that's a reasonable end-to-end picture
+[20:15.680 --> 20:22.960]  of how to use KMS. You've allocated all the buffers you need or imported them from other
+[20:22.960 --> 20:29.040]  clients. You've attached those frame buffers to planes. You've stuck them on a CRTC to
+[20:29.040 --> 20:35.880]  get them in a kind of logical space and stacked against each other. You've set your CRTC
+[20:35.880 --> 20:43.480]  and connector up for the output path. Commit everything. Hopefully that works. Then the
+[20:43.480 --> 20:48.480]  kernel tells you that it's complete. You know when the next frame is going to be and you
+[20:48.480 --> 20:55.800]  just keep on going. You can't click these links if you're sitting in this room, but
+[20:55.800 --> 21:02.840]  they are clickable on the PDF. There's a bunch of pretty decent documentation examples and
+[21:02.840 --> 21:07.720]  formats because I'm not trying to show you the entire thing. Just give you a good idea
+[21:07.720 --> 21:19.240]  and some pointers. If you're bored of KMS or you just don't find display that exciting,
+[21:19.240 --> 21:26.520]  you might want to move on to the Windows system world. There's a super quick one through Wayland.
+[21:26.520 --> 21:35.560]  Again, it's the same thing. It's clients giving you images and you're giving clients pointer
+[21:35.560 --> 21:43.200]  and keyboard and top screen events in return. I think the main thing about Wayland that
+[21:43.200 --> 21:50.600]  people take a while to grasp is that it's descriptive rather than prescriptive. What
+[21:50.600 --> 21:59.000]  I mean by that is in X11, when you have a pop-up, you tell X as a client, put this window
+[21:59.000 --> 22:04.840]  exactly here on the screen. Give me all of the input events until I tell you otherwise
+[22:04.840 --> 22:11.080]  because you're dictating specific outcomes. Wayland is exactly the other direction from
+[22:11.080 --> 22:17.560]  that. The client tells the compositor, this is a pop-up. The compositor does the right
+[22:17.560 --> 22:24.680]  thing for pop-ups, including capturing input and making it always be on top, but still
+[22:24.680 --> 22:33.640]  letting your screensaver work, which is nice. It's just about the client annotating everything
+[22:33.640 --> 22:41.480]  it has with a bunch of descriptive information and properties and then relying on the server
+[22:41.480 --> 22:48.480]  to actually implement the right semantics. There's a fair bit of trust, but it gives
+[22:48.480 --> 22:55.280]  us much, much more flexibility because by the end after how many years of X11, we were
+[22:55.280 --> 23:03.600]  kind of painted into a corner really because clients were just dictating so much.
+[23:03.600 --> 23:10.000]  We tried to make sure that there were no pods in Wayland that required the compositor to
+[23:10.000 --> 23:14.680]  do a huge amount of work because it's such a critical part of the stack that you can't
+[23:14.680 --> 23:24.040]  have it burning loads and loads of time. Like I said at the start, your compositor could
+[23:24.040 --> 23:32.760]  be GNOME, K-Win, could be Western, Sway or something like that. They're all designed
+[23:32.760 --> 23:39.360]  for different things and different use cases like window managers in X11 were. I think
+[23:39.360 --> 23:45.520]  Western is the best one because I work on it. It's basically designed for everything
+[23:45.520 --> 23:52.440]  that isn't a desktop, literally planes, trains and automobiles, digital signage, that kind
+[23:52.440 --> 23:59.560]  of thing. It's really, really efficient and predictable and reliable, but I do use a desktop
+[23:59.560 --> 24:07.000]  so I have GNOME on this one. There are absolutely a pile of them to choose from, but they all
+[24:07.000 --> 24:15.680]  use the same protocol so they all look alike to the client.
+[24:15.680 --> 24:23.040]  It's just a large collection of essentially all extension interfaces. WLBuffer is much
+[24:23.040 --> 24:29.600]  like a frame buffer to handle to some pixels somewhere, no other information just width
+[24:29.600 --> 24:36.640]  and height. A WL surface is a window, can be a pop-up, can be an application window,
+[24:36.640 --> 24:45.360]  can be a subsurface. It takes the buffer, it just crops it and optionally it takes input
+[24:45.360 --> 24:54.960]  back. XDG surface is the main one you'd interact with really because that's what adds all the
+[24:54.960 --> 25:04.160]  desktop-like things of being able to resize and move windows and all that kind of thing.
+[25:04.160 --> 25:11.680]  WLC is where the input comes from because we're still bad at naming, it turns out. That
+[25:11.680 --> 25:18.960]  one was my fault actually. We did design Wailand fundamentally to be really, really easy
+[25:18.960 --> 25:27.400]  to extend so there are quite a pile of extensions that you need to sort through and deal with.
+[25:27.400 --> 25:36.280]  The nice thing is with it having been designed with KMS in mind, it's pretty similar. You've
+[25:36.280 --> 25:42.920]  got your compositor doing the final output at the end and that's composed of a bunch
+[25:42.920 --> 25:51.120]  of windows and surfaces which have got buffers attached to them. The compositor is the ultimate
+[25:51.120 --> 26:03.160]  source of the timing and it flows that timing back to the clients as feedback. If you take
+[26:03.160 --> 26:10.880]  that, it looks exactly the same as the KMS diagram we had earlier which is not really
+[26:10.880 --> 26:19.160]  any coincidence and using that is exactly the same flow as KMS. This slide was almost
+[26:19.160 --> 26:28.360]  copy and paste. Again, I'm not trying to give you a complete guide to how to write every
+[26:28.360 --> 26:35.080]  Wailand client in the world. Please do use a tool kit. They will make your lives much
+[26:35.080 --> 26:46.200]  easier so GTK, QT, STL, IMGUI, whatever. Use a compositor tool kit as well if you like.
+[26:46.200 --> 26:51.640]  Libwestern in particular and WL routes are tool kits you can use to build compositors
+[26:51.640 --> 26:59.960]  on top of good code bases. There's some links in here as well to Wailand info is a good
+[26:59.960 --> 27:12.080]  tool to inspect. WL hacks is a debugging tool. Western debug is another debugging tool. There's
+[27:12.080 --> 27:19.200]  some sample clients as well. The simple SHM and simple EGL are our kind of references
+[27:19.200 --> 27:30.360]  of how do I actually start using this and start approaching it. Now we've got all that
+[27:30.360 --> 27:40.240]  out of the way. I'm not going to try and explain GL to you because we'd be here forever. Like
+[27:40.240 --> 27:50.520]  I said, it's GL as a model for accelerated 3D is clients providing the vertex data so
+[27:50.520 --> 27:57.400]  you're kind of wire frame geometry, your input textures, material images, and your shader
+[27:57.400 --> 28:05.080]  programs as well to run to generate the final output. No shaders can deform the geometry
+[28:05.080 --> 28:14.160]  so you can do cool stuff. You can also do things like lighting per pixel and do that
+[28:14.160 --> 28:24.520]  in a nice reflective way that's all computational. I guess the main thing to recognize about GPU
+[28:24.520 --> 28:36.160]  is they're enormously parallel so thousands of threads, really. There's not much in the
+[28:36.160 --> 28:45.200]  way of synchronization or shared memory. They really, GPUs can't do branching like CPUs.
+[28:45.200 --> 28:51.640]  They want to have everything set up for them a long time in advance and just do straight
+[28:51.640 --> 29:00.320]  line things from there. It's a long, deep pipeline essentially and you want to make
+[29:00.320 --> 29:08.600]  that roughly as static as you can. The cost of being enormously fast and really, really
+[29:08.600 --> 29:15.680]  powerful, it turns out, is that they're really power hungry. That's why we have composition
+[29:15.680 --> 29:23.040]  in the display hardware as well because it turns out that just spinning up your GPU once
+[29:23.040 --> 29:33.040]  per frame to produce the final display output. I worked on a device where the video runtime
+[29:33.040 --> 29:41.880]  went from five hours if we didn't use the GPU to four hours if we did. It's a really
+[29:41.880 --> 29:48.000]  measurable cost to get a GPU involved. You only want to do it if you've got the right
+[29:48.000 --> 30:02.480]  reasons for it or if you actually need it. Like I said, it's just a pure 3D only API
+[30:02.480 --> 30:10.960]  when you talk about GL and GLES because it came out of SGI where you told it to draw
+[30:10.960 --> 30:17.000]  and it was drawing because there's only one screen and obviously it's going to come out
+[30:17.000 --> 30:26.440]  at the right place in the screen as a simpler time. Then SGI realized that they needed some
+[30:26.440 --> 30:35.440]  more nuance. They brought in GLX, which was the first go at integrating OpenGL with the
+[30:35.440 --> 30:44.680]  Windows system. Originally it had the X server processing all the commands. That was terrible.
+[30:44.680 --> 30:51.440]  We came up with the DRI for direct rendering infrastructure, not let the clients directly
+[30:51.440 --> 31:02.560]  access the GPU. It relied on central memory allocation. We came up with DRI2 where the
+[31:02.560 --> 31:10.920]  main innovation was that clients would manage their own memory in cooperation with the kernel
+[31:10.920 --> 31:19.240]  and also execute all of their own commands. That was so good that any time you see DRI
+[31:19.240 --> 31:26.920]  it just means accelerated rendering, so roughly describing the last 20 years. Any time you
+[31:26.920 --> 31:36.720]  see DRI2 it doesn't mean actual DRI2 in X11. It just means this kind of looks like a modern
+[31:36.720 --> 31:45.600]  Windows system by which I mean about the last 15 years. That can be confusing because those
+[31:45.600 --> 31:52.760]  two terms are massively ambiguous, but if you ever see DRI2 it probably means that you're
+[31:52.760 --> 32:05.600]  somewhere good. Then yeah, EGL is an abstraction of GLX. Rather than just plugging GL into
+[32:05.600 --> 32:14.960]  X11 it lets you do Wayland, Android, whatever. All it really does is give you Windows that
+[32:14.960 --> 32:24.480]  you can share with the Windows system, gives you some vague notion of timing, but it doesn't
+[32:24.480 --> 32:31.040]  have any kind of events, so the only way you can get a consistent frame timing is if you
+[32:31.040 --> 32:40.120]  block a lot in EGL. It just tries to hide everything and make it implicit, which again
+[32:40.120 --> 32:50.560]  is where GBM comes in because that's what lets us steal buffers away from EGL, push
+[32:50.560 --> 33:03.400]  them into KMS for display, handle our own timing and do it properly this time. EGL has
+[33:03.400 --> 33:11.840]  that shape and then not coincidentally Vulkan has a fairly similar shape. Vulkan is the
+[33:11.840 --> 33:21.160]  rendering API and that's it. Vulkan WSI is the EGL equivalent which provides that Windows
+[33:21.160 --> 33:29.480]  system integration of creating Windows, posting content to them and so on. The main difference
+[33:29.480 --> 33:36.480]  with Vulkan is that it's really, really explicit and clear about what it's doing. The downside
+[33:36.480 --> 33:42.240]  is that because it's so explicit and clear you end up typing a hell of a lot of code.
+[33:42.240 --> 33:48.320]  So it's more effort to use, but there's no magic hidden under Vulkan. You know exactly
+[33:48.320 --> 33:56.320]  what's going on for better or worse. It's really good on the desktop that on mobile
+[33:56.320 --> 34:04.200]  SOCs the hardware isn't necessarily entirely there yet. If you're doing high performance
+[34:04.200 --> 34:12.480]  things or you just like seeing what's going on under the hood, I'd recommend Vulkan.
+[34:12.480 --> 34:18.280]  And yeah, I think about the last bit that we'd end up having time for is I keep on going
+[34:18.280 --> 34:29.640]  on about how we, you know, just saying that EGL will get things from GL to Wayland. The
+[34:29.640 --> 34:38.520]  way we do that is DMA buff. It's a kernel concept about sharing memory regions between
+[34:38.520 --> 34:45.160]  different subsystems, different processes, different contexts, whatever. So, you know,
+[34:45.160 --> 34:51.320]  we've already got in the graphics side of things. We've got the gem buffer objects,
+[34:51.320 --> 34:59.160]  but they're local to one particular device and to one particular user context. So, you
+[34:59.160 --> 35:05.880]  know, when you want to export a buffer to your Wayland server or share it between, you
+[35:05.880 --> 35:16.480]  know, V4L for your video capture and, excuse me, sorry, V4L for your video capture and
+[35:16.480 --> 35:24.320]  your GPU to do some analysis on it. That's DMA buff, which just gives you a file descriptor
+[35:24.320 --> 35:32.400]  you can use as a handle to that memory area and import it into different contexts or subsystems
+[35:32.400 --> 35:39.640]  or places. And that's completely consistent throughout the stack, like all of Wayland,
+[35:39.640 --> 35:47.520]  EGL, KMS, Vulkan, everything I've discussed has DMA buff integration because that's our
+[35:47.520 --> 35:55.040]  lowest common denominator. So, yeah, we put it all together. I mean, because they're all
+[35:55.040 --> 36:02.040]  built on the same building blocks, it's largely how you think it is. Well, hopefully if I've
+[36:02.040 --> 36:11.520]  done a decent job of this talk, you know, the client's connecting to the compositor.
+[36:11.520 --> 36:18.440]  It's creating a window declaring some very simple annotations about that. It wants to
+[36:18.440 --> 36:24.680]  use the GPU, so it creates an EGL context pointing to the Wayland server. I'd like to
+[36:24.680 --> 36:32.960]  render over here. The Wayland server has some DMA buff protocols, which tells it what it
+[36:32.960 --> 36:43.480]  can and can't accept. The client uses GLES to render into that. That's wrapped in a
+[36:43.480 --> 36:52.520]  DMA buff and passed over to the compositor. The compositor is deciding how to place and
+[36:52.520 --> 37:00.320]  configure everything. It's importing that DMA buff that it's got from the client to
+[37:00.320 --> 37:08.800]  generate one final image. It's then waiting until the next deadline, you know, that sort
+[37:08.800 --> 37:17.320]  of 60 hertz cadence that we have. It's waiting until the next deadline to present that out
+[37:17.320 --> 37:24.960]  going into KMS. That might be KMS doing its own composition directly in the display hardware
+[37:24.960 --> 37:42.800]  or through the GPU itself. It's tough because the display hardware can do that final image
+[37:42.800 --> 37:47.680]  composition of taking your sort of four or five images, mashing them all together and
+[37:47.680 --> 37:53.920]  coming up with one. It is, like I said, a really measurable win on things like power and memory
+[37:53.920 --> 38:02.360]  bandwidth, memory usage as well, but it's kind of complicated in that, you know, it's hard
+[38:02.360 --> 38:12.280]  to know, be predictable about when you can and can't use it. It's a bit fiddly. It's
+[38:12.280 --> 38:18.760]  one of the reasons I recommend using compositor frameworks like LibWestern, which do do all
+[38:18.760 --> 38:25.440]  of this heavy lifting for you. You know, I've spent 10 years of my life trying to solve
+[38:25.440 --> 38:38.680]  this problem and wouldn't recommend anyone else does it. It's not even really that interesting.
+[38:38.680 --> 38:47.840]  Internally, Western has, like I said, that kind of brute force loop of just trying every
+[38:47.840 --> 38:56.240]  possible configuration that could work, seeing what happens and throwing it at KMS to check
+[38:56.240 --> 39:02.960]  if that will work. Currently, that's the most advanced one, but yeah, others are catching
+[39:02.960 --> 39:13.240]  up. I think really to sum up what I was trying to say about GPUs and efficiency is one of
+[39:13.240 --> 39:20.200]  the things that gets collaborate a lot is that no one realizes that every problem on
+[39:20.200 --> 39:28.960]  mobile comes down to memory bandwidth. And so you can solve every problem by just copying
+[39:28.960 --> 39:36.600]  buffers around more. But when you've got 4K buffers and you've got a low-end device,
+[39:36.600 --> 39:42.440]  it turns out that this is always where your performance problem is. It's down in things
+[39:42.440 --> 39:51.000]  like copies and naive memory usage. So yeah, that's just one thing to really be aware of
+[39:51.000 --> 40:00.280]  is try and go for a zero-copy pipeline because when you have 4K and 144Hz, you really don't
+[40:00.280 --> 40:09.760]  have much time and you don't want to spend it all just waiting for slow memory. Yeah,
+[40:09.760 --> 40:17.240]  with that, I think we're pretty much coming up on time. So yeah, there's the quick whirlwind
+[40:17.240 --> 40:25.880]  tour of how all that fits together. Anyone has any questions or wants to talk about how
+[40:25.880 --> 40:34.880]  Wayland's amazing? Please feel free. If you have any questions, please raise your hand.
+[40:34.880 --> 40:40.600]  When we launch a game in full screen, for example, does it go straight from GPU to screen
+[40:40.600 --> 40:46.160]  or does it go all the way through KMS on that? It will go through the Windows system. So
+[40:46.160 --> 40:49.640]  yeah, the question being, if you have a full screen game, will it go straight from the
+[40:49.640 --> 40:55.560]  GPU to the display or will the Windows system still be involved? It will still be there,
+[40:55.560 --> 41:01.840]  but ideally doing nothing. So it will just take the client buffer, give it directly to
+[41:01.840 --> 41:08.400]  KMS and ask KMS to display it in the happy case. But it's always involved as the mediator,
+[41:08.400 --> 41:17.920]  so when a notification pops up, it already has control, so it can show it.
+[41:17.920 --> 41:37.040]  Hello. I can't. Is it working? Yeah. Okay. So forget the super new big question. When
+[41:37.040 --> 41:42.480]  you say the frame buffer is tied to a plane, a plane is not a desktop, a plane is just
+[41:42.480 --> 41:50.720]  a window. When you tie a frame buffer to a plane, the plane goes in the compositor.
+[41:50.720 --> 41:56.680]  So the plane is a window, it's not the entire desktop. Yeah, exactly. So the CRTC is your
+[41:56.680 --> 42:10.280]  final output as one flat image and planes are windows within that CRTC. Thank you.
+[42:10.280 --> 42:30.200]  More questions? All right. Hello. Is it working? Hello. You mentioned that kernel mode setting
+[42:30.200 --> 42:34.320]  is used turning the pixels into... Sorry, could you please... Sorry. Yeah. You mentioned
+[42:34.320 --> 42:40.760]  that KMS kernel mode setting is used to turn the data into pixels on the screen. Is this
+[42:40.760 --> 42:45.840]  where graphics card drivers are involved, another vendor-specific software, or is that
+[42:45.840 --> 42:51.720]  earlier or later in the pipeline? Sorry, which parameters? So basically, where did graphics
+[42:51.720 --> 42:55.600]  card drivers come in? Because I know there's like vendor-specific hardware that requires
+[42:55.600 --> 43:00.560]  its own drivers somewhere in kernel space, I believe, so what does this fit in the pipeline?
+[43:00.560 --> 43:07.080]  So all of the properties and parameters are defined in kernel space, and we try to standardize
+[43:07.080 --> 43:13.440]  them as much as possible. So in the generic world, we do stick pretty religiously to a
+[43:13.440 --> 43:18.560]  standard set of parameters that have common behavior across everyone. If you go to things
+[43:18.560 --> 43:25.120]  like Android where you have hardware composer and vendor-based tells, it's completely different.
+[43:25.120 --> 43:30.040]  And they're all... That's more of a negotiation between kernel and user space, which are
+[43:30.040 --> 43:41.840]  both vendor-specific. That answers your question.
+[43:41.840 --> 43:48.320]  Do you know if there's any toolkit libraries for writing compositors that are not desktop-specific?
+[43:48.320 --> 43:55.760]  Any compositor libraries that are... Libraries for writing compositors that are not desktop-specific.
+[43:55.760 --> 44:02.120]  So it's like LibWestern is good for writing desktops, types, things, but for highly embedded
+[44:02.120 --> 44:08.520]  use cases, I've found any things that make it easy to write a compositor like that.
+[44:08.520 --> 44:17.280]  Yeah, so LibWestern's the one for those kind of embedded or single-purpose use cases. MOTA,
+[44:17.280 --> 44:24.000]  which is the basis of GNOME shell, can be used by anyone else, but it's really GPU reliant.
+[44:24.000 --> 44:31.000]  And WROOTS is, I guess, kind of in the middle. It's not as friendly and desktop-y as GNOME,
+[44:31.000 --> 44:37.320]  but it's not as sort of insanely efficient as Western, and that's the halfway house,
+[44:37.320 --> 44:42.760]  I guess.
+[44:42.760 --> 44:45.800]  Is there any tool you would recommend for profiling?
+[44:45.800 --> 44:47.120]  Sorry, could you speak up?
+[44:47.120 --> 44:54.120]  Is there any tool that you would recommend for profiling, the graphics tech? Is there
+[44:54.120 --> 44:58.840]  a tool for profiling the graphics tech?
+[44:58.840 --> 45:10.000]  Profiling, are there any tools for profiling the graphics tech? Kind of. So Mesa has integration
+[45:10.000 --> 45:15.880]  with a tool called Profetto, which is the basis of Android GPU Inspector. There's some
+[45:15.880 --> 45:24.280]  support in there for Western, specifically, to interpose its timeline on top of Profetto,
+[45:24.280 --> 45:32.160]  but it's pretty patchy, to be honest. We've been working on that basically to try and
+[45:32.160 --> 45:38.160]  make it easier so we can stop getting paid for debugging and profiling stuff, to be honest.
+[45:38.160 --> 45:45.160]  But yeah, it's a slow process. Profetto is the best one there.
+[45:45.160 --> 46:01.160]  I have a question. So why can't we do screen recording or screen sharing in a Bayland?
+[46:01.160 --> 46:10.360]  You can. Screen sharing in Bayland is done through the XDG screencast portal and we did
+[46:10.360 --> 46:17.200]  that because once, if you try to put it in Bayland itself as like a core protocol for
+[46:17.200 --> 46:23.760]  clients to use, it was really going against the grain because everything was designed
+[46:23.760 --> 46:29.880]  with this idea of the timing coming from the display and flowing back to the clients.
+[46:29.880 --> 46:36.240]  And then once you put it in the other way that the client's receiving content, it really
+[46:36.240 --> 46:44.680]  just is a terrible fit with pretty much every interface we had. So it's easier for us to
+[46:44.680 --> 46:54.040]  and also working for like sandboxing and containers to go with the XDG portal solution. And yeah,
+[46:54.040 --> 47:01.040]  it works every way basically. Okay. I think, yeah.
+[47:01.040 --> 47:24.040]  Okay. Thank you, Daniel. Thanks very much. Thank you.

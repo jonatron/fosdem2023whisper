@@ -1,0 +1,620 @@
+[00:00.000 --> 00:11.400]  Thank you, so hi, my name is Drew and I'd like to talk to you today about a new microkernel
+[00:11.400 --> 00:14.000]  I've been working on called Helios.
+[00:14.000 --> 00:19.160]  For context, I work at a place called Source Set and I'm the project lead for a new programming
+[00:19.160 --> 00:28.360]  language called Hair and I've done many other projects but that's what's relevant for today.
+[00:28.360 --> 00:31.280]  This is a new microkernel.
+[00:31.280 --> 00:35.120]  It's inspired a lot by SEL4 but it differs in many ways.
+[00:35.120 --> 00:39.960]  It's written in this hair programming language that I mentioned and one of the main motivations
+[00:39.960 --> 00:43.600]  for it is to find out if we can use the hair programming language to write microkernels
+[00:43.600 --> 00:46.240]  in or any kind of kernel really.
+[00:46.240 --> 00:53.800]  Presently it runs on X8664 and ARM64 and we're thinking about risk 5 in the foreseeable future.
+[00:53.800 --> 00:56.400]  In terms of the footprint of this kernel, it's pretty small.
+[00:56.400 --> 01:00.160]  The portable code is about 8,500 lines of code.
+[01:00.160 --> 01:05.080]  Each architecture adds about another 3,000 lines of code, all hair code and then add
+[01:05.080 --> 01:09.240]  on top of that the boot loaders which are also written in hair and it's a pretty small
+[01:09.240 --> 01:10.240]  footprint.
+[01:10.240 --> 01:17.880]  We've been working on it for about nine months now and we use the GPL3 license.
+[01:17.880 --> 01:21.320]  So again, about nine months of progress so far.
+[01:21.320 --> 01:26.920]  Where do we stand in terms of functionality is about here.
+[01:26.920 --> 01:31.800]  We have capability-based security and the capabilities do work similar to what SEL4
+[01:31.800 --> 01:37.640]  does and also similar to SEL4 we have inter-process communication working using endpoints and
+[01:37.640 --> 01:42.280]  notifications, very similar to SEL4 with some notable differences.
+[01:42.280 --> 01:48.840]  We have scheduler work, we're in user space and we have multi-processing but we don't
+[01:48.840 --> 01:52.960]  have symmetric multi-processing, we have only one core at the moment but we'll do SMP fairly
+[01:52.960 --> 01:54.360]  soon.
+[01:54.360 --> 02:00.800]  We also have all of the necessary rigging in place for drivers in user space so we have
+[02:00.800 --> 02:06.280]  access to ports on X86 and we have memory and map.io support as well as IRQs are rigged
+[02:06.280 --> 02:07.480]  up.
+[02:07.480 --> 02:13.400]  And for booting up the kernel, we currently support EFI on ARM and multi-boot on X86.
+[02:13.400 --> 02:18.720]  We'll be doing EFI on X86 as well in the future and our plan is to also do EFI on risk 5.
+[02:18.720 --> 02:24.800]  So we'll use EFI as the default approach for booting Helios in the future.
+[02:24.800 --> 02:29.280]  But why should we be thinking about writing a new macro kernel or a new kernel of any
+[02:29.280 --> 02:30.280]  sort?
+[02:30.280 --> 02:34.960]  I imagine that for this particular dev room I don't need to give too many reasons but
+[02:34.960 --> 02:39.400]  for the sake of anybody who's maybe watching online, the first point is pretty obvious.
+[02:39.400 --> 02:43.440]  It's really fun to write kernels and that's kind of reason enough so I'm having a great
+[02:43.440 --> 02:46.520]  time working on it and that's enough for me.
+[02:46.520 --> 02:51.040]  But also, importantly, we've been working on this programming language here for about
+[02:51.040 --> 02:55.360]  three years now and it's a systems programming language and one of our goals is to be able
+[02:55.360 --> 02:58.840]  to write things like kernels and so in order to prove that we have achieved this goal,
+[02:58.840 --> 03:03.000]  we have to write a kernel with it and so Helios is that kernel.
+[03:03.000 --> 03:08.920]  I also am a big fan of SCL4's design but I also have some criticisms of it and I'm curious
+[03:08.920 --> 03:14.400]  if we do a kernel which is inspired by SCL4, can we make some improvements on its design?
+[03:14.400 --> 03:19.880]  And if we were to be particularly ambitious, could we perhaps do better than Linux?
+[03:19.880 --> 03:23.880]  We'll see.
+[03:23.880 --> 03:31.040]  I should also point out that this slide deck is going to cover a lot of details which maybe
+[03:31.040 --> 03:35.200]  will seem redundant to people who are already familiar with the design of SCL4 and that
+[03:35.200 --> 03:40.040]  could be a problem with this audience but please bear with me while I explain things
+[03:40.040 --> 03:43.560]  that you already understand at some point in the future.
+[03:43.560 --> 03:47.560]  So the hair programming language, this is the pitch from the website.
+[03:47.560 --> 03:51.920]  I won't read it out to you but essentially it's a very simple language which is very
+[03:51.920 --> 03:58.000]  close to C in terms of design but with a lot of benefit of 50 years of hindsight of what
+[03:58.000 --> 04:04.520]  could be made better about C but compared to other C alternatives that are floating around
+[04:04.520 --> 04:09.080]  today like Rust and Zig and Nim and so on, I would say hair is much, much closer to C's
+[04:09.080 --> 04:15.000]  original ideas than any of these other attempts but it improves in many respects like dealing
+[04:15.000 --> 04:22.560]  with modules and error handling and bound checked things and some safety features.
+[04:22.560 --> 04:24.400]  So it improves in a number of respects.
+[04:24.400 --> 04:27.360]  It's also very, very simple.
+[04:27.360 --> 04:32.480]  So here we have some more line counts for people who like the line counts.
+[04:32.480 --> 04:36.640]  The hair compiler is 18,000 lines of code in C11.
+[04:36.640 --> 04:40.920]  The back end that we use, it's not L of the M, we use cube as our back end, is another
+[04:40.920 --> 04:46.760]  12,000 lines of C99 and then we use binutils for the linker and assembler and that's it.
+[04:46.760 --> 04:52.320]  We support three targets, XA664, AR64 and RISC-564 which it's no coincidence that those
+[04:52.320 --> 04:55.880]  are the targets I'm working on for the macro kernel.
+[04:55.880 --> 05:02.600]  We intend to add more but this is where the language is at.
+[05:02.600 --> 05:09.200]  I started, again, I started here specifically to work on this kind of project and this project
+[05:09.200 --> 05:13.520]  exists to validate the language design for this use case and also because it's fun and
+[05:13.520 --> 05:16.160]  maybe it could be useful.
+[05:16.160 --> 05:20.160]  For those of us who have never seen any hair code before, I just have a little snippet
+[05:20.160 --> 05:22.840]  here so you can get a vague idea of what it looks like.
+[05:22.840 --> 05:26.200]  Again, not going to explain this in too much detail but if you're familiar with C, a lot
+[05:26.200 --> 05:31.120]  of things will seem familiar to you and you can probably guess the double colon does namespaces.
+[05:31.120 --> 05:33.480]  You can guess what the no return tag does.
+[05:33.480 --> 05:36.800]  It's fairly straightforward programming language and this is what it looks like.
+[05:36.800 --> 05:40.840]  The code sample we're looking at here is the portable kernel entry point so it starts with
+[05:40.840 --> 05:44.160]  the boot letter entry point and then the arch specific entry point.
+[05:44.160 --> 05:50.880]  This is the first line of portable code that runs when you boot the kernel.
+[05:50.880 --> 05:54.600]  With the context out of the way, let's talk about Helios itself.
+[05:54.600 --> 05:59.600]  We're going to go over a number of things here with respect to the design of Helios
+[05:59.600 --> 06:01.080]  and the implementation of Helios.
+[06:01.080 --> 06:05.520]  I'm going to talk about our approach to capabilities and on memory management and some other things
+[06:05.520 --> 06:10.440]  specific with how various capabilities actually work like processes and threads and talk about
+[06:10.440 --> 06:14.720]  inter-process communication and then also talk a little bit about the implementation
+[06:14.720 --> 06:19.000]  as well, not just the design.
+[06:19.000 --> 06:22.240]  Here's the big picture in terms of the implementation.
+[06:22.240 --> 06:27.880]  Again, those who are familiar with SEL4 will find no surprises on this slide but essentially
+[06:27.880 --> 06:33.400]  access to all system resources including kernel objects is semantically governed by user space
+[06:33.400 --> 06:39.080]  and we use the MMU to isolate user space processes from each other and to enforce this capability
+[06:39.080 --> 06:40.400]  model.
+[06:40.400 --> 06:45.080]  On system boot up, the kernel enumerates all of the resources on the system, all of the
+[06:45.080 --> 06:49.360]  memory and all of the IO ports and all of the IRQs and it prepares capabilities that
+[06:49.360 --> 06:54.280]  entitle the bearer to access these resources and then it hands all of these off to the
+[06:54.280 --> 06:59.560]  first process, the init process which can then subject to its own user space policy
+[06:59.560 --> 07:05.920]  decisions, choose how to allocate those resources to various processes in such a way that it
+[07:05.920 --> 07:13.320]  can provide a secure system.
+[07:13.320 --> 07:15.680]  Here's a look at our capabilities.
+[07:15.680 --> 07:22.800]  There's an example here on the left of a fake physical address space and on the right shows
+[07:22.800 --> 07:25.440]  the kind of state that we'd be storing in this.
+[07:25.440 --> 07:29.440]  Here we have a number of physical pages, one for a capability space, one for a virtual
+[07:29.440 --> 07:35.040]  address space for a task, a bunch of memory pages, some free memory and so on.
+[07:35.040 --> 07:39.640]  In this physical memory, we store the state you see on the right, so the C space here
+[07:39.640 --> 07:45.280]  stores a list of capability slots, very similar to SEL4, and in those capability slots is
+[07:45.280 --> 07:47.080]  a very small amount of state.
+[07:47.080 --> 07:50.600]  Each of them leave 64 bytes so there's not a whole lot to store there.
+[07:50.600 --> 07:55.320]  In this case, a task, which is like a thread or a process, stores a pointer to another
+[07:55.320 --> 07:59.440]  physical memory page where the bulk of its state really lives.
+[07:59.440 --> 08:06.520]  In this case, we have an example of some registers for XDD664.
+[08:06.520 --> 08:12.920]  And the access to this state is gated behind the MMU, so only the kernel itself can directly
+[08:12.920 --> 08:15.120]  read from this kind of physical memory.
+[08:15.120 --> 08:20.560]  But then, user space, who, you know, maybe this process that we're looking at has semantic
+[08:20.560 --> 08:23.280]  ownership over the C space and this V space.
+[08:23.280 --> 08:26.560]  They can invoke the kernel to do operations against those things, but they can't actually
+[08:26.560 --> 08:28.000]  directly access the memory.
+[08:28.000 --> 08:31.960]  Instead, the virtual memory can only contain certain kinds of capabilities or certain kinds
+[08:31.960 --> 08:36.520]  of physical memory pages, so that could be, you know, arbitrary general purpose memory
+[08:36.520 --> 08:40.120]  or it could be a memory map diode, it could end up in their address space.
+[08:40.120 --> 08:45.400]  But while they have semantic ownership over these other capabilities, the actual state
+[08:45.400 --> 08:53.200]  behind them is not accessible to user space.
+[08:53.200 --> 08:58.400]  So in order to work with these capabilities that the user space has semantic ownership
+[08:58.400 --> 09:01.760]  over, it uses, of course, the syscall API.
+[09:01.760 --> 09:06.800]  And Helios has a very, very small syscall API, it is a microkernel after all.
+[09:06.800 --> 09:12.800]  We have 14 syscalls, which I have enumerated here, 12 of these are for working with capabilities.
+[09:12.800 --> 09:16.560]  And again, if you're familiar with SEL4 here, there's probably no surprises here, except
+[09:16.560 --> 09:23.280]  maybe for syspol, which I'll talk about later.
+[09:23.280 --> 09:28.880]  So here is a little example of how you might invoke a capability on x86 to make use of the
+[09:28.880 --> 09:30.720]  microkernels API.
+[09:30.720 --> 09:35.400]  Again, you're going to be making a syscall here at the end, and here we're going to
+[09:35.400 --> 09:39.400]  be filling up registers and memory buffers with the information we want to use.
+[09:39.400 --> 09:44.720]  So this code is going to invoke the vspace map operation, which accepts a page capability,
+[09:44.720 --> 09:49.680]  a virtual address, and a list of mapping flags, like writer or execute.
+[09:49.680 --> 09:55.600]  And its goal is to map a page of physical memory into a slot in a virtual address space.
+[09:55.600 --> 10:00.760]  And in order to invoke this operation, the caller needs to have access to a vspace capability,
+[10:00.760 --> 10:04.560]  which they're going to modify, and a page capability, which they're going to map.
+[10:04.560 --> 10:07.400]  And these capabilities are provided here in two different ways.
+[10:07.400 --> 10:11.680]  The object being invoked is the vspace, and it gets its own register, RDI, which is the
+[10:11.680 --> 10:14.200]  first API register.
+[10:14.200 --> 10:21.760]  The page which is being used, again similarly to SEL4, is going to be placed into that process's
+[10:21.760 --> 10:27.640]  IPC buffer, which is done here with a fake capability address for the page.
+[10:27.640 --> 10:33.120]  And then we have additional arguments like the message tag, which contains the operation
+[10:33.120 --> 10:36.240]  name, the number of capabilities, and a number of parameters.
+[10:36.240 --> 10:38.720]  And then any additional arguments to the function.
+[10:38.720 --> 10:44.280]  You run syscall, and the operation happens.
+[10:44.280 --> 10:48.840]  I also want to talk a little bit about the specifics of interprocess communication.
+[10:48.840 --> 10:55.440]  So we have two approaches, and I'll first look at endpoints, which they are kind of
+[10:55.440 --> 10:57.440]  a generalized form of IPC.
+[10:57.440 --> 11:00.480]  And the way you use them is very similar to how you use chronologics.
+[11:00.480 --> 11:07.080]  In fact, the interface is uniform, but it can send a set of registers or a set of capabilities
+[11:07.080 --> 11:08.280]  between tasks.
+[11:08.280 --> 11:11.760]  So one task can transfer a capability to another task.
+[11:11.760 --> 11:15.840]  There is synchronous, so calling send on an endpoint or calling receive on an endpoint
+[11:15.840 --> 11:19.280]  will block until the two tasks run debut.
+[11:19.280 --> 11:24.000]  And if there are many senders or many receivers, then the one who has been blocked the longest
+[11:24.000 --> 11:28.800]  will wake up, so you can have many processes, maybe doing some kind of load balancing operation
+[11:28.800 --> 11:31.120]  against IPC operations.
+[11:31.120 --> 11:36.640]  And also, SEL4 style call and reply is supported, so if one task does a call rather than a send,
+[11:36.640 --> 11:40.000]  then it immediately blocks waiting for the reply, which is guaranteed to go back to the
+[11:40.000 --> 11:43.560]  same thread.
+[11:43.560 --> 11:49.000]  I have here a more detailed example of exactly how that kind of IPC interaction looks on
+[11:49.000 --> 11:50.600]  Helios.
+[11:50.600 --> 11:55.080]  So I have here on the left one task, and on the right two tasks that want to communicate
+[11:55.080 --> 11:59.280]  with each other, and the text which is in black is taking place in user space, and the
+[11:59.280 --> 12:02.560]  text in red is taking place in kernel space.
+[12:02.560 --> 12:08.680]  So let's say task two is a daemon or a service of some kind which wants to provide a service,
+[12:08.680 --> 12:13.520]  and so it's going to essentially have its main IO loop call sys receive and then block
+[12:13.520 --> 12:15.680]  until somebody has work for it to do.
+[12:15.680 --> 12:20.440]  And task one wants to be a consumer of that interface, so it will invoke sys call, and
+[12:20.440 --> 12:24.960]  the kernel will notice that task two is blocked waiting for somebody to call it.
+[12:24.960 --> 12:29.800]  And so the kernel will perform the copy of registers, move any capabilities as necessary,
+[12:29.800 --> 12:33.880]  unblock task two, and then block task one while they wait for task two to process the
+[12:33.880 --> 12:37.240]  message and prepare a reply, which is what happens next over here.
+[12:37.240 --> 12:42.040]  The sys call returns from task two, they process the IPC request according to however
+[12:42.040 --> 12:46.120]  they implement their services, and they call the reply sys call, which copies the reply
+[12:46.120 --> 12:51.600]  registers back to task one, very similar to this fourth step, and then unblocks task
+[12:51.600 --> 13:01.160]  one, and then both of them can proceed onwards with whatever CPU time they're given.
+[13:01.160 --> 13:04.360]  Another interesting feature we have in terms of endpoints, which is one of the things that
+[13:04.360 --> 13:09.960]  distinguishes Helios from SEL4, is support for a pull-like interface.
+[13:09.960 --> 13:15.080]  Similar to Unix's pull on file descriptors, Helios lets you pull on capabilities.
+[13:15.080 --> 13:21.400]  So this is an example from the serial driver that I implemented for the standard X86 comports
+[13:21.400 --> 13:22.400]  service.
+[13:22.400 --> 13:25.120]  It has two capabilities it mainly cares about.
+[13:25.120 --> 13:30.240]  It has an endpoint capability that it uses to implement its API for consumers of the
+[13:30.240 --> 13:31.240]  serial port.
+[13:31.240 --> 13:34.920]  So if you want to request a read or a write from serial, you'll send a message to this
+[13:34.920 --> 13:39.680]  endpoint, and then it has an IRQ handler for when the serial port says it's ready to receive
+[13:39.680 --> 13:41.760]  or transmit more data.
+[13:41.760 --> 13:45.280]  And you can prepare a list of capabilities you're interested in, and a list of events
+[13:45.280 --> 13:50.480]  you're interested in, and block on pull, and then when one of those is ready to be done,
+[13:50.480 --> 13:56.640]  you can call it, and it's guaranteed not to block, very similar to the Unix pull syscall.
+[13:56.640 --> 14:02.640]  And again, I think this is, for me, one of the more notable improvements and derivations
+[14:02.640 --> 14:06.400]  from the SEL4 model.
+[14:06.400 --> 14:11.600]  And I mentioned this earlier, but this interface for doing endpoints and for invoking kernel
+[14:11.600 --> 14:17.920]  objects like virtual outer spaces is uniform between user space endpoints and kernel objects.
+[14:17.920 --> 14:23.240]  So it is, for example, possible for a user space process to create a set of endpoints
+[14:23.240 --> 14:28.000]  and then use them to implement an API which is identical to the kernel API.
+[14:28.000 --> 14:32.080]  And if that process is the parent of some other process which thinks it's talking directly
+[14:32.080 --> 14:35.640]  to kernel, it can be sandboxed according to whatever kind of policy you want.
+[14:35.640 --> 14:41.280]  So the kernel is using this API which is uniform with the way that user space communicates
+[14:41.280 --> 14:46.160]  with itself, and thus user space can fill the role of the kernel in sometimes.
+[14:46.160 --> 14:50.840]  This can, for example, allow you to very easily run several different Helio systems on the
+[14:50.840 --> 14:58.760]  same computer at once without going to virtualization, which is kind of interesting.
+[14:58.760 --> 15:04.520]  So here I have a little bit more detail on capabilities in particular, and then the implementation
+[15:04.520 --> 15:07.920]  that some of our capability objects use.
+[15:07.920 --> 15:12.480]  Here we have a capability space on the left, which is, again, a little bit distinct from
+[15:12.480 --> 15:13.480]  SEL4.
+[15:13.480 --> 15:15.160]  We don't use guarded page tables.
+[15:15.160 --> 15:17.040]  It's more like a file descriptor table.
+[15:17.040 --> 15:23.440]  It's just zero to however many slots are allocated in that capability space, and the process
+[15:23.440 --> 15:28.280]  invokes a capability by its number, not by its address.
+[15:28.280 --> 15:33.600]  Here we have an example of slots where we have a number of things which are preallocated,
+[15:33.600 --> 15:36.720]  but then notably we also have some empty capability slots.
+[15:36.720 --> 15:41.280]  And another derivation from the SEL4 model is that we support capability allocation in
+[15:41.280 --> 15:42.280]  the kernel.
+[15:42.280 --> 15:46.360]  We do this by maintaining inside of empty capabilities a free list.
+[15:46.360 --> 15:52.040]  And so when you invoke an endpoint or you want to allocate a capability, you can set
+[15:52.040 --> 15:57.560]  the capability address to the maximum possible address, and the kernel will allocate one
+[15:57.560 --> 15:58.880]  for you using the free list.
+[15:58.880 --> 16:02.760]  You don't have to worry about that state in user space, which is, I think, a very nice
+[16:02.760 --> 16:08.800]  convenience to have and very easy to implement as well.
+[16:08.800 --> 16:12.560]  This is a list of the capabilities that we have implemented.
+[16:12.560 --> 16:16.280]  On the left here is a list of all the capabilities which are available on every architecture.
+[16:16.280 --> 16:21.480]  We have things like memory, device memory, IPC capabilities, threads, and so on.
+[16:21.480 --> 16:24.760]  And then on the right, we have a number of additional capabilities which are specific
+[16:24.760 --> 16:25.760]  to each port.
+[16:25.760 --> 16:33.440]  In this case, I've listed the capabilities which are used on x8664.
+[16:33.440 --> 16:37.280]  I'm going to look at just a few of these.
+[16:37.280 --> 16:42.960]  First I want to talk about memory management, again, very similar to how we use capability
+[16:42.960 --> 16:46.920]  allocation with the C space in the kernel using a free list.
+[16:46.920 --> 16:52.320]  We also derivate from SCL4 in that general purpose memory uses a free list as well so
+[16:52.320 --> 16:56.680]  you can allocate pages without trying to keep track of a watermark, without trying to reset
+[16:56.680 --> 16:59.320]  your watermark, or divide it into smaller objects.
+[16:59.320 --> 17:03.280]  We have a free list of pages, so you can just allocate pages, which is quite nice.
+[17:03.280 --> 17:09.520]  But the only reason the slide is here is to tell you how it differs from SCL4.
+[17:09.520 --> 17:14.960]  We also have address space capabilities, vspaces, which is, again, similar to SCL4.
+[17:14.960 --> 17:19.640]  In fact, it's so similar that we've cargo-cultured this constraint that you can't share page
+[17:19.640 --> 17:20.640]  tables.
+[17:20.640 --> 17:25.680]  I don't really know why SCL4 does that, but once we understand, then we will probably
+[17:25.680 --> 17:28.640]  either commit to this or change our mind.
+[17:28.640 --> 17:32.760]  But we have virtual address space capabilities which can be used to manage processes.
+[17:32.760 --> 17:38.000]  And then we have tasks, which can be either a thread or a process or something else if
+[17:38.000 --> 17:39.560]  you come up with something creative.
+[17:39.560 --> 17:43.520]  But essentially, a task just has a capability space, which is optional, so that I can do
+[17:43.520 --> 17:48.840]  IO and invoke capabilities as an address space, and it receives some CPU time when it is configured
+[17:48.840 --> 17:49.840]  appropriately.
+[17:49.840 --> 17:51.800]  And again, we don't have SMP support yet.
+[17:51.800 --> 17:53.720]  We would like to do that soon.
+[17:53.720 --> 17:55.760]  And for now, the scheduler is very simple.
+[17:55.760 --> 18:01.080]  We just have a round-robin scheduler, but we would like to expand that in the future.
+[18:01.080 --> 18:06.280]  It should be at least easy enough to add priorities or niceness, and we can probably look into
+[18:06.280 --> 18:09.760]  some more sophisticated exclusions a little bit later.
+[18:09.760 --> 18:12.440]  Oh, and I missed one on my notes here.
+[18:12.440 --> 18:16.880]  A quick note to add on the topic of address spaces is that I think it's implemented a
+[18:16.880 --> 18:21.480]  little bit more elegantly than SCL4, but I did not write down why in my notes, so you'll
+[18:21.480 --> 18:23.920]  have to take my word for it.
+[18:23.920 --> 18:29.560]  OK, so that's enough about the design.
+[18:29.560 --> 18:33.200]  I'd like to talk a little bit about the implementation.
+[18:33.200 --> 18:37.800]  The goal is to keep the kernel very straightforward when it comes to booting.
+[18:37.800 --> 18:42.280]  I don't really care for the never-ending nightmare, which is different ways of booting
+[18:42.280 --> 18:43.640]  up computers.
+[18:43.640 --> 18:49.880]  And so the kernel is an Elf executable, and the bootloader's job is to do whatever
+[18:49.880 --> 18:54.440]  crazy bullshit is required on whatever platform it's running on to just load a goddamn Elf
+[18:54.440 --> 18:55.720]  executable into memory.
+[18:55.720 --> 18:58.120]  So that's what we've done.
+[18:58.120 --> 19:02.720]  And these bootloaders are also implemented in here, by the way.
+[19:02.720 --> 19:06.800]  We support, again, multi-boot in X86, and EFI and AR64, and we'll do EFI everywhere
+[19:06.800 --> 19:07.800]  soon.
+[19:07.800 --> 19:11.360]  But the bootloader comes up, and it's responsible for a few things.
+[19:11.360 --> 19:13.720]  It has to, of course, read the memory map.
+[19:13.720 --> 19:18.480]  It also has to load from the file system any boot modules, like similar to an initRAMFS
+[19:18.480 --> 19:23.000]  on Linux, where it's going to pull out the init binary or the init executable for the
+[19:23.000 --> 19:27.360]  first user space process to run, as well as maybe a tarball that init binary wants to
+[19:27.360 --> 19:30.560]  use to read some early drivers from.
+[19:30.560 --> 19:35.280]  It's also going to provide to the kernel that memory map, those boot modules, and details
+[19:35.280 --> 19:39.280]  about the loader kernel, like where it was placed in physical memory and so on.
+[19:39.280 --> 19:43.040]  If we're booting with EFI, we're going to pass along some stuff about the EFI runtime
+[19:43.040 --> 19:44.520]  services.
+[19:44.520 --> 19:50.080]  And if we have a frame buffer at this stage, thanks to GOP or multi-boot, we'll pass that
+[19:50.080 --> 19:56.080]  along as well, and that will eventually make its way to user space.
+[19:56.080 --> 19:59.000]  During boot, we have system initialization.
+[19:59.000 --> 20:06.920]  You saw a little bit of this in the earlier slide, which showed the code sample of the
+[20:06.920 --> 20:08.840]  kernel's portable entry point.
+[20:08.840 --> 20:10.920]  That's where the system initialization begins.
+[20:10.920 --> 20:16.120]  So of the three phases of the kernel runtime, we have the boot phase, the system initialization
+[20:16.120 --> 20:17.920]  phase, and the runtime phase.
+[20:17.920 --> 20:23.320]  So during sysinit, the purpose is to do something I hinted at earlier, which is to enumerate
+[20:23.320 --> 20:27.600]  all of the system resources, create capabilities for them, and then assign them to the inner
+[20:27.600 --> 20:33.040]  process, which is, just again, an alpha executable.
+[20:33.040 --> 20:35.680]  So we pull that alpha executable in from the boot modules.
+[20:35.680 --> 20:38.840]  The kernel has a simple loader, which pulls it into memory.
+[20:38.840 --> 20:42.480]  Enumerate system resources creates enough capabilities to host a task and a v-space
+[20:42.480 --> 20:46.920]  and so on for that initial executable and hand it off.
+[20:46.920 --> 20:51.680]  The basic problem at this stage is not messing up memory.
+[20:51.680 --> 20:55.080]  Everybody who has written a kernel from scratch, maybe as opposed to approaching a project
+[20:55.080 --> 20:58.360]  later, knows that the hardest thing about memory management is you need memory to manage
+[20:58.360 --> 21:00.400]  memory.
+[21:00.400 --> 21:03.600]  So there's a lot of stuff in this stage to deal with that.
+[21:03.600 --> 21:07.840]  We also tried to enumerate resources on the system at this stage, but this is actually
+[21:07.840 --> 21:09.360]  going to change soon.
+[21:09.360 --> 21:15.040]  The kernel, at the time of speaking, has a PCI driver for x86 or a device tree scanner
+[21:15.040 --> 21:19.280]  for ARM, and we kind of tried to enumerate the physical address of everything, but this
+[21:19.280 --> 21:23.160]  is not a good idea, so we're just going to take all physical memory and give it to user
+[21:23.160 --> 21:28.960]  space and let it use policy decisions to figure out who gets what, rather than trying to enumerate
+[21:28.960 --> 21:31.680]  everything in the kernel, just to keep the kernel smaller.
+[21:31.680 --> 21:34.240]  And we definitely don't want to do ACPI, so please, please.
+[21:34.240 --> 21:38.840]  If anybody here is on the risk-fire board or something, I'm begging you.
+[21:38.840 --> 21:41.720]  No ACPI, device trees.
+[21:41.720 --> 21:48.200]  And then finally, we jump to user space, and that concludes the sysinit.
+[21:48.200 --> 21:52.240]  Speaking of user space, I want to talk a little bit about our future plans.
+[21:52.240 --> 21:57.280]  So here we have kind of the onion of Aries, is what it's called.
+[21:57.280 --> 22:01.840]  The Helios is the kernel at the core of this dream of a larger operating system called
+[22:01.840 --> 22:03.920]  the Aries operating system.
+[22:03.920 --> 22:09.440]  And we want to wrap the kernel with various layers to add more functionality.
+[22:09.440 --> 22:11.360]  So we have Helios as the kernel.
+[22:11.360 --> 22:14.640]  We've also started working on Mercury, which is a framework for writing drivers.
+[22:14.640 --> 22:19.200]  It's basically a user space interface to the kernel API, which you can use for drivers
+[22:19.200 --> 22:24.760]  plus some useful functionality like utilities to make it easier to map memory and so on.
+[22:24.760 --> 22:31.040]  And then this Mercury system is applied by Venus, which is a collection of drivers, real-world
+[22:31.040 --> 22:33.480]  drivers for actual hardware.
+[22:33.480 --> 22:38.240]  At the time of this talk, Helios exists, Mercury mostly exists, and Venus was just started
+[22:38.240 --> 22:40.240]  last week.
+[22:40.240 --> 22:43.600]  Gaia is going to be the next thing that we're going to do on top of this.
+[22:43.600 --> 22:49.280]  So through Mercury and Venus, we'll get this kind of abstract view of the devices on the
+[22:49.280 --> 22:54.320]  system as presented through IPC, our capabilities.
+[22:54.320 --> 22:59.720]  And then this will be consumed by Gaia and formed into a cohesive user space, which is
+[22:59.720 --> 23:03.680]  going to essentially be Unix, but everything is not a file.
+[23:03.680 --> 23:04.680]  Everything is a capability.
+[23:04.680 --> 23:10.240]  So you open slash def slash fb and you get a frame buffer capability rather than an IO
+[23:10.240 --> 23:13.480]  object that you might see on Unix.
+[23:13.480 --> 23:17.560]  And furthermore, the design of Gaia is going to be mostly a combination of inspirations
+[23:17.560 --> 23:20.480]  from Unix and Plan 9.
+[23:20.480 --> 23:25.680]  And on top of this, we'll add a POSIX compatibility layer because Gaia is a chance to leave behind
+[23:25.680 --> 23:30.000]  the legacy of POSIX, but the legacy of POSIX is strong, so we'll have to accommodate it
+[23:30.000 --> 23:31.000]  somehow.
+[23:31.000 --> 23:34.000]  And we'll tie all of this up into an operating system called Aries.
+[23:34.000 --> 23:39.400]  So we're going to use your space and we're going to build this stuff there.
+[23:39.400 --> 23:42.480]  One other thing I want to show off is something which is part of the Mercury system, which
+[23:42.480 --> 23:45.960]  is our DSL for defining IPC interfaces.
+[23:45.960 --> 23:50.320]  We were thinking about not doing a DSL, but DSLs are kind of good for this use case,
+[23:50.320 --> 23:51.600]  so we made one.
+[23:51.600 --> 23:54.720]  This is an example of a serial device.
+[23:54.720 --> 23:59.200]  It has support for configuring the BOD rate and stop bits and parity and so on.
+[23:59.200 --> 24:04.720]  And it implements the IO device because it supports read and write as well.
+[24:04.720 --> 24:11.560]  We have a tool called IPCGen, which reads this DSL and generates hair code for it.
+[24:11.560 --> 24:17.400]  And this is now mostly working, but we're going to start actually writing more real
+[24:17.400 --> 24:21.640]  drivers with it soon, so it'll be, remains to be seen if we'll like it after we use
+[24:21.640 --> 24:24.120]  it for a while.
+[24:24.120 --> 24:26.000]  So does Helios work?
+[24:26.000 --> 24:30.640]  And the answer is self-evidently yes, because this slide deck is being presented from this
+[24:30.640 --> 24:36.720]  Raspberry Pi, which is running Helios right now.
+[24:36.720 --> 24:41.440]  Thank you.
+[24:41.440 --> 24:47.040]  So I have no C code written on this device beyond the point of EDK2.
+[24:47.040 --> 24:52.160]  It has EDK2 to run UA5, but once EDK2 hands over to our EFI boot loader.
+[24:52.160 --> 24:56.960]  From that point forward, 100% hair and assembly, just a little bit of assembly.
+[24:56.960 --> 25:00.680]  This port to ARM64 was accomplished over the past eight weeks.
+[25:00.680 --> 25:07.000]  Actually it took exactly 42 days to port the kernel from X86 to AR64.
+[25:07.000 --> 25:12.640]  This system has a simple driver for the Raspberry Pi GPU running in user space to drive the
+[25:12.640 --> 25:13.720]  projector.
+[25:13.720 --> 25:18.440]  And it has a serial port driver, which I'm connected to on my laptop here, to switch
+[25:18.440 --> 25:23.920]  between slides because I could not write a USB driver in eight weeks.
+[25:23.920 --> 25:29.320]  The slide deck itself is encoded as quite okay images, which are packed into a tarball
+[25:29.320 --> 25:32.720]  and dropped in like an NFS would be.
+[25:32.720 --> 25:36.920]  And there really are very few hacks.
+[25:36.920 --> 25:44.320]  I would say that this is a pretty complete port of the kernel with very little shortcuts
+[25:44.320 --> 25:46.520]  or problems.
+[25:46.520 --> 25:51.880]  The reason why I chose to port the kernel to ARM in 42 days is because I was originally
+[25:51.880 --> 25:57.840]  going to give this talk from a laptop running Helios for X8664, where I was going to drive
+[25:57.840 --> 26:01.680]  the projector through Intel HD graphics, and then I read the Intel HD graphics manuals
+[26:01.680 --> 26:06.240]  and it decided it would be much easier to port the entire kernel to ARM and write an
+[26:06.240 --> 26:07.280]  ARM GPU driver.
+[26:07.280 --> 26:10.600]  So that's what I did.
+[26:10.600 --> 26:15.960]  After about two days of reading the HD graphics manuals, I was like, I've had enough.
+[26:15.960 --> 26:19.440]  And then I pulled down the ARM manual and tried to find a PDF reader which could handle
+[26:19.440 --> 26:22.000]  it.
+[26:22.000 --> 26:28.800]  In terms of those hacks and shortcuts, there's no SOC specific builds, so the same kernel
+[26:28.800 --> 26:32.520]  that I wrote will boot from any ARM device with the standard EFI configuration and a
+[26:32.520 --> 26:33.520]  device tree.
+[26:33.520 --> 26:35.560]  It's not Raspberry Pi specific.
+[26:35.560 --> 26:38.240]  The user space is Raspberry Pi specific.
+[26:38.240 --> 26:42.120]  It's actually Raspberry Pi 4 specific, because that's the one I have, just because I didn't
+[26:42.120 --> 26:47.400]  feel like doing device tree parsing in user space for the sake of a silly demo.
+[26:47.400 --> 26:51.200]  But all of the silly demo code aside, the stuff that's necessary to make this talk
+[26:51.200 --> 26:56.320]  work is maybe a little bit hacky and Raspberry Pi specific, but the kernel port is a genuine
+[26:56.320 --> 26:59.440]  port which has basically feature complete.
+[26:59.440 --> 27:04.320]  I think the only hack that's in place is that I said earlier that the kernel tries to enumerate
+[27:04.320 --> 27:08.560]  the device tree to find physical memory for devices to provide to user space through device
+[27:08.560 --> 27:11.240]  memory capabilities, and that was a bad idea.
+[27:11.240 --> 27:14.920]  I was right that it was a bad idea, but there is a little bit of a hack in the kernel in
+[27:14.920 --> 27:22.200]  that I just gave all physical memory to the Raspberry Pi to user space without really
+[27:22.200 --> 27:23.480]  much critical thought.
+[27:23.480 --> 27:25.480]  That's really the only hack.
+[27:25.480 --> 27:31.840]  The full complete, it's done port will correct that oversight by using the EFI memory map
+[27:31.840 --> 27:36.480]  to find memory, which is less stupid to just blithely give to user space.
+[27:36.480 --> 27:43.280]  Additionally, I will confess that I don't have support for IRQs in user space, so if
+[27:43.280 --> 27:49.280]  I put my finger on the heat sink here, it kind of hurts, because it's just busy looping
+[27:49.280 --> 27:53.320]  in user space while I wait for the next slide.
+[27:53.320 --> 27:56.600]  I did get that working before FOSSTEM.
+[27:56.600 --> 28:03.280]  I just didn't incorporate it into the loadout for running the slide deck, so yeah.
+[28:03.280 --> 28:07.680]  It's a good thing that it's not that hot in here or this would crash.
+[28:07.680 --> 28:11.560]  In total, Helios has been developed in nine months.
+[28:11.560 --> 28:16.840]  The ARM port was done in eight weeks, and it's sophisticated enough to run this slide
+[28:16.840 --> 28:22.320]  deck, which is pretty cool, but what's left to do?
+[28:22.320 --> 28:28.760]  The kernel is mostly done, and by done, I mean feature complete, but not necessarily
+[28:28.760 --> 28:29.760]  where we want it to be.
+[28:29.760 --> 28:33.840]  So, by feature complete, I mean the kernel API is complete, and you can write programs
+[28:33.840 --> 28:38.440]  against it, which do everything we want them to do, and then other improvements won't maybe
+[28:38.440 --> 28:41.360]  not necessarily affect that API.
+[28:41.360 --> 28:45.200]  Still needs to be polished in a number of places, like that device tree issue that I mentioned
+[28:45.200 --> 28:46.200]  is one case.
+[28:46.200 --> 28:49.360]  If you get grep through the code base, you'll find about a hundred do comments which we need
+[28:49.360 --> 28:50.680]  to address.
+[28:50.680 --> 28:55.120]  One of the more challenging things that we're going to have to do is SMP support, but again,
+[28:55.120 --> 29:00.640]  the kernel is a total of like 15,000 lines of code, so despite the boogeyman the SMP often
+[29:00.640 --> 29:05.680]  appears to be to most kernel hackers, I imagine that it won't be that difficult for us to
+[29:05.680 --> 29:09.840]  do, which could be famous last words, but we'll see.
+[29:09.840 --> 29:11.600]  I also want to put it to risk five.
+[29:11.600 --> 29:19.280]  I have gotten some hair code running on risk five at the supervisor level, thanks to the
+[29:19.280 --> 29:22.160]  efforts of one of the hair contributors.
+[29:22.160 --> 29:26.400]  We did do some basic OSDA research, but we haven't actually ported Helios itself to risk
+[29:26.400 --> 29:27.400]  five.
+[29:27.400 --> 29:28.400]  We'll do that soon.
+[29:28.400 --> 29:31.000]  I also mentioned that we're going to work on more options for the boot loaders, so we're
+[29:31.000 --> 29:33.440]  going to try to get EFI going everywhere.
+[29:33.440 --> 29:40.720]  The main blocker for EFI on x8664, for example, is that our programming language, which again
+[29:40.720 --> 29:46.520]  is hair, which is developed almost alongside this project.
+[29:46.520 --> 29:53.120]  X86 doesn't have for PIC, and so it would kind of be a little bit of a nightmare to
+[29:53.120 --> 29:59.640]  like do runtime relocations of the boot loader and assembly or something of that nature,
+[29:59.640 --> 30:05.200]  so we're going to do PIC first before we try to do any EFI boot loader for x86, but we
+[30:05.200 --> 30:11.320]  do have PIC for ARM, so that's already working.
+[30:11.320 --> 30:13.040]  Then I also want to improve the docs.
+[30:13.040 --> 30:20.080]  I spent the past few weeks in between hacking on the ARM kernel, improving the documentation
+[30:20.080 --> 30:25.680]  on the website aries-os.org, which there will be a link to in a later slide, which is probably
+[30:25.680 --> 30:29.720]  now about 60% complete, so if you're curious about the project and maybe you want to try
+[30:29.720 --> 30:34.200]  your hand at a little driver in user space, feel free to check that out, and wherever
+[30:34.200 --> 30:39.400]  you find a page, which is a stub, and you need to know what it should say, you can come
+[30:39.400 --> 30:43.840]  to IRC and ask about it, and we'll fill it in.
+[30:43.840 --> 30:49.200]  After the kernel is polished, actually alongside the kernel polish, is going to user space
+[30:49.200 --> 30:53.520]  where I explained a lot of the things that we were looking at.
+[30:53.520 --> 30:57.800]  Mercury again mostly exists, and Venus is just getting started.
+[30:57.800 --> 31:02.640]  Prior to the introduction of Venus, we did have a number of drivers that were built.
+[31:02.640 --> 31:06.080]  For the purpose of testing the kernel and testing Mercury and so on, we obviously have
+[31:06.080 --> 31:11.800]  a serial driver for X86, we have a PL011 serial driver for ARM, but we've also done things
+[31:11.800 --> 31:17.920]  like E1000 networking, we did send pings with that, we did the Rodeo block devices and a
+[31:17.920 --> 31:22.440]  couple of other simple drivers, just as we were working to prove the design of the support
+[31:22.440 --> 31:23.680]  code for drivers.
+[31:23.680 --> 31:30.280]  But the support code is mostly done, so now we're going to start writing drivers for real.
+[31:30.280 --> 31:35.840]  I need to provide some acknowledgments here to people who helped make Helios work.
+[31:35.840 --> 31:40.240]  Finally I mentioned earlier that there's a RISC-5 kernel by Alexi Yuren, Ember Sovati
+[31:40.240 --> 31:44.880]  also did some work on X86 for early kernel attempts.
+[31:44.880 --> 31:49.360]  This was really useful stuff, none of this code, very little of this code that came from
+[31:49.360 --> 31:53.720]  these efforts, they did it to Helios, and these projects never really developed into
+[31:53.720 --> 31:58.480]  full systems, I don't think either of them made it to user space.
+[31:58.480 --> 32:03.040]  But they were still very useful for proving out some ideas about how to actually do basic
+[32:03.040 --> 32:06.960]  kernel hacking in here, how do we boot up the system, how do we work from ring zero,
+[32:06.960 --> 32:10.480]  how do we configure the MMU, how do we do yada-yada-yada, deal with interrupts and so
+[32:10.480 --> 32:15.000]  on, how do we link it properly, all questions that had not been answered previously within
+[32:15.000 --> 32:19.000]  the context of the hair programming language, and so this work was definitely instrumental
+[32:19.000 --> 32:24.920]  in setting the field upon which Helios could be built, so big thanks to these guys.
+[32:24.920 --> 32:28.600]  Also thanks to the hair community, there's almost 80 people now, actually I think it's
+[32:28.600 --> 32:32.120]  more than 80 now, but there's around 80 people who have been working on the programming
+[32:32.120 --> 32:39.200]  language itself, again we've been working on it for about three years now, and the project
+[32:39.200 --> 32:43.000]  Helios of course would not be possible without the programming language that's written in,
+[32:43.000 --> 32:46.560]  so a huge shout out to the hair community for everything they've done, very proud of
+[32:46.560 --> 32:47.560]  that community.
+[32:47.560 --> 32:52.160]  I also want to thank the OSDev community on the Baruchat, hands up if any of you are
+[32:52.160 --> 32:59.080]  in this channel, yeah, so OSDev on the Baruchat is the single best place to learn about kernel
+[32:59.080 --> 33:03.560]  hacking on the entire internet, those guys are so smart and helpful and they're very
+[33:03.560 --> 33:06.560]  knowledgeable, they know everything about kernel hacking and drivers and anything you
+[33:06.560 --> 33:11.440]  want to know, if you want to mess with kernels, go talk to these people.
+[33:11.440 --> 33:15.200]  And also of course to SCL4, as I'm sure you noticed we took a whole bunch of ideas from
+[33:15.200 --> 33:20.400]  SCL4, I think SCL4 has got a really cool kernel design and I was really happy to learn about
+[33:20.400 --> 33:24.600]  it and apply a lot of its ideas to my own kernel.
+[33:24.600 --> 33:36.520]  So kernel hacking is fun, hair is fun, that's all I have fun, that's it.
+[33:36.520 --> 33:38.120]  Thank you so much Drew.
+[33:38.120 --> 33:39.400]  Any questions from the audience?
+[33:39.400 --> 33:40.400]  Martin.
+[33:40.400 --> 33:46.400]  I'm going to give you guys my soap, best thanks to Martin first and then we're going to give
+[33:46.400 --> 33:47.400]  you.
+[33:47.400 --> 33:52.880]  Hi, thanks for the talk, very interesting work.
+[33:52.880 --> 34:01.920]  I was unable to map the standard SCL4 capability derivation tree, like starting with anti-memory
+[34:01.920 --> 34:07.760]  and then converting that to your slides, so do you have it as well or are you?
+[34:07.760 --> 34:12.680]  Yeah, we do track capability derivations in a manner very similar to SCL4 and it really
+[34:12.680 --> 34:16.720]  would have been smart for me to put in a slide about that.
+[34:16.720 --> 34:22.280]  So thanks for the clarification and the second, well I have a hard time formulating it as
+[34:22.280 --> 34:27.560]  a question, so maybe just take it as an unsolicited advice.
+[34:27.560 --> 34:32.560]  Many of the design decisions of SCL4 were strictly motivated by the formal verification
+[34:32.560 --> 34:34.360]  target.
+[34:34.360 --> 34:40.360]  So maybe when you have spoken for example about not sharing the pages, etc., just give
+[34:40.360 --> 34:48.720]  it a thought that the reason for that might be that they did not want to make their life
+[34:48.720 --> 34:52.440]  harder regarding the formal verification and that might be the only reason.
+[34:52.440 --> 34:56.520]  Yeah, I think I've noticed that for a few other implementation details from SCL4 when
+[34:56.520 --> 35:01.800]  we were studying the kernel to learn what we could do for ours and with examples like
+[35:01.800 --> 35:08.040]  sharing page tables, I had bigger fish to fry so I left a comment which says SCL4 doesn't
+[35:08.040 --> 35:11.960]  support copying these and I would rather not run into a Heisenberg because we did it without
+[35:11.960 --> 35:17.320]  thinking about it, you know, and then we can really address it at some point in the future.
+[35:17.320 --> 35:18.880]  Thanks.
+[35:18.880 --> 35:25.800]  Hi, yeah, thanks for the talk, very interesting, quite impressive.
+[35:25.800 --> 35:32.640]  Yesterday we were talking about hair and thinking about it in retrospective, it seemed to me,
+[35:32.640 --> 35:38.080]  my personal opinion, that the great mechanisms of language design are mostly discovered like
+[35:38.080 --> 35:43.040]  we have garbage collection and tech unions and that, assuming you agree with that statement
+[35:43.040 --> 35:47.320]  now that you've written that operating system kernel, would you also say that the great
+[35:47.320 --> 35:52.120]  mechanisms how to write a kernel are established and well-known, things like paging, was there
+[35:52.120 --> 36:00.520]  still areas to experiment in new ways to do memory management, things like that?
+[36:00.520 --> 36:05.880]  Interesting question, I would say that there's a lot of concepts and ideas which can be applied
+[36:05.880 --> 36:12.840]  in the field of OS development which are understood and you can see examples of kernels and systems
+[36:12.840 --> 36:17.560]  which apply these ideas and various different designs that you can learn from and study
+[36:17.560 --> 36:22.120]  and maybe apply to your own kernel if they're the right choice and you can make a complete
+[36:22.120 --> 36:26.960]  kernel which is interesting basically only using proven ideas which is for the most part
+[36:26.960 --> 36:32.680]  describes Helios but at the same time there's certainly all kinds of research which is being
+[36:32.680 --> 36:37.680]  done into more novel approaches, there's been talks in this room throughout the day which
+[36:37.680 --> 36:43.600]  address some of those novel approaches and ideas so I would say that there is certainly
+[36:43.600 --> 36:47.680]  room to build a kernel out of understood ideas and still make it interesting but there's
+[36:47.680 --> 36:53.320]  also definitely an active frontier of research ongoing as well.
+[36:53.320 --> 36:54.320]  Thank you.
+[36:54.320 --> 36:56.320]  Thank you so much.
+[36:56.320 --> 37:00.320]  Any other questions?
+[37:00.320 --> 37:03.680]  Yeah, please.
+[37:03.680 --> 37:14.560]  Yeah, thank you for the talk.
+[37:14.560 --> 37:17.400]  You mentioned that you need position independent code, right?
+[37:17.400 --> 37:18.400]  Yeah.
+[37:18.400 --> 37:24.480]  But I don't understand if you use every driver and it's just like a user space process so
+[37:24.480 --> 37:30.240]  can't you just remap that in MMU so that all the processes like a normal Linux process
+[37:30.240 --> 37:31.880]  just have the same memory map?
+[37:31.880 --> 37:35.720]  Yeah, actually the kernel and user space processes both use a fixed memory map.
+[37:35.720 --> 37:39.440]  The thing where we would maybe want to look at position independent code is specifically
+[37:39.440 --> 37:44.120]  for the case of loading our EFI bootloader as a P32 plus executable.
+[37:44.120 --> 37:46.560]  After that stage it's all fixed memory addresses.
+[37:46.560 --> 37:49.560]  Yeah, then I understand.
+[37:49.560 --> 37:51.560]  Cool.
+[37:51.560 --> 37:57.600]  Hello, thank you for the talk.
+[37:57.600 --> 37:59.800]  Can I ask a non-technical element?
+[37:59.800 --> 38:02.160]  You've GPL-3'd it.
+[38:02.160 --> 38:03.840]  How are you making decisions around the kernel?
+[38:03.840 --> 38:04.840]  Like is it inevitable?
+[38:04.840 --> 38:08.640]  Tata, are you making decisions or are you having massive conversations about things?
+[38:08.640 --> 38:12.040]  How's that looking at the moment?
+[38:12.040 --> 38:15.360]  The vast majority of the work is just done by me personally at the moment.
+[38:15.360 --> 38:19.560]  The project is still pretty early on but we do have a number of other contributors.
+[38:19.560 --> 38:26.160]  I would say that the group of people who ought to be consulted on changes is probably in the
+[38:26.160 --> 38:28.160]  ballpark of five people in total.
+[38:28.160 --> 38:32.640]  So we just have a fairly informal community based on trust.
+[38:32.640 --> 38:36.560]  We try to be transparent, like I am transparent in all of my free software, so we have a public
+[38:36.560 --> 38:40.520]  IRC channel where we have these discussions and anybody can jump in at any time and there's
+[38:40.520 --> 38:43.720]  a patch review process which just goes through me at the moment.
+[38:43.720 --> 38:48.600]  In the hair community, for example, which is a lot bigger at this stage, we have something
+[38:48.600 --> 38:53.360]  more of a governance model where there's less of a BDFL and more of multiple maintainers
+[38:53.360 --> 38:57.480]  who all can do code reviews and improve patches and things like this.
+[38:57.480 --> 39:02.160]  As the Helios project grows, I imagine it will adopt a model similar to hair and perhaps
+[39:02.160 --> 39:05.560]  as hair grows, we'll have to improve upon the model even further.
+[39:05.560 --> 39:06.560]  But we'll see.
+[39:06.560 --> 39:07.560]  Thank you.
+[39:07.560 --> 39:08.560]  Nice shirt, by the way.
+[39:08.560 --> 39:09.560]  Thank you.
+[39:09.560 --> 39:10.560]  Can you pass it on?
+[39:10.560 --> 39:11.560]  Yeah.
+[39:11.560 --> 39:12.560]  Thanks.
+[39:12.560 --> 39:19.960]  You mentioned that you don't want to deal with ACPI but at the same time you want to
+[39:19.960 --> 39:22.600]  make UFI standard, so what's the plan there?
+[39:22.600 --> 39:28.200]  Is there any way to sort of port ACPI in your system because I imagine that it will become
+[39:28.200 --> 39:30.200]  mandatory, right?
+[39:30.200 --> 39:31.200]  Yeah.
+[39:31.200 --> 39:36.800]  I'm going to wail and gnash my teeth and hope it doesn't happen in practice because
+[39:36.800 --> 39:41.480]  at the moment, you know, something like EDK2, to be clear, by the way, I don't give a fuck
+[39:41.480 --> 39:46.400]  about non-free firmwares, so I'm thinking about EDK2 and things like that or Uboot and
+[39:46.400 --> 39:52.440]  so on where there's already an EFI standard UUID for passing a device tree along and
+[39:52.440 --> 39:56.240]  they can be configured to do that instead of ACPI, which is what I'm doing on this Raspberry
+[39:56.240 --> 40:00.480]  Pi, for example, and what I hope to continue to do on risk five and so on.
+[40:00.480 --> 40:04.280]  Our proof of concept on risk five took the same approach.
+[40:04.280 --> 40:09.320]  But there's very little in the kernel that actually needs to be concerned with ACPI
+[40:09.320 --> 40:15.280]  versus device trees that, again, it is a microkernel, so in the long term, we might just pass along
+[40:15.280 --> 40:32.000]  the... at least a little bit in X86, you know, because there's no device trees.
+[40:32.000 --> 40:37.960]  But you know, I'm fingers in my ears not thinking about the fact that ACPI is upon us, but we'll
+[40:37.960 --> 40:43.080]  probably have to deal with it at some point.
+[40:43.080 --> 40:49.360]  Thank you for the presentation.
+[40:49.360 --> 40:53.840]  Which software is running the presentation itself and how is it compiled?
+[40:53.840 --> 40:57.280]  This is just a custom piece of software I wrote myself.
+[40:57.280 --> 41:02.440]  It's a single binary which is loaded by the bootloader as the inner process and then
+[41:02.440 --> 41:07.120]  the kernel loads it into an address space and boots it up as PID1.
+[41:07.120 --> 41:12.920]  And there's additionally a tarball as a second boot module which is, again, loaded into memory
+[41:12.920 --> 41:17.640]  and then passed along to PID1 which is a tarball full of slides.
+[41:17.640 --> 41:20.800]  And then there's just one statically linked executable which contains a serial driver
+[41:20.800 --> 41:26.080]  and a GPU driver and the code to glue everything together.
+[41:26.080 --> 41:37.440]  The code, by the way, is available on source set if you're curious.
+[41:37.440 --> 41:45.120]  As you mentioned, Elios is heavily inspired by SCL4, so is there any plan on format verification
+[41:45.120 --> 41:48.040]  for Elios or that's not something you're interested in?
+[41:48.040 --> 41:51.720]  No, I'm not particularly interested in that.
+[41:51.720 --> 42:00.360]  In the back, there's someone.
+[42:00.360 --> 42:01.360]  Thanks for the presentation.
+[42:01.360 --> 42:08.360]  I have a question, is it on the road map that something like Weston or a other GUI server
+[42:08.360 --> 42:11.960]  or other service like that could potentially be reported to Elios?
+[42:11.960 --> 42:16.640]  I'm actually also the original author of WROTS and have a lot of experience in Wayland
+[42:16.640 --> 42:24.560]  and so there is a 100% chance that Wayland will be running on Elios at some point.
+[42:24.560 --> 42:27.400]  Any other questions?
+[42:27.400 --> 42:39.800]  As you said, for Gaia, you are inspired by Plan 9 and Unix.
+[42:39.800 --> 42:40.880]  What do you plan for Gaia?
+[42:40.880 --> 42:45.920]  What's the best of those both worlds?
+[42:45.920 --> 42:47.760]  It's a little bit hard to say.
+[42:47.760 --> 42:53.080]  At this point, there's less plans and more vision in that respect because we have at
+[42:53.080 --> 42:57.200]  least probably a year of work before we can really start serious work on Gaia.
+[42:57.200 --> 43:01.520]  But I will say that there is a lot of stuff I admire about Plan 9.
+[43:01.520 --> 43:04.680]  There's per process namespaces is one great idea.
+[43:04.680 --> 43:10.320]  I'm also going to go further with the idea of there not being any kind of global file
+[43:10.320 --> 43:11.840]  system at all.
+[43:11.840 --> 43:17.480]  We're also going to take a look at things like using text-based protocols where possible
+[43:17.480 --> 43:20.360]  and we're going to use different from Plan 9.
+[43:20.360 --> 43:25.520]  We're going to use this IPC generation thing for places where text protocols maybe don't
+[43:25.520 --> 43:26.520]  make sense.
+[43:26.520 --> 43:31.160]  I also have a lot of admiration for things like MBD on Plan 9 and so I would like to
+[43:31.160 --> 43:35.680]  organize networks perhaps in a similar fashion.
+[43:35.680 --> 43:42.360]  Also, I would say that the bigger vision for the whole area system is you can almost say
+[43:42.360 --> 43:47.880]  it's correcting a mistake that Plan 9 made, which is that Plan 9 was correct, that distributed
+[43:47.880 --> 43:53.720]  computing is the future, but it was incorrect that they would be distributed across a main
+[43:53.720 --> 43:57.520]  frame and a bunch of thin clients in office building, which is how Plan 9 was designed.
+[43:57.520 --> 44:02.200]  In fact, the group of devices which should be running a uniform operating system is all
+[44:02.200 --> 44:06.640]  of your personal devices, my laptop, my workstation at home, my phones, they should all present
+[44:06.640 --> 44:09.520]  as a single system.
+[44:09.520 --> 44:13.680]  It's very vague and lofty and long-term vision, but I would like to try and achieve that with
+[44:13.680 --> 44:18.480]  the design of Gaia and Aries.
+[44:18.480 --> 44:19.480]  Thank you.
+[44:19.480 --> 44:20.480]  Any other questions?
+[44:20.480 --> 44:24.360]  Okay, then thank you so much, Drew.
+[44:24.360 --> 44:27.600]  Thanks a lot.
+[44:27.600 --> 44:54.360]  So, 10 minutes break until the next talk.

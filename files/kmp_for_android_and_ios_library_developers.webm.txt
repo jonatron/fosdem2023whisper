@@ -1,0 +1,115 @@
+[00:00.000 --> 00:27.440]  So, hi, everyone. Welcome back to the next talk. Today we have on stage Anna La Bellarte
+[00:27.440 --> 00:33.680]  and Paolo Rattolo from Nextome talking about cutting multiplatform for Android and iOS library
+[00:33.680 --> 00:43.280]  developers, I guess it was. Now, yeah, gonna talk about it. Awesome. Thank you. Yes, I'm Paolo
+[00:44.400 --> 00:51.200]  and it's a very pleasure to be here with you. We come from Italy. We come from a small company
+[00:51.200 --> 00:57.280]  in the southern Italy and we decided to introduce cutting multiplatform in our code about a year
+[00:57.280 --> 01:04.400]  ago. We did this because for us it was easier to develop and also we wanted to share as much code
+[01:04.400 --> 01:13.200]  as possible. We make libraries so we didn't have the part of UI to transpose in the multiplatform
+[01:13.200 --> 01:21.280]  and this is our journey in the multiplatform world. Now, we've seen during this conference that we
+[01:21.280 --> 01:26.480]  cut in multiplatform mobile. We can develop a library that targets both Android and iOS
+[01:26.480 --> 01:31.920]  by just writing a single code base in Kotlin. Now, if you look at what happens when we distribute
+[01:31.920 --> 01:36.800]  the jar inside an Android library, we can say that the process is pretty straightforward.
+[01:36.800 --> 01:42.960]  Now, for an Android developer, the language is the same. The IDE that uses is the same and most
+[01:42.960 --> 01:47.920]  of the library that we can use are the same. So, we can't tell the difference between a library
+[01:47.920 --> 01:54.000]  that was made with Kotlin multiplatform mobile and one made with the native tooling. Now,
+[01:54.000 --> 02:00.080]  things are not quite the same when we talk about the iOS part. So, if we distribute the framework,
+[02:00.640 --> 02:06.480]  the process is not so straightforward. And the main of the problem arises because the code is
+[02:06.480 --> 02:11.120]  converted for an objective C and then most of the time we'll be using side projects that
+[02:11.120 --> 02:17.280]  has Rift as the main language. Now, for a Rift developer point of view, sometimes what can happen
+[02:17.280 --> 02:23.840]  is that they can find the API that we expose is just strange and this is just the base case scenario.
+[02:23.840 --> 02:29.600]  Other times, the app may just crash and this is due to some differences that there are between
+[02:29.600 --> 02:35.120]  the two platforms that aren't automatically translated for us by the compiler. So, we will see
+[02:35.120 --> 02:40.000]  during this talk what we can do to what happens when we distribute the framework and what we can
+[02:40.000 --> 02:46.800]  do to make libraries enjoyable also for the iOS part. Now, let's start with a simple example.
+[02:46.800 --> 02:52.560]  So, in this case, we talk about coroutines. So, inside our common code, we can use coroutine.
+[02:52.560 --> 02:56.960]  So, we can have a function like this, which is a suspend function because it performs some
+[02:56.960 --> 03:03.840]  operation with the network and some interaction with a persistent layer. Now, on Android, we
+[03:03.840 --> 03:08.560]  don't have many issues because if we have a coroutine scope, we can launch the coroutine.
+[03:08.560 --> 03:15.360]  But what happens on iOS when we don't have the coroutine library? Now, this function gets converted
+[03:15.360 --> 03:20.960]  by two alternatives. The first one which uses a completion handler, which is basically a callback
+[03:20.960 --> 03:26.480]  that gets called either when we have a result or when, in this case, the to-do variable would be
+[03:26.480 --> 03:32.240]  populated or when we have an error. So, in this case, I will have the error variable populated.
+[03:33.520 --> 03:38.000]  Now, if we don't want to use the callback because it can become cumbersome when we have
+[03:38.000 --> 03:42.960]  different functions, one inside the other, we can use the second alternative which uses
+[03:42.960 --> 03:49.920]  sync and await, but we have to target at least iOS 13. Now, if we go back on Android, we launch
+[03:49.920 --> 03:54.800]  the coroutine inside the scope, and this means that if I don't need the job anymore, what I can do
+[03:54.800 --> 04:01.760]  is just cancel the scope and then also the job gets cancelled. By default, I don't have this
+[04:01.760 --> 04:05.840]  power on iOS. So, what we can do is try to use a library which is called Coru.
+[04:07.200 --> 04:13.520]  Yes. We fixed that problem with Coru that is actually a library inspired by a blog post of
+[04:13.520 --> 04:20.480]  TouchLab. So, thanks to TouchLab for this. Does it work? Basically, you have to include, of course,
+[04:20.480 --> 04:27.200]  in the common dependency of your code. And using this library, it basically introduces you to a
+[04:27.200 --> 04:34.560]  new annotation that is too native class. So, with that annotation, you can specify a name for a
+[04:34.560 --> 04:40.640]  class that will be generated just in the iOS implementation of your code. So, if you have a
+[04:40.640 --> 04:47.760]  look at the generated class, we can see that it is basically a wrapper of our original repository.
+[04:47.760 --> 04:53.760]  So, you have two parameters that are passed. We have a wrapper that is the original repository,
+[04:53.760 --> 04:59.200]  and we have a scope provider. We'll see what a scope provider is later. And all the methods of
+[04:59.200 --> 05:04.560]  that generated class are the same methods that you have in the original repository, but the result
+[05:04.560 --> 05:14.880]  type, list of to-do, is wrapped in another object. So, if we try to use this on iOS, the code that's
+[05:14.880 --> 05:25.280]  get generated is something like that. We have two callbacks actually now, but I can see, for
+[05:25.280 --> 05:31.600]  example, other two problems with that code. First of all, we are exposing a coroutine scope for
+[05:31.600 --> 05:37.920]  iOS developers, and maybe iOS developers are not familiar with that concept of scope, like
+[05:37.920 --> 05:45.680]  coroutine developers are. And also, we have that object that now is an SRA, and it is not a list
+[05:45.680 --> 05:52.320]  of to-do anymore. That is because we are wrapped in a list of to-do in another object that accepts
+[05:52.320 --> 06:00.480]  generics. And the Objective C translation of the Kotlin code cannot do that for now, so it gets
+[06:00.480 --> 06:09.120]  simplified to an SRA. To solve this, we go back in the common code, and we use another function
+[06:09.120 --> 06:16.960]  of that library, that is, launch on scope. So, we can define a scope in common code and tell
+[06:16.960 --> 06:23.760]  the library to run all our coroutines in that scope. So, the scope will not be provided by
+[06:23.760 --> 06:29.440]  iOS developers anymore. Also, for the second problem, it's just a workaround. We can define a
+[06:29.440 --> 06:37.200]  data class, we can define a typology, or something to hide the fact that we are using a list of
+[06:37.200 --> 06:45.040]  something. So, if we try to generate a new code for this, this is the final code that is much
+[06:45.040 --> 06:54.000]  more readable and usable. And, of course, now we can dismiss the job if we are not interested in
+[06:54.000 --> 07:01.120]  the result anymore. What about flows? We'll talk about coroutines. What about flows? This is an
+[07:01.120 --> 07:09.280]  example of a simple flow that emits integers. Of course, again, on Android, it is simple, you
+[07:09.280 --> 07:15.760]  have a scope, you can start collecting values. As with the code that gets generated, it is
+[07:15.760 --> 07:21.360]  something like that. We still have a collect function to collect the values of the flow,
+[07:21.360 --> 07:26.640]  but we have to pass this, that is a flow collector, so we have to implement the function emit,
+[07:27.760 --> 07:33.280]  do something with that value that gets emitted, and then when we are done, call the
+[07:33.280 --> 07:40.240]  completion handler so we can receive the next value. Also, notice that we don't have the type
+[07:41.040 --> 07:47.680]  that we are collecting from the flow, we just have any. I can prove this. First of all,
+[07:47.680 --> 07:55.840]  we tried to make that collector generic, so we can use it in more parts of our code,
+[07:55.840 --> 08:04.800]  and so we exposed another callback. Yes, make it generic. So we exposed another callback,
+[08:04.800 --> 08:13.120]  and we actually casted the value as the one that we wanted, but we found that this is not
+[08:13.120 --> 08:21.360]  good enough. Also, because the highest developer has to do this in his code, we are not doing it
+[08:21.360 --> 08:27.760]  in common, so every time he has to use our library, he has to define this. So we decided to fix it
+[08:27.760 --> 08:35.600]  in common code, and again, we used this, that is a common flow. There is a class found actually in
+[08:35.600 --> 08:45.120]  the Kotlin Conf app, and this class wraps up flow and basically emits all the values of the flow
+[08:45.120 --> 08:51.120]  and returns a crossable object, so you can dismiss the flow when you don't want to listen to it
+[08:51.120 --> 08:59.600]  anymore. So again, we return now a common flow using the extension function, and on iOS again,
+[08:59.600 --> 09:06.480]  now we have a much more readable code that we can also cancel if we want.
+[09:09.040 --> 09:13.520]  Now, we mentioned before that sometimes the app may crash because of the differences between the
+[09:13.520 --> 09:19.760]  two platforms, and one great example of this is our exception handling are handled in the languages,
+[09:19.760 --> 09:24.240]  because Kotlin only works with unchecked exception, while Swift only works with the
+[09:24.240 --> 09:30.480]  unchecked one, and now we will see what this means and what happens. So if I have, we are
+[09:30.480 --> 09:35.840]  bringing back the function from the coroutine that we saw before, so in this case, because in
+[09:35.840 --> 09:40.480]  Kotlin, I don't have to mark explicitly each throwing function, I can wrap it inside a
+[09:40.480 --> 09:45.280]  tri-catch, so if something happens, I will receive the error inside the callback. Now,
+[09:45.280 --> 09:52.080]  if we bring back also the first alternative that we saw before with coroutine, what I expect is
+[09:52.080 --> 09:56.400]  to have the error in the function, but if I launch the application, it actually crashes,
+[09:57.040 --> 10:02.080]  and this is because in Swift, I have to mark explicitly each throwing function, so the fix is
+[10:02.080 --> 10:05.840]  actually quite easy, because there is an annotation that we can use, which is called
+[10:05.840 --> 10:12.400]  throws exception. So by doing this, just in the common code, and we don't have to make any changes
+[10:12.400 --> 10:18.800]  inside the Swift implementation, so in this case, I will receive the error in the callback,
+[10:18.800 --> 10:26.240]  and this works also with non-suspending functions, so if I have this function and mark it
+[10:26.240 --> 10:32.960]  throws and exception, once I compile the code, the generated function in Swift will be marked as
+[10:32.960 --> 10:40.000]  throwing, so this time will be the compiler to force us to handle the exception. Now,
+[10:40.000 --> 10:45.920]  another API that is not quite Swift-friendly is the one of sealed classes. Now, on Kotlin, we
+[10:45.920 --> 10:50.080]  can restrict the concept of inheritance by using sealed classes and sealed interfaces,
+[10:50.800 --> 10:55.760]  so when we use them inside our Android code, we can just make something like this, because,
+[11:01.840 --> 11:06.800]  okay, something like this, because we know for sure that those three, so data, error, and loading
+[11:06.800 --> 11:13.120]  in this case are the only cases that we have to handle, but on iOS, actually it gets converted
+[11:13.120 --> 11:18.480]  by just using the concept of inheritance, and so when I have to handle the, in this case, the
+[11:18.480 --> 11:24.480]  status, I have to define also the case, a default case, which I know for sure that will never be
+[11:24.480 --> 11:30.000]  called, and on Swift, we actually have a concept which is similar to the concept of sealed classes,
+[11:30.000 --> 11:35.840]  which is the concept of enum, so what we want is to map the sealed classes with enum, and to do so,
+[11:35.840 --> 11:42.640]  we can use a library, which is called, it's quite dark, but Merkur keys, Swift, and in this case,
+[11:42.640 --> 11:47.200]  using this library, it automatically detects any sealed classes and sealed interfaces,
+[11:47.200 --> 11:56.080]  and generates, in this case, will be UI state KS, and it just takes the status as input, and it
+[11:56.080 --> 12:00.880]  is actually an enum that I can use, so for a Swift developer, this is much easier to use,
+[12:00.880 --> 12:03.280]  because I don't have to define a default case anymore.
+[12:03.280 --> 12:14.080]  So, if you're writing code that is platform-specific from 400, for example, you probably will need
+[12:14.080 --> 12:21.680]  a context to access some system functionalities. What happens in the library ecosystem? So,
+[12:21.680 --> 12:27.680]  you may expose an API like this that gets the context from the user of the library,
+[12:27.680 --> 12:32.800]  but of course you don't have to do this on iOS, because you don't need a context on iOS.
+[12:32.800 --> 12:43.040]  How you can improve that, how you can unify those APIs, we try to use Jetpack app startup for this,
+[12:43.040 --> 12:51.120]  because if you include the app startup in your library, basically you will be able to
+[12:51.120 --> 13:04.240]  get a context that is injected by the operating system, and maybe save it.

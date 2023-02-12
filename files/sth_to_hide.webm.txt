@@ -1,0 +1,331 @@
+[00:00.000 --> 00:11.840]  Hello, our next talk is going to be by Ahmad about having something to hide.
+[00:11.840 --> 00:12.840]  Thank you.
+[00:12.840 --> 00:17.960]  Yes, so my name is Ahmad Fatoum, I'm an embedded Linux engineer with Pingotronics and thanks
+[00:17.960 --> 00:23.480]  for attending my talk on having something to hide trusted key storage in Linux.
+[00:23.480 --> 00:27.520]  So Pingotronics, a company I work for is a German Linux consulting company.
+[00:27.520 --> 00:29.840]  We specialize in embedded systems.
+[00:29.840 --> 00:34.240]  So all around embedded Linux consulting, around drivers, bootloaders, kernel porting.
+[00:34.240 --> 00:39.840]  And in the course of one project, I had occasion to get more familiar with kernel's trusted
+[00:39.840 --> 00:43.600]  key subsystem, which I will talk about today.
+[00:43.600 --> 00:49.200]  But first I will talk about what we need to store these keys for.
+[00:49.200 --> 00:52.240]  This is usually disk encryption.
+[00:52.240 --> 00:58.200]  So if you install a new Linux distribution on many systems, you already have whole disk
+[00:58.200 --> 01:00.560]  encryption out of the box.
+[01:00.560 --> 01:03.480]  And it's just really one click affair.
+[01:03.480 --> 01:06.920]  But what are the mechanisms underlying that?
+[01:06.920 --> 01:08.720]  That's usually the M-crypt.
+[01:08.720 --> 01:13.320]  So the M-crypt is device mapper with the cryptarget.
+[01:13.320 --> 01:20.800]  And what that does is that it maps physical devices to a virtual device and applies some
+[01:20.800 --> 01:21.960]  transformation to it.
+[01:21.960 --> 01:24.440]  In this case, it's cryptography.
+[01:24.440 --> 01:30.400]  And you see how that looks like in code at the end of the slide.
+[01:30.400 --> 01:32.320]  You specify a range.
+[01:32.320 --> 01:35.800]  You start from the first block, the number of blocks.
+[01:35.800 --> 01:38.600]  You specify that you want to use crypt.
+[01:38.600 --> 01:40.160]  You specify your crypto parameters.
+[01:40.160 --> 01:43.320]  For example, here it's AES.
+[01:43.320 --> 01:48.320]  And then you reference crypto key that you want to use for this symmetric encryption.
+[01:48.320 --> 01:54.640]  Here is 32 byte long key with the name key, and it's of type lock on.
+[01:54.640 --> 01:58.440]  And in the line after that, you see this key being added.
+[01:58.440 --> 02:00.400]  And that's all you need to do.
+[02:00.400 --> 02:06.600]  So to initialize your Dm-crypt, then there is a Dm setup tool you can call.
+[02:06.600 --> 02:08.440]  And then you have the M-script running.
+[02:08.440 --> 02:11.840]  You can use this virtual device, just write to it.
+[02:11.840 --> 02:15.560]  And the physical device, everything that will be written there will be encrypted with this
+[02:15.560 --> 02:19.760]  parameters that you have set.
+[02:19.760 --> 02:24.600]  Most people don't do this manually via Dm setup, but they have a wrapper around that.
+[02:24.600 --> 02:26.920]  That's usually crypt setup with looks.
+[02:26.920 --> 02:31.000]  So looks is desk encryption specification.
+[02:31.000 --> 02:34.600]  You see at the end how the header is laid out.
+[02:34.600 --> 02:37.880]  You have this binary header that's still there for compatibility.
+[02:37.880 --> 02:45.160]  And you have a JSON area that can describe these parameters that we had in our Dm setup
+[02:45.160 --> 02:51.760]  table, like what sort of algorithm is used or what HMAC is used.
+[02:51.760 --> 02:54.240]  And then there is this key slots area.
+[02:54.240 --> 03:01.920]  And in this key slots area, you have this volume key that was at 32 byte long keys that
+[03:01.920 --> 03:03.920]  we had.
+[03:03.920 --> 03:07.160]  That key is what's actually used for crypto.
+[03:07.160 --> 03:12.960]  But if that leaks, yeah, you have all your data encrypted with it.
+[03:12.960 --> 03:22.520]  So the idea with the M-crypt is what the crypt setup and looks do is that you can have multiple
+[03:22.520 --> 03:23.520]  key phrases.
+[03:23.520 --> 03:27.560]  For example, your normal key phrase that you always enter or a recovery key.
+[03:27.560 --> 03:33.160]  And then in turn, you encrypt that volume key with each time with a different key.
+[03:33.160 --> 03:36.440]  And that's stored in these key slots area.
+[03:36.440 --> 03:44.880]  And that way, you can have multiple passphrases for the same volume.
+[03:44.880 --> 03:47.120]  And yeah, where does that passphrase come from?
+[03:47.120 --> 03:49.200]  So it's usually entered by the user.
+[03:49.200 --> 03:53.040]  So in the init.rd, you are asked what's the passphrase that you want.
+[03:53.040 --> 03:54.120]  And then you enter it.
+[03:54.120 --> 03:59.560]  You could be a bit more sophisticated and insert a USB stick that has a file.
+[03:59.560 --> 04:01.840]  That's the same code pass, basically.
+[04:01.840 --> 04:07.480]  You could insert a Fido security key or a smart card, but what all of these have in common
+[04:07.480 --> 04:13.640]  is that the user is inserting or writing or you need user involvement.
+[04:13.640 --> 04:17.160]  And in my project, it was an embedded system.
+[04:17.160 --> 04:21.040]  And we don't have really a user powering up the devices.
+[04:21.040 --> 04:29.000]  And yeah, we need some sort of automated solution for unattended boots.
+[04:29.000 --> 04:31.960]  And here is where trusted storage comes in.
+[04:31.960 --> 04:38.560]  So in the regular case, the trusted storage is like the memory of the user or his USB
+[04:38.560 --> 04:39.560]  stick.
+[04:39.560 --> 04:46.520]  But for an unattended boot, you need some on-chip or off-chip device that's appropriately
+[04:46.520 --> 04:49.520]  secure that can hold the key.
+[04:49.520 --> 04:55.760]  Such device is in many systems, the TPM or the trusted platform with yours.
+[04:55.760 --> 04:57.560]  This is an industry-wide standard.
+[04:57.560 --> 05:04.320]  It's also an international standard and it's mandated by Windows 11, which helps its adoption
+[05:04.320 --> 05:10.040]  in a lot of modern systems because you couldn't boot Linux otherwise.
+[05:10.040 --> 05:16.360]  They are available as discrete devices, as chips, sometimes on like a breakout board
+[05:16.360 --> 05:21.000]  for your motherboard, but they can also be implemented in firmware.
+[05:21.000 --> 05:28.000]  And TPMs have this standardized interface where you can talk to them and they provide
+[05:28.000 --> 05:30.120]  you a lot of services.
+[05:30.120 --> 05:34.680]  What's interesting for us is that it has a random number generator built-in, so it has
+[05:34.680 --> 05:38.000]  its own entropy source and gives you access to it.
+[05:38.000 --> 05:41.200]  And it holds a unique never-disclosed key.
+[05:41.200 --> 05:45.360]  And with this unique never-disclosed key, you can encrypt arbitrary data.
+[05:45.360 --> 05:53.080]  So instead of having a passphrase that you need to remember, you could have an encrypted
+[05:53.080 --> 05:59.000]  passphrase and then you pass it to the TPM and the TPM will decrypt it with this unique
+[05:59.000 --> 06:04.920]  never-disclosed key that it has inside and then pass you the data in a decrypted form,
+[06:04.920 --> 06:09.160]  which you can then pass into the M-crypt or into the crypto setup or whatever.
+[06:09.160 --> 06:18.640]  And you can make this even dependent on having reached a state that's an unintegrity measurement.
+[06:18.640 --> 06:27.200]  So each boot state could verify the boot stage after it and then tell the TPM this is a measurement
+[06:27.200 --> 06:28.200]  value.
+[06:28.200 --> 06:33.040]  And these measurement values are concatenated and hashed and kept in the TPM.
+[06:33.040 --> 06:40.080]  And you can configure the TPM to only release and only to decrypt data when it reaches that
+[06:40.080 --> 06:41.320]  state.
+[06:41.320 --> 06:50.040]  And then you can be, yeah, and when you configure it correctly, the TPM would only decrypt your
+[06:50.040 --> 06:56.200]  encrypted blob when you are indeed in that secure, in that measured boot state that you
+[06:56.200 --> 06:57.200]  want to be.
+[06:57.200 --> 06:59.040]  You can even bind it to a time.
+[06:59.040 --> 07:05.440]  So after a given time has elapsed, you can't access it anymore.
+[07:05.440 --> 07:09.160]  Yeah, how does it look like in practice?
+[07:09.160 --> 07:15.720]  The kernel has drivers for that that abstract away the different modes of communication.
+[07:15.720 --> 07:18.240]  It can be I squared C, it can be SPI.
+[07:18.240 --> 07:20.560]  You don't need to worry about that in user space.
+[07:20.560 --> 07:24.040]  You have these device files that provide your access.
+[07:24.040 --> 07:32.320]  There are user space libraries that wrap that and there is even a system D support since
+[07:32.320 --> 07:39.320]  I think a year and a half or so, where you can enroll looks keys into TPMs.
+[07:39.320 --> 07:42.120]  It's very easy to set up.
+[07:42.120 --> 07:49.680]  But whatever you do, the common way of using this with looks has the common, you could
+[07:49.680 --> 07:56.920]  call it issue that privileged user space has access to this key material.
+[07:56.920 --> 08:02.880]  So if you, you have seen there is this JSON area where you could store stuff.
+[08:02.880 --> 08:05.800]  So you could store your encrypted key there.
+[08:05.800 --> 08:11.920]  And what would happen on boot is that prep setup or system decrypt setup would go there,
+[08:11.920 --> 08:16.080]  it would get this encrypted key, encrypted key, it would send it to the TPM.
+[08:16.080 --> 08:19.760]  The TPM would do its checks and see, okay, I'm in the correct state.
+[08:19.760 --> 08:24.760]  It will decrypt this data and then send it back to your user space.
+[08:24.760 --> 08:30.360]  And then your user space now has this passphrase, which it could use to decrypt the M-crypt
+[08:30.360 --> 08:32.960]  key and then it would pass it into the kernel again.
+[08:32.960 --> 08:39.760]  So it's a real roundabout way to get the M-crypt key into the kernel key ring.
+[08:39.760 --> 08:46.000]  So the idea behind trusted key was why not directly decrypt the TPM secured key into
+[08:46.000 --> 08:53.320]  the kernel key ring and reference it from there without involving user space at all.
+[08:53.320 --> 08:55.840]  And yeah, so it has been implemented.
+[08:55.840 --> 08:57.640]  It was first added in 2010.
+[08:57.640 --> 09:00.680]  The first kernel was released in 2011.
+[09:00.680 --> 09:06.760]  It was originally TPM specific, but the naming was held generic enough, I think, in hopes
+[09:06.760 --> 09:09.120]  that it can be extended in future.
+[09:09.120 --> 09:14.880]  So the same patch series that added it added also encrypted keys.
+[09:14.880 --> 09:23.480]  So encrypted keys are keys that you can only observe from user space in encrypted form.
+[09:23.480 --> 09:26.120]  That's how it should be.
+[09:26.120 --> 09:29.560]  So you will tell the kernel, generate a key for me.
+[09:29.560 --> 09:33.200]  And then when you try to export the key, you only get it in encrypted form.
+[09:33.200 --> 09:37.040]  And then when you want to load it, you give it a kernel in encrypted form and it will
+[09:37.040 --> 09:41.880]  decrypt it, but it will stay in kernel memory in decrypted form.
+[09:41.880 --> 09:44.320]  And that's encrypted keys.
+[09:44.320 --> 09:48.720]  And trusted key additionally have hardware root of trust.
+[09:48.720 --> 09:52.080]  So they use a TPM for doing the encryption and decryption.
+[09:52.080 --> 09:58.760]  So in theory, you shouldn't be able to decrypt a trusted key to load it and have it decrypted
+[09:58.760 --> 10:02.400]  on another system than the one where you generate it on.
+[10:02.400 --> 10:07.560]  Because on the other system, you would have another trust source with its own unique key
+[10:07.560 --> 10:11.120]  which is used for the encryption.
+[10:11.120 --> 10:13.040]  How does it look like in code?
+[10:13.040 --> 10:20.040]  So it's basically the same line as we have seen before, but instead of having a 32-byte
+[10:20.040 --> 10:25.920]  long login key, we have a 32-byte trusted key here.
+[10:25.920 --> 10:28.120]  It's called KMK.
+[10:28.120 --> 10:34.400]  And to create it, you can use the key CTL command, you add a trusted key.
+[10:34.400 --> 10:39.240]  You don't specify the key material like we did with the logon key because you can do
+[10:39.240 --> 10:40.240]  that.
+[10:40.240 --> 10:44.600]  You can just ask the kernel to generate you a 32-byte key.
+[10:44.600 --> 10:51.120]  And then when you try to pipe it, which is the command to pipe the key contents out,
+[10:51.120 --> 10:57.800]  unlike a user key which would just output the key material in plain text, it would output
+[10:57.800 --> 11:05.160]  the encrypted key and set you can store wherever and use it on subsequent boots.
+[11:05.160 --> 11:11.880]  So what the rest does is it sets up a loop device and does the encrypt on it and write
+[11:11.880 --> 11:14.080]  it works and then it reboots.
+[11:14.080 --> 11:19.520]  And then on the second boot, if you were to create a new trusted key, it would be completely
+[11:19.520 --> 11:20.520]  different.
+[11:20.520 --> 11:22.800]  It would be generated randomly.
+[11:22.800 --> 11:28.080]  And you want to use the key that you have stored already, which is what the blue line
+[11:28.080 --> 11:29.080]  is doing.
+[11:29.080 --> 11:34.840]  It does add trusted KMK, but instead of creating a new key, it loads the key blobs that we
+[11:34.840 --> 11:36.400]  have stored.
+[11:36.400 --> 11:42.520]  And with that, you should be able to read back what you have written before.
+[11:42.520 --> 11:47.600]  Yeah, so that's how it works.
+[11:47.600 --> 11:53.280]  We have a way to do it in user space already, and that's how it's usually done.
+[11:53.280 --> 11:59.480]  And not everyone agrees that sets strict advantages by doing it in the kernel.
+[11:59.480 --> 12:06.480]  But what was interesting to me is that it is a very useful interface to represent much
+[12:06.480 --> 12:09.000]  more than just TPMs.
+[12:09.000 --> 12:14.400]  Because on modern system, you can have off-ship secure enclaves, basically a TPM that doesn't
+[12:14.400 --> 12:20.400]  speak to TPM protocol and doesn't implement everything, but it implements part of it.
+[12:20.400 --> 12:23.920]  You can have an on-ship trusted execution environment.
+[12:23.920 --> 12:28.360]  You can have crypto units inside everyday socks.
+[12:28.360 --> 12:34.400]  Very often you have a crypto accelerator that also has access to a key that it could use
+[12:34.400 --> 12:37.680]  for wrapping and unwrapping data.
+[12:37.680 --> 12:45.240]  And indeed, in 2019, work started from Sumit Garg at Linaro to generalize trusted keys
+[12:45.240 --> 12:48.760]  and add T support in the first instance.
+[12:48.760 --> 12:49.760]  So what is T?
+[12:49.760 --> 12:54.160]  T is also an API standard.
+[12:54.160 --> 13:01.640]  And what it's about, it's having a hardware isolated environment where you can run trusted
+[13:01.640 --> 13:05.720]  applications on the same CPU where you execute your Linux.
+[13:05.720 --> 13:11.720]  But thanks to this hardware isolation, normally armed trust zone, if you do everything right
+[13:11.720 --> 13:17.800]  and have firewalls in place and all that stuff, you shouldn't be able to read the secure memory
+[13:17.800 --> 13:22.120]  from your normal world, which is Linux.
+[13:22.120 --> 13:24.960]  And these trusted applications can do basically everything.
+[13:24.960 --> 13:28.280]  You can have a trusted application that offers you a TPM.
+[13:28.280 --> 13:31.680]  And in that case, you could just use trusted keys with TPMs.
+[13:31.680 --> 13:33.520]  But you can do basically anything.
+[13:33.520 --> 13:34.520]  It's software.
+[13:34.520 --> 13:39.480]  You can just do random number generation in T. You can do key sealing and unsealing
+[13:39.480 --> 13:41.280]  with a hardware unique key.
+[13:41.280 --> 13:46.400]  So that's available on some processors that when you are in the secure mode, you have
+[13:46.400 --> 13:52.480]  access to a key that you can never see from Linux, which is unique and fused in.
+[13:52.480 --> 13:58.040]  And there are even people doing clock reset power domain support stuff in it because they
+[13:58.040 --> 14:01.520]  don't want Linux to have access to these things.
+[14:01.520 --> 14:07.000]  So if you are interested, you can just grab the kernel tree for a T client driver and see
+[14:07.000 --> 14:10.080]  all the stuff that's there.
+[14:10.080 --> 14:16.040]  And what was interesting to me was the crypto unit inside the IMX SOCs.
+[14:16.040 --> 14:20.160]  It's called CAM by free scale.
+[14:20.160 --> 14:22.560]  And we already have a CAM driver in Linux.
+[14:22.560 --> 14:24.360]  It does random number generation.
+[14:24.360 --> 14:26.880]  It does crypto acceleration.
+[14:26.880 --> 14:28.600]  It works a bit like a network card.
+[14:28.600 --> 14:34.320]  So I have these shared TMA rings where you push the jobs you want the CAM to do.
+[14:34.320 --> 14:36.920]  And then the CAM replies to you.
+[14:36.920 --> 14:41.000]  And you can do, as I said, the crypto acceleration RNG.
+[14:41.000 --> 14:48.080]  And it also has access to a one-time programmable master key that's fused by NXP in the factory.
+[14:48.080 --> 14:54.440]  And that's unique between devices.
+[14:54.440 --> 14:56.320]  That's the selling point.
+[14:56.320 --> 15:01.920]  And the CAM can use it for red blob generation, which means it seals and unseals user supplied
+[15:01.920 --> 15:03.560]  data using it.
+[15:03.560 --> 15:09.120]  Basically the same we have seen with the TPM and with T. And it has black blob generation.
+[15:09.120 --> 15:11.680]  So TPMs are very slow.
+[15:11.680 --> 15:19.400]  And I don't know if they support crypto offloading, but you probably don't want to do that if
+[15:19.400 --> 15:21.280]  you want to do something quickly.
+[15:21.280 --> 15:24.680]  But the CAM can do it much quicker.
+[15:24.680 --> 15:30.440]  And you can have this key never exit the CAM and use it for crypto inside the CAM.
+[15:30.440 --> 15:32.960]  You are, of course, limited to the crypto algorithm.
+[15:32.960 --> 15:34.440]  The CAM supports.
+[15:34.440 --> 15:40.080]  But the possibility is there if you don't want your key to even enter the kernel.
+[15:40.080 --> 15:47.640]  It should be all the time in the CAM itself.
+[15:47.640 --> 15:51.840]  And yeah, so why do we need that for?
+[15:51.840 --> 15:54.880]  The common use case is certificate storage.
+[15:54.880 --> 16:00.120]  So you are a vendor and you need to call into your own cloud.
+[16:00.120 --> 16:02.800]  And you have client certificates for that.
+[16:02.800 --> 16:08.760]  And you don't want someone to be able to desolder this EMMC and read it out and get access to
+[16:08.760 --> 16:10.680]  your certificates.
+[16:10.680 --> 16:16.520]  And thus you decrypt the certificates and at runtime encrypt it into memory, maybe normal
+[16:16.520 --> 16:20.800]  memory, maybe unshipped memory, however, whatever.
+[16:20.800 --> 16:24.840]  And yeah, we had many customers that needed something like that.
+[16:24.840 --> 16:30.160]  And we had been carrying out of three patches for it in 2015.
+[16:30.160 --> 16:34.200]  We send it out the first time to get some feedback.
+[16:34.200 --> 16:40.760]  Back then it was using the standard thing, a custom CSS interface.
+[16:40.760 --> 16:51.000]  In the following years, NXP tried to upstream their own new key types to represent, to rep
+[16:51.000 --> 16:54.480]  this hardware functionality.
+[16:54.480 --> 16:59.840]  And finally in 2019, work began on generalizing trusted keys.
+[16:59.840 --> 17:02.680]  And yeah, it was finally merged in 2021.
+[17:02.680 --> 17:07.680]  In 2021, I also started then with implementing it for CAM.
+[17:07.680 --> 17:11.240]  And that support is now available since 5.19.
+[17:11.240 --> 17:14.520]  And it's usable exactly the same way as with TPMs.
+[17:14.520 --> 17:20.360]  You can't do this measurement stuff because a CAM doesn't have support for that.
+[17:20.360 --> 17:26.240]  But on NXP SOCs, you would rather use their form of verified boot.
+[17:26.240 --> 17:32.600]  So this unique key that's inside the CAM, it's only released when the SOC believes it's
+[17:32.600 --> 17:34.520]  in a high assurance boot state.
+[17:34.520 --> 17:39.360]  It means that the boot ROM has verified the boot loader.
+[17:39.360 --> 17:44.320]  And then you are supposed to keep that chain of verification going.
+[17:44.320 --> 17:51.000]  And boot loader verifies the kernel, verifies the init.rd and so on.
+[17:51.000 --> 17:54.520]  Yeah, some interesting tidbits.
+[17:54.520 --> 18:01.520]  While I upstreamed the series, T and TPM both don't use a kernel entropy pool for TPMs.
+[18:01.520 --> 18:06.640]  They always have a random number generator for T. It was specified that they need to
+[18:06.640 --> 18:09.240]  provide random number generation.
+[18:09.240 --> 18:13.680]  That's not something that I wanted to do for CAM because we have a perfectly fine CAM
+[18:13.680 --> 18:15.760]  RNG driver.
+[18:15.760 --> 18:21.040]  Not everyone was fine with it, but eventually, stubbornness prevailed.
+[18:21.040 --> 18:26.720]  And yeah, you can now choose it for existing backends as well.
+[18:26.720 --> 18:31.920]  You can specify trusted RNG equals kernel, and then you can, even for T or TPM, use the
+[18:31.920 --> 18:38.640]  kernel entropy pool if you want to use that.
+[18:38.640 --> 18:44.000]  The default is leaving it to the trust source to decide what it wants to do.
+[18:44.000 --> 18:50.080]  And that's also useful for devices like on the IMX6 ultra-light light, you can guess
+[18:50.080 --> 18:51.080]  from the name.
+[18:51.080 --> 18:52.960]  It's supposed to be very lightweight.
+[18:52.960 --> 18:57.360]  And their crypto unit doesn't support an RNG as is, and yeah.
+[18:57.360 --> 19:02.960]  So you rather want to use the kernel driver that's available, that does this differently
+[19:02.960 --> 19:07.040]  than you have to do it in your own driver.
+[19:07.040 --> 19:10.960]  And what was also interesting, hardware feature bits were broken on some variants, so you
+[19:10.960 --> 19:16.760]  can ask the CAM what features it supports, and the R-CAMs that support, say they have
+[19:16.760 --> 19:23.480]  a blob support, but they lack AES support, so they fail with an internal exception when
+[19:23.480 --> 19:26.520]  you try to use it, because it's, yeah.
+[19:26.520 --> 19:29.120]  Because the ceiling and unsealing is AES based.
+[19:29.120 --> 19:33.160]  But yeah, that's one more thing the kernel needs to take into account to work on these
+[19:33.160 --> 19:34.160]  systems.
+[19:34.160 --> 19:41.800]  And yeah, that's also something I only learned about while getting review feedback was not
+[19:41.800 --> 19:44.760]  something I anticipated.
+[19:44.760 --> 19:53.040]  As you have seen, NXP had different, okay, NXP had different attempts on getting into
+[19:53.040 --> 19:55.760]  the kernel, and they applied that to their vendor tree.
+[19:55.760 --> 20:00.800]  They called it secure keys, and during the upstreaming feedback I was asked if I wouldn't
+[20:00.800 --> 20:06.240]  want to change my modifier key to be compatible with the NXP kernel, so people have an easier
+[20:06.240 --> 20:10.680]  time migrating to it, because it was no problem for me.
+[20:10.680 --> 20:15.880]  It broke my SysS interface, but I needed a migration step anyway, and yeah, this makes
+[20:15.880 --> 20:23.080]  stuff easier for most of the users that want to switch, and yeah, so I did that.
+[20:23.080 --> 20:25.280]  Why did I need a migration step?
+[20:25.280 --> 20:32.320]  Because I was using looks before, but looks doesn't have trusted key support.
+[20:32.320 --> 20:35.400]  So what I did is I used the M-Crip directly.
+[20:35.400 --> 20:39.920]  I basically did the same things that looks would be doing, but only on the M-Crip part,
+[20:39.920 --> 20:44.720]  and I would exclude the header you had seen in the first, one of the first slides.
+[20:44.720 --> 20:48.440]  You can specify the range of blocks that it should work on, and then you can just cut
+[20:48.440 --> 20:51.760]  out the looks area and do the M-Crip directly.
+[20:51.760 --> 20:55.840]  And yeah, and you need a one-time import step, because the first time you don't want to generate
+[20:55.840 --> 20:59.640]  the trusted key randomly, but you want to take the ones that you have already been using
+[20:59.640 --> 21:00.800]  for years.
+[21:00.800 --> 21:04.880]  Of course, in a new product, you don't want that non-upstream patch I linked there, but
+[21:04.880 --> 21:08.680]  in an existing product, yeah, that's how you could do it.
+[21:08.680 --> 21:12.920]  Old key blob, put into CISFS, gets a plain text key out, keysetlmports, and you have
+[21:12.920 --> 21:14.000]  the new key blob.
+[21:14.000 --> 21:17.960]  We store both alongside, so if the update fails for whatever reason, you can fall back
+[21:17.960 --> 21:22.400]  to the old system and use the old key blob and both work.
+[21:22.400 --> 21:25.200]  Yeah, finally, what more is there to do?
+[21:25.200 --> 21:29.160]  So there's encrypted key support for the M-Crip, eCryptFS, eFAM, and VDM.
+[21:29.160 --> 21:34.160]  There's direct key support, trusted key support, without involving encrypted key for the M-Crip,
+[21:34.160 --> 21:36.600]  and yeah, you can use encrypted keys.
+[21:36.600 --> 21:41.440]  Future candidates would be FS-Cript, there has been attempts, one for the old key set-up
+[21:41.440 --> 21:48.480]  scheme, the second by me for the new key set-up scheme, UBFS authentication also currently
+[21:48.480 --> 21:54.520]  uses a logon key that could be changed to be a trusted or encrypted key, but yeah, these
+[21:54.520 --> 21:58.200]  patches have died down.
+[21:58.200 --> 22:02.840]  Look support would be awesome, because yeah, with looks it just works out of the box, with
+[22:02.840 --> 22:08.400]  the M-Crip, we still need to do it manually, but that enables us to do it completely in
+[22:08.400 --> 22:13.680]  the kernel without involving user space, and yeah, you don't really want user space missing
+[22:13.680 --> 22:17.640]  with a DMA-capable device that could just overwrite the kernel if you give it access,
+[22:17.640 --> 22:21.640]  so trusted keys was the correct solution for us there.
+[22:21.640 --> 22:32.800]  And that concludes my talk, and I would accept your questions if you have any.
+[22:32.800 --> 22:44.960]  Thank you, and we have some time for a few questions.
+[22:44.960 --> 22:54.160]  I have a question, are you aware of any way to kind of get this step of getting the secret
+[22:54.160 --> 22:59.400]  from the hardware to automate that into the kernel as well, so you don't need user space
+[22:59.400 --> 23:09.200]  interaction, user space utilities, my use case is mainly like the root file system,
+[23:09.200 --> 23:15.280]  and to forego using an NDRAMFS that needs to run a lot of commands, so you could, from
+[23:15.280 --> 23:20.480]  the kernel command line, similar, like with DMInit, also get the key.
+[23:20.480 --> 23:26.960]  Personally, if I had that requirement, I would consider doing it from the boot loader and
+[23:26.960 --> 23:31.000]  then have the kernel read it off the kernel command line, because the encrypted key blobs
+[23:31.000 --> 23:35.880]  there is nothing confidential about it, so yeah, in theory the kernel could accept it
+[23:35.880 --> 23:51.640]  over the kernel command line, but there is nothing like that currently.
+[23:51.640 --> 24:04.960]  I can repeat the question, if it's to.
+[24:04.960 --> 24:14.000]  Is there a way to also combine these hardware keys with some pin and looks, so you have
+[24:14.000 --> 24:19.000]  to authorize yourself to the device?
+[24:19.000 --> 24:25.880]  That's not really how it's meant to be used, because, well, yeah, the key material shouldn't
+[24:25.880 --> 24:31.920]  exit the kernel, and you directly reference the DMCrypt key, insert the key in the kernel
+[24:31.920 --> 24:40.200]  key ring and directly reference it, so I don't know how to do it to easily factor in a user
+[24:40.200 --> 24:41.200]  pin.
+[24:41.200 --> 24:51.680]  There's a passphrase option, apparently there is a passphrase option that I need to look
+[24:51.680 --> 24:55.600]  up when using trusted keys.
+[24:55.600 --> 25:04.680]  So thanks for the talk, would it be possible to add a manual step before communicating
+[25:04.680 --> 25:11.680]  with the TPM, for example, a fingerprint scanner or anything like that?
+[25:11.680 --> 25:24.080]  Is there a hardware and software option to combine the two verification steps?
+[25:24.080 --> 25:25.560]  You could.
+[25:25.560 --> 25:31.200]  So currently you need to have an init RD, so in my case you have an init RD, or I don't
+[25:31.200 --> 25:34.160]  even have an init RD, I don't use it for the root file system, but if you were to use
+[25:34.160 --> 25:38.480]  it for the root file system, for example, you could in the init RD first check that you
+[25:38.480 --> 25:45.920]  have that fingerprint is there, but there is no way to wire it in the kernel, first
+[25:45.920 --> 26:05.480]  this needs to happen, that's more of a policy thing that you would do in user space.

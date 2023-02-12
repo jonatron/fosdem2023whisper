@@ -1,0 +1,367 @@
+[00:00.000 --> 00:29.920]  I'm sorry for the wrong title, but you know, naming is hard, so I had to put something.
+[00:29.920 --> 00:35.460]  But today, I want to talk to you about my experience with dealing with out-of-tree
+[00:35.460 --> 00:37.360]  plug-in and tools for LLVM.
+[00:37.360 --> 00:42.200]  Parkoach is just one example, and I will give some others.
+[00:42.200 --> 00:47.800]  So first of all, I will try to explain to you why and for whom am I doing this talk.
+[00:47.800 --> 00:49.920]  So you know the audience.
+[00:49.920 --> 00:52.240]  I'm going to talk about three different things.
+[00:52.240 --> 00:54.200]  The first one is keeping up with LLVM.
+[00:54.200 --> 00:55.560]  So we will see some code.
+[00:55.560 --> 00:58.240]  She makes C++ and stuff.
+[00:58.240 --> 01:02.680]  The second point is usability, both from a developer, a tool developer point of view
+[01:02.680 --> 01:05.040]  and a user point of view.
+[01:05.040 --> 01:12.720]  And the final point will be dealing with packaging when you're actually targeting some system.
+[01:12.720 --> 01:14.960]  So why am I doing this talk?
+[01:14.960 --> 01:21.800]  First of all, it's to provide some feedback and maybe provide you with some stuff I wish
+[01:21.800 --> 01:28.000]  I knew beforehand before coming into this.
+[01:28.000 --> 01:31.960]  I'm doing this also because I've learned a couple of out-of-tree projects, and I've
+[01:31.960 --> 01:33.920]  faced the same issues.
+[01:33.920 --> 01:37.440]  So maybe you've faced them too, and it will be helpful.
+[01:37.440 --> 01:43.680]  So it's not so much about the tool parkoach itself, it's rather about the approach.
+[01:43.680 --> 01:49.720]  And for whom, it's basically anyone who is involved in an out-of-tree project for LLVM.
+[01:49.720 --> 01:53.960]  This is my own point of view on this topic.
+[01:53.960 --> 01:59.920]  If you have ideas, comments, like improvements that you think may be helpful to me, don't
+[01:59.920 --> 02:00.920]  hesitate.
+[02:00.920 --> 02:02.640]  I will welcome them.
+[02:02.640 --> 02:06.640]  So parkoach is a tool for HPC application.
+[02:06.640 --> 02:12.560]  It's basically an instrumentation, analysis and instrumentation tool for OpenMP and MPI
+[02:12.560 --> 02:13.560]  application.
+[02:13.560 --> 02:18.760]  It basically checks that the user is using the APIs appropriately, that there are no
+[02:18.760 --> 02:21.720]  deadlock or data racism.
+[02:21.720 --> 02:22.720]  The developers.
+[02:22.720 --> 02:26.000]  This is where it gets interesting, because they are not like LLVM engineers, right?
+[02:26.000 --> 02:30.760]  They are interns, students, PhD students, researchers.
+[02:30.760 --> 02:35.880]  They have a whole job, which is not LLVM.
+[02:35.880 --> 02:39.080]  The users of the tool, they are scientific application developers.
+[02:39.080 --> 02:42.440]  So you cannot ask them to compile LLVM from the source.
+[02:42.440 --> 02:43.440]  It's not going to work.
+[02:43.440 --> 02:47.160]  They are not going to use your tool.
+[02:47.160 --> 02:51.760]  And the last part, which is interesting with this project, it started a long time ago when
+[02:51.760 --> 02:56.200]  it was LLVM 3.7, and now it's based on LLVM 15.
+[02:56.200 --> 02:59.520]  So there has been a lot of history in the tool.
+[02:59.520 --> 03:00.920]  And I'm working on it right now.
+[03:00.920 --> 03:05.840]  It's my main job, so they have an LLVM engineer now, and I can do stuff.
+[03:05.840 --> 03:08.800]  I provided the link for reference if you want to take a look.
+[03:08.800 --> 03:12.600]  There are two other motivating projects that I can talk about.
+[03:12.600 --> 03:16.280]  One, I'm actually not going to talk about much, because it's not free.
+[03:16.280 --> 03:22.160]  It's a commercial compiler, which is based on LLVM, and basically the developers are
+[03:22.160 --> 03:27.360]  LLVM engineers, so we have more flexibility when doing developments.
+[03:27.360 --> 03:32.600]  And the users are clients who are paying for the compiler, so we need it to provide something
+[03:32.600 --> 03:35.720]  good.
+[03:35.720 --> 03:38.560]  And the other point is student LLVM exercises.
+[03:38.560 --> 03:45.360]  I do courses, LLVM courses for security students, and I want them to be able to do some code
+[03:45.360 --> 03:47.760]  transformation with LLVM.
+[03:47.760 --> 03:52.680]  So the developer is just a friend of mine and me, and the users are students.
+[03:52.680 --> 03:58.200]  We are expecting them to code into the project, so we need to make it easy for them to get
+[03:58.200 --> 03:59.200]  into.
+[03:59.200 --> 04:06.440]  And we have 16 hours to do this project, and they cannot spend two hours like installing
+[04:06.440 --> 04:07.440]  LLVM.
+[04:07.440 --> 04:10.200]  It's not going to work either.
+[04:10.200 --> 04:14.000]  So in all this project, I am considered pretty much the same issues, so I'm going to talk
+[04:14.000 --> 04:17.760]  about them now, and the first one is keeping up with LLVM.
+[04:17.760 --> 04:21.880]  So I'm not sure if it was intentional in the schedule, but having a talk with you about
+[04:21.880 --> 04:26.320]  CMake and stuff, it's quite helpful because I don't have to go too deep in the details.
+[04:26.320 --> 04:28.400]  You already know them.
+[04:28.400 --> 04:34.600]  So let's go back maybe eight years ago.
+[04:34.600 --> 04:38.560]  You wanted to do some LLVM tools, there was no CMake integration.
+[04:38.560 --> 04:44.760]  The first approach that you had as a developer was either do stuff manually, maybe using
+[04:44.760 --> 04:48.840]  LLVM config to get the flags and the libraries and so on.
+[04:48.840 --> 04:51.280]  But basically, you had no easy way to integrate with LLVM.
+[04:51.280 --> 04:53.280]  It was quite manual.
+[04:53.280 --> 04:59.760]  Then came CMake, and you could use the standard ad library, target link libraries, but you
+[04:59.760 --> 05:05.800]  had to know what to feed these macros with.
+[05:05.800 --> 05:13.000]  And some stuff I've encountered in this project is some kind of people who were developing
+[05:13.000 --> 05:19.160]  this project were not comfortable with CMake, and they would perform some changes where
+[05:19.160 --> 05:24.080]  they would actually do CMake integration, but with R-coded passes in the CMake, so it
+[05:24.080 --> 05:25.640]  would be awkward.
+[05:25.640 --> 05:34.920]  So basically now it's, I think, at least from the examples we have, it's way better.
+[05:34.920 --> 05:38.880]  So using the LLVM CMake integration simplifies a lot of stuff.
+[05:38.880 --> 05:45.080]  You just have basically to know which component of LLVM you want to use, how you want to build
+[05:45.080 --> 05:48.360]  your library, like is it static or shared basically.
+[05:48.360 --> 05:55.400]  And you have dedicated macros to just construct whatever stuff you want to construct for LLVM.
+[05:55.400 --> 05:57.800]  So let's take an example code.
+[05:57.800 --> 06:03.000]  So you don't have to understand everything, just to give an example of how it works.
+[06:03.000 --> 06:09.960]  You basically say, okay, I want to find LLVM, provide a version, sometimes, include the
+[06:09.960 --> 06:16.280]  LLVM CMake helper, and include some definition, and then this is the interesting part.
+[06:16.280 --> 06:20.600]  Because you can say, okay, I want these components in my tool.
+[06:20.600 --> 06:26.440]  Call the CMake helper with your plug-in source, and that's it.
+[06:26.440 --> 06:33.560]  I mean, the CMake helper will take care of saying, okay, depending on how LLVM is installed,
+[06:33.560 --> 06:38.920]  like is it just the big dialy, but are there like individual libraries?
+[06:38.920 --> 06:43.440]  It will set up the target link libraries appropriately, and you don't have to think about it.
+[06:43.440 --> 06:46.280]  It's just automatic.
+[06:46.280 --> 06:51.880]  If you want to like do some tools or pass plug-in, there are macros to do these two.
+[06:51.880 --> 06:57.880]  So basically, you just have to figure out which kind of build you want, and CMake LLVM
+[06:57.880 --> 07:00.280]  will configure everything for you.
+[07:00.280 --> 07:02.840]  There are some useful examples.
+[07:02.840 --> 07:07.640]  For pass plug-ins, there is the buy example, which is basically a new pass plug-in, very
+[07:07.640 --> 07:08.640]  simple.
+[07:08.640 --> 07:10.000]  It's a kind of a hello world.
+[07:10.000 --> 07:15.560]  And LLVM tutor has some out-of-three passes to get you started with, and it's actually
+[07:15.560 --> 07:18.560]  quite helpful if you are looking into this.
+[07:18.560 --> 07:26.280]  No, let's talk about some code.
+[07:26.280 --> 07:33.920]  So let's say you're new to LLVM, pretty new to C++, your student, for instance, and you
+[07:33.920 --> 07:36.600]  want to perform some LLVM transformation.
+[07:36.600 --> 07:44.760]  So you go on your search engine, and you look for how do I iterate over instructions of
+[07:44.760 --> 07:47.680]  LLVM function?
+[07:47.680 --> 07:51.840]  And pretty much all the resources like Stack Overflow or even some presentations, they will
+[07:51.840 --> 07:54.440]  give you the code on the left.
+[07:54.440 --> 07:55.440]  So it's fine.
+[07:55.440 --> 07:56.440]  It works.
+[07:56.440 --> 07:59.680]  I mean, you are iterating over all the iteration instruction of the function.
+[07:59.680 --> 08:04.640]  But if you know a bit better C++, you know that you can put range instead of row iterators.
+[08:04.640 --> 08:09.640]  And if you know the instruction iterators from LLVM, you know that you can use instruction
+[08:09.640 --> 08:13.400]  of F to just get all the instruction of F.
+[08:13.400 --> 08:19.880]  All the code works, but arguably the codes on the right are easier to read, and in the
+[08:19.880 --> 08:23.640]  end easier to maintain, especially if you consider that there are a lot of examples like this
+[08:23.640 --> 08:24.640]  in the code.
+[08:24.640 --> 08:30.880]  It adds up, and so simplifying stuff is nice sometimes.
+[08:30.880 --> 08:34.680]  So it's not a problem of Stack Overflow or anything.
+[08:34.680 --> 08:40.920]  It's just that the answer in Stack Overflow or in the slides are old, like from 2015.
+[08:40.920 --> 08:49.160]  Like if you would update the answer, it would just be the option on the right.
+[08:49.160 --> 08:55.880]  Another thing I want to talk about, and that I've seen a lot in ParCoach, is iterating
+[08:55.880 --> 08:58.200]  over something, but putting a predicate.
+[08:58.200 --> 09:03.880]  Like I want to iterate through this stuff, but only if this stuff is true for some predicate.
+[09:03.880 --> 09:09.000]  So you can do stuff like that, early, continuous, or nested if.
+[09:09.000 --> 09:16.360]  But if you know the STL extra from LLVM, you know that you can create filtered range for
+[09:16.360 --> 09:17.360]  any range, actually.
+[09:17.360 --> 09:23.640]  So you pass a range, you pass a predicate, and inside the loop, you just get the object
+[09:23.640 --> 09:25.280]  you're looking for.
+[09:25.280 --> 09:31.080]  Again, it's a simple predicate, so it doesn't matter much as is, but if you add some more
+[09:31.080 --> 09:36.880]  stuff, it starts like growing up, and maintenance became a bit harder, readability is impacted
+[09:36.880 --> 09:37.880]  too.
+[09:37.880 --> 09:40.120]  So this is something to consider.
+[09:40.120 --> 09:45.600]  Now, something more like critical is advanced data types.
+[09:45.600 --> 09:50.760]  There are a lot of data types in LLVM, and if you are not familiar with LLVM, and I've
+[09:50.760 --> 09:57.240]  seen a lot of code like this, you will just use whatever data types is available in the
+[09:57.240 --> 10:01.720]  STL, and you will get a map, for instance, use some helper.
+[10:01.720 --> 10:07.760]  And the actual issue starts when input, the map of instruction, you want to map an instruction
+[10:07.760 --> 10:09.680]  to something.
+[10:09.680 --> 10:16.480]  If you go through the input and change an instruction, like if you delete it, or if
+[10:16.480 --> 10:22.280]  you replace all the uses with some other value, what happens to the instruction in the map?
+[10:22.280 --> 10:29.600]  So with raw map from the STL, like there is no mechanism, so nothing happens, and you
+[10:29.600 --> 10:35.040]  end up iterating or trying to find something which is not valid anymore, whereas if you
+[10:35.040 --> 10:41.200]  are aware of the data types from LLVM, you are able to use some kind of value map which
+[10:41.200 --> 10:48.560]  has specific handle to remove the value or update the value if it is changed during the
+[10:48.560 --> 10:50.320]  life of the value.
+[10:50.320 --> 10:58.240]  So some other helper that are quite nice, I mean, it's not a big deal, but for instance,
+[10:58.240 --> 11:03.160]  instead of using std-finif, you can use LLVM-finif and just put a range, instead of just like
+[11:03.160 --> 11:09.320]  the individual iterator, in this case, it's not a big deal, but it's actually quite nice.
+[11:09.320 --> 11:15.320]  But basically, every stuff like that, I've encountered this for a lot of kind of code
+[11:15.320 --> 11:24.680]  where you would be able to replace most of the occurrences with any vector from the LLVM
+[11:24.680 --> 11:29.440]  array advanced data types, or like a array or string array, like there are a lot of stuff
+[11:29.440 --> 11:40.360]  in LLVM that you may not be aware of and that makes your code quite nicer if you use them.
+[11:40.360 --> 11:45.040]  So yeah, dealing with it, so you may think, okay, this guy is just being picky with people
+[11:45.040 --> 11:46.920]  who are writing the code.
+[11:46.920 --> 11:47.920]  It may be true.
+[11:47.920 --> 11:51.600]  I will argue that it depends on actually who makes the contribution, because you cannot
+[11:51.600 --> 11:57.640]  expect the same level of contribution from a student or from a LLVM engineer, and like
+[11:57.640 --> 12:00.920]  especially when you're a PhD student, you have, I don't know, a deadline, you just want
+[12:00.920 --> 12:07.320]  a tool who does something, like you're not going to spend times and times on how you
+[12:07.320 --> 12:14.240]  do stuff as long as it works, at least that's my experience dealing with that.
+[12:14.240 --> 12:20.280]  But in my opinion, the accumulation of small details matters, and it was very explicit in
+[12:20.280 --> 12:26.360]  the case of Barcoach, because I came after like maybe five, six years where the accumulation
+[12:26.360 --> 12:36.720]  of researchers and PhD students like led to a lot of technical depths, and if there was
+[12:36.720 --> 12:45.040]  some advice that were given to the PhD students or the researcher, it would have been a way
+[12:45.040 --> 12:47.480]  nicer code to read or to maintain.
+[12:47.480 --> 12:54.040]  And so obviously, it's quite obvious, but doing code reviews helps a lot.
+[12:54.040 --> 12:59.120]  Sometimes you cannot do them if there is no one able to actually provide some useful feedback
+[12:59.120 --> 13:04.760]  on this, like in the case when people don't know LLVM, you cannot expect them to review
+[13:04.760 --> 13:08.800]  code and provide some, a lot of feedback.
+[13:08.800 --> 13:15.520]  But what I do know is I redirect every time to the LLVM programmers manual, it's not like
+[13:15.520 --> 13:20.040]  the first thing you usually just go to a search engine and search for what you want.
+[13:20.040 --> 13:23.560]  But I will argue that actually reading the program manual is more helpful in that, in
+[13:23.560 --> 13:25.800]  this specific case.
+[13:25.800 --> 13:29.760]  And something that I know people don't want to do when they are starting LLVM is just
+[13:29.760 --> 13:33.680]  read the code from the passes in LLVM, there are a lot of good stuff in there.
+[13:33.680 --> 13:39.920]  Obviously, if you're not familiar with C++ and LLVM, it's not the easiest, but I think
+[13:39.920 --> 13:43.920]  it's still worth it.
+[13:43.920 --> 13:49.640]  So the next topic is updating the LLVM versions.
+[13:49.640 --> 13:54.960]  So far, when I've developed out of three tools, I've always set the version to one
+[13:54.960 --> 13:56.840]  specific number, right?
+[13:56.840 --> 13:58.840]  And like let's say LLVM 9.
+[13:58.840 --> 14:07.000]  And then when LLVM 10 comes out, you rebase your plug-in and check if any API broke, if
+[14:07.000 --> 14:09.720]  there was like some changes in the IR.
+[14:09.720 --> 14:16.320]  Most recently, I am thinking about Opak pointers, it was quite a big change when updating the
+[14:16.320 --> 14:18.480]  LLVM version.
+[14:18.480 --> 14:22.400]  And something to consider when doing this is that it may be time-consuming, like a lot
+[14:22.400 --> 14:29.520]  of time can be spent in, it may be like just a day if there were no changes in the API,
+[14:29.520 --> 14:33.280]  but it could also be very time-consuming for instance if you have to change all your passes
+[14:33.280 --> 14:37.120]  because it's been three years that the new pass manager was out and you still didn't
+[14:37.120 --> 14:41.120]  do the migration and now suddenly it's deprecating and it's going to be removed, so you need
+[14:41.120 --> 14:45.080]  to migrate your passes, so you have to do it.
+[14:45.080 --> 14:52.960]  And in my experience, it's quite obvious too, but skipping versions makes it worse.
+[14:52.960 --> 14:57.760]  And some things that I've seen, and I know sometimes it cannot be avoided, but in that
+[14:57.760 --> 15:05.400]  case it was avoidable, but basically trying to support multiple LLVM versions at once,
+[15:05.400 --> 15:11.200]  like say support from LLVM 9 through 12, it's actually what was done, and yeah, don't
+[15:11.200 --> 15:12.200]  do it.
+[15:12.200 --> 15:18.840]  Just pick a version and stay like this, because otherwise it's just multiple if-deaf and everyone
+[15:18.840 --> 15:24.960]  in the code and it's unmaintainable, I think.
+[15:24.960 --> 15:28.400]  So now let's talk about passes.
+[15:28.400 --> 15:34.840]  If you look for a hello world pass on the internet, you will get a hello world pass,
+[15:34.840 --> 15:37.320]  which is a transformation pass.
+[15:37.320 --> 15:44.200]  So in LLVM, you have two kind of passes, the first kind is analysis, and basically they
+[15:44.200 --> 15:49.560]  don't touch the IR, you just look at the IR and maybe provide some result, which is
+[15:49.560 --> 15:55.320]  a result of the analysis and that can be used by transformation passes or other analysis.
+[15:55.320 --> 16:01.200]  And there are the transformation passes, which may or may not change the IR.
+[16:01.200 --> 16:04.880]  And obviously, when you get your hello world pass, you want to do everything in it.
+[16:04.880 --> 16:10.280]  Like, I mean, I'm not talking about LLVM developers, I'm talking about students and
+[16:10.280 --> 16:14.640]  researchers that have the pass and they put everything in it.
+[16:14.640 --> 16:21.600]  And so it's fine when it's just like one shot or something like that, but in the time,
+[16:21.600 --> 16:27.120]  at some point, both the analysis and the transformation are semantically different,
+[16:27.120 --> 16:33.920]  and LLVM has some mechanism to make it easy for you to have the analysis run only when
+[16:33.920 --> 16:34.920]  it's needed, right?
+[16:34.920 --> 16:39.760]  There is a caching mechanism, you can say, okay, I want this analysis for this object
+[16:39.760 --> 16:44.440]  and if it exists, it will give it back to you.
+[16:44.440 --> 16:49.960]  And also, it avoids passing structure around because when you are in a transformation pass,
+[16:49.960 --> 16:55.160]  you can request any analysis from basically anywhere as long as you have the analysis manager.
+[16:55.160 --> 17:03.000]  And so this is something that has costed me quite some time, like just untangling the
+[17:03.000 --> 17:08.960]  analysis code from the transformation code, and overall, it improved the performances
+[17:08.960 --> 17:15.880]  because some analyses were requested more than once for the same object.
+[17:15.880 --> 17:25.640]  And yes, it leads me to investigating performance issues because it was something too.
+[17:25.640 --> 17:29.080]  So what happens when you don't know LLVM and you want to debug your code?
+[17:29.080 --> 17:34.440]  You put LLVM errors everywhere and you command them out when your code is ready, okay?
+[17:34.440 --> 17:42.920]  So it's a nightmare, I mean, it works, but you're not supposed to do it like this.
+[17:42.920 --> 17:50.960]  So specifically for like printf like debug stuff, you have some LLVM helper, it's actually
+[17:50.960 --> 17:51.960]  quite handy.
+[17:51.960 --> 17:57.160]  You just put a debug type somewhere and you dot CPP, you wrap everything in LLVM debug
+[17:57.160 --> 18:03.000]  because it does all the things for you if you don't include debug information, it doesn't
+[18:03.000 --> 18:05.240]  even appear in the binary.
+[18:05.240 --> 18:10.480]  And when you're running your pass without, you can say, okay, I want to show debug information
+[18:10.480 --> 18:14.880]  for this kind of pass and it basically provides the same feature and you don't have to command
+[18:14.880 --> 18:18.480]  out LLVM errors.
+[18:18.480 --> 18:24.320]  The other thing is timing your code, being able to tell, okay, this part of the transformation
+[18:24.320 --> 18:27.120]  is costing me time.
+[18:27.120 --> 18:32.680]  And so what I've seen was some manual attempt to do timers and basically declare all the
+[18:32.680 --> 18:37.320]  timers, you start them manually and it starts being a mess really quick.
+[18:37.320 --> 18:40.720]  Hopefully, thankfully, now we have a time trace scope.
+[18:40.720 --> 18:46.880]  It was, I think it's what's used when you use a F time trace when starting clung.
+[18:46.880 --> 18:52.040]  And so basically it's just one line, you put one variable and when it's constricted, it
+[18:52.040 --> 18:58.120]  starts a scope and it starts a timer and when it's destructed, it stops the timer.
+[18:58.120 --> 19:05.760]  And LLVM has a whole system for this and it emits a JSON and you get, if you put this
+[19:05.760 --> 19:09.520]  in this JSON speed scope, you get something like that.
+[19:09.520 --> 19:15.040]  And you can see basically everything in your code without having to do anything.
+[19:15.040 --> 19:21.840]  You get the entry point, you get the analysis and here it was quite obvious for us was the
+[19:21.840 --> 19:27.080]  changes, what the changes were because this analysis, for instance, was called multiple
+[19:27.080 --> 19:29.640]  times but it was for the same object.
+[19:29.640 --> 19:33.920]  So like for instance, it would appear here too but because of the caching mechanism and
+[19:33.920 --> 19:38.280]  the untangling, it basically just, it was just called once.
+[19:38.280 --> 19:42.800]  So this is something nice that you get basically for free.
+[19:42.800 --> 19:51.160]  So now let's, okay, some conclusion on the tool development, so it's a fairly basic conclusion.
+[19:51.160 --> 19:52.160]  Try to invest in maintenance.
+[19:52.160 --> 20:01.160]  I know it's not always possible, especially in a scientific project but it's worth it.
+[20:01.160 --> 20:02.160]  Don't remember the wheel.
+[20:02.160 --> 20:08.400]  If you want to do something in LLVM, it likely has already something in LLVM for this.
+[20:08.400 --> 20:09.720]  And keep the this minimal.
+[20:09.720 --> 20:14.840]  One of the main weakness of Parkour right now is that we use some passes which exist
+[20:14.840 --> 20:16.600]  already in LLVM.
+[20:16.600 --> 20:22.280]  I'm thinking about memory SSA for instance, we use some copies of this and from a maintenance
+[20:22.280 --> 20:26.560]  point of view, it's not quite nice so we need to migrate this away.
+[20:26.560 --> 20:31.520]  And if your passes can be useful to others, just try to upstream them, I mean if you don't
+[20:31.520 --> 20:35.600]  use them, you don't have to pay for them.
+[20:35.600 --> 20:40.400]  Then let's talk a bit about usability because it's quite a big deal for a tool because you
+[20:40.400 --> 20:42.400]  want it to be usable.
+[20:42.400 --> 20:49.320]  So first, from a developer point of view, if your developers are going to be non-LLVM
+[20:49.320 --> 20:56.640]  folks, you don't want them to go into the LLVM install and stuff so I've had good experience
+[20:56.640 --> 21:04.040]  with using Docker and basically provide a Docker image with the LLVM compiled installed somewhere
+[21:04.040 --> 21:12.760]  or just installed using the APT repositories and have some clear CI, like how to build
+[21:12.760 --> 21:17.360]  your tool, like just looking at the CI should be enough to know how to build your tool from
+[21:17.360 --> 21:19.560]  a developer point of view.
+[21:19.560 --> 21:24.560]  And the other great thing is when you use LLVM, you get LLVM tools with it.
+[21:24.560 --> 21:30.080]  So you get a lead and five check and so instead of going through some manual testing and stuff,
+[21:30.080 --> 21:34.320]  you can just use them and it's actually quite nice.
+[21:34.320 --> 21:38.680]  And yes, of course, I could talk about coding standards but basically since you're making
+[21:38.680 --> 21:42.960]  a plugin or a tool for LLVM, it makes sense to follow the same standard and you have already
+[21:42.960 --> 21:46.760]  clonk format and clonk tidy configuration for this.
+[21:46.760 --> 21:54.800]  Now, as a user, you obviously don't want a scientific application developer to compile
+[21:54.800 --> 22:00.400]  your code from source, you want them to just have the plugin and use it or have the tool
+[22:00.400 --> 22:02.440]  and use it.
+[22:02.440 --> 22:07.760]  If you look at Hello World passes, you see a lot of times that you have to first get the
+[22:07.760 --> 22:08.760]  IR.
+[22:08.760 --> 22:15.400]  So in our case, it's either from clonk or from clonk and you have to call out, load the
+[22:15.400 --> 22:19.160]  path manually and call the path manually.
+[22:19.160 --> 22:28.080]  So I would argue this is not nice enough for researchers and students and since Spark
+[22:28.080 --> 22:35.840]  Coach is a verification tool, we cannot expect users to call it on every single file.
+[22:35.840 --> 22:42.680]  So we actually had to do some more tooling to create some wrapper which takes the original
+[22:42.680 --> 22:49.080]  compiler invocation, runs the original compiler invocation, generates temporary IR and then
+[22:49.080 --> 22:50.200]  runs the tool over it.
+[22:50.200 --> 22:58.720]  It makes it much more easy for the users to just integrate with auto tools or CMake.
+[22:58.720 --> 23:04.080]  So that makes the tool more user friendly than I would say unusual.
+[23:04.080 --> 23:07.280]  And the other part is how do you get the tool?
+[23:07.280 --> 23:15.680]  So again, I've had good experience with Docker especially for students because it's easy
+[23:15.680 --> 23:18.480]  for them.
+[23:18.480 --> 23:25.040]  And sometimes obviously we also provide some package for major distributions but you actually
+[23:25.040 --> 23:30.400]  have to worry about how is LLVM packaged on the target system because depending on what
+[23:30.400 --> 23:38.560]  is available, how is it shared libraries, Dalib and stuff, it's not the same thing.
+[23:38.560 --> 23:43.440]  And yeah, Docker, it's not something you can quite use on shared HPC clusters, you're more
+[23:43.440 --> 23:50.040]  looking at stuff like geeks for instance when targeting such platforms.
+[23:50.040 --> 23:53.560]  So for this, you need some packaging.
+[23:53.560 --> 23:57.000]  And packaging is my last point.
+[23:57.000 --> 24:04.720]  So obviously we used to use do-it-yourself approach, basically just create a shared library
+[24:04.720 --> 24:08.480]  and hope for the best, it doesn't work.
+[24:08.480 --> 24:13.400]  Because you depend on how opt is installed and compiled because you're loading dynamically
+[24:13.400 --> 24:14.520]  a library into opt.
+[24:14.520 --> 24:19.600]  So if you have not used the same like C++ libraries, you're going to run into issues.
+[24:19.600 --> 24:23.320]  You don't know for sure which pass manager is enabled by default in opt.
+[24:23.320 --> 24:26.320]  So there is also this.
+[24:26.320 --> 24:36.360]  So we've moved to doing some proper packages for APT.deb and for geeks and for Red Hat 2
+[24:36.360 --> 24:42.000]  because we have some users using some custom version of Red Hat.
+[24:42.000 --> 24:50.000]  And for this, we actually have quite an interesting issue because we are sure that the LL version
+[24:50.000 --> 24:52.080]  in their image is not available.
+[24:52.080 --> 24:58.760]  So we made the choice of shipping just one single static tool.
+[24:58.760 --> 25:04.400]  And for this, it was actually quite easy because as I said, when I talked about CMake, you
+[25:04.400 --> 25:12.480]  just say, OK, I want this to be linked statically or as a shared library and CMake, LLVM CMake
+[25:12.480 --> 25:14.280]  handles it for you.
+[25:14.280 --> 25:19.560]  And it was quite a nice experience for us to package for so many distribution without
+[25:19.560 --> 25:24.120]  having to worry too much about CMake option and stuff.
+[25:24.120 --> 25:26.760]  So some takeaways for the whole talk.
+[25:26.760 --> 25:31.680]  In my opinion, the LLVM integration has evolved a lot and in a good direction.
+[25:31.680 --> 25:35.880]  It's way easier to integrate with LLVM now than it was 10 years ago.
+[25:35.880 --> 25:42.160]  It's nice, but it's nice to say it because when nice stuff happens, you have to say it
+[25:42.160 --> 25:43.160]  too.
+[25:43.160 --> 25:44.920]  Be prepared for maintenance.
+[25:44.920 --> 25:49.200]  If you want to create a not-off-tree tool, you have to invest in maintenance both for
+[25:49.200 --> 25:57.320]  LLVM rebases and basically reviews and make sure that your contributors, if you are able
+[25:57.320 --> 26:04.080]  to provide some LLVM guidance to your contributors, do it and it's worth it.
+[26:04.080 --> 26:06.200]  Investing in CI is worth it, obviously.
+[26:06.200 --> 26:14.080]  And LLVM documentation, I would definitely, every day, recommend going to the LLVM documentation
+[26:14.080 --> 26:20.920]  rather than Google for understanding what is available in LLVM.
+[26:20.920 --> 26:28.200]  And I want to encourage my students to read LLVM source code, but it's sometimes a bit
+[26:28.200 --> 26:29.200]  hard.
+[26:29.200 --> 26:35.520]  So if you have questions or comments, feel free and I will be happy to answer them.
+[26:35.520 --> 26:36.520]  Yeah.
+[26:36.520 --> 26:59.520]  So the question is for the wrapper we created, what do we use to create this wrapper, right?
+[26:59.520 --> 27:07.520]  So basically, it's a very, very small LLVM tool, maybe you are familiar with not in LLVM.
+[27:07.520 --> 27:14.280]  There is a very small utility in LLVM which just does not on the return of a program.
+[27:14.280 --> 27:17.480]  And it's a very small LLVM tool based on LLVM.
+[27:17.480 --> 27:20.840]  And we use a similar approach.
+[27:20.840 --> 27:27.480]  Basically we say, okay, I created basically an empty main where I just use the LLVM support
+[27:27.480 --> 27:33.320]  library to get the benefit from like argument parsing and the data types and so on.
+[27:33.320 --> 27:42.400]  And I just parse the command line and call successively clang the original compiler line.
+[27:42.400 --> 27:50.680]  And then I just generate the intermediate representation for it by adding the appropriate
+[27:50.680 --> 27:55.440]  flag and filtering out the other object generation flags.
+[27:55.440 --> 27:58.720]  And then I just run the tool over it.
+[27:58.720 --> 28:07.040]  Yes, yes, because you can just, for instance, with CMake, you can use the CMake C launcher
+[28:07.040 --> 28:11.560]  basically just like Ccache work for LLVM, you just change the launcher and you can use
+[28:11.560 --> 28:13.680]  the tool to launch the compiler.
+[28:13.680 --> 28:19.640]  And for other tools, you can actually, actually in our project we use MPICC but we are able
+[28:19.640 --> 28:41.800]  to change if compiler used for MPICC and say, okay, use instead of GCC for instance.
+[28:41.800 --> 28:47.240]  So the question is when you ship your tool, do you link statically or dynamically?
+[28:47.240 --> 28:50.360]  So actually both.
+[28:50.360 --> 28:55.960]  When shipping for Red Hat because we don't have a control over what package are in their
+[28:55.960 --> 29:00.320]  custom image, we ship statically because we are not sure about which LLVM we are going
+[29:00.320 --> 29:01.320]  to have.
+[29:01.320 --> 29:06.160]  So we just, the binary is 100 megabyte but we don't have much choice.
+[29:06.160 --> 29:12.880]  And when shipping for system like Ubuntu or Debian, we just ship the dependence on the
+[29:12.880 --> 29:14.880]  shared libraries.
+[29:14.880 --> 29:43.080]  So the question is, when we're basing the tool from one LL version to the next one,
+[29:43.080 --> 29:53.080]  do you use the changelog developers put their love into and if yes, is it helpful?
+[29:53.080 --> 29:57.920]  Unfortunately the answer is no.
+[29:57.920 --> 30:02.720]  But that's because I look at the LLVM weeklies so I kind of know what happens.
+[30:02.720 --> 30:11.760]  This is just my way of doing stuff, yeah, so no, but if I would look into the changelog,
+[30:11.760 --> 30:25.200]  I would find helpful information I'm sure.
+[30:25.200 --> 30:33.440]  So the question is, am I trying to rebase as LLVM progresses or am I just rebasing every
+[30:33.440 --> 30:40.840]  version when it's released and it's only when a release came out, comes out, I do the rebase.
+[30:40.840 --> 30:50.000]  It's easier because otherwise, you know, depending on what kind of target you ship for, it's
+[30:50.000 --> 30:55.080]  hard and it's just simpler to say, okay, we know and then, we know we need to rebase
+[30:55.080 --> 30:57.080]  the version and it's fine.
+[30:57.080 --> 31:12.320]  I think we're out of time now, thank you Philippe.

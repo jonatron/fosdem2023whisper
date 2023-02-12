@@ -1,0 +1,240 @@
+[00:00.000 --> 00:14.320]  So, hello everyone. So, welcome to our talk and really thank you so much for staying for
+[00:14.320 --> 00:19.120]  this long. This is like the second last of the session of the day. So, really appreciate
+[00:19.120 --> 00:23.920]  you being here. So, today we're going to be talking about modernizing legacy messaging
+[00:23.920 --> 00:30.000]  system with Apache Pulsar. And here, you know, we have Enrico and then myself too. We're
+[00:30.000 --> 00:36.700]  from Datastax. Okay. So, but before we start, if you like a copy of our, you know, slide
+[00:36.700 --> 00:44.760]  deck, here's the QR code and also the short link if you want. I'll let you take a moment.
+[00:44.760 --> 00:54.440]  Good. Okay. Okay. Well, even if you missed, don't worry, we'll be sharing with you our
+[00:54.440 --> 00:58.320]  connection info. Then you can connect with us. We can always be there to answer your
+[00:58.320 --> 01:03.320]  questions too. So, with that, let me start. First, just a quick introduction. Who's Mary?
+[01:03.320 --> 01:10.280]  So, I'm a streaming developer advocate at Datastax. And Datastax is a company based in California.
+[01:10.280 --> 01:14.880]  Starting in Apache Cassandra, Managed Cloud. And then now we also have the Managed Cloud
+[01:14.880 --> 01:22.200]  for streaming, which is Apache Pulsar. And I was also a developer advocate before joining
+[01:22.200 --> 01:27.680]  Datastax last year. And I'm based in Chicago. I'm also the president of the Chicago Java
+[01:27.680 --> 01:33.240]  users group. And I'm also a Java champion. And before this, I was spending over 20 years
+[01:33.240 --> 01:39.760]  or so being a developer myself too. So, that's me. And then this is Enrico. Enrico. Oh, yes.
+[01:39.760 --> 01:47.480]  Sure. Sure. I'm Enrico. I work with Mary. I really enjoy working with open source communities.
+[01:47.480 --> 01:55.920]  So I'm involved in a few Apache projects like Pulsar, but all the big Datastax or ZooKeeper.
+[01:55.920 --> 02:05.160]  And also I collaborate with Maven and Curator. I'm participating also in some CNCF project
+[02:05.160 --> 02:10.360]  like Pravega that is still about massaging and distributed streaming. And also contributed
+[02:10.360 --> 02:14.640]  to RDB that is a Distributed Embeddable Java Database.
+[02:14.640 --> 02:20.920]  Okay. Great. Thanks, Enrico. I'm really happy today to be here with Enrico because we were
+[02:20.920 --> 02:25.600]  just working remotely, finally get to meet here in Belgium when he lives in Italy. And
+[02:25.600 --> 02:31.240]  I'm in Chicago. So, okay. So without further ado, this is the agenda like within 20 minutes.
+[02:31.240 --> 02:35.640]  So it's going to be a little bit quick, but we'll end up having Enrico also doing some
+[02:35.640 --> 02:41.520]  quick demo as well. So first, let's kind of give an introduction to what is JMS, assuming
+[02:41.520 --> 02:45.520]  you know, not everybody is familiar with that. So some introduction. And then we'll talk
+[02:45.520 --> 02:50.960]  about Apache Pulsar and why Pulsar. And also just quickly describe the Pulsar architecture
+[02:50.960 --> 02:56.640]  and how do you do the mapping between JMS and Pulsar. And then how do you use JMS API
+[02:56.640 --> 03:02.880]  with Pulsar. And Enrico will show that. And then that's how we're going to be doing.
+[03:02.880 --> 03:08.160]  So first of all, just some core concepts too, right, of JMS. And as such, right, JMS is
+[03:08.160 --> 03:14.760]  all about also messaging, but it's very much a Java centric technology. And it's here,
+[03:14.760 --> 03:20.320]  as you can see, right, it's also published, subscribed kind of model, making use of destinations
+[03:20.320 --> 03:27.280]  that it supports queues and topics. So messages, producers, consumers, these are typical like
+[03:27.280 --> 03:31.840]  pop-up producer, consumer type of pattern. As such, it's a pattern, but this has its
+[03:31.840 --> 03:37.120]  own implementation. And basically too, it makes use of the JMS context and that will
+[03:37.120 --> 03:43.920]  help you with the connections and sessions. Okay, so about destinations, right. So essentially
+[03:43.920 --> 03:50.680]  too, it supports both queuing and the topic too. And so it acts as a broker in the topic
+[03:50.680 --> 03:56.880]  case, but for queues. So each message is basically, as such, right, message queue is you drop
+[03:56.880 --> 04:01.560]  the message there and then it gets picked up and then it's kind of done, right, by the
+[04:01.560 --> 04:07.240]  consumer like that. It's browsable, this queue, first in, first out kind of approach. And
+[04:07.240 --> 04:13.640]  then with topic, it allows for multiple subscriptions too. And message dispatch according to the
+[04:13.640 --> 04:19.280]  subscription type as well. And consumer, as far as consumers styles go, you can have
+[04:19.280 --> 04:25.320]  blocking, which is in the blocking received methods and that's all application driven.
+[04:25.320 --> 04:32.640]  And also, yeah, okay. And then there's also making use of the message listener method,
+[04:32.640 --> 04:39.600]  which is a JMS to driver driven in that case. And as far as producer styles go, the blocking
+[04:39.600 --> 04:44.440]  will be send method or there's also a async send too. And that will be like with completion
+[04:44.440 --> 04:50.440]  listener. So that's real quickly. And then as far as administrative operations go, as
+[04:50.440 --> 04:57.600]  we know, JMS does not cover administrative operations. And how do you manage the destinations
+[04:57.600 --> 05:02.400]  and doing, you know, connection properties, all of these things, the defining security
+[05:02.400 --> 05:07.720]  models or resource limits, all of these things and configure all of these at JMS itself doesn't
+[05:07.720 --> 05:13.600]  have to do it. So how do you manage it? It usually relies on your vendor. How do you,
+[05:13.600 --> 05:18.880]  you know, we kind of do all of the management too is through some vendor way of allowing
+[05:18.880 --> 05:27.200]  you to do that. And so basically too, there's also API also to let you work with administrative
+[05:27.200 --> 05:32.400]  objects too. And so basically, they're, you know, supposed to be kind of also provided
+[05:32.400 --> 05:38.840]  by the system as well. And as far as destinations go, there are queue and topic references.
+[05:38.840 --> 05:43.240]  And connection factory basically is the, is essentially too, using connection factory
+[05:43.240 --> 05:48.880]  is the client that allows you to connect to the system in that case. And then there's
+[05:48.880 --> 05:56.000]  also JMS, right? The API is essentially allows you to interact with Java EE or now is Jakarta
+[05:56.000 --> 06:02.040]  EE, but back then there's Jakarta Java EE. And in that case, you can basically make use
+[06:02.040 --> 06:09.000]  of EJB components. There's stateful, stateless EJB. That's used in web surflets or, you
+[06:09.000 --> 06:16.360]  know, the Jax RS, Jax WS endpoints, right? And it allows you to also do background like
+[06:16.360 --> 06:21.920]  doing scheduling kind of way of doing things. And then there's also message driven beans.
+[06:21.920 --> 06:28.000]  So these essentially too is basically their JMS specific kind of beans to handle messages
+[06:28.000 --> 06:35.640]  in there. And it's basically managed by the container, the, you know, J2, JEE container.
+[06:35.640 --> 06:40.160]  When you receive a messages from a container, then it will be essentially be, you know,
+[06:40.160 --> 06:46.720]  activated in that case. So J, the Java EE container provides support for like all of
+[06:46.720 --> 06:52.480]  the, you know, life cycle management pulling of these context dependency injection of these
+[06:52.480 --> 06:58.320]  things and transaction supports of security standard API. All of these tools basically
+[06:58.320 --> 07:04.080]  relying on the container to do that for you. And then there's also to what about external
+[07:04.080 --> 07:09.160]  resources. So a lot of times, and that's how it relies on resource adapters. It allows
+[07:09.160 --> 07:16.280]  you to essentially extend the Java EE container in that case. So in some key points, it basically
+[07:16.280 --> 07:22.200]  to use it is you need to have the resource archive file. So dot RAL file that will contain
+[07:22.200 --> 07:28.120]  the code and you have to then configure the resource adapter and everything. And it allows
+[07:28.120 --> 07:33.120]  you to essentially create administer objects, right? That conforms to these objects will
+[07:33.120 --> 07:39.400]  conform to the standard API and is implemented by the, by the core inside the resource adapter
+[07:39.400 --> 07:46.000]  too. So these are the different packages like basically Java X dot JMS. In this case, it's
+[07:46.000 --> 07:51.680]  I think in the new, new version would be Jakarta, but we're still talking about Java, the older
+[07:51.680 --> 07:57.400]  JMS in this case, and will be connection factory queue and topic. So usually each objects to
+[07:57.400 --> 08:04.960]  a bound to a JNDI naming and directory interface registry, right, provided by the container.
+[08:04.960 --> 08:09.720]  And so it's specific to the container as to how you do deployment too. And that's how
+[08:09.720 --> 08:15.480]  it usually works. Now then let's get introduced, right? So now we talk, talk about JMS stuff
+[08:15.480 --> 08:20.080]  is a bit more legacy stuff. So what are some of the options, right? To, to kind of leverage
+[08:20.080 --> 08:25.680]  on today's like more modern world that allows you to work in a cloud native environment.
+[08:25.680 --> 08:31.160]  But also we want to introduce to you Apache Pulsar is an open source platform and it's
+[08:31.160 --> 08:37.440]  cloud native and it supports distributed messaging and streaming too. And as such too, this is
+[08:37.440 --> 08:41.800]  the link where you can kind of find out more information or this is actually more the,
+[08:41.800 --> 08:46.960]  the GitHub repo. So wanting to highlight it because we don't have too much time, but
+[08:46.960 --> 08:54.480]  basically it's very cloud native in nature. It's born with the cloud native DNA and various,
+[08:54.480 --> 08:59.400]  you know, it's basically the key point of it is that why do you want pulsars? I think
+[08:59.400 --> 09:03.960]  what, I think at least one of the key point, it separates out the compute and the storage.
+[09:03.960 --> 09:09.720]  So basically Pulsar can focus more on working with the messages delivery, right, dealing
+[09:09.720 --> 09:13.440]  with all the messages coming in, delivering all of these things. And then, you know,
+[09:13.440 --> 09:17.560]  you have a whole laundry baskets of all the log messages, then what do you do with it?
+[09:17.560 --> 09:22.000]  Rather than dealing with it, Pulsar said, let me get bookkeeper to handle it for me.
+[09:22.000 --> 09:26.760]  So, so that way Pulsar can focus on that, you know, just the messaging part and coordinate
+[09:26.760 --> 09:31.000]  with the bookkeepers. So that's what it does. And it also supports multi-tenancy and that's
+[09:31.000 --> 09:35.920]  a very nice way of helping you to organize all of your messages, as well as some features
+[09:35.920 --> 09:40.200]  that are more kind of ready for enterprise level, like, you know, geo replication is
+[09:40.200 --> 09:45.680]  also a major thing in that. And also it has what is called like tiered offset. It's basically
+[09:45.680 --> 09:50.320]  if your messages get code, right, and bookkeeper, you don't want it to take up too much room.
+[09:50.320 --> 09:54.600]  Then you want to move it to, or actually, I should say, it gets kind of in the one storage
+[09:54.600 --> 09:59.360]  and you want to move it off to cold storage. So all these, as Pulsar has built in and it
+[09:59.360 --> 10:04.760]  knows it. So native Kubernetes support all of these things, schema, it has a Pulsar schema
+[10:04.760 --> 10:10.920]  connectors, and you can use the basically Pulsar IO framework to build different connectors.
+[10:10.920 --> 10:15.200]  And currently we're supporting like almost a hundred different kind of connectors, too,
+[10:15.200 --> 10:20.160]  in there. Message processing, you can use the Pulsar functions framework, so you don't
+[10:20.160 --> 10:24.960]  need to use anything outside to do message transformation as you are building your data
+[10:24.960 --> 10:29.400]  pipeline. And also the nice thing, too, is that it doesn't restrict you to only using
+[10:29.400 --> 10:35.520]  Java as your client. You can use other things like C++, Python Go, and other community contributions
+[10:35.520 --> 10:40.680]  to such a cloud. There's also Node.js, also.NET C-Shop client, too. So that's really
+[10:40.680 --> 10:45.680]  flexible and really functioning real well in Pulsar. So let's kind of really quickly
+[10:45.680 --> 10:50.320]  kind of take a look. I already mentioned some of it. Essentially, too, it's a blazing performance.
+[10:50.320 --> 10:54.800]  That's what we all want. Provides you with true like real-time type of processing. That's
+[10:54.800 --> 11:00.360]  why we want it, right? It's basically millions of JMS messages can be handled if you have
+[11:00.360 --> 11:06.200]  JMS leveraging on such a platform. So it's all good. Horizontal scalability. If you expand
+[11:06.200 --> 11:10.880]  your infrastructure, adding more servers and nodes and all of these to it, Pulsar will
+[11:10.880 --> 11:15.120]  handle that for you. You don't need to rebalance all of your topics, and you don't need to
+[11:15.120 --> 11:19.840]  deal with offsets, right, such as in maybe like Kafka, things like that. It has its own
+[11:19.840 --> 11:24.840]  way, so then you don't have to worry as a developer. Worrying about all of these infrastructural
+[11:24.840 --> 11:30.600]  things. So all of these things are just listed here. I know there's a lot of, you know, works
+[11:30.600 --> 11:34.200]  in here, but it allows you to kind of get a bit more into detail, and we can share with
+[11:34.200 --> 11:40.320]  you this thing. So let me pass this on to, let me see. Oh, let me kind of quickly, I
+[11:40.320 --> 11:45.000]  thought this was on. Okay, so just a really quick basic architecture. This kind of pictorially
+[11:45.000 --> 11:49.320]  described to you what I just talked about. We only have so little time. So this is just
+[11:49.320 --> 11:53.560]  describing to you, right? Producers, consumers can be written in, you know, many different
+[11:53.560 --> 11:58.520]  languages, not just with Java, and it gets managing, you know, by bookkeeper that deals
+[11:58.520 --> 12:03.800]  with all of the storage side of things, and very dynamic. As you can see, this kind of
+[12:03.800 --> 12:09.560]  quickly summarized in picture what Pulsar can do for you. Okay, and then here, just quick
+[12:09.560 --> 12:14.960]  summary Apache Pulsar. Again, take mixtures of a pop-up type of architecture, right, and
+[12:14.960 --> 12:20.600]  that's what it is, and supports like multi-tenants, namespaces. Different subscription modes
+[12:20.600 --> 12:26.200]  do that. You can also leverage on that, essentially turn Pulsar into a queuing kind of capability
+[12:26.200 --> 12:32.160]  if you use an exclusive type of mode to do, you know, subscription. And what other thing?
+[12:32.160 --> 12:35.560]  Yeah, so there are different modes. It's just highly flexible is what we're trying to tell
+[12:35.560 --> 12:42.640]  you about the story. So here, we have a little bit of story about that. We can talk more
+[12:42.640 --> 12:52.880]  about it later. Yeah, so I just want to map Pulsar concept to JMS. JMS is pretty straightforward.
+[12:52.880 --> 12:59.680]  So the model is quite flexible because it is with a queuing, but also a pop-sub. And
+[12:59.680 --> 13:07.840]  in Pulsar, the mapping is really natural because you can map a JMS topic to a Pulsar topic,
+[13:07.840 --> 13:15.440]  whatever it is, Pulsar standard topic, partitioned topic, virtual topics. A JMS queue is like
+[13:15.440 --> 13:21.600]  a Pulsar shared subscription, and the JMS is like a Pulsar message with an envelope and
+[13:21.600 --> 13:27.680]  with the body. So in JMS, we have several consumer types. So I'm not going to enter
+[13:27.680 --> 13:36.560]  the details, but there is a subscription type that matches the JMS requirements. One important
+[13:36.560 --> 13:41.200]  thing is that if you want to use JMS with Pulsar, you don't need to install any additional
+[13:41.200 --> 13:51.840]  plugin because the JMS API is built over the standard native Java client because the Pulsar
+[13:51.840 --> 13:59.440]  features are a super set of JMS. So it's only about implementing an API. You know, in JDBC,
+[13:59.440 --> 14:06.640]  you have an API that allows you to connect to every database. In JMS, you just have to implement
+[14:06.640 --> 14:12.960]  the API and follow the specs. If you want, you can deploy a server-side component just
+[14:12.960 --> 14:19.040]  to push some of the computations. So for instance, in JMS, you have filters. You can filter the
+[14:19.040 --> 14:24.240]  messages. So if you want, you can filter them on the broker. Otherwise, you can simply
+[14:24.240 --> 14:35.360]  filter them on the client side. I'm just showing some examples of how to use Pulsar with JMS.
+[14:36.080 --> 14:42.800]  Maybe if you are already familiar with JMS, that's pretty simple. So in JMS, you start with a
+[14:42.800 --> 14:50.160]  connection factory. So we have Pulsar connection factory. And this is JMS 2.0. And you can get
+[14:50.160 --> 14:57.600]  a JMS context. You get a reference to a destination. This is create queue. Create queue is not creating
+[14:57.600 --> 15:02.640]  a queue. It's creating a reference to a queue because JMS doesn't deal with administrative
+[15:02.640 --> 15:08.880]  operations, as Mary said. You create a producer. You can send as many messages as you want. And
+[15:08.880 --> 15:15.120]  if you want to consume, you create a consumer. And you can use receive or set the message listener.
+[15:15.120 --> 15:22.640]  This is from standard Java. If you're using Jakarta or Java Enterprise, actually, yes,
+[15:22.640 --> 15:32.640]  I've been helping a few companies to migrate from Java Enterprise to Pulsar. So I know much
+[15:32.640 --> 15:40.960]  more cases about Java Enterprise more than Jakarta. But that's it. So for instance, if you
+[15:40.960 --> 15:48.880]  want to write and you have an Enterprise Java bin, then you can ask to the container to inject the
+[15:48.880 --> 15:55.440]  connection to Pulsar. And this is a standard Java Enterprise code. So this code runs with
+[15:55.440 --> 16:03.680]  ActiveMQ, with TIBCO, with whatever you want, whatever you are running. And the container
+[16:03.680 --> 16:09.600]  injects the connection factory and the destination. And you can, as in the standard Java code, you
+[16:09.600 --> 16:16.720]  can get a reference to the JMS context and then you send. We will see later how the administrator,
+[16:16.720 --> 16:25.280]  for instance, with Apache Tomy, connects all the parts. The consumer, usually in Java Enterprise,
+[16:25.280 --> 16:32.880]  you use message driven bins to consume from destinations. So yes, this is a simple message
+[16:32.880 --> 16:42.320]  driven bin. You configure all the relevant things that you want. For instance, usually you
+[16:42.320 --> 16:48.640]  configure the destination that is still a logical name and a subscription type or the
+[16:48.640 --> 16:56.800]  parallelism of the kind of things. In many containers, you can configure the things on
+[16:56.800 --> 17:04.160]  other descriptors or descriptors on user links and files. You implement a callback on message.
+[17:04.160 --> 17:09.760]  Every time a message is dispatched to the application, the code runs and if everything
+[17:09.760 --> 17:15.280]  goes well, the message is acknowledged to the Pulsar broker and it won't be delivered anymore.
+[17:15.280 --> 17:21.200]  If there is any exception that is thrown, Pulsar will deliver again the message.
+[17:21.200 --> 17:30.000]  In Tomy, there is a very simple way to deploy the resource adapter. I'm deploying the resource
+[17:30.000 --> 17:37.760]  adapter for Pulsar. So Pulsar RA, you configure the connection to Pulsar. Now in the demo,
+[17:37.760 --> 17:43.760]  I'm using localhost and this is the most interesting part. I create a logical queue,
+[17:43.760 --> 17:52.720]  so full queue. This is a queue and I bind it to a physical destination. So the container
+[17:52.720 --> 17:58.720]  will create a Pulsar connection factory and also the Pulsar queue.
+[18:01.120 --> 18:10.000]  The demo is on my GitHub space. So yes, you can run it by yourself. I'm going to use Apache Tomy
+[18:10.000 --> 18:18.640]  8, Starlight for JMS. I'll talk about that later. It is basically the JMS implementation.
+[18:19.440 --> 18:25.360]  I create the object with the same file that we saw and Apache Pulsar to.11.
+[18:25.360 --> 18:32.240]  So we have one application that consumes, one that produces and Pulsar will run locally.
+[18:32.240 --> 18:39.520]  So let me switch to the console. Oh no, yes, the code. The code is really simple. This is on
+[18:39.520 --> 18:49.280]  GitHub, so you can check it out later. So this is the producer. I'm not writing the code that
+[18:50.720 --> 18:57.360]  instantiates or assigns some value to the factory or to the queue. I'm scheduling the execution
+[18:57.360 --> 19:05.040]  of this method every two seconds and that's it. Very easy. On the JMS listener, these are two
+[19:05.040 --> 19:10.800]  separate applications. Usually in a real world application, you have some application that
+[19:10.800 --> 19:15.760]  produce the data. Then you have a pipeline that transforms your data and something else that
+[19:15.760 --> 19:23.520]  consumes the data. This is pretty common. So here, on message, depending on the type of message,
+[19:23.520 --> 19:32.640]  I'm printing the content and message. Here, I'm just declaring the reference to the logical queue
+[19:32.640 --> 19:42.800]  that I want. In this case, OpenAJB that is still Tommy will resolve the binding with the physical
+[19:42.800 --> 19:56.080]  queue via JNDI. We are running out of time. So I have a script to run all the demo. The script
+[19:56.080 --> 20:04.320]  simply installs two instances of Tommy, Pulsar, copies the configuration file, deploys the
+[20:04.320 --> 20:11.200]  resource archives, changes some ports because I'm running multiple services on my machine.
+[20:11.200 --> 20:17.600]  So there will be conflicts. Copy the consumer application to Tommy one, copy the producer
+[20:17.600 --> 20:24.560]  application to Tommy two, then start the Pulsar standalone. That is a quick way to start Pulsar
+[20:24.560 --> 20:31.600]  locally with all the services, but only in one JVM process. Tommy one, Tommy two, and then we will
+[20:31.600 --> 20:40.800]  see the logs. So there is some noise initially because it is installing everything. This is
+[20:40.800 --> 20:51.680]  Pulsar. This is starting. These are the two Tommy. Actually, we don't see. Oh yes, this is good. So
+[20:51.680 --> 20:58.720]  Tommy two is sending the messages. Tommy one is receiving the messages. So it works. It's a very
+[20:58.720 --> 21:08.240]  straightforward setup and very common way to develop with Java Enterprise. Let's drop up.
+[21:09.120 --> 21:16.000]  Two minutes probably. Yes, okay, good. So JMS is very useful and it allows you to switch very
+[21:16.000 --> 21:26.960]  easily to another vendor. Usually with JMS you don't use very specific features. Usually in my
+[21:26.960 --> 21:33.040]  experience with JMS, maybe you're using TIBCOR, you're using ActiveMQ. You configure on the container
+[21:33.040 --> 21:39.840]  some special flags, but the code usually is pretty standard. Yes, so switching to Pulsar is usually
+[21:39.840 --> 21:48.880]  easy. Pulsar is cloud native. It's scalable horizontally. So like Mary said, really, if you
+[21:49.760 --> 21:56.000]  it looks like a promise, but this is real, you can add machines, add or remove machines, and
+[21:56.000 --> 22:02.320]  the service automatically adapts. Actually, at Datastax we are running it as a service on the
+[22:02.320 --> 22:09.680]  cloud. And so this is very powerful because you can automatically adapt the resource consumption.
+[22:10.560 --> 22:17.280]  And also you can move the data that is not actually consumed to tier storage. And this
+[22:17.280 --> 22:25.040]  allows you to really lower the cost. It's open source. It's a vibrant community. If you want,
+[22:25.040 --> 22:29.680]  you can reach out to me on the community. And there are many people that are very enthusiastic.
+[22:29.680 --> 22:37.280]  Pulsar is young. It is only five years old, something like that. But in the past two years,
+[22:37.280 --> 22:46.320]  it grew very fast because it is really the next generation. Maybe someone working with ActiveMQ,
+[22:46.320 --> 22:54.160]  then I did it in my previous jobs, ActiveMQ and then Kafka and then Pulsar. Now it's time for Pulsar.
+[22:54.160 --> 23:00.560]  If you want to use Pulsar, you can use Starlight for GMS. I'm the initial author and main maintainer
+[23:00.560 --> 23:08.400]  for Starlight for GMS. So yes, feel free to ask me any questions. It's open source. It's on GitHub.
+[23:08.400 --> 23:13.840]  Pulsar Connection Factory, if you're using standard Java, there is a resource adapter
+[23:13.840 --> 23:18.640]  that works well with many containers. And it's already tested and it is running on production.
+[23:18.640 --> 23:26.000]  Okay. And these are just real quick. If you like, get this copy of the slide deck. But otherwise,
+[23:26.000 --> 23:31.200]  there are resources in here, community info, references to all the Pulsar information on
+[23:33.040 --> 23:38.640]  GitHub and also in our Pulsar site. And also then just additional information too with data stacks.
+[23:38.640 --> 23:44.000]  If you're interested, we offer like the $25 credit per month for personal projects. So
+[23:44.000 --> 23:50.000]  wanting to share with you, I know it's not true, open source in that sense, but we do have astra.datastacks.com
+[23:50.000 --> 23:57.360]  and all of the astra streaming is our company's supporting this in our cloud. So oops, where did
+[23:57.360 --> 24:05.440]  it go? Sorry. You tried to subscribe to us. Okay. So how do you contact us? This is the slide
+[24:05.440 --> 24:10.640]  just containing information about Twitter handles and LinkedIn, all of these things. So please do
+[24:10.640 --> 24:15.360]  consider staying in touch with us. We'll be very happy to answer more questions that you may have
+[24:15.360 --> 24:19.280]  and all you want to share with us, your project idea, we'll be happy to answer. And those sound
+[24:19.280 --> 24:42.640]  to Jay's luck. Yes. That's right. So thank you. Thank you so much. And I think that's any questions.
+[24:42.640 --> 25:05.040]  Sure. What the Pulsar functions or Pulsar function is a lightweight processing framework that
+[25:05.040 --> 25:12.480]  usually it's very easy to enrich the data that you have on your topics. So it's
+[25:12.480 --> 25:20.560]  for very lightweight processing. So if you have to do more complicated processing, you usually
+[25:20.560 --> 25:27.760]  move to something like Flink or other things. But Pulsar function is very useful when you have to
+[25:27.760 --> 25:35.440]  really process your data. And also it is the base for Pulsar.io that is the connector framework.
+[25:35.440 --> 25:41.840]  So basically in Pulsar, you can deploy on the Pulsar cluster your code that transforms your
+[25:41.840 --> 25:51.040]  data on your topics. Yes. It starts from a message on Pulsar and usually it ends with another
+[25:51.040 --> 25:58.960]  message on Pulsar. So it's really useful for transforming the data that is on Pulsar or
+[25:58.960 --> 26:06.000]  to push your data outside of Pulsar. I don't know if this answers. We need to continue. Oh, yes.
+[26:06.000 --> 26:10.720]  There is a question over here. If you want to have a discussion and also on Fuji Slack,
+[26:10.720 --> 26:37.040]  you can have discussions with people, but usually at the top they are married.

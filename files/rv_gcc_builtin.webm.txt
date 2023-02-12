@@ -1,0 +1,242 @@
+[00:00.000 --> 00:13.440]  Hello, Fozdom. I am Nandini Jomsanas. I am a software toolchain engineer at Ember Cozum.
+[00:13.440 --> 00:23.000]  I lead the Core 5 GNU toolchain project. I am also a UK electronic scholar from UK ESF.
+[00:23.000 --> 00:34.000]  UK ESF encourages young electronic scholars, students to study electronics and pursue a career in the sector.
+[00:34.000 --> 00:45.000]  UK ESF also connects top UK universities with leading employees.
+[00:45.000 --> 01:01.000]  In this talk, I will be giving you a tutorial on how to add a GCC built-in to the RISC-5 compiler.
+[01:01.000 --> 01:08.000]  Okay, so what is a built-in? Well, in C++ and C, there are two types of functions.
+[01:08.000 --> 01:21.000]  You've got your user defined functions and your built-in functions. User defined functions are functions that the programmer has defined within their code so they can use it.
+[01:21.000 --> 01:26.000]  But a built-in function are functions that are already implemented in the compiler.
+[01:26.000 --> 01:35.000]  So the programmer doesn't need to write specific code for it and can directly use these built-ins.
+[01:35.000 --> 01:41.000]  Many low-level architectures in GCC use built-ins.
+[01:41.000 --> 01:52.000]  Built-ins look superficially like any C function, but there are intrinsics to the compiler which are directly implemented within.
+[01:52.000 --> 02:05.000]  These built-ins have specific patterns to be matched in the machine description file and have access to unique individual machine functionalities.
+[02:05.000 --> 02:16.000]  Because they are integrated within GCC, they are more efficient than using just simple inline assembly.
+[02:16.000 --> 02:28.000]  For RISC-5, this presents an excellent opportunity to expose the ISA extension to C and C++ programmers.
+[02:28.000 --> 02:35.000]  This is an example of a simple built-in in GCC which takes the square root of a float.
+[02:35.000 --> 02:45.000]  There are tons and tons of GCC built-ins, but I don't know if you know, but there's probably like two in RISC-5.
+[02:45.000 --> 02:50.000]  And this is why I'm giving you a tutorial about it so we can add more.
+[02:50.000 --> 02:56.000]  It is important to say that yes, we call it a built-in function, but it's not really a function.
+[02:56.000 --> 03:07.000]  There are any corresponding entry or exit points and a just cannot be obtained.
+[03:07.000 --> 03:12.000]  Here is the square root float built-in that is implemented in GCC.
+[03:12.000 --> 03:21.000]  If you want to find it in GCC built-ins.dev, all of the source code will be linked at the end, so don't worry, I will give that to you.
+[03:21.000 --> 03:38.000]  And if you want to make a specific RISC-5 built-in, then you would go into the link below, or the path at the below, which will be in RISC-5 built-ins.cc.
+[03:38.000 --> 03:43.000]  Yes, I'm talking a lot about built-ins, we could simply just use inline assembly.
+[03:43.000 --> 03:49.000]  But this is why we shouldn't be using inline assembly.
+[03:49.000 --> 03:57.000]  If you want to use inline assembly, you have to annoyingly specify the pattern every single time you use inline assembly.
+[03:57.000 --> 03:59.000]  Sometimes you can get it wrong.
+[03:59.000 --> 04:07.000]  GCC does not know about this built-in, so there's a huge risk of data flow information being lost.
+[04:07.000 --> 04:16.000]  Again, GCC does not know about this instruction that you're using with inline assembly, so optimization cannot be used.
+[04:16.000 --> 04:25.000]  The reason we use built-in functions, well, all of your data flow information will be retained.
+[04:25.000 --> 04:28.000]  Patterns can be recognized and used elsewhere by GCC.
+[04:28.000 --> 04:33.000]  You only need to specify the pattern once, and that will be in the machine description file.
+[04:33.000 --> 04:40.000]  And then, voila, you just need to use your built-ins, put in the arguments, and the programmer will be fine.
+[04:40.000 --> 04:47.000]  And again, with built-in functions, they're implemented directly in the compiler.
+[04:47.000 --> 04:51.000]  So GCC will know about it and can use their optimization flags.
+[04:51.000 --> 04:54.000]  What do I talk about when I say optimization?
+[04:54.000 --> 04:59.000]  Well, GCC has a bunch of optimization flags.
+[04:59.000 --> 05:02.000]  Here are two that I'm currently using as an example.
+[05:02.000 --> 05:07.000]  The first one is with the flag minus 0.
+[05:07.000 --> 05:10.000]  I don't think that is. That's the basic level of optimization.
+[05:10.000 --> 05:13.000]  In fact, I don't think that's any optimization at all.
+[05:13.000 --> 05:20.000]  This is just hardcore assembly, which you will use for cv.er, which I'll explain later.
+[05:20.000 --> 05:29.000]  And when you use an optimization flag, minus 02, that will increase performance, reduce compilation time.
+[05:29.000 --> 05:37.000]  GCC optimizes those assembly instructions because it knows that it doesn't need to be used.
+[05:37.000 --> 05:44.000]  You might have noticed that I'm using cv.erw, probably wondering what the hell that is.
+[05:44.000 --> 05:54.000]  Well, cv.erw is part of cv3 to e4ep iso extensions, also core 5 iso extensions.
+[05:54.000 --> 05:59.000]  The cv.erw is part of event load extension.
+[05:59.000 --> 06:06.000]  We are currently implementing version 2 of this in Open Hardwares core 5 GCC and binutils.
+[06:06.000 --> 06:14.000]  The first set of extensions, the first set of versioning has the first five extensions,
+[06:14.000 --> 06:19.000]  and then version 2 has event load, SIMD and bit manipulation.
+[06:19.000 --> 06:27.000]  I would like to emphasize that all of these extensions and instructions are in binutils, the assembly and the linker.
+[06:27.000 --> 06:34.000]  But it's time to add built-ins in GCC.
+[06:34.000 --> 06:37.000]  I am going to be using event load for this tutorial.
+[06:37.000 --> 06:45.000]  This is because event load only has one instruction, so it's a very beginner-friendly task.
+[06:45.000 --> 06:59.000]  That instruction is cv.erw, which will load a word and cause the cv3 to e4ep process cycle to go into sleep state.
+[06:59.000 --> 07:07.000]  This is an instruction that GCC will not know about because it's very machine-specific.
+[07:07.000 --> 07:12.000]  Thus, we need a built-in.
+[07:12.000 --> 07:20.000]  Before we get into all of this, it is very important to call out the naming conventions of these built-ins.
+[07:20.000 --> 07:27.000]  A general convention name for a built-in in GCC will just be built-in and then the instruction name.
+[07:27.000 --> 07:34.000]  But if you want to make it a RISC-5 specific built-in, it will be built-in RISC-5, the vendor and the name.
+[07:34.000 --> 07:43.000]  For a core-5 specific one, it will be built-in RISC-5, cv4 core-5, the extension name and then the instruction name.
+[07:43.000 --> 07:52.000]  Yes, I understand it's a bit long-winded, but it is very important to emphasise which vendor, which architecture you want to use,
+[07:52.000 --> 07:54.000]  what extension, what instruction.
+[07:54.000 --> 08:00.000]  It just makes it a lot easier for the programmer to know which instructions they want to use.
+[08:00.000 --> 08:07.000]  So for my built-in, and if you want to use it, it will be called underscore underscore built-in underscore RISC-5,
+[08:07.000 --> 08:11.000]  underscore cv underscore aw underscore aw.
+[08:11.000 --> 08:21.000]  Because there's only one instruction, I just call it the same thing.
+[08:21.000 --> 08:25.000]  So this is an example of how to use this built-in.
+[08:25.000 --> 08:28.000]  This built-in will take a void pointer.
+[08:28.000 --> 08:38.000]  It will be loading it from a specific memory address and then loading it into a general-purpose register,
+[08:38.000 --> 08:46.000]  which is an unsigned day-to-bit integer.
+[08:46.000 --> 08:57.000]  From this example, yes, the only thing you'll have to do is just put in the pointer and it will return your unsigned day-to-bit integer value.
+[08:57.000 --> 09:04.000]  Can you speak a little louder, please?
+[09:04.000 --> 09:09.000]  Oh, okay, sorry.
+[09:09.000 --> 09:18.000]  Now that I've spoken about what event load is, it's time to add an extension to GCC.
+[09:18.000 --> 09:34.000]  So most of these implementation for adding an extension will be in RISC-5.common.cc.
+[09:34.000 --> 09:40.000]  So we've called our extension xcv, which will be the main extension,
+[09:40.000 --> 09:45.000]  and then you'll have a sub-extensions, which will be xcvew.
+[09:45.000 --> 09:50.000]  There isn't any ISO-specific class, so I'll just use a macro none,
+[09:50.000 --> 09:57.000]  and this will be the first version of it.
+[09:57.000 --> 10:05.000]  Because I am implementing a sub-extension, we'll have to imply it here by putting the sub-extension first
+[10:05.000 --> 10:13.000]  and then the main or parent extension.
+[10:13.000 --> 10:18.000]  Next, we add the corresponding masks and targets.
+[10:18.000 --> 10:30.000]  Before we do all of this, we need to go into RISC-5.opt to emphasize or add the target variable and the corresponding core five flags.
+[10:30.000 --> 10:40.000]  This file is very sensitive, and so you'll have to, even though it's two lines, if you mess it up, then you've got GCC crashing everywhere.
+[10:40.000 --> 10:51.000]  So you have to be very careful in this file, and then you use that flag for your corresponding target,
+[10:51.000 --> 10:58.000]  but you also use it when you have to specify your GCC options.
+[10:58.000 --> 11:09.000]  So I've done that in RISC-5.common.cc, which is here.
+[11:09.000 --> 11:17.000]  Now it gets into the interesting stuff to actually define the built-in.
+[11:17.000 --> 11:23.000]  RISC-5 has a function already made for us, so we can make these built-ins.
+[11:23.000 --> 11:27.000]  That is in RISC-5's built-ins.cc.
+[11:27.000 --> 11:33.000]  It takes in five arguments, and I'll be going through all of these in the following slides.
+[11:33.000 --> 11:46.000]  That'll be the instruction name, the built-in name, built-in type, function type, and availability predicate.
+[11:46.000 --> 11:54.000]  So using this function, I have created my own file, which is called corev.dev,
+[11:54.000 --> 12:00.000]  and this is where all the corev-related built-ins will be in.
+[12:00.000 --> 12:11.000]  My first built-in will be in corev.dev, and the name of the instruction name will be C-V-E-L-W-S-I for single integer.
+[12:11.000 --> 12:17.000]  The name of the built-in that the programmers will be using will be C-V-E-L-W-E-L-W,
+[12:17.000 --> 12:21.000]  but that will be expanded to built-in RISC-5.
+[12:21.000 --> 12:32.000]  Then you've got the corresponding built-in types, function types, availability predicate, and I'll go into that more.
+[12:32.000 --> 12:41.000]  So the instruction patterns, this is probably the most difficult part of the whole built-in implementation.
+[12:41.000 --> 12:47.000]  So the insert name is the name of the associated instruction pattern in the machine description file.
+[12:47.000 --> 12:52.000]  It uses, it takes in five operands, but the last operand is optional,
+[12:52.000 --> 12:56.000]  but I recommend you putting in if you can.
+[12:56.000 --> 13:05.000]  You've got the name, you've got the RTL template, conditions, output template, and instant attributes,
+[13:05.000 --> 13:13.000]  and that will be all in RISC-5.md, but I will be creating my own md for corev-specific,
+[13:13.000 --> 13:20.000]  so we don't merge it into RISC-5.md.
+[13:20.000 --> 13:25.000]  So this is an example of RTL templates or register transfer language.
+[13:25.000 --> 13:33.000]  It's a template that is very, very similar to intermediate representation that GCC uses.
+[13:33.000 --> 13:42.000]  It's a template that GCC will take and then put in the corresponding registers or operands that it needs to do.
+[13:42.000 --> 13:48.000]  So this is my instruction pattern that I will be using for this built-in.
+[13:48.000 --> 14:01.000]  The name will be RISC-5 underscore CV as we've previously defined it.
+[14:01.000 --> 14:10.000]  I am using the set pattern and this will take a destination register and a source register.
+[14:10.000 --> 14:18.000]  The destination, I think, this will be the destination register, the first operand,
+[14:18.000 --> 14:28.000]  and I've used the match operand pattern which will take m as machine mode and the index of this operand,
+[14:28.000 --> 14:33.000]  the predicate and the constraint.
+[14:33.000 --> 14:40.000]  The machine mode for this will be SI which is a single integer, it's 32 bits.
+[14:40.000 --> 14:43.000]  It's zero for the index of this operand.
+[14:43.000 --> 14:48.000]  We usually start with zero as the indexing.
+[14:48.000 --> 14:57.000]  The predicate for this will be a register operand as we'll be loading it into a general purpose register
+[14:57.000 --> 15:09.000]  and the constraint will be R emphasizing as register equals to meaning it's going to be written to.
+[15:09.000 --> 15:20.000]  Next part of this is the source register which will be the memory specific address.
+[15:20.000 --> 15:26.000]  So we're using mem to specify the size of the object being referenced.
+[15:26.000 --> 15:30.000]  SI being single integer, 32 bits.
+[15:30.000 --> 15:42.000]  Again, we're using match operand to match the register or the pointer to the specific address.
+[15:42.000 --> 15:48.000]  The index number will be one because that's the next number.
+[15:48.000 --> 15:59.000]  I am using an address operand and then p specifying as pointer.
+[15:59.000 --> 16:06.000]  I am using an unspect volatile for this instruction because it's a volatile operation.
+[16:06.000 --> 16:08.000]  It's very machine specific.
+[16:08.000 --> 16:13.000]  It can get difficult and there are times where it could be trapped.
+[16:13.000 --> 16:29.000]  We are referencing in this state that is fragile and vulnerable so that is why I've been using an unspect volatile.
+[16:29.000 --> 16:38.000]  Now that I've talked about the RTL pattern, we talk about the condition.
+[16:38.000 --> 16:46.000]  The condition is important to add so that the instruction can only be generated within these conditions.
+[16:46.000 --> 17:03.000]  You can only generate this pattern if the target is to X call VELW and that it's not a 64 bit target.
+[17:03.000 --> 17:08.000]  Next we talk about the orange bit which is the output template.
+[17:08.000 --> 17:14.000]  The output template will be what you will see in the assembly.
+[17:14.000 --> 17:21.000]  You define it with the instruction name so cv.el and then slash t for tad.
+[17:21.000 --> 17:27.000]  This is where you use those index numbers to reference which operands you want to use.
+[17:27.000 --> 17:33.000]  I will be referencing %0 and then %a1.
+[17:33.000 --> 17:40.000]  %0 will be the destination register and %1 will be the source register.
+[17:40.000 --> 17:50.000]  I am using %a to substitute as a memory reference.
+[17:50.000 --> 17:59.000]  Lastly we talk about the optional operand but again this is something we should try to put in if you are going to add a built-in.
+[17:59.000 --> 18:09.000]  We want to tell GCC that this is a load type of instruction and the mode is SI throughout the whole built-in.
+[18:09.000 --> 18:28.000]  The reason I have added this optional operand is that the instruction can still be generated but GCC can now optimise it knowing that it is a load, knowing that it is in machine mode SI.
+[18:28.000 --> 18:32.000]  That is now the big part of the built-in.
+[18:32.000 --> 18:37.000]  We have discussed the instant name and the template name.
+[18:37.000 --> 18:39.000]  Here it comes to the built-in types.
+[18:39.000 --> 18:46.000]  In RISC-5 there are currently only two types of built-in types.
+[18:46.000 --> 18:52.000]  Those built-in types can be found in RISC-5 built-ins.cc.
+[18:52.000 --> 18:59.000]  This is RISC-5 built-in direct and RISC-5 built-in direct no target.
+[18:59.000 --> 19:12.000]  RISC-5 built-in direct corresponds directly to a machine pattern we have just created whereas RISC-5 built-in direct no target does the same thing but the return type will be void.
+[19:12.000 --> 19:18.000]  But we are returning a general register operand or theta bit unsigned integer.
+[19:18.000 --> 19:26.000]  So we will be using RISC-5 built-in direct.
+[19:26.000 --> 19:29.000]  Next comes the function types.
+[19:29.000 --> 19:35.000]  And again, everything is in RISC-5 built-ins.cc.
+[19:35.000 --> 19:41.000]  And currently there are only two types of prototypes for RISC-5.
+[19:41.000 --> 19:45.000]  You can only return.
+[19:45.000 --> 19:47.000]  You can only have a returning type.
+[19:47.000 --> 19:51.000]  You can only have a return type and one argument.
+[19:51.000 --> 20:06.000]  In coming presentations I will be talking about it a bit more because I only have 45 minutes to talk about this presentation.
+[20:06.000 --> 20:18.000]  When it comes to defining which return types and argument types we are using that will be in RISC-5-f types.dev.
+[20:18.000 --> 20:36.000]  So the comment says that it will expand to RISC-5 underscore unsigned integer and then avoid pointer because that's what I will be using for my built-in type.
+[20:36.000 --> 20:39.000]  Lastly we have the availability predicate.
+[20:39.000 --> 20:45.000]  This is very similar to the conditions we had in the RTL template.
+[20:45.000 --> 20:52.000]  So we use this avail function that has been declared in RISC-5 built-ins.cc.
+[20:52.000 --> 20:57.000]  It takes the name of your availability predicate and then the corresponding conditions.
+[20:57.000 --> 21:13.000]  As you can see it's very similar to the condition we had in the RTL template which is a target reference and then it's not a 64-bit target.
+[21:13.000 --> 21:22.000]  Now that we've added the extension and the instruction and the built-in it's time to test it.
+[21:22.000 --> 21:26.000]  And this is a very simple test just to make sure that it works.
+[21:26.000 --> 21:28.000]  It's a compilation test.
+[21:28.000 --> 21:32.000]  It takes in a void pointer with an offset.
+[21:32.000 --> 21:35.000]  It returns an unsigned 32-bit value.
+[21:35.000 --> 21:38.000]  You can see there are comments on the side.
+[21:38.000 --> 21:40.000]  These are deja vu comments.
+[21:40.000 --> 21:49.000]  We are using deja vu because we want to use a simulator or it can be used on microcontrollers.
+[21:49.000 --> 21:56.000]  It's a framework testing model that we use for our test scripts.
+[21:56.000 --> 22:04.000]  The first comment we'll talk about telling it it can be an execution or a compilation test.
+[22:04.000 --> 22:09.000]  So this will be a compilation test because we haven't got an executable target yet.
+[22:09.000 --> 22:13.000]  The second line is to tell you the options for this built-in.
+[22:13.000 --> 22:24.000]  If you don't specify the options then this test won't run because this instruction only works within X core VELW.
+[22:24.000 --> 22:38.000]  And then the last line or the last comment will be for checking if our instruction has been generated in the assembly.
+[22:38.000 --> 22:41.000]  And it should be generated once.
+[22:41.000 --> 22:43.000]  There are dashes to escape.
+[22:43.000 --> 22:59.000]  It's very sensitive because it's a regular expression type of framework.
+[22:59.000 --> 23:02.000]  We've got a run script for this.
+[23:02.000 --> 23:10.000]  It's very important to build GCC because I've been running tests without building GCC and wondering why it doesn't work.
+[23:10.000 --> 23:15.000]  And it wasn't until our GCC experts told us, no, you've got a run build.
+[23:15.000 --> 23:23.000]  You have to run GCC and then run it.
+[23:23.000 --> 23:34.000]  So this shows the results from our run test scripts.
+[23:34.000 --> 23:39.000]  Although it's just one test, there are 18 passes.
+[23:39.000 --> 23:43.000]  That is because it goes through nine optimization levels.
+[23:43.000 --> 23:57.000]  The optimization level goes through a scan assembly test and then a compilation test.
+[23:57.000 --> 24:04.000]  Like I promised, I put up the slides for where all of this will be found.
+[24:04.000 --> 24:11.000]  This will be found in GitHub's Open Hardware Core 5 Vinutils and Core 5 GCC.
+[24:11.000 --> 24:14.000]  This is also part of the Open Hardware group.
+[24:14.000 --> 24:22.000]  We are still looking for volunteers and people to contribute to this project.
+[24:22.000 --> 24:27.000]  And it's very important to also mention the GCC internals manual.
+[24:27.000 --> 24:30.000]  It's probably the guru of GCC.
+[24:30.000 --> 24:36.000]  That's what I rely on the most now.
+[24:36.000 --> 24:49.000]  Thank you for listening to my presentation. Do you have any questions?
+[24:49.000 --> 24:50.000]  Yes?
+[24:50.000 --> 24:51.000]  I have a question.
+[24:51.000 --> 25:00.000]  So I know that these built-in functions are used by the code people, which I think is what came before the Core 5 project, right?
+[25:00.000 --> 25:08.000]  I think they use it for various mathematical functions to speed them up.
+[25:08.000 --> 25:19.000]  I was just wondering, what I'm interested in, what I'm working on, is using higher level compilers to compile into automatically generated kernels.
+[25:19.000 --> 25:26.000]  What's not clear to me right now is that if I use a built-in, then I would need to compile to a C code, right?
+[25:26.000 --> 25:35.000]  Is there any way that you can still reuse part of this work without having to use C code, or would you always need to go to C code?
+[25:35.000 --> 25:39.000]  For now, I've just been using C code, so I'm not really sure.
+[25:39.000 --> 25:42.000]  I don't know.
+[25:42.000 --> 25:44.000]  If you've got a fault, I'm fine.
+[25:44.000 --> 25:49.000]  There's the C API, so you can sort of wire it into it.
+[25:49.000 --> 25:55.000]  This is in the compiler, so you just need to find your own code to reach to the client.
+[25:55.000 --> 25:58.000]  So in this case, you would also use these things in Fortran code.
+[25:58.000 --> 26:00.000]  You could, yeah.
+[26:00.000 --> 26:08.000]  I have an amazing that myself, I've been working with the staff, so there's no reason for this not to work.
+[26:08.000 --> 26:14.000]  It's expressed in terms of a C code, so it has to be expressed somehow.
+[26:14.000 --> 26:20.000]  I was a bit confused more about the built-in concept in general,
+[26:20.000 --> 26:25.000]  because I mean, usually people use C code to not be machine specific,
+[26:25.000 --> 26:29.000]  but if you use it like a built-in, then you become machine specific, right?
+[26:29.000 --> 26:30.000]  Yeah.
+[26:30.000 --> 26:31.000]  Oh, yeah.
+[26:31.000 --> 26:34.000]  It depends on the built-in.
+[26:34.000 --> 26:37.000]  GCC has built-ins that are sort of general.
+[26:37.000 --> 26:46.000]  I mean, like all the maths functions, for example, like a body of maths, it's not machine specific.
+[26:46.000 --> 26:50.000]  And it says, obviously, compiler specific.
+[26:50.000 --> 26:58.000]  It's not that specific in this case, yeah, but because you can have other kind of other mathematics.
+[26:58.000 --> 26:59.000]  Yeah.
+[26:59.000 --> 27:02.000]  Okay, at least architecture specific, right?
+[27:02.000 --> 27:05.000]  Well, actually it is not architecture specific.
+[27:05.000 --> 27:07.000]  It's a general.
+[27:07.000 --> 27:12.000]  Yeah, but even for mathematics built-in functions, you always have,
+[27:12.000 --> 27:17.000]  not always, but mostly, yeah, kind of architecture specific.
+[27:17.000 --> 27:22.000]  Oh, yeah, there can be stuff like encoding of numbers or such like.
+[27:22.000 --> 27:23.000]  Yeah.
+[27:23.000 --> 27:27.000]  It's a sort of, you know, just because.
+[27:27.000 --> 27:31.000]  So it should work, yeah.
+[27:31.000 --> 27:37.000]  Actually, that's one way to avoid these architecture specific.
+[27:37.000 --> 27:45.000]  Like, rather than encoding a non-pattern into your code, just by using a constant or bit pattern
+[27:45.000 --> 27:53.000]  and then sort of casting to proper floating point type, you can use built-in non.
+[27:53.000 --> 28:08.000]  It's a built-in function that produces the correct encoding of a non for your target.
+[28:08.000 --> 28:10.000]  Okay, thank you for listening to my presentation.
+[28:10.000 --> 28:12.000]  Thank you.
+[28:12.000 --> 28:13.000]  For me.
+[28:13.000 --> 28:24.000]  Thank you.

@@ -1,0 +1,311 @@
+[00:00.000 --> 00:13.000]  Please welcome Sanju, Sanju and Pranin for us and enjoy.
+[00:13.000 --> 00:16.840]  Thank you guys, thank you.
+[00:16.840 --> 00:23.800]  Good morning guys, I am Sanju and he is Pranin, we work at Foonpei, yeah today we are going
+[00:23.800 --> 00:28.360]  to discuss about the lessons that we learnt while we manage the cluster first cluster
+[00:28.360 --> 00:33.880]  at the scale and the some of the problems we have faced and the solutions that we have
+[00:33.880 --> 00:44.640]  came up with, yeah Foonpei is the leading Indian digital payments and technology company
+[00:44.640 --> 00:50.320]  headquartered in Bangalore, India and it uses unified payments interface which is introduced
+[00:50.320 --> 00:56.200]  by government of India, so in India if you are thinking of any payment you can do it
+[00:56.200 --> 01:02.240]  using Foonpei app, this is how our Foonpei app home screen looks like.
+[01:02.240 --> 01:09.440]  And we have like a we see 800 k rps on our edge layer every day and we do 130 million
+[01:09.440 --> 01:19.720]  daily transactions, so this will generate lots of records and this will generate lots
+[01:19.720 --> 01:25.560]  of records in the documents that we have to store and as per the regulations in India
+[01:25.560 --> 01:31.400]  we have to store all of them in India only, so Foonpei has a private cloud where we store
+[01:31.400 --> 01:38.360]  all these things and we need a service to store and retrieve the files from the cloud,
+[01:38.360 --> 01:44.400]  we have developed a service called darkstore which will write the data to Glustreface and
+[01:44.400 --> 01:49.160]  which will fetch the data from the Glustreface, so coming to the question why did we choose
+[01:49.160 --> 01:54.640]  the Glustreface, we didn't wanted to have a metadata server because like we have lots
+[01:54.640 --> 02:00.760]  of small files and storing all the metadata, we didn't wanted it, so Glustreface has no
+[02:00.760 --> 02:06.840]  metadata server, so we went ahead with it and our team had earlier success in the Glustreface
+[02:06.840 --> 02:15.080]  project, so they were confident that Glustreface will work for our use case, so we are here
+[02:15.080 --> 02:21.080]  and this is the data flow to and from the Glustreface, so all the traffic is fronted
+[02:21.080 --> 02:27.320]  up by CDM and the request is forwarded to nginx and nginx will send the request to the API
+[02:27.320 --> 02:33.960]  gateway and API gateway can choose to store or retrieve any file from the, any file or
+[02:33.960 --> 02:38.920]  it can choose to send the request to any back-end service, now if the back-end service wants
+[02:38.920 --> 02:45.960]  to store this file or if it wants a file it can be a post or get request I mean like it
+[02:45.960 --> 02:52.040]  can store or it can retrieve, it will send the request to darkstore, now the darkstore
+[02:52.040 --> 02:59.960]  will store the data or retrieve the data from Glustreface servers and darkstore also uses
+[02:59.960 --> 03:07.560]  elastic search to store some of the metadata and it uses aero spike to store the earth related
+[03:07.560 --> 03:15.840]  info and some of the rate limiting features, it uses RMQ for asynchronous jobs like deletions
+[03:15.840 --> 03:25.280]  and batch operations and this is our team, yeah today's our agenda is an introduction
+[03:25.280 --> 03:30.880]  to Glustreface and then we will discuss about different problems that I have faced and the
+[03:30.880 --> 03:37.440]  solutions that we are using and we have some proposals as a roadmap.
+[03:37.440 --> 03:38.440]  What is Glustreface?
+[03:38.440 --> 03:44.920]  Glustreface it is a distributed file system that means whenever you do some write the
+[03:44.920 --> 03:51.760]  data is distributed across multiple servers, these servers have some of the directories
+[03:51.760 --> 04:00.800]  we call them as BRICS and this is where the data is actually getting stored, yes so this
+[04:00.800 --> 04:07.920]  is a typical Glustreface server, each server can have multiple BRICS, the BRICS will have
+[04:07.920 --> 04:14.480]  underlying file system where the data will be stored and in the root partition we store
+[04:14.480 --> 04:22.920]  the Glustreface configuration, go ahead, yeah this is how a 3 by 3 Glustreface volume looks
+[04:22.920 --> 04:31.640]  like, when I say 3 by 3 whenever a write comes to Glustreface mount point, so how Mr. 1 point
+[04:31.640 --> 04:40.640]  like we can mount Glustreface volume on any mission over the network and you can read
+[04:40.640 --> 04:47.480]  and write from that mission, now from the client where the mount is happened if any write
+[04:47.480 --> 04:55.040]  comes, so it is distributed across 3 sub volumes based on the hash range allocation, we will
+[04:55.040 --> 05:05.000]  talk more about the hash range in a coming slides and another 3 is transfer the data
+[05:05.000 --> 05:12.640]  is replicated 3 times, so whenever a write comes the data will choose one of the sub
+[05:12.640 --> 05:20.240]  volume and in a sub volume, sub volume is a replica set, here it is a 3, so it is replicated
+[05:20.240 --> 05:32.440]  thrice, over to Pranip, hello, yeah so let us look at some numbers that we see at phone
+[05:32.440 --> 05:40.000]  pay for dock store service and then to Glustreface, in a day we see about 4.3 million uploads
+[05:40.000 --> 05:48.160]  and downloads are 9 million, with peak upload rps as 200 and download rps as 800, the aggregate
+[05:48.160 --> 05:55.120]  upload size per day is just 150 GB, not a lot but the download size is 2.5 TB, so it
+[05:55.120 --> 06:01.720]  is completely read heavy workload and this is after a Syrian is fronting it, that means
+[06:01.720 --> 06:07.000]  only when the file is not available in your CDN, the call will come to Glustreface which
+[06:07.000 --> 06:13.600]  will download the file onto the CDN and then it will be served and this is how the rps
+[06:13.600 --> 06:21.360]  is distributed throughout the day, rps is request per second, so the uploads actually
+[06:21.360 --> 06:28.920]  are reasonably uniform from 6 am to 5 in the evening, then it tapers off for the rest of
+[06:28.920 --> 06:35.080]  the day, whereas the downloads are in bimodal distribution with one peak at around 12 pm
+[06:35.080 --> 06:44.240]  and another at around 7 pm, the latencies are function of the size of the file, so we
+[06:44.240 --> 06:54.240]  have post upload latencies with mean of about 50 ms to the p99 at around 250 ms, similarly
+[06:54.240 --> 07:06.680]  for gates the mean is around 10 ms and p99 is around 100 ms, let us look at the configuration
+[07:06.680 --> 07:12.480]  that we use at phone pay for Glustreface, we have 30 nodes in the cluster, each node
+[07:12.480 --> 07:21.040]  contributes 2 bricks and one brick corresponds to 10 TB and that is a ZFS pool, so 30 into
+[07:21.040 --> 07:27.880]  20 that is 600 TB of available capacity and we use replica 3, so the available size is
+[07:27.880 --> 07:37.040]  200 TB out of which 130 TB is in use at the moment, let us now go to the problems that
+[07:37.040 --> 07:42.280]  we face and how we solved it, I will start off with the capacity expansion problem that
+[07:42.280 --> 07:49.760]  we solved, then Sanju will take over and talk about the data migration problem that we solved,
+[07:49.760 --> 07:56.360]  I will talk about how performance issues are debugged and how we solved the problems using
+[07:56.360 --> 08:01.320]  that method, then Sanju will finish it off with maintenance activities that we do to
+[08:01.320 --> 08:08.240]  prevent the problems, before we talk about the capacity expansion problem, let us try
+[08:08.240 --> 08:18.160]  to understand a bit about the distribution, so the data is distributed across the servers
+[08:18.160 --> 08:26.440]  based on hashes, in this diagram we have 3 distribute sub volumes, each sub volume is
+[08:26.440 --> 08:34.600]  a replica 3, so when you create a directory, each of the directory in these 3 replica sets
+[08:34.600 --> 08:43.560]  will get a hash range and whenever you create a file or try to read a file, it will actually
+[08:43.560 --> 08:48.920]  compute the hash of the name and it will figure out which of these directories in these 3
+[08:48.920 --> 08:53.840]  sub volumes has that hash range and tries to get that file or store that file in that
+[08:53.840 --> 09:02.360]  node, so for folks who are well versed with database, this is more like sharding but the
+[09:02.360 --> 09:07.960]  entity here that is getting sharded is the directory based on the file names, alright,
+[09:07.960 --> 09:14.600]  so the files actually can have varying sizes, for example in our setup, the minimum size
+[09:14.600 --> 09:20.560]  would be less than a kb but the maximum size is like 26gb, so you will run into this problem
+[09:20.560 --> 09:26.840]  where some of the shards or distributes of volumes that you have would fill up the space
+[09:26.840 --> 09:32.640]  before the others, so you need to handle that part as well, so there is a feature in Glouceref
+[09:32.640 --> 09:38.200]  is called min-free disk where if you hit that level, when you create the directory again,
+[09:38.200 --> 09:42.760]  the hash range will not be allocated for the ones that met the threshold, so for example
+[09:42.760 --> 09:49.040]  here, even though there are 3 distribute sub volumes, data is going to only 2 because
+[09:49.040 --> 09:56.920]  the middle one actually has met the threshold, so the hash range will only be distributed
+[09:56.920 --> 10:04.400]  between the 2, 50% and 50% instead of one third that you would expect normally, so let's
+[10:04.400 --> 10:11.000]  talk about the actual process of increasing the capacity and why it didn't work for us,
+[10:11.000 --> 10:14.880]  when you want to increase the capacity that is you bring in more distributes of volumes
+[10:14.880 --> 10:22.120]  or shards, the way that you do it is you first you do something called as cluster peer probe,
+[10:22.120 --> 10:26.360]  that will bring the new machines into the cluster, then you do another operation called
+[10:26.360 --> 10:32.400]  add brick that will add the bricks to your volume, then you have to do something called
+[10:32.400 --> 10:41.080]  as cluster volume rebalance to redistribute the data among the nodes equally, so what
+[10:41.080 --> 10:47.280]  are the problems that we faced, when we did the benchmark, the rebalance had this application
+[10:47.280 --> 10:54.760]  latency impact in some cases up to 25 seconds and as I mentioned most of the P99 latencies
+[10:54.760 --> 11:00.480]  were just in milliseconds, so this is this will be like a partial timeout partial outage
+[11:00.480 --> 11:06.880]  for us, so this is not going to work for us, the other thing that we notice is for large
+[11:06.880 --> 11:14.080]  volumes the rebalance may take up to months and at the moment cluster FS rebalance does
+[11:14.080 --> 11:21.720]  not have pause and resume, so we can't do the maintenance activity in off peak hours,
+[11:21.720 --> 11:29.800]  that is one more problem, the other one that we have seen is when you do the data migration
+[11:29.800 --> 11:34.680]  when it is going from one distribute sub volume or shard to two distribute sub volumes, you
+[11:34.680 --> 11:39.160]  would expect 50 percent of the data to be transferred that's all right, but when you
+[11:39.160 --> 11:45.000]  are going from 9 shards slash distributed sub volumes to 10, you want to only migrate
+[11:45.000 --> 11:51.720]  like 10 percent of the data, but less than FS is still like transferring about 30 percent
+[11:51.720 --> 12:00.840]  to 40 percent like irrespective of what is the number of sub volumes are, so the rebalance
+[12:00.840 --> 12:08.600]  itself may take so much time with our workload that by the time we want to do the next capacity
+[12:08.600 --> 12:13.480]  expansion the rebalance may not even complete, so that is also not going to work for us,
+[12:13.480 --> 12:19.800]  so these are the three main problems that we have seen, so this is the solution that
+[12:19.800 --> 12:26.040]  we are using now, then there is a proposal as well, since we know that the hash range
+[12:26.040 --> 12:32.120]  allocation is based on the based on both the number of sub volumes and number of free sub
+[12:32.120 --> 12:38.560]  volumes, what we are doing is in our doxor application every day in the night we create
+[12:38.560 --> 12:46.400]  directories with a new basically, so the directory structure will be something like the namespace
+[12:46.400 --> 12:53.200]  that the clients are going to use slash year slash month slash day, so each day you are
+[12:53.200 --> 12:59.480]  going to create new directories, so based on the size that is available only the ones
+[12:59.480 --> 13:05.720]  that have space will get the hash range allocation, so you will never run into the problem where
+[13:05.720 --> 13:10.240]  you will have to do rebalance that much, because we have seen that with our workloads reads
+[13:10.240 --> 13:17.480]  are distributed uniformly and as we have seen the it is read heavy workload and writes are
+[13:17.480 --> 13:24.560]  just a few, so we were okay with the solution in the interim, but long term the solution
+[13:24.560 --> 13:30.080]  that we are we have proposed and this is something that is yet to be accepted, but there are
+[13:30.080 --> 13:36.720]  some POC that we did very few use jump consistent hash instead of the one that we have when
+[13:36.720 --> 13:41.760]  you are going from 9 to 10 here it is only about 10 percent that is getting rebalanced,
+[13:41.760 --> 13:47.040]  so that is what we want to get to this is something that we are focusing on this year,
+[13:47.040 --> 14:00.280]  alright over to you Sanju, so let us look at the problems that we have faced while migrating
+[14:00.280 --> 14:06.200]  the data, so we had a use case where we wanted to move complete data which is present in
+[14:06.200 --> 14:14.280]  one server to another server, so in clusterface the standard way of doing this is to use a
+[14:14.280 --> 14:22.040]  rebalance operation, sorry replace brick operation, so when you do replace brick operation there
+[14:22.040 --> 14:27.600]  is a process called a self filled demon which will copy all the data which is present in
+[14:27.600 --> 14:38.040]  the old server to new server, so to copy 10 TB data it takes around 2 to 3 weeks, so
+[14:38.040 --> 14:43.640]  that is like a huge time we wanted to reduce this time so we came up with a new approach
+[14:43.640 --> 14:51.040]  so let us understand few aspects of clusterface before we jump to the solution, so that we
+[14:51.040 --> 14:56.520]  understand our approach better, so the right flow in clusterface is something like this
+[14:56.520 --> 15:03.680]  whenever a right comes based on the hash range allocation plan is just spoke it will choose
+[15:03.680 --> 15:16.320]  one of the sub volume, so the data will go to all the servers in that sub volume, now
+[15:16.320 --> 15:26.160]  let us say we have chosen replicas at 0 and the right will go to all the machines in
+[15:26.160 --> 15:32.880]  that sub volume, it is a client side replication so the client will send the right to all the
+[15:32.880 --> 15:40.440]  machines and it will wait for the success response to come, so client will assume the
+[15:40.440 --> 15:48.240]  right is successful only when quorum number of success responses has come, let us say
+[15:48.240 --> 15:55.600]  one of the node is down, in our case we see like a server 2 either it can be a node down
+[15:55.600 --> 16:03.440]  or the brick process is unhealthy this can be unresponsive at times, so something happened
+[16:03.440 --> 16:08.600]  the right came to one of the sub volume and it went to all the three replica servers,
+[16:08.600 --> 16:15.840]  but server 2 did not responded with the success response, now server 1 and server 3 has responded
+[16:15.840 --> 16:22.440]  with the success response, so client it assumes that the right is successful, now when the
+[16:22.440 --> 16:29.520]  server 2 is back up we to have the consistency of the data server 2 should get the data which
+[16:29.520 --> 16:36.960]  it has missed while it was down, so who will take care of the job of doing this it is SHD,
+[16:36.960 --> 16:44.360]  so SHD is a daemon process which will read the pending heal data like whatever the data
+[16:44.360 --> 16:50.360]  that was missing we call it as a pending heal, so it will read from one of the good copy
+[16:50.360 --> 16:57.120]  in our case server 1 and server 3 are the good copies and server 2 is a bad copy, so
+[16:57.120 --> 17:04.640]  SHD will read the data from one of the good copy and it will write to server 2, so server
+[17:04.640 --> 17:12.040]  2 will have all the data once the self heal is completed healing the data, we will use
+[17:12.040 --> 17:19.760]  this as part of our approach as well, our approach is we will kill the brick which we
+[17:19.760 --> 17:28.080]  want to migrate like we want to migrate from the server 3 to server 4, so we have to copy
+[17:28.080 --> 17:36.120]  all the data right, so self heal is taking 2 to 3 weeks, here in our case we will kill
+[17:36.120 --> 17:44.920]  the brick and we have a ZFS, we are using ZFS file system, so we will take a ZFS snapshot
+[17:44.920 --> 17:51.040]  and we will transfer this snapshot from the server 3 to server 4, it is like a old server
+[17:51.040 --> 17:57.760]  to the new server and now we will perform the replace brick operation, while we are
+[17:57.760 --> 18:03.840]  performing the replace brick operation server 4 that is a new server will already have all
+[18:03.840 --> 18:12.160]  the data which server 3 had, once the replace brick operation is performed server 4 is now
+[18:12.160 --> 18:20.240]  part of the sub volume and the heals will take place from server 1 and server 2 to server
+[18:20.240 --> 18:29.880]  4, so now we have reduced the amount of data that we are healing, previously we are copying
+[18:29.880 --> 18:36.560]  all the data that is like a 10 TB of data from server 3 to server 4, but here in our
+[18:36.560 --> 18:44.440]  case we are healing only the data which came after killing the brick before doing the rebalance
+[18:44.440 --> 18:53.120]  replace brick operation, so the data we heal is reduced hugely, with this approach now it
+[18:53.120 --> 19:00.120]  is taking only 50 hours to complete this, that is also if we are using the spinning
+[19:00.120 --> 19:07.240]  discs it will take 48 hours to transfer the snapshot of 10 TB and 2 hours for the healing
+[19:07.240 --> 19:15.160]  of data, but it is only 8 to 9 hours if we are using SSDs, if we are using SSD it takes
+[19:15.160 --> 19:21.680]  like a 8 hours to transfer the snapshot and it takes around 40 minutes to complete the
+[19:21.680 --> 19:30.560]  heals, so that is like we came from 2 to 3 weeks to 1 or 2 days or 9 hours we can say,
+[19:30.560 --> 19:36.480]  we are using netcat utility, it gave us very good performance, it is like a 60% performance
+[19:36.480 --> 19:43.560]  optimization and we have in flight checksum at both the ends in the old server and also
+[19:43.560 --> 19:49.760]  in the new server, so that it is like we are checking whether we are transferring the snapshot
+[19:49.760 --> 19:59.680]  perfectly or not, we are not using any data and yeah it is at the time, I have kept the
+[19:59.680 --> 20:06.800]  commands that we have exactly used in this link and we also have a rollback plan, so
+[20:06.800 --> 20:12.200]  let us say that we have started with this activity but we have not performed the replace
+[20:12.200 --> 20:17.480]  brick yet, because once the replace brick is performed it will be something like this,
+[20:17.480 --> 20:24.040]  the sub volume will already have the server 4 as a part of it, before we perform the replace
+[20:24.040 --> 20:31.280]  brick that means when we are here, we can we do not want to do this anymore, all we
+[20:31.280 --> 20:37.280]  need to do is start the volume with the force, so that the brick process that we have killed
+[20:37.280 --> 20:45.840]  will come up, once it is up the good copies that we have SSD will copy the data from good
+[20:45.840 --> 20:52.520]  copies to bad copy are the old server, so that we will have the consistent data across
+[20:52.520 --> 20:59.840]  all of our replicated servers, yeah that is so easy and we want to popularize this method
+[20:59.840 --> 21:11.360]  so that it helps the community, yeah over to Prenet, yeah so this we will now talk about
+[21:11.360 --> 21:17.200]  the performance issues that we faced and how we solved them, this is the graph that we
+[21:17.200 --> 21:24.520]  have seen in our prod setup, while doing this migration when something happened that we did
+[21:24.520 --> 21:30.880]  not account for, so the latencies have shot up to 1 minute here and I have said that it
+[21:30.880 --> 21:35.040]  is supposed to be only milliseconds, so this is horrible, there was like 2 hours of partial
+[21:35.040 --> 21:41.760]  voltage because of this, so let us see how these things can be debugged and how they
+[21:41.760 --> 21:50.000]  can be fixed, so we have a method called GlusterVolumeProfile in GlusterFS, so what
+[21:50.000 --> 21:55.840]  you do is you start profiling on the volume, then you run your benchmark or whatever is
+[21:55.840 --> 22:01.680]  your workload, then you keep executing GlusterVolumeProfile in for incremental and it will keep
+[22:01.680 --> 22:07.960]  giving you the stats of what is happening to the volume during that time, for each of
+[22:07.960 --> 22:12.320]  the bricks that are there in the volume you will get an output like this, where for that
+[22:12.320 --> 22:16.920]  interval in this case interval 9, for each of the block size you will see the number
+[22:16.920 --> 22:21.960]  of reads and writes that came and for all of the internal file operations that you see
+[22:21.960 --> 22:25.960]  on the volume, you will get the number of calls and the latency distribution, min max
+[22:25.960 --> 22:30.760]  average latency and what is the percentage latency that is taken by each of your file
+[22:30.760 --> 22:32.440]  operation internally.
+[22:32.440 --> 22:40.760]  So, what we have seen when this ZFS issue happened is the lookup call is taking more
+[22:40.760 --> 22:47.840]  than a second which is not what we generally see, so we knew something was happening during
+[22:47.840 --> 22:55.880]  lookup operation, so we did an stress on the brick and we have found that there is one
+[22:55.880 --> 23:03.040]  internal directory called GlusterFS indices XRTROP, to list three entries it is basically
+[23:03.040 --> 23:10.800]  taking 0.35 seconds, so we so imagine this, so you do LS it will just show you three entries,
+[23:10.800 --> 23:18.440]  but it will take like 0.35 seconds sometimes it even takes a second, so we after looking
+[23:18.440 --> 23:23.400]  at this we found that ZFS has this behavior where if you create a lot of files in one
+[23:23.400 --> 23:29.440]  directory like millions and then you delete most of them and then if you do LS it takes
+[23:29.440 --> 23:37.880]  up to a second, so this bug is open for more than like two years I think, so we did not
+[23:37.880 --> 23:43.840]  know whether ZFS would fix this issue anytime soon, so in GlusterFS we patched it by caching
+[23:43.840 --> 23:48.560]  this information, so that we do not have to keep doing this operation, so now you would
+[23:48.560 --> 23:56.520]  not see it if you are using any of the latest GlusterFS releases, but yeah this is one issue
+[23:56.520 --> 23:59.280]  that we found and fixed.
+[23:59.280 --> 24:06.640]  The second one is about increasing the RPS that we have on our volume, so the there was
+[24:06.640 --> 24:13.160]  a new application that was getting launched at the time and the RPS that they wanted was
+[24:13.160 --> 24:20.280]  not what we are giving, so basically they wanted something like 300, 360 RPS or something
+[24:20.280 --> 24:25.720]  like that, but when we did the benchmark we were getting only like 250 RPS, so we wanted
+[24:25.720 --> 24:32.400]  to figure out what is happening, so we ran benchmarks on Prod Gluster itself and we saw
+[24:32.400 --> 24:42.040]  that one of the threads is getting saturated, so there is a feature in GlusterFS called
+[24:42.040 --> 24:48.760]  client IO threads where multiple threads would take the responsibility of sending it over
+[24:48.760 --> 24:53.840]  the network, so we thought let us just enable it and it would solve all our problems, we
+[24:53.840 --> 24:59.960]  enabled it and it made it worse like from 250 it went down, so we realized that there
+[24:59.960 --> 25:05.760]  is a continuation problem in the client side that we are yet to fix, so for now what we
+[25:05.760 --> 25:12.880]  did is to on the containers of Dockstore where it was doing only one mount, we are now doing
+[25:12.880 --> 25:23.080]  three mounts and distributing the uploads and downloads over yes, so can you repeat
+[25:23.080 --> 25:33.080]  the, oh yeah, no I didn't, it is a fuse mount, yeah the thread that is saturating is fuse
+[25:33.080 --> 25:41.240]  thread, yeah so the question is which GlusterFS client we are using, the answer is fuse client
+[25:41.240 --> 25:48.200]  and the thread that is saturating is fuse thread, so what we are doing is we have created
+[25:48.200 --> 25:52.800]  multiple mounts on the container and we are distributing the load in the application itself
+[25:52.800 --> 25:57.720]  like the uploads will go to all three and even downloads will go to all three, that
+[25:57.720 --> 26:02.680]  is one thing that we did to solve the CPU saturation problem, the other thing that we
+[26:02.680 --> 26:07.840]  noticed this is like part of the Gluster volume profile output where it will tell you for
+[26:07.840 --> 26:13.520]  each block what is the number of reads and writes, we have seen that most of the writes
+[26:13.520 --> 26:20.880]  are coming as 8KB, so later when we looked at the Java application Dockstore we saw that
+[26:20.880 --> 26:28.240]  the IO block that Java is using the default size is 8KB, so we just increased it to 128KB,
+[26:28.240 --> 26:35.920]  so these two combined has given us 2X to 3X the number and we also increased the number
+[26:35.920 --> 26:43.400]  of VMs that we are using to mount the client, so put all together we got something like
+[26:43.400 --> 26:50.720]  10X performance improvement compared to the earlier one, so we are set for maybe 2, 3
+[26:50.720 --> 27:02.960]  KB all right, so let us now go on to health checks, so for any production cluster some
+[27:02.960 --> 27:07.160]  of the health checks are needed, so I will talk about the minimal health checks that
+[27:07.160 --> 27:14.760]  needed for GlusterFace cluster, so GlusterFace already provides POSIX health checks, so it
+[27:14.760 --> 27:22.960]  is a health checker thread which will do a write of 1KB for every 15 or 30 minutes,
+[27:22.960 --> 27:29.960]  I mean seconds, so there is one option to set the time interval in which you want to
+[27:29.960 --> 27:36.560]  do this, so if you set it as a 0 that means you are disabling the health check, so you
+[27:36.560 --> 27:42.000]  can set it as like a 10 seconds or something, so it sends a write and check if the disk
+[27:42.000 --> 27:48.840]  is responsive enough and brick is healthy or not, if it did not get a response in a
+[27:48.840 --> 27:55.240]  particular time, it will kill the brick process, so that like we will get to know that something
+[27:55.240 --> 28:03.440]  is wrong with the brick process, so the other one we have is the rest of the things are
+[28:03.440 --> 28:09.400]  we have a script and we have some config, these are the things we have kept externally
+[28:09.400 --> 28:14.760]  kind of thing, the POSIX health checks are the one which come with the GlusterFace project,
+[28:14.760 --> 28:20.920]  so the cluster health checks that we have are like we have a config where we will specify
+[28:20.920 --> 28:26.160]  number of nodes in the cluster, so that is like a expected number of nodes in the cluster
+[28:26.160 --> 28:33.480]  and using the Gluster peer status or GlusterPoorList command, we can check the number of nodes
+[28:33.480 --> 28:40.840]  that are present in the cluster and we will check if both of them are equal, if not we
+[28:40.840 --> 28:48.240]  will write an alert saying something unexpected is happening and we will also check whether
+[28:48.240 --> 28:54.880]  the node is in connected state or not, so in the GlusterFace cluster the nodes can be
+[28:54.880 --> 29:03.560]  in different state, so it can be connected or rejected or disconnected based on how the
+[29:03.560 --> 29:11.760]  GlusterFace management daemon is working, so now we will see whether, so the expected
+[29:11.760 --> 29:15.840]  is all the nodes should be in a connected state, we will check whether the nodes are
+[29:15.840 --> 29:21.560]  connected or not, if the nodes are not connected then we will get an alert saying okay one
+[29:21.560 --> 29:27.000]  of your node is not in a connected state and we have some of the health checks for the
+[29:27.000 --> 29:33.720]  BRICS as well, so we have number of BRICS that are present in each volume in the config
+[29:33.720 --> 29:39.120]  and in the GlusterVolume info output you will get how many number of volumes that are present
+[29:39.120 --> 29:44.480]  in that volume and you will check if they are equal, the another check we have on the
+[29:44.480 --> 29:49.840]  BRICS, if the BRICS is not online we will get to know it by checking the GlusterVolume
+[29:49.840 --> 29:55.200]  status command and if it is not online you will get an alert saying that one of your
+[29:55.200 --> 30:03.040]  BRICS is down and so whenever the server is down or the BRICS is down there will be some
+[30:03.040 --> 30:09.400]  of the pending heels and you can check the pending heels using the GlusterVolumeHealInfo
+[30:09.400 --> 30:16.680]  command and if there are any pending heels you will see an entry, so if the entry is
+[30:16.680 --> 30:22.000]  non-zero then you will get an alert saying that okay you have some pending heels in your
+[30:22.000 --> 30:27.680]  cluster that means something unexpected, unwanted is going on that can be like a BRICS down
+[30:27.680 --> 30:35.480]  or node is down anything and we always lock profile info incremental to our debug locks
+[30:35.480 --> 30:41.960]  using the health check so that whenever we see some issue like the Prandit just spoke
+[30:41.960 --> 30:47.680]  about some of the issues that we can solve by looking at the profile info output, so
+[30:47.680 --> 30:54.960]  in such cases this output will be helpful so we always log into our log backup servers
+[30:54.960 --> 31:06.440]  and the exact commands that we are using are listed in this link, so we have some of the
+[31:06.440 --> 31:15.240]  maintenance activities so things can go back sometimes, so we have a replica 3 setup in
+[31:15.240 --> 31:21.880]  our production, so at any point of time quorum number of BRICS process should be up so that
+[31:21.880 --> 31:30.600]  the reads and writes can go on smoothly, so whenever we are doing something which might
+[31:30.600 --> 31:38.480]  take some downtime of the BRICS process or which can have some load on particular server
+[31:38.480 --> 31:45.600]  at that time we do it only on one of the server from each replica set so that even if that
+[31:45.600 --> 31:51.360]  server goes down or the BRICS process running on that server goes down we won't be having
+[31:51.360 --> 31:58.840]  an issue because there are two other replica servers which can like do all the reads and
+[31:58.840 --> 32:05.600]  writes, so we are doing few activities in this way, one is ZFS scrubbing, ZFS scrubbing
+[32:05.600 --> 32:13.280]  is about doing the checksum of the data, it will see if the data is in a proper condition
+[32:13.280 --> 32:22.880]  or not and we do migrations in this way only, so we are doing it on one server from each
+[32:22.880 --> 32:29.640]  replica set so that even if it is down for some time or something didn't work out we
+[32:29.640 --> 32:38.560]  are in a good place and upgrades also we will do in the same manner, we have done some contributions
+[32:38.560 --> 32:45.240]  so the data migration part that I have spoke it's a production ready we have used it in
+[32:45.240 --> 32:51.920]  our production and Pranit has given some of the developer sessions which has many internals
+[32:51.920 --> 32:57.800]  of Glastrophase, they are very useful for any Glastrophase developers who wants to learn
+[32:57.800 --> 33:05.760]  about many translators that we have in Glastrophase and recently we have fixed one of the single
+[33:05.760 --> 33:11.720]  point of failure which was present in the geo-replication feature, it was merged into
+[33:11.720 --> 33:18.920]  the upstream very recently last week and this year we are looking at another thing the hashing
+[33:18.920 --> 33:26.320]  strategy that Pranit has proposed, once it is accepted at the community we will take
+[33:26.320 --> 33:33.880]  it and develop it, yeah that's all we had folks, thank you.
+[33:33.880 --> 33:40.520]  Just want to let you guys know that the production ready thing, we actually migrated like in
+[33:40.520 --> 33:47.320]  total 375 TB using the method that Sanju talked about so it is ready, so yeah you guys can
+[33:47.320 --> 33:52.000]  use it, I think it should work even with butter, basically any file system that has a snapshot
+[33:52.000 --> 34:03.440]  feature it should work, yeah thank you guys, yeah I think we have a few minutes for questions
+[34:03.440 --> 34:18.200]  if you have any otherwise you guys can catch us there, yeah so the question is how do you
+[34:18.200 --> 34:27.320]  handle a disk failure, so basically the problem that I showed you where we had the ZFS issue
+[34:27.320 --> 34:32.680]  where it was taking like minutes of latency that was the first time it happened on production
+[34:32.680 --> 34:38.680]  for us and initially we were waiting for the machine itself to be fixed so that it will
+[34:38.680 --> 34:44.840]  come back again and it went for like a week or so and the amount of data that needed to
+[34:44.840 --> 34:54.720]  be healed became too much that it coincided with our peak hours, so now the standard operating
+[34:54.720 --> 34:59.400]  procedure that we have come up with after this issue is if a machine goes down or disk
+[34:59.400 --> 35:05.640]  goes down we can just get it back online in 9 hours so why do we have to wait, so we just
+[35:05.640 --> 35:11.640]  consider that node dead, we get a new machine we do whatever Sanju mentioned using ZFS snapshot
+[35:11.640 --> 35:20.880]  migration and we just bring it up, so do you have the ZFS backup somewhere, do you have
+[35:20.880 --> 35:28.120]  the ZFS backup somewhere, the answer is no you have the ZFS data on the active bricks
+[35:28.120 --> 35:33.240]  so you take a snapshot on the active bricks and do the snapshot trend, yeah one of the
+[35:33.240 --> 35:43.160]  good ones yes, any other questions, I think that's it I think, thank you guys, thanks
+[35:43.160 --> 35:44.160]  a lot.
+[35:44.160 --> 35:45.160]  Thank you.
+[35:45.160 --> 35:46.160]  Thank you.
+[35:46.160 --> 35:58.640]  Thank you.

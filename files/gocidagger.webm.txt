@@ -1,0 +1,207 @@
+[00:00.000 --> 00:11.680]  Okay. Thank you, everyone. Our next speaker has some interesting news for your CI. There
+[00:11.680 --> 00:17.000]  are better solutions than the YAML you're used to. Mark is going to talk to us about
+[00:17.000 --> 00:30.680]  building a CI pipeline with Dagger in Go. Thank you. Thank you. Can you hear me? Okay.
+[00:30.680 --> 00:37.600]  So very important information before we get started. I have some Dagger stickers here
+[00:37.600 --> 00:41.600]  if you want to pick them up. I don't know. Maybe I can just leave them after the talk
+[00:41.600 --> 00:47.120]  or you can come to me and pick them up. I'll leave the stickers over here. Perfect. People
+[00:47.120 --> 00:51.360]  can grab them. Thank you. An important thing. Stickers are for your laptop, not for the
+[00:51.360 --> 00:55.600]  room. Every sticker you put inside a room involves them we have to pay for. So keep
+[00:55.600 --> 01:02.600]  them for yourself. Yeah. Well, that's why we are going to conferences for it. So thank
+[01:02.600 --> 01:11.680]  you again for joining me today. My name is Mark. And for the better part of the decade
+[01:11.680 --> 01:18.160]  I've been focusing on helping engineering teams focus build, helping them focus on
+[01:18.160 --> 01:22.080]  their business applications, building their best business applications instead of worrying
+[01:22.080 --> 01:29.520]  about things like CI and how they are being deployed. And I have this fake title at Cisco
+[01:29.520 --> 01:35.880]  technical lead that I decided that I would come clean here today that I'm really nothing
+[01:35.880 --> 01:41.840]  more than just a YAML engineer. Ooh, that feels good. Anyone else want to onboard them
+[01:41.840 --> 01:52.440]  themselves? Any other YAML engineers here? All right. So let's talk about CI-CD a bit.
+[01:52.440 --> 02:01.560]  And CI or CI systems improved a lot in the last couple of years. We have new and more
+[02:01.560 --> 02:09.320]  evolved CI solutions today. But we still have some challenges that we face every day. Like
+[02:09.320 --> 02:15.720]  the one I've been already hinting at, YAML. Obviously, YAML is one of the biggest problems
+[02:15.720 --> 02:23.000]  with CI systems today. Admittedly, sometimes, like using YAML to build the declarative pipeline
+[02:23.000 --> 02:29.840]  can be fine. But, man, you miss a space. The whole thing just broke. The whole thing just
+[02:29.840 --> 02:37.200]  breaks. And you might not even know where to start debugging it. So YAML makes it often
+[02:37.200 --> 02:47.600]  really hard for people to even just touch CI. And the other thing is CI tends to break for
+[02:47.600 --> 02:52.080]  no obvious reasons. Like, the pipeline that worked yesterday may not work today and you
+[02:52.080 --> 02:57.760]  don't really know why. And obviously, as developers, when something breaks in production, we can
+[02:57.760 --> 03:03.840]  just tell the ops people to worry about it. But with CI, that's not really the case. Like,
+[03:03.840 --> 03:08.720]  we have to interact with CI. And if something goes wrong, we might have to be the ones who
+[03:08.720 --> 03:17.040]  fix it. And with the currently available CI solutions today, you can't really, like, everything
+[03:17.040 --> 03:22.080]  was running in the cloud or in the remote system. You can't really have or you don't
+[03:22.080 --> 03:26.520]  really have tools that you can use to debug effectively. You have to start gassing and
+[03:26.520 --> 03:31.960]  start changing some YAML config. And you have to push that to a repository and then wait
+[03:31.960 --> 03:38.080]  for the CI to get triggered. And you have to go through this whole and long feedback loop
+[03:38.080 --> 03:43.320]  to be able to debug what's going wrong and to be able to fix that. And that's a pain.
+[03:43.320 --> 03:49.080]  Like, it takes a lot of time. It's really a huge waste of time. And it's really painful
+[03:49.080 --> 03:57.120]  to do that. Now, sometimes it's not the CI that's wrong. Sometimes it's you, like, pushing
+[03:57.120 --> 04:03.320]  something that you shouldn't be pushing to the repository like tests are not passing
+[04:03.320 --> 04:09.520]  or the linters are not passing or something else goes wrong. And again, you may have the
+[04:09.520 --> 04:15.760]  tools locally in your machine, but you may not have the same versions. You may not have
+[04:15.760 --> 04:21.160]  the same setup as in the CI. And it may just break in the CI even though you ran the test
+[04:21.160 --> 04:27.880]  locally and everything was green, it may still fail in the CI. And you still have to go through
+[04:27.880 --> 04:33.480]  the same long feedback loop again and again, trying to fix that, instead of being able
+[04:33.480 --> 04:40.080]  to run the whole thing locally and being confident that it will just work in the CI as well.
+[04:40.080 --> 04:44.720]  And probably there are other challenges with CI, but these are the ones that wasted hours
+[04:44.720 --> 04:53.720]  from my life in the last couple years. So how can Dagger provide an answer to this problem?
+[04:53.720 --> 04:59.280]  So first of all, Dagger is a programmable and deportable CI solution, which means you
+[04:59.280 --> 05:05.920]  can run your CI pipelines basically anywhere. We will get to how it does that. But the important
+[05:05.920 --> 05:11.680]  thing is that you can run your CI pipelines anywhere using the same environment, which
+[05:11.680 --> 05:17.240]  means if it runs on your machine, then you can be confident that it will run the same
+[05:17.240 --> 05:22.760]  way in your own CI system. Now, that's a great thing for a number of reasons, because when
+[05:22.760 --> 05:29.800]  you start building a pipeline, for example, using any of the CI systems today, you still
+[05:29.800 --> 05:35.160]  have to go through that feedback loop, like adding some config and then pushing it to the
+[05:35.160 --> 05:41.840]  GitHub OO and trying to figure out if it works or not, and then changing until it works. Now,
+[05:41.840 --> 05:47.520]  the ability to run this whole thing locally, it's much shorter feedback loop, so you can
+[05:47.520 --> 05:54.360]  build your own CI pipelines much more quickly than using some remote system. The other thing
+[05:54.360 --> 05:59.040]  is that if something goes wrong, you have the whole thing running locally. So again,
+[05:59.040 --> 06:05.880]  shorter feedback loop, you have more tools to debug, so it's much easier to figure out
+[06:05.880 --> 06:12.240]  what goes wrong, even if it's either the CI pipeline or your code. The other thing about
+[06:12.240 --> 06:17.280]  Dagger is that you can actually write your pipelines in your own preferred language.
+[06:17.280 --> 06:24.760]  Now, not any language, obviously. Some of the languages that Dagger supports, but that's
+[06:24.760 --> 06:31.280]  already much better than YAML. You can write your pipelines in Go, Python or TypeScript,
+[06:31.280 --> 06:38.000]  ThinkQ, EvenQ, but that's already much better than YAML. You can write your own pipelines
+[06:38.000 --> 06:44.040]  in code, and you don't have to invent or use some weird syntax, for example, to represent
+[06:44.040 --> 06:49.960]  dependencies between steps or between different pipelines. You can just do that in plain code,
+[06:49.960 --> 06:57.760]  so that's great. And all those, so the possibility of writing pipelines in your own language points
+[06:57.760 --> 07:05.640]  to the fact that you can avoid Pandor locking entirely. You would still have a CI solution
+[07:05.640 --> 07:12.400]  like Jenkins or GitHub actions or whatever, and you would still run Dagger on those systems,
+[07:12.400 --> 07:19.360]  but you would have to write a very thin integration layer just to run the Dagger pipelines. You
+[07:19.360 --> 07:23.960]  can, you would be much more confident that the pipelines would run the same way on the
+[07:23.960 --> 07:32.560]  CI system as on your computer, and yeah, you can avoid Pandor locking entirely. You can
+[07:32.560 --> 07:38.440]  move to another CI system if you want to, and you may say that it doesn't happen often,
+[07:38.440 --> 07:43.800]  but when it does, man, it's really painful, like converting from one YAML to another or
+[07:43.800 --> 07:53.720]  one YAML to, I don't know, Groovy or JenkinsFly or something, that hurts. And lastly, costly
+[07:53.720 --> 08:00.640]  caching. So every CI system or most CI systems have their own caching solutions where you
+[08:00.640 --> 08:09.200]  can cache the dependencies of your language or dependency manager, but that requires configuration.
+[08:09.200 --> 08:14.840]  You have to make sure that you configure it right, otherwise, well, it could either like
+[08:14.840 --> 08:19.080]  grow the cache endlessly and then you will be paying a lot of money for that, or it would
+[08:19.080 --> 08:25.520]  just be non-functional at all and it wouldn't cache anything properly. Now with Dagger,
+[08:25.520 --> 08:30.120]  everything is cached by default, like every step is cached. You can think about it like
+[08:30.120 --> 08:36.400]  a Docker file. Every instruction or the result of it is basically cached in a separate layer
+[08:36.400 --> 08:43.000]  in the Docker file, and if nothing changed between the steps, then when you run it again,
+[08:43.000 --> 08:48.640]  it will basically run the same way and it will come from the cache. That's really how
+[08:48.640 --> 08:52.640]  Dagger works. Obviously, you have some control over what you want to cache and how you want
+[08:52.640 --> 08:59.400]  to do it, but by default, Dagger got that covered for you. Now how does all this work
+[08:59.400 --> 09:05.480]  behind the scenes? If I had to describe it in one word, it's obviously containers. Now
+[09:05.480 --> 09:10.320]  we can do it ourselves today, right? We could just run everything in a container and it
+[09:10.320 --> 09:18.080]  would be reasonable to say that it will run on the CEI the same way. What Dagger adds
+[09:18.080 --> 09:25.440]  to the mix here is that you can actually build pipelines with code and that would be translated
+[09:25.440 --> 09:34.200]  into build pipelines. So you would use the Dagger SDK, the language SDK that Dagger provides.
+[09:34.200 --> 09:40.960]  Again, today, I believe it's for Go, TypeScript, Python, maybe Q as well. But the underlying
+[09:40.960 --> 09:49.080]  API is actually the GraphQL. So if you have a language client for GraphQL, you can actually
+[09:49.080 --> 09:53.480]  build your own SDK if you want to, or you can just write GraphQL queries and send those
+[09:53.480 --> 10:01.560]  directly to the Dagger engine. But basically, you write your own pipelines using this SDK
+[10:01.560 --> 10:07.280]  in your own language, and then the SDK will basically send GraphQL queries to the Dagger
+[10:07.280 --> 10:12.080]  engine. Now, when you run the whole thing locally first, then the Dagger SDK will actually
+[10:12.080 --> 10:19.440]  launch the Dagger engine for you. All it needs is really a Docker-compatible container runtime.
+[10:19.440 --> 10:28.440]  So if you have Docker on your computer or in your CEI, then you can run your Dagger pipeline
+[10:28.440 --> 10:34.520]  basically. So that's once more the portability of this whole thing. If you have Docker on
+[10:34.520 --> 10:41.520]  your machine and Docker basically runs anywhere these days, then you can run the Dagger pipeline
+[10:41.520 --> 10:46.800]  there. So locally, when you launch this for the first time, the Dagger SDK will launch
+[10:46.800 --> 10:52.240]  the Dagger engine for you and you send these GraphQL queries. You'll see a couple examples
+[10:52.240 --> 11:00.440]  how that looks like in the SDK, and the Dagger engine basically builds a DAG, directed basically
+[11:00.440 --> 11:07.520]  graph of all those steps, and then sends it through, well, it says an OCI runtime, I believe
+[11:07.520 --> 11:13.520]  currently Docker is the only supported runtime, but sends through an OCI runtime and runs the
+[11:13.520 --> 11:18.720]  whole thing in containers for you. And then when, obviously, when a pipeline is finished,
+[11:18.720 --> 11:22.840]  you get back the results, and you can use the results in another pipeline if you want
+[11:22.840 --> 11:28.360]  to. For example, the result of your build pipeline would be used in your deployed pipeline,
+[11:28.360 --> 11:34.800]  and you could deploy or project or whatever you have. So that's how Dagger works under
+[11:34.800 --> 11:46.400]  the hood. And let's take a look at an actual example. Let's see. So the example will be
+[11:46.400 --> 12:07.080]  go because this is the go-to-room. Can you see it from the back? Okay, cool. So the first
+[12:07.080 --> 12:14.920]  thing you need to use the Dagger SDK and go is importing this module from Dagger. It's
+[12:14.920 --> 12:27.800]  the Dagger SDK for go that you can use to interface with the Dagger engine. And once
+[12:27.800 --> 12:31.840]  you have that, you can basically start writing your own program. Now, in this case, I'm using
+[12:31.840 --> 12:36.720]  mage. I'm not sure if you're familiar with that, but it's basically like a make file
+[12:36.720 --> 12:43.200]  like solution for go. You can write these functions, and mage will basically compile
+[12:43.200 --> 12:52.360]  the binary from that and execute it like it would work with make. Now, you can absolutely
+[12:52.360 --> 12:56.720]  import this Dagger package in your own application if you want to. In case of applications, it's
+[12:56.720 --> 13:02.680]  probably not a huge deal if you have an additional dependency in your go modules. If you're writing
+[13:02.680 --> 13:11.680]  the library, though, you might want to create a separate module, for example, called CI,
+[13:11.680 --> 13:17.960]  and import the Dagger SDK in that separate module so you don't import Dagger as a development
+[13:17.960 --> 13:24.800]  dependency in your libraries go that modified. I know it still won't be built or still won't
+[13:24.800 --> 13:29.760]  be in the final binary if you import that library, but some people get to know it if
+[13:29.760 --> 13:38.640]  they see dependencies that is actually not necessary for the library. So make the life
+[13:38.640 --> 13:44.000]  easier for your peers, and if you develop a library and use Dagger, just create a separate
+[13:44.000 --> 13:49.040]  module and put all the Dagger-related code there. The first thing you need to do when
+[13:49.040 --> 13:59.480]  you want to write pipeline with Dagger is call this DaggerConnect function, which will
+[13:59.480 --> 14:08.120]  basically connect to your Docker runtime, and it will launch the Dagger engine for you and
+[14:08.120 --> 14:14.640]  start the so-called session. Now, within that session, you can start building your actual
+[14:14.640 --> 14:21.480]  pipelines using these containers. Now, it's pretty similar to how a Docker file would
+[14:21.480 --> 14:30.400]  look like for good reason, but what you can do here is basically use some of the same
+[14:30.400 --> 14:36.560]  instructions as you would do in a Docker file. You can obviously go from a base image, which
+[14:36.560 --> 14:42.120]  will be going in a Go project, for example. You can mount your source code. That's how
+[14:42.120 --> 14:47.480]  you would have access to the source code within the container, and then you can run a bunch
+[14:47.480 --> 14:58.280]  of commands like test or you can do the same with the linter, for example. And the other
+[14:58.280 --> 15:07.400]  two here, these are the mounted caches. You can do that with built-kit, actually. I believe
+[15:07.400 --> 15:11.920]  that's a built-kit functionality, so you can mount a cache directory to the container
+[15:11.920 --> 15:19.800]  that will not actually be part of the container, but it will be a mounted cache directory from
+[15:19.800 --> 15:33.640]  your host. Now, let's see if I can run this. So, I'm using the mage miner here. I'm telling
+[15:33.640 --> 15:39.200]  it to change to the CI directory because it's a separate module, and then I'm telling it
+[15:39.200 --> 15:55.800]  to use the current jet. Can you hear me? Okay. I don't know what happened there. And then
+[15:55.800 --> 16:03.080]  I'm basically just telling it to run the test function here again, similarly how a mage
+[16:03.080 --> 16:09.760]  file would look like. Now, let's see what happens. Kind of hope that I don't have to
+[16:09.760 --> 16:38.480]  download all those container images. Let's see. Let's get some locks here. I swear this
+[16:38.480 --> 16:53.440]  worked like a couple of hours ago. Oh, you know what? I think I don't have Docker running.
+[16:53.440 --> 17:11.720]  Yeah. That's a problem. Yeah, maybe we'll, yeah. So, I don't have the Docker engine running
+[17:11.720 --> 17:28.000]  at the moment. Let's see. This should start a new container. I mean, this should start
+[17:28.000 --> 17:52.560]  a new container. Let's see what's going on. All right. This is not great.
+[17:52.560 --> 18:09.960]  Can we all pray to the demo gods, please? Thank you.
+[18:09.960 --> 18:35.720]  Okay. You all just have to believe me that this actually works. Okay. So, here are the
+[18:35.720 --> 18:53.480]  locks from the previous run. So, this actually worked before. Yeah, it says, let's see. Okay,
+[18:53.480 --> 19:23.400]  let's try that. Let's see. Do we have internet connection here? Yeah, we do have internet
+[19:23.400 --> 19:38.200]  connection. Okay. Well, we'll have to work with the locks from here. So, well, basically
+[19:38.200 --> 19:46.640]  what happens here is when it works is it just runs the whole thing within this goal and
+[19:46.640 --> 19:54.960]  the image mounts the source code and then runs the goal that test command and just gives
+[19:54.960 --> 20:00.360]  back the results. Obviously, this is the build log, like this is the debug log, but normally
+[20:00.360 --> 20:06.280]  it would just output the, output of the go test command. Or the go lxci command. Let's
+[20:06.280 --> 20:32.200]  see. It's still not working. Let's try from hotspot. Maybe that works better. Anyway,
+[20:32.200 --> 20:44.080]  if, well, if someone wants to get back their money, sorry, folks, this is a free conference.
+[20:44.080 --> 20:49.320]  Anyway, yeah, you will just have to believe me that this works, but I will try to make
+[20:49.320 --> 20:53.880]  this work after the presentation. Now, if you take a look at the code here, this is
+[20:53.880 --> 21:01.920]  still not very user friendly. If you don't know how dagger works or if you don't know
+[21:01.920 --> 21:06.200]  what happens here, then it's not really useful to you. You will have to go to the documentation
+[21:06.200 --> 21:13.360]  and understand how this whole thing works, when it works. So, but the good thing is that
+[21:13.360 --> 21:20.560]  this is like, this is not an arbitrary YAML interface you have to use, so we can actually
+[21:20.560 --> 21:28.080]  make this a bit better if we want to. And what I did in the last couple of weeks is that
+[21:28.080 --> 21:36.920]  I built a higher-level library over the dagger SDK. So, instead of writing all that container
+[21:36.920 --> 21:44.760]  mount nonsense stuff, you can just use this go link package. It's actually called the
+[21:44.760 --> 21:51.840]  OCI. You can find it here if you want to give it a try. And instead of, you still have to
+[21:51.840 --> 21:58.320]  connect to dagger, obviously, but instead of writing that whole container code, you can
+[21:58.320 --> 22:05.880]  just use this much more friendly interface to run your tests or run the go link CILin,
+[22:05.880 --> 22:10.240]  for example. And it's much easier for developers to interact with this. Like, if they want
+[22:10.240 --> 22:16.000]  to change the cover mode, for example, it's pretty obvious how you would want to do that.
+[22:16.000 --> 22:22.640]  In this case, compared to how you would want to do that, it would be the lower-level dagger
+[22:22.640 --> 22:52.240]  SDK stuff. Let's give this another try. Now, from the... Oh, still on. Let's go to the...
+[22:52.240 --> 23:02.920]  Well, it doesn't work. Anyway, if you want to give this a try at home, you're absolutely
+[23:02.920 --> 23:09.520]  welcome to do that. The documentation is getting better by the day. It has a bunch of different
+[23:09.520 --> 23:18.000]  examples. You will find these examples on my GitHub as well. I promise it works. They've
+[23:18.000 --> 23:23.120]  actually just released a brand-new kickstart guide. So far, the documentation... They had
+[23:23.120 --> 23:30.200]  documentation for the different SDKs in different places. Now, they have a kickstart guide that
+[23:30.200 --> 23:34.200]  is basically the same for all of the languages. Regardless which one you want to choose or
+[23:34.200 --> 23:40.400]  if you want to try all three supported SDKs, you can do that with the kickstart guide.
+[23:40.400 --> 23:46.400]  You can actually go ahead and run the code from there. And finally, they have a playground
+[23:46.400 --> 23:55.360]  that works with their low-level GraphQL API. So if you want to give that a try, it's fairly
+[23:55.360 --> 24:01.440]  similar to the SDK, actually. If you want to give that a try, then you can absolutely
+[24:01.440 --> 24:12.600]  do that and see how dagger works without actually installing it on your computer. That's all
+[24:12.600 --> 24:19.520]  I had for today. If you have questions, feel free. There is a sticker. Thank you very much
+[24:19.520 --> 24:23.320]  for your attention.
+[24:23.320 --> 24:33.760]  If there are any questions, raise your hand. I'll try to give you a microphone. I have
+[24:33.760 --> 24:35.360]  one over here that's closer.
+[24:35.360 --> 24:42.080]  Can you use it with something other than Docker? I'm sorry. Can you use it with something other
+[24:42.080 --> 24:43.080]  than Docker underneath?
+[24:43.080 --> 24:49.160]  I think you can use it with Docker compatible runtimes. So I think you can use it with Podman
+[24:49.160 --> 24:57.840]  at the moment. I think, technically, you can use it at runtime. But I don't know if that's
+[24:57.840 --> 25:02.080]  currently available as an option. But we have someone from the Dagger team here who can
+[25:02.080 --> 25:06.280]  actually answer that question.
+[25:06.280 --> 25:16.120]  Hi. So how does the portability work when parts of your deployment depend on publishing
+[25:16.120 --> 25:23.440]  a Docker image to a repo that is external or AWS or Terraform or things that require secrets?
+[25:23.440 --> 25:26.280]  How does that fit in running it locally?
+[25:26.280 --> 25:34.000]  So that's a great question, actually. So the code itself should be completely portable.
+[25:34.000 --> 25:40.000]  So the pipeline itself can run anywhere. What you would need to do in that case is you need
+[25:40.000 --> 25:46.760]  some sort of either a central secret store that you can connect to from your own computer
+[25:46.760 --> 25:53.840]  or you need to be able to load some sort of secrets or credentials from your environment
+[25:53.840 --> 25:57.640]  variables, for example. You can absolutely do that with the Dagger pipeline. So from
+[25:57.640 --> 26:14.080]  that perspective, if the processor is here, you can push to another registry or push to
+[26:14.080 --> 26:20.400]  a development environment, for example. So you can parametrize pipelines based on where
+[26:20.400 --> 26:28.720]  you run them. You would still run the same code, but you could deploy to different environments
+[26:28.720 --> 26:29.720]  from locally.
+[26:29.720 --> 26:50.000]  We have one more question there. Okay. Thank you. One last applause, please.

@@ -1,0 +1,133 @@
+[00:00.000 --> 00:16.440]  Yeah, yeah, exactly. Okay, good afternoon. Yeah, so I'm going to be talking about compiler
+[00:16.440 --> 00:24.000]  intrinsics in sickle in DPC plus plus specifically. This is Intel's open source sickle implementation.
+[00:24.000 --> 00:29.360]  This is what I work on. Yeah, so hopefully I'll be able to say something without saying
+[00:29.360 --> 00:35.880]  too much in 10 minutes. Yeah, so code play. I work for code play. We had the first sickle
+[00:35.880 --> 00:42.640]  implementation, compute CBP. We now work. We were acquired by Intel. So now we work
+[00:42.640 --> 00:47.640]  on the Intel sickle implementation DPC plus plus. That's what I work on. We have lots
+[00:47.640 --> 00:51.560]  of partners, you know, hardware companies, that kind of thing, whoever needs an open
+[00:51.560 --> 00:55.160]  CL implementation, sickle implementation, and so on, come to us.
+[00:55.160 --> 01:01.760]  Yeah, so sickle is a single source heterogeneous programming API. So you can write single source
+[01:01.760 --> 01:11.640]  code that can run on NVIDIA, Intel, AMD GPUs, close to the mic. Okay, voice up. Yeah, so
+[01:11.640 --> 01:16.600]  it's great for someone who's developing scientific applications to be able to write single source
+[01:16.600 --> 01:25.760]  code that runs on whatever GPU the implementation enables, such as CUDA, level zero for Intel,
+[01:25.760 --> 01:31.280]  AMD GPUs, and so on. Yeah, this is a really good thing. So I work specifically on the
+[01:31.280 --> 01:38.520]  NVIDIA and the HIP, the AMD backends for DPC plus plus. Okay, so yeah, I just want to talk
+[01:38.520 --> 01:42.640]  a little bit about compiler intrinsics and how kind of, you know, math function calls
+[01:42.640 --> 01:47.680]  work in sickle and DPC plus plus at the moment, and how we can hopefully improve them so that
+[01:47.680 --> 01:53.120]  we're contributing upstream. So what happens to sickle cause? So essentially, you get your
+[01:53.120 --> 01:58.800]  sickle cause in your source code. This is redirected to spear V open CL cause F, you
+[01:58.800 --> 02:03.200]  compile the spear V, you make a spear V module, this is a symbol within the spear V module,
+[02:03.200 --> 02:09.680]  and then that is the implementation is provided by a CL level zero Vulkan driver. Okay, as
+[02:09.680 --> 02:16.720]  I said, I don't work on the spear V backend at all. I work the PTX, the CUDA or the AMD
+[02:16.720 --> 02:21.440]  GPU backends. So what do we do with these symbols so that we get to the native implementations?
+[02:21.440 --> 02:25.360]  We're not trying to reinvent the wheel. We're not trying to do anything that the people
+[02:25.360 --> 02:30.560]  who are making the GPUs aren't doing already. We're just trying to redirect to that. So
+[02:30.560 --> 02:36.840]  how do we go from this to that, and then compile to our PTX module, our AMD GPU module, HSA
+[02:36.840 --> 02:48.320]  module, and so on. So, yeah, how do we go from spear V OCL to NV cause F? So use the
+[02:48.320 --> 02:52.880]  shim library, easy peasy, that's fine. Okay, you just redirect it, you compile it to bitcode,
+[02:52.880 --> 02:57.440]  you link it, a compilation time, and you get to this, this native bitcode implementation.
+[02:57.440 --> 03:03.320]  This is great. Okay, so we use libclc for this. So libclc is written in open CL. Okay, open
+[03:03.320 --> 03:08.520]  CL does lots of stuff that SQL doesn't expose as easily like address spaces, that kind of
+[03:08.520 --> 03:13.560]  thing. So we write an open CL. This is great. This makes our lives really, really easy.
+[03:13.560 --> 03:20.600]  We can do it. Say, before we get into this, just why do we want to use a BC library in
+[03:20.600 --> 03:24.520]  the first place? Why don't we use a.so? Why don't we just resolve to some symbol that
+[03:24.520 --> 03:30.640]  then a runtime is called and we don't care about it? So on a GPU, the overhead of a function
+[03:30.640 --> 03:35.000]  call is really high. Okay, it's because we lose information about, say, address spaces,
+[03:35.000 --> 03:40.560]  that kind of thing. The GPU memory hierarchy is a bit more complex than, say, for CPU.
+[03:40.560 --> 03:44.120]  So we really, really need to worry about this. We want to inline everything so we don't lose
+[03:44.120 --> 03:50.720]  any information about our memory hierarchies. We also allow compile time branching of code
+[03:50.720 --> 03:53.800]  based on the architecture, based on the back end, that kind of thing. We don't want to
+[03:53.800 --> 03:57.000]  have these checks at runtime. We want high performance. That's the name of the game for
+[03:57.000 --> 04:03.000]  what we're doing. This gives us greater optimization opportunities as well. You can do lots of
+[04:03.000 --> 04:08.360]  dead code elimination, lots of fun stuff in the middle end because you're doing all these
+[04:08.360 --> 04:15.200]  checks at the IR level. Okay, so this is just kind of what it looks like. So we just have
+[04:15.200 --> 04:21.520]  Spirvio CR-Casef. We return NV-Casef. Great. Amazing. That's so easy. And then this is
+[04:21.520 --> 04:27.640]  the implementation which is provided by NVIDIA. This is in-bit code. We link this, and then
+[04:27.640 --> 04:36.560]  this is just in-lined into our IR. This is great. Okay. Yes, so we're linking this echo
+[04:36.560 --> 04:41.640]  code with LipsyLC. Then we link that with the vendor-provided BC library. So we're linking,
+[04:41.640 --> 04:48.480]  linking. We get to the implementation. It's all in-lined. It's all great. We love it.
+[04:48.480 --> 04:55.000]  So this works well, but so this is a bit of code from LipsyLC. Because we're dealing
+[04:55.000 --> 04:59.160]  in OpenCL-C, we could choose something else. We could write a native IR. We find that OpenCL
+[04:59.160 --> 05:04.520]  is actually easier to use than an easier to maintain than writing a native IR. So we end
+[05:04.520 --> 05:09.880]  up with some funny kind of problems with mangling and all this kind of thing. This isn't nice.
+[05:09.880 --> 05:15.440]  Sometimes we need manual mangling. It's got to do with namespaces when they're interpreted
+[05:15.440 --> 05:23.640]  by the OpenCL mangler, unfortunately. Yes, we need to sometimes as well. Sometimes OpenCL
+[05:23.640 --> 05:27.320]  isn't as good as we want it to be. So we need to actually write a native IR as well. So
+[05:27.320 --> 05:37.120]  it's a mix of LVM IR, LipsyLC. It's a bit messy. It's not great. Yes, so also we're
+[05:37.120 --> 05:42.560]  exposing some compiler internals here. This is the NVVM reflect pass, which essentially
+[05:42.560 --> 05:46.800]  takes your function call for NVVM reflect, replaces it with a numeric value. This is
+[05:46.800 --> 05:53.920]  totally done at the IR level, so you can branch at the IR level based on this is a high architecture,
+[05:53.920 --> 06:00.000]  a newer architecture. Do this new implementation, do this new built-in. There's an old architecture,
+[06:00.000 --> 06:04.640]  as well for things like rounding modes. This pass is used. We're exposing this in source
+[06:04.640 --> 06:13.920]  code through hacks. This isn't really, you know, it's not, it's not kosher. But it works.
+[06:13.920 --> 06:20.720]  Who cares? Okay, but consider the new proposal to add FP accuracy attributes to math built-ins.
+[06:20.720 --> 06:26.680]  This is where we have, say, FP built-in cars, and we specify the accuracy in ULP that we
+[06:26.680 --> 06:32.880]  want it to be computed to. Okay, this is totally lost on us. Okay, so this is what it would
+[06:32.880 --> 06:38.160]  look like. Yeah, you have this attribute here. You've, FP max error. This is really, really
+[06:38.160 --> 06:44.000]  needed in SQL because SQL is targeting lots and lots of different platforms. All these platforms
+[06:44.000 --> 06:48.320]  have different numerical accuracy guarantees. We really, really need this, but we don't use
+[06:48.320 --> 06:55.040]  built-ins at all. We're sorry, we don't use LVM intrinsics at all. So this is, we need to get to
+[06:55.040 --> 06:58.800]  a point where we can start using this compiler infrastructure. We're not using it as much as
+[06:58.800 --> 07:07.920]  you want to. So we could do this using a libclc compiler kind of hack workaround. We do another,
+[07:07.920 --> 07:12.000]  you know, pass, you just say compiler precision value. If it's that, do some precise square root.
+[07:12.640 --> 07:17.520]  If it's not, do some approximate thing. Yeah, we could do that. Okay, the problem with libclc
+[07:17.520 --> 07:23.680]  and this stuff, it's not upstreamable. Okay, it's, it's a collection of hacks. It's not totally
+[07:23.680 --> 07:29.040]  hacked, but like it's a little bit messy. It's not written in the same API. It's lib, it's OpenCL
+[07:29.040 --> 07:33.760]  and it's, it's LVM IR. It's messy. We can upstream this. We can all benefit from this.
+[07:37.120 --> 07:43.200]  Okay, so the pro about doing some, another, adding another hack to the, the kind of passes,
+[07:43.200 --> 07:47.440]  another hack to the bunch is that it's easy to do. Okay, we can do this and we can keep going with our
+[07:48.080 --> 07:52.080]  libclc implementation. It's pretty straightforward. We've been doing this the whole time. Yeah,
+[07:52.080 --> 07:58.240]  fine. We don't need to worry about the broader LVM concerns. However, we miss out on LVM community
+[07:58.240 --> 08:03.040]  collaboration, which is why we're, we're here. And then how many of these workarounds do we
+[08:03.040 --> 08:08.720]  actually need in order to keep up with the latest trends and then libclc as bad as it could be now,
+[08:08.720 --> 08:11.920]  like it just degenerates into an absolute mess and we don't want that.
+[08:14.320 --> 08:20.240]  Okay, so we think the answer for this is to try and redirect, try and, try and actually
+[08:20.240 --> 08:24.480]  have it calling the compiler intrinsic. Okay, we want to use compiler intrinsic and then have
+[08:24.480 --> 08:30.080]  some generic behavior of these intrinsics for offload targets. Okay, and this would be used by
+[08:30.080 --> 08:35.520]  say OpenMP by, by, you know, CUDA Clang and so on, all these different targets, but we don't have
+[08:35.520 --> 08:41.360]  this transformation. We, we're not comfortable with this connection. Okay, from an intrinsic to a
+[08:41.360 --> 08:47.280]  vendor provided BC built in. Okay, why is that? Essentially, this needs to happen as early as
+[08:47.280 --> 08:54.640]  possible in the, at the IR level. So we're adding an external dependency in our LLVM kind of,
+[08:54.640 --> 09:01.120]  you know, pipeline. We need to link this BC library early on in our, in our, yeah, pipeline.
+[09:01.840 --> 09:05.440]  We don't do this. We're not comfortable with doing this. We need to figure out a way that people
+[09:05.440 --> 09:11.520]  will be happy with us doing this. Okay, obviously we're used to things resolving to external symbols,
+[09:11.520 --> 09:16.480]  but then that's a runtime thing. It's not, it's not a compile time thing. Okay, this needs to be
+[09:16.480 --> 09:24.800]  inline. We need to do lots and lots of stuff with this at the IR level. Okay, so there will still be
+[09:24.800 --> 09:28.640]  cases where we need libclc potentially. It's not going to, you know, just disappear from our
+[09:28.640 --> 09:37.360]  SQL implementation, hopefully, but we need to start pushing towards better kind of resolution,
+[09:37.360 --> 09:43.040]  better use of these intrinsics in LLVM for offload in general. Okay, so why?
+[09:43.040 --> 09:48.960]  Why? Share infrastructure, keep an eye, keep on the cutting edge of new developments,
+[09:48.960 --> 09:54.160]  less compiler hacks, and we make SQL compilation eventually work upstream. It doesn't at the
+[09:54.160 --> 09:58.240]  moment, but eventually we want it to, of course. We're trying to upstream as much as possible,
+[09:58.240 --> 10:00.400]  but libclc is not upstreamable, and that's a problem.
+[10:02.880 --> 10:07.920]  Okay, so the first step, try and have this discussion about making the intrinsics work
+[10:07.920 --> 10:14.800]  for offload. Okay, so time, okay, time's up. So we need to have this link step at the IR level
+[10:14.800 --> 10:19.440]  early on in the IR kind of pipeline. This is problematic for some people, but we need to talk
+[10:19.440 --> 10:26.720]  about this. So please join in the discussion here. This is NVPTX co-gen for LLVM sign-in friends,
+[10:26.720 --> 10:31.440]  if you have any opinions on this. Sorry, I kind of ran over a little bit, but yeah, any questions?
+[10:31.440 --> 10:41.680]  Yeah, I was wondering, would it make sense to try to get rid of the mess by going to an MLIR
+[10:41.680 --> 10:46.960]  type of approach, or like, what are the benefits or downsides to MLIR?
+[10:47.680 --> 10:54.640]  So I'm not an expert. So the question was, are there benefits? Can we avoid this by going to MLIR?
+[10:54.640 --> 11:03.360]  I think it's more fundamental than MLIR. I'm not an expert on MLIR, but I think we need basic
+[11:03.360 --> 11:09.600]  resolution of intrinsics. Presumably with MLIR, you'll have, you know, other MLIR intrinsics that
+[11:09.600 --> 11:13.520]  will need the same kind of treatment. We'll have the same questions there. So this is the first
+[11:14.640 --> 11:17.600]  case study. This is the most simple case. We're not trying to implement the new
+[11:18.320 --> 11:22.720]  FU built-ins with the accuracy thing. We're just trying to decide how do we make this dependency
+[11:22.720 --> 11:29.360]  on this external BCLib work, and do it in a very, very confined sort of way. Yeah, thank you.
+[11:30.400 --> 11:38.480]  Yeah. Two questions. First one is a tutorial to generate NVPTX from MLIR. There is a work section
+[11:38.480 --> 11:42.960]  about linking with the Bitcoin library from NVIDIA. So what's the difference with this?
+[11:43.520 --> 11:48.960]  And the second question is, you mentioned NVM, which is the closed source
+[11:48.960 --> 11:54.160]  ptx generator from NVIDIA, and there is also the LLVM NVPTX backend.
+[11:56.000 --> 12:00.400]  Are we reaching speed parity with the closed source one?
+[12:01.760 --> 12:05.280]  It depends on the application. We find that with, so the second question first,
+[12:06.400 --> 12:14.320]  is there still a big performance gap between the native, say, NVCC compiler and LLVM client? So
+[12:14.320 --> 12:22.960]  in terms of DPC++, which is a fork of LLVM, we're attaining, say, roughly comparable performance,
+[12:23.600 --> 12:29.920]  whether you're using SQL or you're using CUDA with NVCC, and then any improvements that we make to
+[12:29.920 --> 12:36.560]  the kind of compiler or whatever, they're shared by client CUDA as well. So the first question again
+[12:36.560 --> 12:47.600]  was, how is this different from? So essentially, when you're linking Bitcode or whatever,
+[12:48.640 --> 12:56.480]  you're not using any LLVM intrinsics. You're just redirecting things yourself. You're not
+[12:56.480 --> 13:02.800]  using intrinsics. So you need to do everything explicitly. You need to either have a specific
+[13:02.800 --> 13:08.720]  kind of driver path that will do this for you or you need to specifically say, I want to link this
+[13:08.720 --> 13:14.000]  in at this time or whatever. And so it's more manual. It's not happening automatically. It's
+[13:14.000 --> 13:18.560]  not happening really within the compiler. It's happening at link time, LLVM link time.
+[13:18.560 --> 13:31.360]  All right. Thank you, Hugh. Thank you.

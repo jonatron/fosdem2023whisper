@@ -1,0 +1,462 @@
+[00:00.000 --> 00:29.920]  Okay, so thanks everyone for coming.
+[00:29.920 --> 00:32.760]  Today I'm going to talk about two projects.
+[00:32.760 --> 00:36.400]  One is Metal LB, which I'm currently maintaining,
+[00:36.400 --> 00:40.380]  and the other one is FRR, which kind of started integrating
+[00:40.380 --> 00:44.200]  in Metal LB more or less one year and a half ago.
+[00:44.200 --> 00:46.080]  Is anyone using Metal LB?
+[00:47.600 --> 00:51.600]  Awesome, okay, so if you found it less stable
+[00:51.600 --> 00:54.080]  in the past two years, that's because of me.
+[00:56.240 --> 00:59.680]  So again, the agenda today is I'll describe
+[00:59.680 --> 01:03.000]  what Metal LB is, white matters in the context
+[01:03.000 --> 01:07.320]  of Kubernetes, then I'll introduce FRR,
+[01:07.320 --> 01:10.800]  and then I'll talk about the integration between the two.
+[01:10.800 --> 01:12.440]  Some quick words about me.
+[01:12.440 --> 01:16.960]  Federico, I work for Red Hat almost for four years now,
+[01:16.960 --> 01:20.520]  and I'm part of this networking team
+[01:20.520 --> 01:22.760]  on the OpenShift platform that is in charge
+[01:22.760 --> 01:26.400]  of making it a suitable to run telco workloads
+[01:26.400 --> 01:29.520]  that we know have slightly different requirements
+[01:29.520 --> 01:31.360]  from regular application that runs
+[01:31.360 --> 01:34.600]  on the cloud environments.
+[01:34.600 --> 01:36.800]  Due to that, I contributed to a variety
+[01:36.800 --> 01:38.840]  of network-related projects.
+[01:39.720 --> 01:43.000]  I touched our primary CNI, which is OVNK.
+[01:43.000 --> 01:48.000]  I wrote a simple CNI plugin for using DRFs.
+[01:50.040 --> 01:52.600]  I put some code in Kubernetes itself,
+[01:52.600 --> 01:55.400]  and lately my primary focus is on Metal LB,
+[01:55.400 --> 01:58.680]  but please don't think that I'm a networking expert
+[01:58.680 --> 01:59.520]  because I'm not.
+[02:00.480 --> 02:02.840]  Who doesn't know anything about Kubernetes?
+[02:04.280 --> 02:08.960]  Okay, so I'll very briefly introduce
+[02:08.960 --> 02:11.200]  the concept of services for those
+[02:11.200 --> 02:13.640]  that don't know anything about Kubernetes.
+[02:14.680 --> 02:18.040]  We have our application deployed as multiple pods
+[02:18.040 --> 02:21.760]  where we want to scale our traffic against,
+[02:21.760 --> 02:26.760]  and the concept that Kubernetes gives us is services,
+[02:26.760 --> 02:30.840]  and with the service, we get two things.
+[02:30.840 --> 02:33.560]  One is a cluster IP that is a virtual IP
+[02:33.560 --> 02:35.600]  accessible from inside the cluster,
+[02:35.600 --> 02:38.240]  and the other part is the balancing part.
+[02:38.240 --> 02:42.040]  So the client tries to hit the service,
+[02:42.040 --> 02:45.320]  and then the cluster CNI in some way
+[02:45.320 --> 02:47.640]  balances the traffic across the different endpoints.
+[02:47.640 --> 02:49.920]  It's more than this, we have IP families,
+[02:49.920 --> 02:52.560]  we have parts, but that's the main idea.
+[02:52.560 --> 02:56.520]  What if we want to expose our application
+[02:56.520 --> 02:57.360]  outside the cluster?
+[02:57.360 --> 02:59.480]  Because yeah, there might be use cases
+[02:59.480 --> 03:01.560]  where we want to expose them inside,
+[03:01.560 --> 03:05.080]  but it makes sense to access them from outside.
+[03:05.080 --> 03:10.080]  And the main construct that Kubernetes gives us
+[03:10.160 --> 03:12.280]  is a service of type load balancer.
+[03:12.280 --> 03:13.960]  This is the definition taken from
+[03:13.960 --> 03:16.040]  the Kubernetes documentation.
+[03:17.120 --> 03:21.840]  A service of type load balancer is exposed externally
+[03:21.840 --> 03:24.280]  using a cloud provider slot balancer.
+[03:24.280 --> 03:25.800]  As we saw in the talk before,
+[03:25.800 --> 03:28.960]  like there is the cloud provider, Google AWS,
+[03:28.960 --> 03:32.920]  that gives us an IP that is accessible from outside,
+[03:32.920 --> 03:37.920]  and that drives the traffic towards our application.
+[03:38.480 --> 03:41.880]  And again, the emphasis here is on the cloud provider.
+[03:43.280 --> 03:46.000]  What happen when we create a service of type load balancer?
+[03:46.000 --> 03:50.480]  We get an external IP that is accessible from outside,
+[03:50.480 --> 03:52.920]  and we get the load balancer part.
+[03:52.920 --> 03:56.640]  So if we try to access our application,
+[03:56.640 --> 03:59.880]  the network infrastructure of the cloud provider
+[03:59.880 --> 04:03.800]  will drive the traffic toward all the nodes of our cluster
+[04:03.800 --> 04:06.960]  so that the CNI can do its part.
+[04:06.960 --> 04:09.360]  So, and this is important to understand
+[04:09.360 --> 04:10.400]  how Metal Lab works.
+[04:10.400 --> 04:13.120]  Once the traffic gets to the node,
+[04:14.000 --> 04:16.440]  all the rest is handled by the cluster CNI.
+[04:16.440 --> 04:21.080]  And in this case, this is a real network load balancer.
+[04:21.080 --> 04:24.440]  So again, where we don't have control
+[04:24.440 --> 04:26.920]  and is controlled by the provider.
+[04:26.920 --> 04:31.920]  So just to iterate, we get two things from a service,
+[04:32.680 --> 04:33.920]  from a load balancer service,
+[04:33.920 --> 04:38.080]  we get a stable IP that we can pin our DNS entries to,
+[04:38.080 --> 04:41.080]  and we get the load balancing across all the different nodes.
+[04:41.080 --> 04:45.600]  So now let's move to bare metal and see what happens there.
+[04:45.600 --> 04:48.120]  The first thing that we see when we try to create
+[04:48.120 --> 04:50.040]  a service of this type on bare metal
+[04:50.960 --> 04:52.880]  is the fact that the external IP,
+[04:52.880 --> 04:54.560]  we are not getting an external IP
+[04:54.560 --> 04:58.440]  because there is no one that is giving that to us.
+[04:58.440 --> 05:01.480]  And the second part is, even if we had that IP,
+[05:01.480 --> 05:03.400]  who is routing the traffic to the nodes
+[05:03.400 --> 05:07.440]  as the cloud provider's network infrastructure is doing?
+[05:07.440 --> 05:11.480]  And these very same two issues
+[05:11.480 --> 05:14.520]  are the issues that Metal Lab tries to solve.
+[05:14.520 --> 05:16.320]  Metal Lab is a community project
+[05:17.520 --> 05:19.520]  now under the CNCF umbrella.
+[05:19.520 --> 05:22.840]  It was originally started by David Anderson.
+[05:22.840 --> 05:27.560]  Then there was a handoff to one red actor,
+[05:27.560 --> 05:31.840]  Russell Bryant and two folks working out at King Volk,
+[05:31.840 --> 05:34.360]  Rodrigo Campos and Johannes Lieberman.
+[05:34.360 --> 05:36.680]  And during that phase,
+[05:36.680 --> 05:39.240]  Metal Lab went more or less in maintenance mode.
+[05:39.240 --> 05:43.640]  They were replying to issues and stuff like that,
+[05:43.640 --> 05:46.400]  but it wasn't evolving too much.
+[05:46.400 --> 05:51.400]  And at some point, because things went in a different way,
+[05:52.360 --> 05:55.480]  I started leading the project basically.
+[05:55.480 --> 05:59.000]  One nice thing about Metal Lab is this dichotomy.
+[05:59.000 --> 06:04.000]  It's used a lot in home clusters around Raspberry PIs,
+[06:04.120 --> 06:06.800]  but it's also used by enterprise users
+[06:06.800 --> 06:09.660]  in very complex scenarios.
+[06:09.660 --> 06:14.660]  So the first and most disappointing thing
+[06:15.420 --> 06:19.100]  about Metal Lab, but please don't run away,
+[06:19.100 --> 06:21.580]  don't leave the room, is the fact that Metal Lab
+[06:21.580 --> 06:23.300]  is not a network load balancer.
+[06:24.860 --> 06:27.980]  Yeah, this was disappointing when I started digging into it,
+[06:27.980 --> 06:31.500]  but let's keep in mind those two issues
+[06:31.500 --> 06:33.700]  that we want to solve and see how Metal Lab
+[06:33.700 --> 06:37.180]  tries to solve them in a, I think in a very elegant way,
+[06:37.180 --> 06:40.940]  interacting with an existing network infrastructure.
+[06:40.940 --> 06:43.740]  And the first part is the address advertisement,
+[06:43.740 --> 06:45.140]  assignment, sorry.
+[06:45.140 --> 06:47.340]  And this part is probably the most boring one.
+[06:47.340 --> 06:49.300]  We have a Kubernetes controller,
+[06:49.300 --> 06:52.500]  listens for services in the need of an IP
+[06:52.500 --> 06:54.060]  and tries to assign them the IP.
+[06:54.060 --> 06:57.100]  But what IPs are we talking about?
+[06:58.340 --> 07:00.560]  We, here we are not on the cloud provider,
+[07:00.560 --> 07:03.140]  we don't have control over the IPs.
+[07:03.140 --> 07:06.740]  And so in this case, the cluster administrator
+[07:06.740 --> 07:10.180]  is the entity in charge of providing a pool
+[07:10.180 --> 07:13.060]  of IPs to Metal Lab, so it can use them
+[07:13.060 --> 07:15.500]  and give them to the various services.
+[07:15.500 --> 07:18.940]  And those can be ranges, can be full-siders,
+[07:18.940 --> 07:23.940]  we can add multiple ranges and IPv4 and IPv6.
+[07:24.540 --> 07:29.180]  And then there is the probably most networking part
+[07:29.180 --> 07:34.180]  of Metal Lab, which is address advertisement.
+[07:34.180 --> 07:39.180]  So we have the address and we need to find a way
+[07:39.300 --> 07:42.980]  to attract the traffic to the nodes
+[07:42.980 --> 07:47.020]  so that the CNI itself can do its part.
+[07:47.020 --> 07:49.180]  And Metal Lab works in two modes.
+[07:50.060 --> 07:52.980]  L2, I'll briefly describe how it works.
+[07:52.980 --> 07:54.900]  It's more or less like a KIPA LiveD,
+[07:54.900 --> 07:58.220]  it collects one node as the leader of the IP,
+[07:58.220 --> 08:01.940]  it replies to our request, sends out gratuitous RPs
+[08:01.940 --> 08:06.700]  when a failover happens and you can only have one node
+[08:06.700 --> 08:08.140]  as the entry point for the service.
+[08:08.140 --> 08:12.700]  And then there is the part that I'll dig more into today,
+[08:12.700 --> 08:14.620]  which is the BGP mode.
+[08:14.620 --> 08:16.820]  In BGP, we leverage the interaction
+[08:16.820 --> 08:21.260]  with BGP-enabled routers in order to advertise them.
+[08:24.220 --> 08:29.220]  Yeah, so this is taken from the BGP RFC,
+[08:29.220 --> 08:32.300]  the primary function of a BGP-speaking system
+[08:32.300 --> 08:34.420]  is to exchange network reachability information
+[08:34.420 --> 08:35.620]  with other BGP systems.
+[08:35.620 --> 08:38.500]  So this is exactly what we need.
+[08:38.500 --> 08:39.860]  We need to find a way to say,
+[08:39.860 --> 08:42.220]  hey, if you want to reach this service IP,
+[08:42.220 --> 08:44.700]  which I'm assigning to my load balance service,
+[08:44.700 --> 08:47.700]  then you should go through this set of nodes
+[08:47.700 --> 08:51.820]  because then, again, the CNI can do its part.
+[08:51.820 --> 08:55.380]  And this is exactly how Metal Lab works.
+[08:55.380 --> 09:00.380]  Each node acts as a mini router establishing BGP sessions
+[09:00.780 --> 09:03.580]  with externally configured routers.
+[09:03.580 --> 09:06.820]  You need to make Metal Lab be aware of the existence
+[09:06.820 --> 09:11.020]  of those routers with some configuration.
+[09:11.020 --> 09:13.380]  And then, when we create a service,
+[09:13.380 --> 09:16.740]  it will start advertising the routes to the router
+[09:16.740 --> 09:19.300]  so that there, and this is a bit bigger
+[09:19.300 --> 09:23.620]  for those in the back, so that the router knows
+[09:23.620 --> 09:28.620]  that in order to reach this virtual IP,
+[09:28.860 --> 09:32.140]  it needs to route the traffic towards these nodes.
+[09:32.140 --> 09:35.820]  So again, the traffic gets to the node,
+[09:35.820 --> 09:37.900]  that's the end does the rest.
+[09:37.900 --> 09:42.300]  And in this case, compared to the L2 mode,
+[09:42.300 --> 09:46.940]  we get fully load balancing through ECMP routes.
+[09:46.940 --> 09:49.860]  And the scenarios can be more complex.
+[09:49.860 --> 09:51.420]  We can have multiple routers.
+[09:51.420 --> 09:56.420]  We can have, we have some knobs to drive which routers,
+[09:56.540 --> 09:59.300]  which peers we want to advertise, a given service.
+[09:59.300 --> 10:02.100]  We have other knobs to say, hey,
+[10:02.100 --> 10:04.620]  I want this BGP session to be established
+[10:04.620 --> 10:05.900]  only from this set of nodes
+[10:05.900 --> 10:10.180]  because maybe they belong to different areas.
+[10:10.180 --> 10:13.300]  And of course, we can have cascading routers
+[10:13.300 --> 10:15.220]  and this is like regular BGP.
+[10:16.540 --> 10:20.140]  The configuration looks something like this.
+[10:20.140 --> 10:23.820]  So we still need the set of IPs to get the metadata
+[10:23.820 --> 10:27.180]  in order to have our services assigned
+[10:27.180 --> 10:31.140]  to have them assigned to our services.
+[10:31.140 --> 10:33.500]  And then we have these other item,
+[10:33.500 --> 10:37.700]  which tries to describe the properties of the BGP session
+[10:37.700 --> 10:42.060]  that needs to be established with the different routers.
+[10:42.060 --> 10:44.620]  And we have a few features here.
+[10:44.620 --> 10:48.820]  We have BFD support.
+[10:48.820 --> 10:50.860]  We have node selectors.
+[10:50.860 --> 10:55.660]  We support IBGP and EBGP single and multi-hop.
+[10:55.660 --> 10:59.300]  But even if we are acting as a mini router
+[10:59.300 --> 11:03.220]  because metadata-based purpose is only to advertise,
+[11:03.220 --> 11:07.180]  routes outside, we refuse an incoming router to the node.
+[11:07.180 --> 11:10.620]  Because again, that is not metadata-based purpose.
+[11:10.620 --> 11:13.020]  How it works under the hood.
+[11:14.780 --> 11:16.420]  The architecture is pretty simple.
+[11:16.420 --> 11:20.700]  We have one single pod that is the controller
+[11:20.700 --> 11:23.500]  that is in charge of the IPAN part of MetaLEB.
+[11:23.500 --> 11:27.620]  So it's in charge of reconciliating the services
+[11:27.620 --> 11:31.140]  and the configuration with those IPs
+[11:31.140 --> 11:32.780]  that needs to be assigned to the service.
+[11:32.780 --> 11:36.860]  And again, there is not too much network in this side.
+[11:36.860 --> 11:38.300]  The other part is the speaker.
+[11:38.300 --> 11:41.420]  And the speaker is the part that is in charge
+[11:41.420 --> 11:43.900]  of handling the networking side.
+[11:43.900 --> 11:45.380]  We run it as a demo set.
+[11:45.380 --> 11:47.180]  It runs on each node.
+[11:47.180 --> 11:48.580]  It runs on the host network.
+[11:48.580 --> 11:51.460]  So it is in control of the configuration
+[11:51.460 --> 11:53.500]  of the host networking.
+[11:53.500 --> 11:56.620]  And it handles the announcement part.
+[11:56.620 --> 12:02.020]  So both the L2 and the BGP1.
+[12:02.020 --> 12:07.700]  And now I will talk a bit about the history.
+[12:07.700 --> 12:11.180]  Originally, the BGP part was done
+[12:11.180 --> 12:13.660]  using a native Go implementation that
+[12:13.660 --> 12:20.900]  was implementing a subset of the BGP protocol.
+[12:20.900 --> 12:24.820]  This was before I started to maintain and to contribute
+[12:24.820 --> 12:26.700]  the project.
+[12:26.700 --> 12:30.860]  And at some point, there were a bunch of features
+[12:30.860 --> 12:33.980]  that were being asked by the users.
+[12:33.980 --> 12:38.660]  And the people that were maintaining the project
+[12:38.660 --> 12:41.220]  at the time had this discussion about,
+[12:41.220 --> 12:44.620]  should we start extending the Go BGP implementation
+[12:44.620 --> 12:49.220]  to cover all these scenarios that the users are asking?
+[12:49.220 --> 12:51.780]  And the result was, we shouldn't.
+[12:51.780 --> 12:54.180]  We should not reinvent the wheel.
+[12:54.180 --> 12:56.580]  We should leverage something that is already
+[12:56.580 --> 12:58.380]  doing that for us.
+[12:58.380 --> 13:00.740]  And that thing was FRR.
+[13:00.740 --> 13:06.740]  FRR is Internet Routing Protocol Suite for Linux
+[13:06.740 --> 13:09.100]  that is well-established.
+[13:09.100 --> 13:12.860]  And it implements all the stuff that we were looking for
+[13:12.860 --> 13:14.780]  to add to Metalhead View.
+[13:14.780 --> 13:18.460]  So as the result of this discussion,
+[13:18.460 --> 13:22.260]  Metalhead View was extended with an alternative mode
+[13:22.260 --> 13:26.340]  that is turned on by a configuration flag,
+[13:26.340 --> 13:34.940]  where all the BGP part is handled by FRR.
+[13:34.940 --> 13:38.020]  An FRR configuration looks like this.
+[13:38.020 --> 13:41.620]  We describe our autonomous system number.
+[13:41.620 --> 13:47.500]  We describe the properties of the neighbors.
+[13:47.500 --> 13:51.180]  And then we describe the prefixes
+[13:51.180 --> 13:53.940]  that we want to advertise around.
+[13:53.940 --> 13:54.860]  And we can do more.
+[13:54.860 --> 14:01.260]  We can set rules for each neighbor.
+[14:01.260 --> 14:04.500]  And associated to those rules, we can say, hey,
+[14:04.500 --> 14:09.980]  if the IP belongs to this set of IPs, then we can add communities.
+[14:09.980 --> 14:12.260]  We can have local preferences.
+[14:12.260 --> 14:17.980]  We can block this IP for this particular neighbor.
+[14:17.980 --> 14:21.780]  And this is all the stuff that we had to do.
+[14:21.780 --> 14:23.500]  We were required in Metalhead View.
+[14:23.500 --> 14:27.700]  So now, in BGP mode, the way Metalhead View works
+[14:27.700 --> 14:30.940]  is that we are running multiple containers inside the speaker
+[14:30.940 --> 14:33.620]  pod as we had before.
+[14:33.620 --> 14:36.380]  And one of them is running FRR.
+[14:36.380 --> 14:39.260]  And because all the containers share the host network
+[14:39.260 --> 14:44.500]  namespace, then what we need to do now
+[14:44.500 --> 14:50.420]  is to apply the proper configuration to FRR
+[14:50.420 --> 14:54.620]  so that it can do its part.
+[14:54.620 --> 14:58.420]  So this is what we have.
+[14:58.420 --> 15:02.700]  On one side, we have all these continuously evolving
+[15:02.700 --> 15:06.380]  configurations that we received from the Kubernetes API.
+[15:06.380 --> 15:08.860]  We have the services that come and go.
+[15:08.860 --> 15:11.700]  We have the new routers that we want to configure.
+[15:11.700 --> 15:15.140]  We have this BGP advertisement that
+[15:15.140 --> 15:21.220]  allows us to set some properties on the advertisement itself.
+[15:21.220 --> 15:24.260]  On one side, what we want to achieve
+[15:24.260 --> 15:27.020]  is the corresponding FRR configuration
+[15:27.020 --> 15:29.700]  so that FRR can do its part.
+[15:29.700 --> 15:34.700]  And this is done by some code that renders all this changing
+[15:34.700 --> 15:37.820]  stuff and continuously reconcile it
+[15:37.820 --> 15:39.820]  in some sort of internal data.
+[15:39.820 --> 15:45.740]  We pass it through the go template engine.
+[15:45.740 --> 15:50.180]  We then generate the configuration for FRR that we want.
+[15:50.180 --> 15:53.900]  But we are not finished yet because then we
+[15:53.900 --> 15:57.420]  need to instruct FRR to apply the new changes.
+[15:57.420 --> 16:01.620]  And luckily, what we can leverage
+[16:01.620 --> 16:09.580]  is this Python script FRR.reload that does a lot of stuff
+[16:09.580 --> 16:10.100]  for us.
+[16:10.100 --> 16:13.620]  So this comes together with FRR and calculates
+[16:13.620 --> 16:16.020]  all the delta between the current configuration
+[16:16.020 --> 16:18.780]  and the configuration that we want to achieve
+[16:18.780 --> 16:21.860]  and applies all those commands to FRR.
+[16:21.860 --> 16:27.380]  And so again, we get to the right configuration corresponding
+[16:27.380 --> 16:29.620]  to the Kubernetes configuration.
+[16:29.620 --> 16:34.020]  Assuming that we are doing our part here.
+[16:34.020 --> 16:39.540]  So I don't generally add memes to talks,
+[16:39.540 --> 16:44.340]  but I thought that this was particularly relevant.
+[16:44.340 --> 16:47.620]  Because leveraging FRR allowed us
+[16:47.620 --> 16:51.980]  to focus on the business logic on what our users were asking
+[16:51.980 --> 16:57.060]  to us without having to worry too much about the protocol
+[16:57.060 --> 16:58.980]  and its implementations.
+[16:58.980 --> 17:01.620]  And that helped us a lot.
+[17:01.620 --> 17:03.860]  In order to add new features to the project,
+[17:03.860 --> 17:06.380]  we added the BFD support.
+[17:06.380 --> 17:10.260]  Seamlessly, we added the VRF support.
+[17:10.260 --> 17:12.260]  IPv6 and DOS stack were something
+[17:12.260 --> 17:14.060]  that we were missing in Metal LB,
+[17:14.060 --> 17:16.620]  and they came out naturally.
+[17:19.580 --> 17:25.700]  But this doesn't mean that we don't have challenges.
+[17:25.700 --> 17:29.780]  Probably the biggest challenge is the fact
+[17:29.780 --> 17:33.980]  that on one side, we had an existing API that was already
+[17:33.980 --> 17:37.820]  there and was fitting well with the Metal LB use
+[17:37.820 --> 17:40.380]  case where the focus was the service.
+[17:40.380 --> 17:45.100]  So I want to apply all this logic to the service.
+[17:45.100 --> 17:50.780]  On the other hand, FRR thinks in a slightly different way.
+[17:50.780 --> 17:54.420]  So there is a good amount of logic
+[17:54.420 --> 17:57.140]  in doing this API contortionism in order
+[17:57.140 --> 17:59.380]  to have one API to fit the other.
+[17:59.380 --> 18:01.900]  And again, that's because we wanted
+[18:01.900 --> 18:05.860]  to be backward compatible.
+[18:05.860 --> 18:10.540]  And probably the second most interesting challenge
+[18:10.540 --> 18:13.940]  was the fact that Metal LB was known to be super stable.
+[18:13.940 --> 18:20.020]  Like, we came and we replaced the core mechanism
+[18:20.020 --> 18:22.100]  about the interaction with the routers,
+[18:22.100 --> 18:26.140]  and we wanted to make sure that we weren't breaking too much.
+[18:26.140 --> 18:29.300]  On top of that, we started also to add new features.
+[18:29.300 --> 18:34.300]  And again, we were changing a lot in very few times.
+[18:34.300 --> 18:40.220]  And at the time, there wasn't a proper CI mechanism that
+[18:40.220 --> 18:42.620]  was covering all the cases.
+[18:42.620 --> 18:46.580]  So that was quite a challenge, because again, Metal LB users
+[18:46.580 --> 18:49.180]  were used to having something that was stable,
+[18:49.180 --> 18:52.940]  and we were promising that we were replacing the implementation
+[18:52.940 --> 18:56.540]  without in a compatible way.
+[18:56.540 --> 19:01.180]  So the problem was we want to be able to test something
+[19:01.180 --> 19:03.500]  like this, where we have multiple servers.
+[19:03.500 --> 19:05.340]  So you have one router.
+[19:05.340 --> 19:10.820]  You might have multi-hops, and you
+[19:10.820 --> 19:13.580]  have all the configuration knobs that Metal LB has.
+[19:13.580 --> 19:18.420]  So and then you have node selectors.
+[19:18.420 --> 19:20.900]  You have the BFT that we were adding.
+[19:20.900 --> 19:23.460]  We have communities and a lot of stuff.
+[19:23.460 --> 19:34.900]  And this was something that I wasn't keeping me sleeping.
+[19:34.900 --> 19:42.100]  So we started thinking, how do we set up a proper CI for this?
+[19:42.100 --> 19:45.900]  And we use kind.
+[19:45.900 --> 19:48.220]  Does anyone knows what kind is?
+[19:48.220 --> 19:48.820]  Of course.
+[19:48.820 --> 19:57.940]  OK, so basically, with kind we are able to replace something
+[19:57.940 --> 19:59.740]  like this with something like this.
+[19:59.740 --> 20:03.060]  So each node is running inside the container.
+[20:03.060 --> 20:07.020]  The external router is now replaced by FRR.
+[20:07.020 --> 20:10.380]  So we use FRR both inside Metal LB
+[20:10.380 --> 20:13.820]  to do the implementation, but also outside to validate
+[20:13.820 --> 20:15.100]  that everything is working.
+[20:15.100 --> 20:18.740]  And now we have even control on this kind of network,
+[20:18.740 --> 20:23.420]  because this is the Docker bridge.
+[20:23.420 --> 20:29.380]  So this allowed us to add a test suite,
+[20:29.380 --> 20:33.860]  where we apply the Metal LB configuration
+[20:33.860 --> 20:36.460]  and the FRR configuration corresponding
+[20:36.460 --> 20:39.180]  to that Metal LB configuration.
+[20:39.180 --> 20:42.900]  And we can inspect the external router
+[20:42.900 --> 20:46.780]  so that all the advertisements, all the sessions are up
+[20:46.780 --> 20:48.900]  and all that kind of stuff.
+[20:48.900 --> 20:53.020]  And obviously, we can even access the service from outside.
+[20:53.020 --> 20:57.140]  And we can test more complex scenarios.
+[20:57.140 --> 20:58.380]  We can test multi-hops.
+[20:58.380 --> 21:02.580]  We can test IPv4, IPv6, dual stack, and so on.
+[21:02.580 --> 21:06.900]  And most importantly, this can run on our laptop.
+[21:06.900 --> 21:10.740]  So even the development phase is now
+[21:10.740 --> 21:13.740]  easier to move forward.
+[21:13.740 --> 21:19.140]  And also we are able to run this in the UPS MCI
+[21:19.140 --> 21:23.660]  as under GitHub Actions.
+[21:23.660 --> 21:31.260]  So wrapping up, FRR made us able to focus
+[21:31.260 --> 21:35.460]  on the business logic of our applications
+[21:35.460 --> 21:40.740]  instead of having to re-implement all those protocols.
+[21:40.740 --> 21:44.380]  To the point that sometimes writing this test suite
+[21:44.380 --> 21:48.180]  takes more time than implementing the feature itself.
+[21:51.460 --> 21:54.260]  And I think this is a nice example
+[21:54.260 --> 21:57.900]  of the interaction between two different projects.
+[21:57.900 --> 22:01.620]  These are some resources.
+[22:01.620 --> 22:04.700]  The first section is about Metal LB.
+[22:04.700 --> 22:07.300]  We are trying to be active as much as we can
+[22:07.300 --> 22:09.620]  on the Kubernetes Slack channel.
+[22:09.620 --> 22:12.300]  We always monitor upstream issues.
+[22:12.300 --> 22:16.820]  If you want to ask questions, that's the right place to do.
+[22:16.820 --> 22:20.500]  Again, I'm responding on daily basis.
+[22:20.500 --> 22:27.100]  And I think that can be said also for the FRR community.
+[22:27.100 --> 22:30.660]  They are super active in their Slack channel.
+[22:30.660 --> 22:33.860]  And with that, I want to thank them
+[22:33.860 --> 22:37.020]  because they made our life super easy.
+[22:37.020 --> 22:39.780]  And I'm done for today.
+[22:47.540 --> 22:48.180]  Any question?
+[22:56.980 --> 22:58.220]  Hello.
+[22:58.220 --> 23:00.500]  Is it possible in a few words to explain
+[23:00.500 --> 23:04.380]  when I should use ARP or BGP?
+[23:09.460 --> 23:12.260]  If you are working locally, if you have a home lab
+[23:12.260 --> 23:18.340]  and you don't have a BGP enabled router,
+[23:18.340 --> 23:21.460]  that means that the only alternative that you have
+[23:21.460 --> 23:28.740]  is L2 and R. Otherwise, the BGP mode requires routers
+[23:28.740 --> 23:32.780]  but also gives you more power because you
+[23:32.780 --> 23:38.020]  have a proper load balancing across all the different nodes.
+[23:38.020 --> 23:38.900]  One more question here.
+[23:43.980 --> 23:44.260]  Hi.
+[23:44.260 --> 23:46.820]  Thanks for your call.
+[23:46.820 --> 23:50.940]  We have Metal LB running on our worker nodes.
+[23:50.940 --> 23:56.660]  And our worker nodes are talking BGP to the host,
+[23:56.660 --> 23:57.500]  routing to the host.
+[23:57.500 --> 24:03.100]  So FRR is running on the metal machines as well.
+[24:03.100 --> 24:06.860]  So can we configure Metal LB with FRR
+[24:06.860 --> 24:08.940]  routing without conflicting ports?
+[24:08.940 --> 24:10.660]  So because we already have a problem?
+[24:10.660 --> 24:11.300]  Yeah, correct.
+[24:11.300 --> 24:12.260]  You can't.
+[24:12.260 --> 24:17.820]  And that's something that we are trying to think to solve.
+[24:17.820 --> 24:19.620]  One of the idea that I have in mind,
+[24:19.620 --> 24:22.700]  but this is super early stages.
+[24:22.700 --> 24:30.380]  Again, having Metal LB able to use an existing FRR instance,
+[24:30.380 --> 24:33.300]  but that comes with challenges because it
+[24:33.300 --> 24:35.540]  expects to reconfigure all the configuration
+[24:35.540 --> 24:40.340]  and it might have conflicts with what you have currently.
+[24:40.340 --> 24:44.140]  So the go-to solution now is to have different ports, I guess.
+[24:47.460 --> 24:48.980]  OK, thank you.
+[24:48.980 --> 24:53.020]  I have a user having a namespace where he uses a lot
+[24:53.020 --> 24:54.940]  of IP addresses without control.
+[24:54.940 --> 24:56.500]  A lot, sorry?
+[24:56.500 --> 25:00.260]  I have some users that are allocated separate namespaces
+[25:00.260 --> 25:01.780]  in Kubernetes.
+[25:01.780 --> 25:05.060]  And some of them are using a lot of IP addresses.
+[25:05.060 --> 25:08.660]  Can you limit the IP addresses that matter?
+[25:08.660 --> 25:09.500]  For a namespace.
+[25:09.500 --> 25:10.020]  Yeah.
+[25:10.020 --> 25:10.500]  Yeah.
+[25:10.500 --> 25:16.180]  So one of the things that we added over the past year
+[25:16.180 --> 25:20.460]  and I think it's going to go out in the next release.
+[25:20.460 --> 25:24.580]  It's merged on main, but it's not released yet.
+[25:24.580 --> 25:27.860]  It's namespace selectors and service selectors
+[25:27.860 --> 25:29.180]  in the IP address pool.
+[25:29.180 --> 25:31.780]  So by doing that, it will solve your,
+[25:31.780 --> 25:34.540]  that's meant to solve the multi-tenant problem, where
+[25:34.540 --> 25:37.660]  you want to have a given set of pools associated
+[25:37.660 --> 25:40.300]  with a given tenant and not more.
+[25:40.300 --> 25:43.340]  So we are trying to remove the control
+[25:43.340 --> 25:48.100]  from the service itself, as it was before,
+[25:48.100 --> 25:50.900]  where you had to set a fixed IP or the pool
+[25:50.900 --> 25:53.340]  that you were pulling inside the service
+[25:53.340 --> 25:55.900]  and having it as part of the cluster configuration
+[25:55.900 --> 25:58.300]  so that the cluster administrator can do that.
+[25:58.300 --> 26:02.460]  And there won't be cases where applicants should
+[26:02.460 --> 26:03.700]  are abusing of the cluster.
+[26:06.700 --> 26:10.020]  Well, Morio.
+[26:10.020 --> 26:11.860]  Thanks for your talk, also.
+[26:11.860 --> 26:13.900]  I have a question about the possibility
+[26:13.900 --> 26:17.460]  to have Metal LB coexisting with Calico,
+[26:17.460 --> 26:20.500]  because I think in that case, we have two BGP speakers
+[26:20.500 --> 26:24.660]  on the same note, and I had issues with that in the past.
+[26:24.660 --> 26:27.580]  Yeah, I'm not a Calico expert, so I
+[26:27.580 --> 26:30.380]  know that the existing configuration suggested
+[26:30.380 --> 26:34.620]  to disable the Metal LB BGP part and let Calico
+[26:34.620 --> 26:36.620]  advertise the services.
+[26:36.620 --> 26:42.700]  But that's all I know, and I haven't dug into the thing.
+[26:42.700 --> 26:43.180]  One more?
+[26:47.060 --> 26:49.420]  Just to follow up on the last question,
+[26:49.420 --> 26:53.340]  is it possible to run Metal LB on a different port for BGP?
+[26:53.340 --> 26:53.840]  Yeah.
+[26:58.940 --> 27:03.660]  Actually, it should be, but I don't remember,
+[27:03.660 --> 27:07.020]  because it has to be a process parameter.
+[27:07.020 --> 27:08.780]  I should check.
+[27:08.780 --> 27:11.660]  If you catch me out later, I'll tell you.
+[27:11.660 --> 27:15.860]  Because for the neighbor part, yes, it's like that is clear.
+[27:15.860 --> 27:19.340]  For the Metal LB part, I don't remember.
+[27:22.140 --> 27:23.740]  OK, thank you.
+[27:23.740 --> 27:33.740]  Thank you.

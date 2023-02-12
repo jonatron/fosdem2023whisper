@@ -1,0 +1,369 @@
+[00:00.000 --> 00:09.440]  Yes, Fernando is fine.
+[00:09.440 --> 00:13.920]  Fernando, he's going to talk about using Rust for
+[00:13.920 --> 00:16.640]  your network management tools. Take it away.
+[00:16.640 --> 00:18.760]  All right. Thank you.
+[00:18.760 --> 00:25.200]  All right. So, welcome everyone.
+[00:25.200 --> 00:26.240]  My name is Fernando.
+[00:26.240 --> 00:28.160]  I'm a senior software engineer at Drehat.
+[00:28.160 --> 00:30.160]  I work for the Networking Services Team,
+[00:30.160 --> 00:32.760]  mainly in focus on network management tools,
+[00:32.760 --> 00:36.240]  and today we are going to talk what was our journey,
+[00:36.240 --> 00:40.080]  building a Rust tool for network management.
+[00:40.080 --> 00:43.280]  So, okay. We did not start with Rust.
+[00:43.280 --> 00:44.520]  We have started with Python,
+[00:44.520 --> 00:47.840]  but after some time we decide that we wanted to shift to Rust.
+[00:47.840 --> 00:50.320]  So, this is two talks in one.
+[00:50.320 --> 00:54.680]  One is how we did build the project in Rust,
+[00:54.680 --> 00:58.720]  and what we learned when moving from Python to Rust.
+[00:58.720 --> 01:00.680]  Okay. So, network management.
+[01:00.680 --> 01:01.880]  What's network management?
+[01:01.880 --> 01:03.880]  Basically, it's all the operations that you do
+[01:03.880 --> 01:05.440]  to configure your networking.
+[01:05.440 --> 01:07.760]  Roots, interfaces, DNS,
+[01:07.760 --> 01:09.520]  firewalling, whatever you do,
+[01:09.520 --> 01:11.040]  it's network management.
+[01:11.040 --> 01:15.120]  So, it's a process that is quite complex because it requires
+[01:15.120 --> 01:18.240]  a lot of coordination between user space and kernel space.
+[01:18.240 --> 01:20.880]  We need to check when we get
+[01:20.880 --> 01:23.280]  notification for kernel space because all the tools
+[01:23.280 --> 01:26.200]  could modify the network status.
+[01:26.200 --> 01:28.400]  We also need to communicate with
+[01:28.400 --> 01:32.560]  kernel in order to configure stuff.
+[01:32.560 --> 01:35.320]  So, it's a quite complex task.
+[01:35.320 --> 01:38.760]  There is already a tool which is network manager.
+[01:38.760 --> 01:43.720]  It's by default, the tool that is in almost all situations used
+[01:43.720 --> 01:47.560]  for managing your Linux network configuration,
+[01:47.560 --> 01:50.040]  and we were willing to use it and we were
+[01:50.040 --> 01:53.560]  willing to build in top of a network manager because
+[01:53.560 --> 01:56.680]  implementing everything was really, really complex.
+[01:56.680 --> 01:58.400]  So, we created NMS state,
+[01:58.400 --> 02:00.680]  and NMS state is a tool that communicates with
+[02:00.680 --> 02:06.400]  network manager and it's a library with a command line tool,
+[02:06.400 --> 02:13.320]  and allow us to configure the network with using declarative states.
+[02:13.320 --> 02:15.640]  So, you can define what do you want,
+[02:15.640 --> 02:17.080]  and you don't need to care about
+[02:17.080 --> 02:20.120]  how is network manager or how is the kernel doing,
+[02:20.120 --> 02:23.200]  and what's going to do or what are the dependencies.
+[02:23.200 --> 02:25.120]  You don't need to care about any of that.
+[02:25.120 --> 02:27.120]  NMS state is going to manage it,
+[02:27.120 --> 02:30.280]  so it makes everything easier.
+[02:30.280 --> 02:33.800]  So, as I say, we started to build NMS state in Python,
+[02:33.800 --> 02:37.920]  and one day we noticed that a lot of our users were
+[02:37.920 --> 02:41.120]  willing to chip a binary and not Python,
+[02:41.120 --> 02:43.040]  don't use the Python environment,
+[02:43.040 --> 02:45.840]  and well, there were also some performance issues
+[02:45.840 --> 02:47.720]  because we need to do a lot of operations.
+[02:47.720 --> 02:50.880]  So, we decided to give it a try to REST,
+[02:50.880 --> 02:55.760]  and we have a problem is that we have a library and a binary,
+[02:55.760 --> 02:58.840]  and we needed to move both of them to REST,
+[02:58.840 --> 03:04.120]  and also we already have a big base of users.
+[03:04.120 --> 03:05.600]  So, we could not break them,
+[03:05.600 --> 03:08.400]  and we need to do it in a way that we are going to support,
+[03:08.400 --> 03:12.800]  we need to support all the features that we already did in Python.
+[03:12.800 --> 03:16.760]  So, well, we created our own NMS state library in REST,
+[03:16.760 --> 03:18.880]  I will tell you how,
+[03:18.880 --> 03:21.640]  and also the NMS state CTL tool,
+[03:21.640 --> 03:24.680]  which is the command line tool.
+[03:25.120 --> 03:28.560]  All right. So, the first thing is that we are using
+[03:28.560 --> 03:31.400]  Jamel files and JSON files, and we are parsing them.
+[03:31.400 --> 03:34.600]  So, in Python, this was quite trivial with an schema,
+[03:34.600 --> 03:36.720]  and we needed to find a way to do it.
+[03:36.720 --> 03:38.520]  In Python, we were using dictionary,
+[03:38.520 --> 03:40.320]  so the user could create a dictionary,
+[03:40.320 --> 03:43.360]  and it was using a Jamel library,
+[03:43.360 --> 03:47.840]  it was quite trivial to convert that Jamel into a dictionary,
+[03:47.840 --> 03:50.000]  and we needed something in REST to do this.
+[03:50.000 --> 03:52.960]  So, we end up looking at CD.
+[03:52.960 --> 03:54.920]  CD is a framework for serializing and
+[03:54.920 --> 03:58.480]  deserializing REST data structures efficiently and
+[03:58.480 --> 04:02.520]  generically we use it for Jamel and JSON,
+[04:02.520 --> 04:05.040]  but it supports other formats.
+[04:05.040 --> 04:08.800]  This allows us to keep our declarative state,
+[04:08.800 --> 04:12.560]  keep our API, so that was pretty good,
+[04:12.560 --> 04:15.200]  and we noticed that CD allow us to
+[04:15.200 --> 04:18.560]  implement our own serializers and deserializers.
+[04:18.560 --> 04:21.120]  So, that was also a big plus because we
+[04:21.120 --> 04:24.880]  could do validation steps and simplify
+[04:24.880 --> 04:27.640]  the validation work when
+[04:27.640 --> 04:30.480]  getting the configuration file from the user,
+[04:30.480 --> 04:34.440]  and then there were a lot of decorators on server,
+[04:34.440 --> 04:37.920]  so it was quite good for creating aliases,
+[04:37.920 --> 04:41.880]  for creating multiple helper functions,
+[04:41.880 --> 04:47.040]  and also some conditional deserialization and serializations.
+[04:47.040 --> 04:49.400]  So, here's an example.
+[04:49.400 --> 04:55.680]  For example, this is a interface state for a general bond,
+[04:55.680 --> 04:58.600]  and we basically define it is app,
+[04:58.600 --> 05:02.040]  it is have an IPv4 address with this address,
+[05:02.040 --> 05:03.640]  with this prefix length,
+[05:03.640 --> 05:04.960]  and it is enabled,
+[05:04.960 --> 05:07.680]  and then we define the link aggregation options.
+[05:07.680 --> 05:11.120]  So, we have the mod options and the ports.
+[05:11.120 --> 05:17.200]  One really good thing that we have is that we have a partial editing.
+[05:17.200 --> 05:19.360]  So, you can define what you want to change,
+[05:19.360 --> 05:21.480]  and we are going to merge it with
+[05:21.480 --> 05:25.520]  what you already have on configure on the system.
+[05:25.520 --> 05:28.240]  About the decorators, as you can see there,
+[05:28.240 --> 05:31.240]  we were able to use the decorator for example,
+[05:31.240 --> 05:33.240]  accepting numbers as a string,
+[05:33.240 --> 05:36.360]  accepting strings, accepting only the number,
+[05:36.360 --> 05:40.480]  custom strings, creating alias, renaming,
+[05:40.480 --> 05:45.920]  yeah, all of that, and it was quite good.
+[05:45.920 --> 05:48.600]  So, okay. We communicate with
+[05:48.600 --> 05:50.720]  Neville Manager and we communicate with
+[05:50.720 --> 05:56.320]  Neville Manager to configure the network state,
+[05:56.320 --> 05:58.640]  and we have a problem is that before we were using
+[05:58.640 --> 06:01.880]  the Lebanon bindings, Python bindings,
+[06:01.880 --> 06:04.720]  and they were not available in trust,
+[06:04.720 --> 06:08.040]  and we tried to create a trust bindings,
+[06:08.040 --> 06:09.840]  but it was quite complex because they use
+[06:09.840 --> 06:11.800]  gObject and we did not have gObject,
+[06:11.800 --> 06:13.640]  and it was a big mess,
+[06:13.640 --> 06:18.680]  but we noticed that Neville Manager is providing a Divas API.
+[06:18.680 --> 06:22.160]  So, we say, okay, let's use Divas then,
+[06:22.160 --> 06:26.320]  and we noticed that there is a create which is Zitabas,
+[06:26.320 --> 06:29.720]  and with Zitabas, we were able to communicate with
+[06:29.720 --> 06:33.040]  Neville Manager using the Divas API,
+[06:33.040 --> 06:35.920]  and with Zitabas, and we were able to
+[06:35.920 --> 06:38.880]  encode the data structures that we were using
+[06:38.880 --> 06:41.960]  to communicate with Neville Manager
+[06:41.960 --> 06:45.160]  and configure the settings that we wanted.
+[06:45.160 --> 06:48.760]  So, using this, we solved one of the problems,
+[06:48.760 --> 06:51.360]  which is telling Neville Manager what we want to do,
+[06:51.360 --> 06:54.600]  and also fetching what already Neville Manager have,
+[06:54.600 --> 06:56.600]  which is also important because,
+[06:56.600 --> 06:58.720]  all right, there are some options
+[06:58.720 --> 07:01.040]  that maybe we do not want to overwrite
+[07:01.040 --> 07:03.640]  because the user configured it that way,
+[07:03.640 --> 07:05.880]  and for patch editing, that is important.
+[07:05.880 --> 07:07.320]  We need to know what the user configured
+[07:07.320 --> 07:09.520]  and what the user was to modify.
+[07:09.520 --> 07:12.400]  So, okay, one problem solved.
+[07:12.400 --> 07:14.320]  Then, we have another problem.
+[07:14.320 --> 07:16.000]  So, Neville Manager does not provide
+[07:16.000 --> 07:19.040]  at all real-time information from kernel,
+[07:19.040 --> 07:22.240]  and we needed that because we also do verification.
+[07:22.240 --> 07:24.640]  So, when you configure something,
+[07:24.640 --> 07:29.280]  NMS state do a verification step,
+[07:29.280 --> 07:32.600]  which what it does is compare what the user defined,
+[07:32.600 --> 07:35.640]  which what is configured on the system.
+[07:35.640 --> 07:37.960]  We have a problem because Neville Manager
+[07:37.960 --> 07:39.480]  was not providing real-time information,
+[07:39.480 --> 07:43.280]  and sometimes it took quite
+[07:43.280 --> 07:47.240]  sometimes to get the information that we wanted,
+[07:47.240 --> 07:51.640]  and we were having some problems on the verification.
+[07:51.640 --> 07:53.600]  So, we were looking for a library,
+[07:53.600 --> 07:55.360]  and we did not find any library that
+[07:55.360 --> 07:59.640]  certified our requirements, but we noticed
+[07:59.640 --> 08:01.720]  that there is already a Rastnet link library,
+[08:01.720 --> 08:05.080]  and that link is a kernel API for
+[08:05.080 --> 08:07.480]  communication between user place and kernel,
+[08:07.480 --> 08:09.600]  also, I think, between kernel components,
+[08:09.600 --> 08:11.320]  and it was perfect.
+[08:11.320 --> 08:12.760]  We could use Rastnet link,
+[08:12.760 --> 08:14.200]  which is an existing library,
+[08:14.200 --> 08:16.680]  to build another tool, which is NISPOR.
+[08:16.680 --> 08:20.360]  So, NISPOR only queries information from kernel,
+[08:20.360 --> 08:23.040]  and show you in a jammel file,
+[08:23.040 --> 08:27.320]  or basically, proper data structures.
+[08:27.800 --> 08:30.480]  Well, it was quite good because we
+[08:30.480 --> 08:31.920]  started to contribute to Rastnet link,
+[08:31.920 --> 08:36.560]  because Rastnet link was an independent project,
+[08:36.560 --> 08:39.520]  and they didn't support everything.
+[08:39.520 --> 08:41.280]  So, we were able to help there,
+[08:41.280 --> 08:44.120]  and currently, a lot of people use Rastnet link,
+[08:44.120 --> 08:46.080]  and it's a quite big project,
+[08:46.080 --> 08:48.240]  and probably the one that most of
+[08:48.240 --> 08:52.320]  the people use when need to work with NEL link and REST.
+[08:52.320 --> 08:58.280]  So, we have one more problem.
+[08:58.280 --> 09:01.400]  Okay. Now, we have network manager working,
+[09:01.400 --> 09:04.200]  we have verification working, validation working,
+[09:04.200 --> 09:05.840]  we can read the configuration,
+[09:05.840 --> 09:07.240]  we can do a lot of stuff.
+[09:07.240 --> 09:10.120]  But then, networking is complex,
+[09:10.120 --> 09:12.560]  and there is one thing that is called OBS,
+[09:12.560 --> 09:17.080]  OBSDB, and network manager configure OBS, right?
+[09:17.080 --> 09:21.400]  But they do not configure global OBSDB settings.
+[09:21.400 --> 09:25.080]  And that was a problem because we wanted to do that.
+[09:25.080 --> 09:26.880]  So, how we did?
+[09:26.880 --> 09:29.880]  We basically started to use sockets,
+[09:29.880 --> 09:34.960]  and using the Rast SDD library for stream sockets,
+[09:34.960 --> 09:44.160]  we were able to communicate with OBSDB send petitions,
+[09:44.160 --> 09:47.200]  read what they already have stored on the OBSDB,
+[09:47.200 --> 09:50.600]  and configure whatever OBSDB settings
+[09:50.600 --> 09:51.960]  the user want to configure.
+[09:51.960 --> 09:54.920]  So, we created our own set of
+[09:54.920 --> 09:57.920]  JSON or using set of JSON libraries,
+[09:57.920 --> 10:02.040]  we created our own JSON RPC to communicate with OBSDB.
+[10:02.040 --> 10:05.000]  This is internal of NMS state.
+[10:05.000 --> 10:09.200]  We have considered to put it on a separate crate,
+[10:09.200 --> 10:11.680]  but we did not yet.
+[10:13.200 --> 10:16.600]  Then, we had another problem.
+[10:16.600 --> 10:19.800]  Okay. I promise this will end.
+[10:19.800 --> 10:21.800]  We are going to have a solution.
+[10:21.800 --> 10:23.920]  It will stop at some point.
+[10:23.920 --> 10:26.080]  So, we had users,
+[10:26.080 --> 10:28.480]  the users were using our Python library,
+[10:28.480 --> 10:30.920]  and some of them were willing to move to Rast,
+[10:30.920 --> 10:33.800]  some of them were willing to move to Goland,
+[10:33.800 --> 10:37.600]  but we were already developing a Rast solution.
+[10:37.600 --> 10:39.880]  And some of them didn't want to move
+[10:39.880 --> 10:42.240]  from the Python code to Rast.
+[10:42.240 --> 10:45.600]  So, what we did is create bindings,
+[10:45.600 --> 10:47.480]  and we create plenty of them.
+[10:47.480 --> 10:50.800]  First of all, we created C bindings.
+[10:50.800 --> 10:55.320]  So, C users could use the Rast library.
+[10:55.320 --> 10:57.160]  Then, from the C bindings,
+[10:57.160 --> 11:00.680]  we created the Python and Goland bindings.
+[11:00.680 --> 11:05.440]  And finally, one of the other problem that we had is that
+[11:05.440 --> 11:09.520]  we got a huge integration test base,
+[11:09.520 --> 11:12.040]  and we wanted to reuse them.
+[11:12.040 --> 11:15.520]  So, with the Python bindings,
+[11:15.520 --> 11:18.800]  we were able to integrate the Python integration test
+[11:18.800 --> 11:21.280]  that we had into our Rast library.
+[11:21.280 --> 11:24.280]  So, it was quite cool because we were able to start
+[11:24.280 --> 11:27.520]  building the new Rast NMS date,
+[11:27.520 --> 11:28.640]  but at the same time,
+[11:28.640 --> 11:31.840]  using the Python integration test.
+[11:31.840 --> 11:35.160]  And this way, we were sure that we were not
+[11:35.160 --> 11:40.520]  breaking any existing use case that we already support.
+[11:40.520 --> 11:44.800]  So, that's it. It was a success.
+[11:44.800 --> 11:48.240]  And we are quite proud because most of the people that were
+[11:48.240 --> 11:50.560]  using it liked the idea,
+[11:50.560 --> 11:55.880]  and even the ones that did not care about if you use Python or Rast,
+[11:55.880 --> 11:57.880]  we're happy because the change was
+[11:57.880 --> 12:00.560]  completely transparent for the final user.
+[12:00.560 --> 12:03.400]  If you were using Python,
+[12:03.400 --> 12:05.520]  nothing will change for you.
+[12:05.520 --> 12:06.960]  The code is the same.
+[12:06.960 --> 12:09.520]  You didn't need to do anything different.
+[12:09.520 --> 12:12.120]  So, it will be a transparent update.
+[12:12.120 --> 12:16.040]  And if you are using Python and are willing to use Rast,
+[12:16.040 --> 12:18.240]  okay, you need to change your code.
+[12:18.240 --> 12:21.240]  But basically, the API is the same.
+[12:21.240 --> 12:27.520]  So, well, you were able to use the same Jamel files,
+[12:27.520 --> 12:29.040]  and the same JSON files,
+[12:29.040 --> 12:30.640]  and everything will work.
+[12:30.640 --> 12:32.840]  So, we got a lot of adoptions,
+[12:32.840 --> 12:37.680]  and right now, the user base of NMS date is still growing,
+[12:37.680 --> 12:39.640]  and we are quite happy.
+[12:39.640 --> 12:43.160]  Also, it was recreated goal and bindings because
+[12:43.160 --> 12:45.280]  OpenShift people and Kubernetes people were
+[12:45.280 --> 12:47.960]  wiling to use it and it's written in goal and bindings.
+[12:47.960 --> 12:51.640]  So, we provided them with goal and bindings,
+[12:51.640 --> 12:53.280]  and they really liked it.
+[12:53.280 --> 12:56.160]  So, yeah, it was a success story.
+[12:56.160 --> 13:01.760]  Yeah. So, basically, that was our journey.
+[13:01.760 --> 13:03.600]  I would like to hear,
+[13:03.600 --> 13:05.560]  I think we have time for questions.
+[13:05.560 --> 13:08.760]  So, please, as whatever you want,
+[13:08.760 --> 13:11.520]  I promise you there are no dumb questions.
+[13:11.520 --> 13:13.760]  So, thank you very much.
+[13:13.760 --> 13:25.280]  All right, any question? Okay.
+[13:27.680 --> 13:32.320]  I wondered what your experience was in terms of time to
+[13:32.320 --> 13:34.520]  implement in Rust versus Python.
+[13:34.520 --> 13:35.440]  All right.
+[13:35.440 --> 13:38.880]  From a developer point of view.
+[13:38.880 --> 13:42.720]  I think it took us around two years,
+[13:42.720 --> 13:46.040]  two developers mainly working on it.
+[13:46.040 --> 13:48.280]  It was full-time.
+[13:48.280 --> 13:50.600]  It was a long journey,
+[13:50.600 --> 13:53.840]  but it helped us a lot having
+[13:53.840 --> 13:57.240]  the Python integration test working with the new library,
+[13:57.240 --> 13:59.120]  because we were sure that we were not
+[13:59.120 --> 14:03.960]  breaking the existing cases and speed up the things a little bit.
+[14:03.960 --> 14:06.640]  Absolutely. Do you have a feeling for how long it would have
+[14:06.640 --> 14:09.200]  taken you if you had re-implemented it in Python?
+[14:09.200 --> 14:10.800]  I mean, I know that's not really a thing,
+[14:10.800 --> 14:13.200]  but roughly how long if you had said right?
+[14:13.200 --> 14:14.280]  Going back to Python.
+[14:14.280 --> 14:15.440]  No, if you had said, right,
+[14:15.440 --> 14:17.520]  we've got it in Python, but for no good reason,
+[14:17.520 --> 14:18.840]  we're going to rewrite it from scratch in
+[14:18.840 --> 14:21.280]  Python to make it cleaner, let's say.
+[14:21.280 --> 14:23.720]  Just as like, how long does it take to write something in
+[14:23.720 --> 14:27.320]  Python versus Rust or maybe it's not possible to guess?
+[14:27.320 --> 14:29.240]  Well, I think it depends.
+[14:29.240 --> 14:31.960]  In my opinion, this is a personal opinion,
+[14:31.960 --> 14:35.640]  writing Python is much easier,
+[14:35.640 --> 14:37.840]  but then you have more bugs.
+[14:37.840 --> 14:39.640]  This was my experience.
+[14:39.640 --> 14:42.080]  When I implement something in Python,
+[14:42.080 --> 14:45.320]  I do it in 30 minutes,
+[14:45.320 --> 14:48.800]  one hour, two hours, but then I got bugs.
+[14:48.800 --> 14:50.160]  When I do it in Rust,
+[14:50.160 --> 14:51.640]  it took me more longer,
+[14:51.640 --> 14:53.720]  a lot of compiler errors,
+[14:53.720 --> 14:57.120]  a lot of unsafe stuff everywhere,
+[14:57.120 --> 14:59.000]  so we need to avoid that,
+[14:59.000 --> 15:01.240]  but then it's quite stable.
+[15:01.240 --> 15:04.240]  I can say that nowadays,
+[15:04.240 --> 15:05.840]  the Rust version,
+[15:05.840 --> 15:10.200]  it is younger that the Python one is more stable.
+[15:10.200 --> 15:14.440]  We got less bug reports and we have more users.
+[15:14.440 --> 15:15.520]  Thank you.
+[15:15.520 --> 15:17.640]  Yeah, thank you.
+[15:17.640 --> 15:33.480]  Did you run into any problems in terms of
+[15:33.480 --> 15:35.600]  compatibility when you created
+[15:35.600 --> 15:38.440]  C bindings from the Rust code?
+[15:38.440 --> 15:40.560]  No, not at all. To be honest,
+[15:40.560 --> 15:41.720]  we did not have any problem.
+[15:41.720 --> 15:43.800]  It was quite straightforward.
+[15:43.800 --> 15:46.040]  We did not have any problem.
+[15:46.040 --> 15:48.440]  I must say that the NMS state library is,
+[15:48.440 --> 15:50.480]  well, we spoke to the users,
+[15:50.480 --> 15:56.240]  it's quite simple, so that makes it simple for us.
+[15:56.240 --> 16:00.760]  We did not have any problem. That's it.
+[16:00.760 --> 16:01.960]  Okay, thanks.
+[16:01.960 --> 16:17.880]  Before. You mentioned that it was
+[16:17.880 --> 16:22.400]  a long journey when you implemented this in Rust.
+[16:22.400 --> 16:25.840]  Could you compare what you have
+[16:25.840 --> 16:30.720]  expected in the beginning of this journey and with the reality?
+[16:30.720 --> 16:34.480]  I must say that I'm not the only one person working on this.
+[16:34.480 --> 16:36.240]  There is my teammate, Chris,
+[16:36.240 --> 16:39.600]  and Chris was the lead here.
+[16:39.600 --> 16:41.800]  I must say that I did not trust very much,
+[16:41.800 --> 16:43.840]  that we were able to do it in two years.
+[16:43.840 --> 16:45.360]  So we were like, yeah, in two years,
+[16:45.360 --> 16:49.240]  we are going to have Rust and I was like, I don't think so.
+[16:49.240 --> 16:51.520]  But he was right.
+[16:51.520 --> 16:55.400]  So I think my expectation is that it will take much longer,
+[16:55.400 --> 16:58.200]  but it was much simpler than what I thought.
+[16:58.200 --> 17:03.440]  So also, I thought that we could have more problems
+[17:03.440 --> 17:05.440]  with finding the libraries that we
+[17:05.440 --> 17:07.800]  need to do all the positions that we needed.
+[17:07.800 --> 17:11.640]  But I must say that Rust have a great ecosystem.
+[17:11.640 --> 17:14.280]  So the libraries that we are using,
+[17:14.280 --> 17:18.080]  they are really, really well maintained and that's great.
+[17:18.080 --> 17:19.520]  Let's work for us.
+[17:19.520 --> 17:21.440]  We have a question from the matrix.
+[17:21.440 --> 17:22.320]  Sure.
+[17:22.320 --> 17:23.560]  So that's a bit weird.
+[17:23.560 --> 17:25.960]  Tanya is asking, how long did it take
+[17:25.960 --> 17:29.040]  your team to learn Rust or did they know Rust already?
+[17:29.040 --> 17:30.000]  No.
+[17:30.000 --> 17:31.560]  We did not know Rust.
+[17:31.560 --> 17:35.080]  I mean, we didn't know what Rust was
+[17:35.080 --> 17:37.520]  and we did some work on Rust.
+[17:37.520 --> 17:38.600]  But we did one thing here.
+[17:38.600 --> 17:41.720]  We started with NISPOR instead with NMS state.
+[17:41.720 --> 17:44.400]  So when we noticed what are the missing pieces,
+[17:44.400 --> 17:46.200]  we first started with NISPOR, which
+[17:46.200 --> 17:51.200]  is much simpler than NMS state, and we learned on the way.
+[17:51.200 --> 17:52.640]  I must say that I am most surprised
+[17:52.640 --> 17:57.640]  with all the Rust resources that it was quite easy to learn.
+[17:57.640 --> 18:00.080]  But we learned on the way.
+[18:00.080 --> 18:02.000]  When we needed something, we started learning it.
+[18:02.000 --> 18:04.360]  And then we revisited the code and we changed things.
+[18:04.360 --> 18:06.560]  For example, initially, we did not
+[18:06.560 --> 18:08.800]  understood correctly how to use traits,
+[18:08.800 --> 18:10.240]  so we did not use them.
+[18:10.240 --> 18:13.320]  And then we noticed, right, traits are really useful.
+[18:13.320 --> 18:15.120]  We are not using them.
+[18:15.120 --> 18:17.320]  And then we started to implement traits everywhere
+[18:17.320 --> 18:20.280]  and make it more flexible.
+[18:20.280 --> 18:23.040]  Thank you.
+[18:23.040 --> 18:23.540]  Great.
+[18:23.540 --> 18:25.840]  There's no more questions.
+[18:25.840 --> 18:26.840]  Thank you for your time.
+[18:26.840 --> 18:27.840]  Thank you for listening.
+[18:27.840 --> 18:51.840]  Thank you very much.

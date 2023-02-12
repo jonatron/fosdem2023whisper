@@ -1,0 +1,292 @@
+[00:00.000 --> 00:11.240]  Okay, hello. Sorry for the technical trouble. My machine didn't work for this screen, so
+[00:11.240 --> 00:19.520]  I got the help from a colleague. So, I'm Marco Mäkele. I've been working on an ENO-DB
+[00:19.520 --> 00:27.520]  code for 20 years almost, and today I will talk about one of my pet hates in ENO-DB,
+[00:27.520 --> 00:32.960]  this change buffer, which I long time suspected that it's causing bugs, but I couldn't prove
+[00:32.960 --> 00:39.280]  all of them. So, I took a car analogy because some software people like car analogies this
+[00:39.280 --> 00:46.400]  unsafe at any speed. It's from the 1960s. I'm a bicycle person myself. So, what was
+[00:46.400 --> 00:53.480]  the change buffer good for? It was something developed in the times of the spinning rust,
+[00:53.480 --> 01:00.360]  the hard disks. The idea was that when you are doing sequential I.O., like page reads
+[01:00.360 --> 01:06.800]  or page writes sequentially, then the read write hit will move less on the hard disk.
+[01:06.800 --> 01:15.960]  And if you're doing random cx, it could take a long time to position the head to the correct
+[01:15.960 --> 01:21.240]  track and then wait for the sector to come under the track when it's rotating. So, the
+[01:21.240 --> 01:27.760]  idea of the change buffer was that instead of reading something from a page and then
+[01:27.760 --> 01:34.560]  applying a change to that page, you would write a buffer change to somewhere else. So,
+[01:34.560 --> 01:42.920]  if a B3 secondary index leaf page is not in the memory, in that case, instead of reading
+[01:42.920 --> 01:48.640]  the page to perform an insert, originally it was only insert buffering, we would write
+[01:48.640 --> 01:54.080]  that insert operation into a separate insert buffer tree. And then later when some other
+[01:54.080 --> 01:59.520]  operation needs to read the page, it would merge the changes from that buffer to the
+[01:59.520 --> 02:05.000]  page. And these structures are persistent. So, even the insert buffering could happen
+[02:05.000 --> 02:10.440]  years ago and then at some point years later happens somebody wants to access that page
+[02:10.440 --> 02:19.640]  and then you'll get the trouble. This was extended in MySQL 5.5 to cover delete operations
+[02:19.640 --> 02:26.120]  and purge operations. Deleting in InnoDB only marks the record for deletion, same for update
+[02:26.120 --> 02:33.240]  of a key in a secondary index, it will do delete marking and insert. So, the purge is
+[02:33.240 --> 02:38.000]  what is actually removing the record. Those operations could be buffered, but not rollback
+[02:38.000 --> 02:45.800]  of an insert, that was never buffered. And this leads to lots of problems, like the
+[02:45.800 --> 02:51.720]  change buffer is located in the InnoDB system table space. And up to this time there is
+[02:51.720 --> 02:56.280]  no mechanism to shrink the system table space. If you at some point use the change buffer
+[02:56.280 --> 03:01.560]  a lot, the system table space will grow by some hundreds of gigabytes, there's no way
+[03:01.560 --> 03:05.560]  to reclaim that space. Okay, in MariaDB we have something, we are working on something
+[03:05.560 --> 03:13.720]  to help with that, but it's not done yet. And then this obvious right amplification,
+[03:13.720 --> 03:19.560]  if you are doing an insert, okay, that's rather fine. Instead of doing just one insert, you
+[03:19.560 --> 03:25.360]  are doing two inserts, you are doubling the right, plus you have to write some metadata,
+[03:25.360 --> 03:31.520]  some index information so that the contents of the page can be interpreted correctly because
+[03:31.520 --> 03:37.160]  the change buffer doesn't have access to the data dictionary. But for delete or delete
+[03:37.160 --> 03:43.560]  marking, if you apply the change directly to the page, you would write one byte or couple
+[03:43.560 --> 03:47.840]  of bytes, now you have to copy the entire record which you are going to delete or delete
+[03:47.840 --> 03:54.000]  marked to the change buffer and the metadata. And then at some point it will be merged.
+[03:54.000 --> 03:57.960]  And then there is some overhead, even if you are disabling the change buffer, you still
+[03:57.960 --> 04:05.000]  have some overhead, you have to maintain some metadata saying how full your pages are. If
+[04:05.000 --> 04:10.560]  somebody is going to enable the change buffering or insert buffering later, this data has to
+[04:10.560 --> 04:15.840]  be accurate, otherwise you would get a page overflow. The insert buffering must know that
+[04:15.840 --> 04:21.960]  the page will not get too full when you are buffering the insert and merging later. And
+[04:21.960 --> 04:27.240]  then we got lots of nice corruptions where the secondary index gets out of sync with
+[04:27.240 --> 04:33.520]  the primary key index. And these are very hard to reproduce. So why is it hard to reproduce?
+[04:33.520 --> 04:40.960]  Well, the first part is the same as on the previous slide. It is exactly this that you
+[04:40.960 --> 04:48.480]  cannot easily control when the change buffer merge happens. It's like the Spanish inquisition
+[04:48.480 --> 04:56.760]  in the Montice Python sketch. Nobody expects a change buffer merge. And to reproduce something,
+[04:56.760 --> 05:03.360]  as a user, you are unlucky and as a tester, you are lucky if you can reproduce this. And
+[05:03.360 --> 05:09.560]  you need lots of luck to get that. Because especially this perching of the history, which
+[05:09.560 --> 05:16.480]  is deleting records from the index, it can be blocked by reviews. Like if you have long
+[05:16.480 --> 05:21.400]  running transactions which are holding a review open, that will prevent perch from running.
+[05:21.400 --> 05:26.600]  And then at some point that review will be closed and perch can start running. And then
+[05:26.600 --> 05:31.280]  there is also this buffer pool. If a page is locked by something, it can't be written
+[05:31.280 --> 05:36.440]  out and it can't be evicted from the buffer pool. So the change buffer can't be used.
+[05:36.440 --> 05:42.160]  And we have a debug setting that forces that, okay, user is asking for operation that could
+[05:42.160 --> 05:46.600]  use the change buffer and we see the page is in the buffer pool. We are going the evil
+[05:46.600 --> 05:51.800]  and we evict the page. But we cannot do that because somebody could be holding a latch
+[05:51.800 --> 05:55.880]  on that page or the current thread is holding a latch and the page was modified. And we
+[05:55.880 --> 06:04.040]  cannot wait for page writes to happen because this latch is blocking the page write. So
+[06:04.040 --> 06:11.360]  this is really difficult to test. And there was a recent fix to some hanks which were
+[06:11.360 --> 06:19.720]  introduced in MySQL 5.7. We have that fix in the release that is coming out next week.
+[06:19.720 --> 06:27.720]  That one will make it even more tricky this debug option. So in order for tests for this
+[06:27.720 --> 06:34.200]  to be effective, they have to do some smart tricks like abandon some tables for a while
+[06:34.200 --> 06:40.280]  and let them cool down. Use some other tables meanwhile and then come back.
+[06:40.280 --> 06:48.840]  Well, we got some nice magic tools as well. We have this random query generator. It's
+[06:48.840 --> 06:58.080]  also used at MySQL and a grammar simplifier. We could start with the huge grammar of all
+[06:58.080 --> 07:04.840]  of the SQL covering all the features and let it run. If the crash was frequent enough,
+[07:04.840 --> 07:12.280]  then we could use this grammar simplifier. But in this case, this is very hard to reproduce
+[07:12.280 --> 07:17.120]  back. We cannot use the simplifier. We cannot get any simpler grammar. We just have to run
+[07:17.120 --> 07:26.080]  it all and hope for the best. But then we got this debugger RR, record and replay.
+[07:26.080 --> 07:34.320]  That one is really a huge productivity boost. We started using it maybe two or three years
+[07:34.320 --> 07:42.360]  ago. So when you are able to reproduce a problem while running it under RR, what you would
+[07:42.360 --> 07:50.320]  do that you will save RR record will save a trace, a deterministic trace of an execution
+[07:50.320 --> 07:57.080]  that is interleaving processors or threads that are being monitored by it. It saves
+[07:57.080 --> 08:04.880]  the system calls and the results and so on. And this trace can be debugged as many times
+[08:04.880 --> 08:10.360]  as you want. You just need the same binaries, same libraries and compatible processor. Then
+[08:10.360 --> 08:15.960]  you can run it. And you can set break points, you can set data watch points and you can
+[08:15.960 --> 08:21.880]  execute in forward and backward direction. You can see what happened before the bad thing
+[08:21.880 --> 08:27.000]  was observed. And this can also be used for optimized code. You are probably familiar
+[08:27.000 --> 08:33.800]  with cases where you are debugging an optimized executable, then the debugger complains that
+[08:33.800 --> 08:38.400]  some variable has been optimized out. Well, then you can just single step some instructions,
+[08:38.400 --> 08:44.680]  you get it from the registers, because you can go backwards in time. So now I am coming
+[08:44.680 --> 08:52.080]  to describe one bug that we found last year. And actually there was a support customer
+[08:52.080 --> 08:59.760]  last week who hit this bug or a consequence of this bug. So we had a bug that would be
+[08:59.760 --> 09:04.040]  a slow shutdown which is doing this change buffer merge. It would hang because the change
+[09:04.040 --> 09:09.200]  buffer got corrupted. And we were testing some fixes in a branch for that. And then
+[09:09.200 --> 09:15.040]  we got this assertion failure. This assertion failure essentially means that when it tried
+[09:15.040 --> 09:22.080]  to insert a record that was insert buffered, it ran out of space in the page. And what
+[09:22.080 --> 09:30.000]  was the reason? Well, there were some extra records in the page. And it turned out that
+[09:30.000 --> 09:36.200]  this is partly by design. Hei Kittori, the creator of InnoDB, he was a friend of lazy
+[09:36.200 --> 09:42.400]  deletion or lazy operations. So drop index wouldn't clear anything from the change buffer.
+[09:42.400 --> 09:46.720]  It would leave the garbage behind. And later on, if the same page is reallocated for something
+[09:46.720 --> 09:54.040]  else, then we would pay the price and free the space from the change buffer, delete the
+[09:54.040 --> 10:02.360]  records. And in MySQL 5.7, there was a new feature, bulk insert creation or building
+[10:02.360 --> 10:10.480]  indexes faster. And that codebase didn't do this adjustment correctly. It only cleared
+[10:10.480 --> 10:16.240]  some bit, but it didn't remove the records. And there was a mandatory Oracle security
+[10:16.240 --> 10:22.000]  train I took several years ago before switching to MariaDB. It said something like complexity
+[10:22.000 --> 10:28.120]  is the friend of security bugs. I found it somehow fitting here.
+[10:28.120 --> 10:34.360]  So the immediate root cause of this failure was that this new code cleared a bit that
+[10:34.360 --> 10:41.240]  says that there are buffer changes for this page. So when somebody is going to use that
+[10:41.240 --> 10:45.560]  page, he will see that, OK, there's nothing to do. I don't have to care about the change
+[10:45.560 --> 10:51.680]  buffer. And then later on, something adds records to the page, and then these old records
+[10:51.680 --> 10:57.200]  from the change buffer will come to the page as part of a merge.
+[10:57.200 --> 11:03.560]  And how can we prove this using this RR tool? By the way, you can download the slides from
+[11:03.560 --> 11:10.240]  the first page, and you can also download an attachment that has a script replay recording
+[11:10.240 --> 11:15.560]  of the RR session. So I'm only showing some high-level view here, but you can download
+[11:15.560 --> 11:22.440]  a debugger session that shows the exact commands and the output, which I'm going to present
+[11:22.440 --> 11:29.440]  in the next slides. So the short version, how we did this, how we can prove these claims
+[11:29.440 --> 11:35.360]  in the debugger, we let it continue from the start to the crash or the assertion failure.
+[11:35.360 --> 11:41.000]  Then we set the break point on a function that was the last one to access the change
+[11:41.000 --> 11:47.360]  buffer bitmap bits. And from that function, we get the address of the bitmap bits for
+[11:47.360 --> 11:53.040]  this page, and we can set the data watch point on that. And I found this hardware watch
+[11:53.040 --> 11:57.600]  point is a very powerful tool. It's really much easier for some things when you don't
+[11:57.600 --> 12:02.640]  have an idea which code is going to modify or read something.
+[12:02.640 --> 12:07.560]  And then based on this watch point, we get some call stacks where these change buffer
+[12:07.560 --> 12:13.240]  bits were last changed. And then we set the break points on functions that insert records
+[12:13.240 --> 12:17.120]  into the change buffer and delete records from there. And then we observe that, okay,
+[12:17.120 --> 12:23.960]  there was nothing to delete records for this page and basically proving this claim. So
+[12:23.960 --> 12:31.840]  we are printing the index ID and index name to get some more detail to this proof.
+[12:31.840 --> 12:41.000]  Oh, sorry. Okay, so we were unable to reproduce this with a small grammar. We just took something
+[12:41.000 --> 12:46.440]  and we got lucky and got the trace and debugged it.
+[12:46.440 --> 12:54.800]  Possible consequences of this bug are the wrong results. That's of course very difficult
+[12:54.800 --> 13:00.320]  to prove. You don't have any testing tools to prove that really or not many tools. Or
+[13:00.320 --> 13:06.000]  you could get the crash on change buffer merge like here we got. And that change buffer merge
+[13:06.000 --> 13:10.200]  could happen any time, even if you are running check table to check if your table is okay,
+[13:10.200 --> 13:16.480]  then before my score, MariaDB 10.6, your server would crash because of this change buffer
+[13:16.480 --> 13:23.840]  corruption. So in our case, it was a page overflow when applying an insert. And change
+[13:23.840 --> 13:28.120]  buffer doesn't allow any page splitting. It must fit in the page. In the support case
+[13:28.120 --> 13:35.680]  I mentioned one week ago, the case was that the page split failed. It ran out of space.
+[13:35.680 --> 13:40.160]  You are taking one page, you are trying to copy part of the records to a new page and
+[13:40.160 --> 13:47.400]  it ran out of space. How can that be? It turned out that the page contained records for some
+[13:47.400 --> 13:55.000]  other index which apparently had been dropped earlier and that index apparently had not
+[13:55.000 --> 14:03.800]  null columns. So the length of a variable length field was interpreted, was stored there for
+[14:03.800 --> 14:10.560]  that index where this correct index would have the null bit map. And then we would read
+[14:10.560 --> 14:15.680]  the length of the record from previous byte and that's how we would get these two long
+[14:15.680 --> 14:24.640]  records being copied. Oh, five minutes left. I have to hurry up. So this debugging, how
+[14:24.640 --> 14:31.000]  it goes in detail, we continue to the end of the execution from the start. And then
+[14:31.000 --> 14:37.280]  we reverse continue to go back from the abort signal. Then we set the temporary breakpoint
+[14:37.280 --> 14:46.480]  to this bitmap page access. Then we get to that breakpoint and we get in a register we
+[14:46.480 --> 14:51.720]  happen to have the byte address of the bitmap byte which we are interested in. And then
+[14:51.720 --> 15:00.600]  we reverse continue to the changes of that byte. So the last occurrence of that was for
+[15:00.600 --> 15:08.800]  an insert that was buffered after the at index. And we continue from that, we see that this,
+[15:08.800 --> 15:14.440]  the previous occurrence is the at index that is clearing the flag. And from that we can
+[15:14.440 --> 15:21.840]  get the page number which is affected and we can get the index ID and index name and
+[15:21.840 --> 15:30.640]  the SQL statement which is alter table. And then we set some more breakpoints on this
+[15:30.640 --> 15:34.720]  insert buffer delete and insert operations. Set the condition that we wanted only for
+[15:34.720 --> 15:40.880]  this page and then we reverse continue, we get the insert that was buffered before this
+[15:40.880 --> 15:47.240]  at index. Apparently there was a drop index in between but I didn't add statements to
+[15:47.240 --> 15:54.040]  get a breakpoint there this time. So the index name is different as after the at index and
+[15:54.040 --> 16:00.920]  index ID is different. And there was no call to the change buffer deletion. When we continue
+[16:00.920 --> 16:06.120]  from this point to the end of the execution we just reached the assertion failure again
+[16:06.120 --> 16:12.520]  without any change buffer record deletion in between.
+[16:12.520 --> 16:21.960]  So I'm quoting this Finnish ski jumper who apparently was confusing to French phrases.
+[16:21.960 --> 16:28.560]  He was wishing him a good trip when he is starting to do the ski jumping. And I'm wishing
+[16:28.560 --> 16:35.600]  a good trip for anybody who is using the change buffer. So and the deja vu, yes, we have seen
+[16:35.600 --> 16:43.520]  this shut down hang actually earlier. There was a 10.1, MariaDB 10.1 support customer case.
+[16:43.520 --> 16:50.240]  They got this hang and we had to do something to fix that. But in MariaDB 10.5 we made
+[16:50.240 --> 16:59.000]  another change hopefully to reduce the chances of getting like random change buffer much
+[16:59.000 --> 17:08.520]  because basically after this change buffer much only happens when SQL statement needs
+[17:08.520 --> 17:14.000]  that change buffer much to happen. No background operation. So we had to adjust that previous
+[17:14.000 --> 17:20.800]  fix for the 10.5 code base but that was not adjusted correctly. And we were not able to
+[17:20.800 --> 17:29.280]  reproduce this corruption or this hang earlier. So only quite lately we were able to reproduce
+[17:29.280 --> 17:37.720]  it and then we were able to debug it properly. There are some other corruption caused by
+[17:37.720 --> 17:46.560]  the change buffer. And one thing I want to notice that in MariaDB 10.6 recently there
+[17:46.560 --> 17:52.640]  was a fix that we should not crash on any page corruption. If there are any cases where
+[17:52.640 --> 17:59.080]  we are still crashing I would be interested in details. And this includes like check table
+[17:59.080 --> 18:03.560]  when there is a crash. When there is a failure during change buffer much it will not cause
+[18:03.560 --> 18:12.480]  a crash. There was a mystery bug filed like 12 years ago. MySQL bug. The customer got
+[18:12.480 --> 18:19.600]  a crash during change buffer much because the page got empty as a result of applying
+[18:19.600 --> 18:25.480]  a perch operation. I can think of several bugs that have been fixed in MariaDB that
+[18:25.480 --> 18:33.800]  could be the explanation. The last one, this one from the previous example that cannot
+[18:33.800 --> 18:40.960]  apply because that only was introduced in MySQL 5.7 which they didn't use. And of this
+[18:40.960 --> 18:53.960]  list the 30422 it's a clone of MySQL fix which is applicable to MariaDB 10.3 and 10.4. Others
+[18:53.960 --> 19:01.960]  I don't think have been fixed in MySQL yet. So this teaches us that it really pays off
+[19:01.960 --> 19:10.840]  to analyze any obscure failure you get from running with RR because there are games in
+[19:10.840 --> 19:15.960]  there. And I think that assertions are like lottery tickets. If you don't write assertions
+[19:15.960 --> 19:23.520]  in your code then you can't win these kind of bug findings. And sometimes you can lose,
+[19:23.520 --> 19:28.440]  you can write a bogus assertion okay you make mistake, you correct it and improve the assertion
+[19:28.440 --> 19:37.360]  and then hopefully you will get something better later. We have some mitigation for this in
+[19:37.360 --> 19:48.520]  MariaDB. We don't access the data file when executing drop table. So if in that case we
+[19:48.520 --> 19:57.120]  are avoiding maybe more crashes on drop table. And there was a bug in you know DB slow shutdown
+[19:57.120 --> 20:02.440]  that the change buffer merge wouldn't check for log file overflow. So if the user got
+[20:02.440 --> 20:06.680]  impatient and killed the server because it's taken too long time then they could end up
+[20:06.680 --> 20:15.800]  with unrecoverable database. And some more mitigation that we disabled this change buffer
+[20:15.800 --> 20:22.320]  by default. We deprecated the parameter and we removed the change buffer in the 11.0 release.
+[20:22.320 --> 20:29.840]  The upgrade code for handling it, it was tested and I hope that if there is some corruption
+[20:29.840 --> 20:35.960]  notice during the upgrade it should still be a possible to go back to the earlier version
+[20:35.960 --> 20:47.680]  and then do something to correct. Yes, if there are any records in the change buffer
+[20:47.680 --> 20:53.880]  we ignore, we don't trust these bitmap bits. We go through the change buffer records and
+[20:53.880 --> 21:03.480]  if there are any we will apply them. Yeah, so that was basically what I wanted to say
+[21:03.480 --> 21:13.120]  and maybe this last slide that it's a good thing to have a nice layer design if you optimize
+[21:13.120 --> 21:18.400]  things by breaking this layer boundaries then you are asking for trouble. That's basically
+[21:18.400 --> 21:27.320]  what we can learn from this. Question, you said that you fixed a few things in Merle
+[21:27.320 --> 21:36.480]  DB and they're not yet fixed in upstream. Are there bugs open upstream for fixing these
+[21:36.480 --> 21:43.480]  things? I haven't filed any, I lost my MySQL account when I resigned Oracle.
+[21:43.480 --> 21:52.040]  Okay, well, I'll look into it so we can get this fixed in upstream. Yeah, you are welcome
+[21:52.040 --> 21:58.000]  to file bugs and maybe they will be fixed. Well, especially if it's a crashing bug.
+[21:58.000 --> 22:07.960]  Yeah, but you can't repeat them, so you have a hard time proving that. Well, there are
+[22:07.960 --> 22:12.680]  tools obviously now, weren't obvious before. I'm very persistent. It's like once we know
+[22:12.680 --> 22:21.680]  it exists in Merle DB as it takes and somebody that is persistent enough should be able to
+[22:21.680 --> 22:46.640]  do that. Yes. It is very bad. I mean, if you have multiple threats or processes, it's running
+[22:46.640 --> 22:52.280]  them on a single CPU core at the time. So that's why we are running hundreds of servers
+[22:52.280 --> 23:04.280]  in parallel on a single server for several hours to get these traces. Actually, also
+[23:04.280 --> 23:09.120]  for normal debugging, there have been cases like if you have lots of conditional branches
+[23:09.120 --> 23:18.760]  in your code like this debug library or performance schema. Those branches are never taken, but
+[23:18.760 --> 23:24.080]  because RR is interested in conditional branches. I have seen a case where if I compile without
+[23:24.080 --> 23:32.600]  these things, I get a crash or problem in let's say like three seconds. And then I was curious
+[23:32.600 --> 23:38.240]  how long does it take if I use these stupid compilation options with these extra conditions.
+[23:38.240 --> 23:44.040]  For that particular thing, I interrupted it after two hours. So it was 7,000 seconds
+[23:44.040 --> 23:52.880]  versus three seconds. So don't use conditional branches or unnecessary debugging. Turn off
+[23:52.880 --> 24:03.200]  all the code that you don't need. Conditional branches are evil for RR. Well, maybe you
+[24:03.200 --> 24:12.080]  are not using it like multi-threaded with context switches and so on. For single-threaded,
+[24:12.080 --> 24:38.800]  there is basically no overhead. Thank you for saving me. It was a team effort.
+[24:38.800 --> 24:43.600]  Thank you.
+[27:08.800 --> 27:34.600]  One, two, three. Is it working? Okay, there is no audio in the room, right? So you want
+[27:34.600 --> 27:44.120]  me to speak loud. Well, anyway, we are going to talk today about MySQL 8 and MariaDB 10.10.
+[27:44.120 --> 27:49.960]  Original Toxa is 10.11, but I wanted to make sure we're sticking to the latest GA or stable
+[27:49.960 --> 28:00.640]  version so it had to go down a bit. Well, and let me start by congratulating MariaDB team
+[28:00.640 --> 28:09.320]  with MariaDB Corporation going public. In particular, Monty, congrats for driving two
+[28:09.320 --> 28:16.520]  very impactful open-source database companies to exit. That's quite an achievement, I think
+[28:16.520 --> 28:29.400]  you people in the universe have that. Yeah. Well, so what are we going to talk about first?
+[28:29.400 --> 28:37.880]  I think which we need to recognize where MariaDB and MySQL started from the same roots, right?
+[28:37.880 --> 28:44.960]  We have diverged substantially, right? So I think it was interesting when on the previous
+[28:44.960 --> 28:49.200]  talk, Jean-François was talking about the upstream, right? I was thinking, hey, you know,
+[28:49.200 --> 28:58.000]  what does MariaDB really consider MySQL upstream at this point? Or not quite, right? In this
+[28:58.000 --> 29:04.680]  case, I think there is enough diversity right what this is our kind of, you know, ancestors,
+[29:04.680 --> 29:11.760]  maybe, you know, like monkeys for humans, you know, something of this regard. Now, in
+[29:11.760 --> 29:21.160]  this case, like I am trying to be fair the best way I can, right, which for me always
+[29:21.160 --> 29:28.440]  means offends everybody equally, right? So, you know, if Monty is not screaming at me
+[29:28.440 --> 29:32.960]  saying you are fucking moron, Peter, that is not how it is, then probably I am not doing
+[29:32.960 --> 29:45.000]  my job properly. No, no, no, but you... Oh, you see? Yes, yes, yes. Of course, of course.
+[29:45.000 --> 29:50.520]  You always do everything with loving your heart, right? And you don't use bad words
+[29:50.520 --> 29:57.520]  as I do. That is wonderful. So, let's talk about development model first. Obviously,
+[29:57.520 --> 30:03.440]  MySQL is developed by the Oracle corporations. We can see what the contributions are accepted,
+[30:03.440 --> 30:09.640]  but I wouldn't say they are encouraged in the same way as MariaDB does. And we also have
+[30:09.640 --> 30:13.400]  open source, as I would say, like a drop ship open source, right? We have those release
+[30:13.400 --> 30:20.400]  coming, but we do not really have a tree there over developers changes, right, happen. You
+[30:20.400 --> 30:24.920]  know, as we can see. That, I think, can be particularly problematic, for example, for
+[30:24.920 --> 30:31.760]  security bugs where it can be hard to track, like, what exactly change fixes that particular
+[30:31.760 --> 30:40.120]  issue, right, which is different from MariaDB, which is... has a server released by MariaDB
+[30:40.120 --> 30:48.040]  Foundation, though there is a lot of work, right, for actual new features done by MariaDB
+[30:48.040 --> 30:54.520]  corporations, though foundations ensure what the contributions are encouraged and developers
+[30:54.520 --> 31:02.600]  really done in the public, right, as I would say, through open source project. One thing
+[31:02.600 --> 31:09.560]  I wanted to point out, which I think is interesting, is also changes from the Oracle side, right?
+[31:09.560 --> 31:16.640]  For years, I've been actually defender of Oracle in regards to, hey, you know, besides
+[31:16.640 --> 31:21.560]  all this kind of stuff that Oracle is looking to kill MySQL, they have actually been doing
+[31:21.560 --> 31:27.880]  a pretty good job in releasing majority features of the open source and the proprietary enterprise
+[31:27.880 --> 31:33.720]  features have been kind of well-isolated, abstracted through API, and it was relatively
+[31:33.720 --> 31:39.480]  easy for companies as well, especially, like, per corner, to implement the equivalent.
+[31:39.480 --> 31:44.000]  Now things have been changing in the last couple of years, right? We can see what, everybody
+[31:44.000 --> 31:54.120]  knows this guy? Yeah, yeah, yeah. Well, like, we can see what Larry actually discovered,
+[31:54.120 --> 32:01.600]  what the MySQL exists in the last couple of years, right? And he only seems to care about
+[32:01.600 --> 32:09.680]  the MySQL as a heatwave, because we all know heatwave supports the melt zone of lake, right?
+[32:09.680 --> 32:15.520]  And we can see a lot of focus getting on this snowflake development, which is sort of a
+[32:15.520 --> 32:23.400]  cloud-only, and of course, you know, proprietary version of MySQL. So far, it is only analytic
+[32:23.400 --> 32:28.600]  extension, right? But I think it's all questions to us, hey, could there be some other critical
+[32:28.600 --> 32:33.960]  features which will be only property, right? Maybe Oracle somewhere in a bellies developing
+[32:33.960 --> 32:37.960]  something like transparent sharding for MySQL, maybe that is going to be proprietary first,
+[32:37.960 --> 32:42.840]  right? So that is, I think, the questions what a lot of people in MySQL community are
+[32:42.840 --> 32:54.240]  asking. Now, with MySQL, with MariaDB, I think what is interesting compared to, like, a MySQL
+[32:54.240 --> 33:00.320]  is that there are actually two companies, MariaDB, well, two entities, probably better
+[33:00.320 --> 33:08.120]  than MariaDB Foundation and MariaDB Corporation, right? That is the latest mission, which I
+[33:08.120 --> 33:16.520]  just grabbed a couple of days ago from MariaDB Foundation side, right? And I think that is
+[33:16.520 --> 33:25.560]  a very good to understand relationship with those companies to understand this, right?
+[33:25.560 --> 33:31.600]  Now, if you think in this case is what MariaDB Foundation is really at large focusing on
+[33:31.600 --> 33:38.760]  serving MariaDB community, MariaDB ecosystem, right? It develops open-source software around
+[33:38.760 --> 33:44.480]  MySQL. They are MariaDB Corporation. That is now public company, right? Which is providing
+[33:44.480 --> 33:51.920]  a property solutions and commercializing MariaDB software, right? That is, I think, the interest
+[33:51.920 --> 33:58.320]  way, right? Now, relationship sometimes can be a little bit complicated, though I would
+[33:58.320 --> 34:03.920]  say there have been some more complicated entitlements in which I mentioned in my previous
+[34:03.920 --> 34:11.760]  talks, right? And some of them have been made more clear, which I think is a great progress.
+[34:11.760 --> 34:17.200]  So if you think about this, what is interesting is MariaDB Foundation has responsibility kind
+[34:17.200 --> 34:22.040]  of relatively narrow to the MariaDB server, right? And we can see what number of other
+[34:22.040 --> 34:30.120]  components which are very valuable in MySQL ecosystem are owned by MariaDB Corporation,
+[34:30.120 --> 34:40.600]  right? Not by the Foundation and also a lot of development. Roadmap is driven by the Corporation.
+[34:40.600 --> 34:45.600]  I also find it interesting what we see MySQL knowledge base, which is kind of built by
+[34:45.600 --> 34:52.800]  a community but is hosted by MariaDB Corporation. I find that not in a very good sense for like
+[34:52.800 --> 35:00.120]  an open-source software, there is also entanglement on the website level, right? So if I am downloading
+[35:00.120 --> 35:11.120]  MariaDB software from.org, right, then I am kind of redirected next to the MariaDB
+[35:11.120 --> 35:17.800]  Corporation knowledge base, right? And encouraged to fill out the lead which will go to their
+[35:17.800 --> 35:22.640]  MariaDB Corporation, which is not totally transparent, right? I think that's kind of, I may be still
+[35:22.640 --> 35:31.200]  looking like, oh, I am engaging with a non-profit while actually I am giving my connections
+[35:31.200 --> 35:36.920]  to somewhere else. Now, I wouldn't say though that that is completely unfair in this case
+[35:36.920 --> 35:44.040]  because MariaDB does carry the largest way to development and promote in MariaDB, right?
+[35:44.040 --> 35:55.200]  And they do also get the largest rewards compared to the other sponsors of MariaDB Foundation.
+[35:55.200 --> 36:02.920]  Now let's look quickly at what is really open-source between those versions, right? Now, in MySQL,
+[36:02.920 --> 36:13.760]  what we can see is a very clear open-core platform and we have Maria, MySQL community, right?
+[36:13.760 --> 36:20.600]  And, you know, router, cluster, whatever, all that comes which comes in open-source edition
+[36:20.600 --> 36:26.360]  and there is also enterprise version. Plus, as I mentioned, additionally, we have increasing
+[36:26.360 --> 36:37.920]  focus on the cloud-only solution as a heat wave. In terms of MariaDB, there are, you
+[36:37.920 --> 36:44.200]  know, a lot more nuance in this case, right? Because there are certain things coming from
+[36:44.200 --> 36:51.880]  MariaDB Foundation which are completely open-source right now. The things in MariaDB Corporation
+[36:51.880 --> 36:58.200]  Spaceway can be with a variety of licenses.

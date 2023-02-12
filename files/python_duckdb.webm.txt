@@ -1,0 +1,314 @@
+[00:00.000 --> 00:13.480]  Let's welcome Pedro Holanda for his talk on DuckDB and a magnificent snake duck.
+[00:13.480 --> 00:19.720]  Yeah, you guys can be surprised at anything you can find as a rubber duck these days,
+[00:19.720 --> 00:20.720]  you know.
+[00:20.720 --> 00:22.920]  All right, so I'm Pedro Holanda.
+[00:22.920 --> 00:28.080]  I am one of the main contributors of the DuckDB projects, which is an open source database
+[00:28.080 --> 00:32.680]  system, and also I'm the COO of DuckDB Labs.
+[00:32.680 --> 00:36.640]  And today I'm going to be talking a little bit about how DuckDB can bring analytical
+[00:36.640 --> 00:40.480]  SQL power directly into your Python show.
+[00:40.480 --> 00:44.920]  So to give you a little bit of an idea of how the stocks look like, I'm going to start
+[00:44.920 --> 00:46.640]  with what is DuckDB.
+[00:46.640 --> 00:50.120]  So I'm here talking about one more database system.
+[00:50.120 --> 00:54.360]  I want to motivate you guys that we actually needed to do one more database system.
+[00:54.360 --> 00:57.560]  The other ones didn't solve the problems we had.
+[00:57.560 --> 01:03.760]  And then I'm going to go over the main characteristics of DuckDB, so what actually makes it special.
+[01:03.760 --> 01:08.240]  Then I'm going to go over DuckDB in the Python land, so how DuckDB integrates in the Python
+[01:08.240 --> 01:09.240]  ecosystem.
+[01:09.240 --> 01:12.760]  I'm going to do a little demo.
+[01:12.760 --> 01:18.160]  The basic idea is that we're going to use the infamous New York City taxi data sets,
+[01:18.160 --> 01:24.360]  and we're going to try to do some estimation of fair costs, and we're going to use DuckDB
+[01:24.360 --> 01:28.360]  partners and PySpark just to see a couple of the differences of the things I'm going
+[01:28.360 --> 01:30.120]  to be talking over.
+[01:30.120 --> 01:32.440]  And then some summary of the talk.
+[01:32.440 --> 01:33.440]  So what is DuckDB?
+[01:33.440 --> 01:39.280]  Well, DuckDB was actually born at CWI, which is the research center of mathematics and
+[01:39.280 --> 01:41.760]  computer science in the Netherlands.
+[01:41.760 --> 01:45.760]  And what we actually had there is that a lot of the projects, the PhD student projects,
+[01:45.760 --> 01:48.840]  the master projects, they are very data sciencey.
+[01:48.840 --> 01:52.400]  So usually you have a data science problem, and you want to throw a database measurement
+[01:52.400 --> 01:56.160]  system at the data science problem because you're handling data.
+[01:56.160 --> 02:02.080]  So initially we were like, OK, we can probably use a database server, use a database connection,
+[02:02.080 --> 02:07.800]  and then just transfer the data from the relational database to your Python terminal, for example,
+[02:07.800 --> 02:10.360]  like where your analytical tools are.
+[02:10.360 --> 02:14.920]  And it turns out that's quite a bad idea, because you are transferring a lot of data.
+[02:14.920 --> 02:16.880]  So that's pretty costly.
+[02:16.880 --> 02:20.760]  And then you're like, OK, this is really not solving our problem, can we draw inspiration
+[02:20.760 --> 02:22.200]  from somewhere else?
+[02:22.200 --> 02:25.800]  And then, of course, there are SQLites, the most famous database out there, at least the
+[02:25.800 --> 02:28.160]  most used one.
+[02:28.160 --> 02:33.600]  And it has quite a nice property, which is being an embedded database system.
+[02:33.600 --> 02:37.360]  Being an embedded database system, it means it can run inside your Python process.
+[02:37.360 --> 02:41.680]  So you can eliminate this data transfer cost.
+[02:41.680 --> 02:46.880]  SQLite comes with one design decision that is a transactional database, so it's actually
+[02:46.880 --> 02:52.720]  super optimized for small updates, but it's not really optimized for analytics.
+[02:52.720 --> 02:57.800]  So we kind of wanted to do SQLites in terms of being easy to use and eliminating this
+[02:57.800 --> 03:03.160]  data transfer cost, but focusing on analytical queries.
+[03:03.160 --> 03:07.480]  And that's kind of how the database was born, and that's also why we frame it as a SQLite
+[03:07.480 --> 03:09.560]  for analytics.
+[03:09.560 --> 03:11.240]  It also has a very simple installation.
+[03:11.240 --> 03:14.760]  So if you think about Python, you just do a bit so, and you're good.
+[03:14.760 --> 03:16.880]  This is embedded, there's no server management.
+[03:16.880 --> 03:21.120]  So let's say you just want to, I don't know, query a pre-kit file, two lines of code you
+[03:21.120 --> 03:22.120]  can write, query it.
+[03:22.120 --> 03:28.120]  Like, there's no starting of server, there's no schema creation, the schema is inferred
+[03:28.120 --> 03:31.240]  from the object, so it's very easy, very fast.
+[03:31.240 --> 03:36.320]  And we also really focus on this fast transfer between analytical languages and their tools,
+[03:36.320 --> 03:38.840]  like in Python and R, to DuckDB.
+[03:38.840 --> 03:45.600]  DuckDB is currently in pre-release, I think the last version we released was 0.6, 0.7
+[03:45.600 --> 03:46.600]  is coming up soon.
+[03:46.600 --> 03:52.040]  I need the web pages like a little bit more details about all the things that are in each
+[03:52.040 --> 03:53.040]  release.
+[03:53.040 --> 03:59.200]  All right, so I'm going to go over some of the main characteristics of DuckDB, particularly
+[03:59.200 --> 04:03.400]  like the color data storage, a little bit about compression.
+[04:03.400 --> 04:07.720]  I'm going to talk about vectorized execution, so these are all like core database stuff.
+[04:07.720 --> 04:12.840]  Actually talking about vectorized execution engine, it's going to be difficult because
+[04:12.840 --> 04:18.720]  Professor Bonk is here and he actually created that, so I'll try to do it correctly.
+[04:18.720 --> 04:25.160]  A little bit about end-to-end core optimization, parallelism and beyond-memory execution.
+[04:25.160 --> 04:30.000]  So color data storage, well, there's basically two ways that you can do it.
+[04:30.000 --> 04:35.160]  One is a raw store, a scone store, as an example of raw store, we have SQLites, and the whole
+[04:35.160 --> 04:42.920]  thing about the whole idea is they're storing your data consecutively in memory per row.
+[04:42.920 --> 04:46.600]  So that basically means that if you want to fetch an individual row, that's very cheap
+[04:46.600 --> 04:52.200]  because it's continuous in memory, however, you always have to fetch all the columns.
+[04:52.200 --> 04:57.360]  So analytical queries, usually you have very white tables, but you just want to really
+[04:57.360 --> 05:00.240]  get a couple of these columns.
+[05:00.240 --> 05:02.040]  So what if you only want to use a field?
+[05:02.040 --> 05:08.160]  So in this example, what if you just are interested in the price of a product, but not the stores
+[05:08.160 --> 05:11.480]  as sold, right?
+[05:11.480 --> 05:19.240]  In a column store, you actually have your layout that the data of the column is consecutively
+[05:19.240 --> 05:20.240]  in memory.
+[05:20.240 --> 05:24.400]  So if you want to access just a couple columns, you can actually have immense savings on this
+[05:24.400 --> 05:27.280]  KIO and memory bandwidth.
+[05:27.280 --> 05:31.360]  So that's why this type of format is really optimized for analytics.
+[05:31.360 --> 05:35.880]  So to give you a more concrete example, let's say that we have a one terabyte table with
+[05:35.880 --> 05:38.040]  100 columns.
+[05:38.040 --> 05:41.880]  For simplicity, let's say all the columns have the same size, and we just require five
+[05:41.880 --> 05:44.560]  columns of the table in our analytical query.
+[05:44.560 --> 05:49.520]  So in a raw store, let's SQLites, reading this whole table, if you have a disk with
+[05:49.520 --> 05:52.600]  around 100 megabytes per second, it will take you three hours.
+[05:52.600 --> 05:57.160]  If you were using a column store model, which is what Pandas inductively does, for example,
+[05:57.160 --> 06:01.520]  using these five columns from disk, it takes you eight minutes.
+[06:01.520 --> 06:09.400]  So there's a huge improvement by just setting up the correct storage formats for your workload.
+[06:09.400 --> 06:10.400]  Compression.
+[06:10.400 --> 06:13.680]  Well, I'm not going to go into a lot of detail about the compression algorithms that we implement
+[06:13.680 --> 06:19.760]  in Duck2B, but what I can tell you is because of having a column store, you're going to
+[06:19.760 --> 06:25.880]  have your data from your column continuously in memory, which gives you a very good advantage
+[06:25.880 --> 06:31.120]  to compressing it, because usually the data from the same column is somewhat similar.
+[06:31.120 --> 06:40.960]  So you can apply cool things like RLE, FSST and CHIMP for floating point numbers, FSST
+[06:40.960 --> 06:41.960]  for strings.
+[06:41.960 --> 06:45.760]  So you can start applying all these algorithms and really decrease the size of your data.
+[06:45.760 --> 06:51.480]  So in this table here, we actually have, I think this is from one year ago, one year
+[06:51.480 --> 06:53.480]  and a half.
+[06:53.480 --> 06:55.520]  0.2.8 from Duck2B.
+[06:55.520 --> 06:59.800]  We had no compression at that point, and then a year and a half later, we actually managed
+[06:59.800 --> 07:05.720]  to implement all these things, which got us five times better compression, Y19, for example,
+[07:05.720 --> 07:12.600]  3.18 better compression in the taxi data set that I'm going to be using later.
+[07:12.600 --> 07:14.000]  And why is compression so important?
+[07:14.000 --> 07:18.960]  Well, if we go back again to the same example, where we were reading our five columns, and
+[07:18.960 --> 07:23.840]  it was costing us to read them from disk eight minutes because of the storage formats, if
+[07:23.840 --> 07:29.000]  we compress these columns, we suddenly don't have to read 50 gigabytes anymore, right?
+[07:29.000 --> 07:30.120]  You read less.
+[07:30.120 --> 07:33.440]  And then of course, you apply like the best case from what I showed you from the last
+[07:33.440 --> 07:40.560]  table, five times, there are increases that cost you one point, one minute and 40 seconds.
+[07:40.560 --> 07:47.280]  So execution, well, there's three ways of doing a query execution.
+[07:47.280 --> 07:49.680]  There's actually one more, but it's not in the slides.
+[07:49.680 --> 07:54.080]  So our SQLites use the top-of-the-time processing, which means that you process one row at a
+[07:54.080 --> 07:55.080]  time.
+[07:55.080 --> 07:58.680]  Pandas uses column-of-the-time processing, which means that you process one column at
+[07:58.680 --> 07:59.680]  a time.
+[07:59.680 --> 08:05.120]  And DuckDB uses kind of like a mix of the both, which is a technique developed by Peter, the
+[08:05.120 --> 08:09.720]  vectorized processing where you process batches of a column at a time.
+[08:09.720 --> 08:13.800]  So basically, the top-of-the-time model from SQLites, it was optimized for a time where
+[08:13.800 --> 08:15.720]  computers didn't have a lot of memory.
+[08:15.720 --> 08:20.760]  There was low memory to be used because you only need to really keep one row in memory
+[08:20.760 --> 08:23.840]  throughout your whole query plan.
+[08:23.840 --> 08:28.560]  So the memory was expensive, that's what it could do, but this comes with a high CPU overhead
+[08:28.560 --> 08:34.400]  per tuple because you're constantly resetting your caches, you don't have any cache-conscious
+[08:34.400 --> 08:40.000]  algorithm running that piece of data up to the production of your query results.
+[08:40.000 --> 08:43.560]  If you go to the column-of-the-time, which is what Pandas uses, this already brings like
+[08:43.560 --> 08:47.320]  better CPU utilization, it allows for SIMD.
+[08:47.320 --> 08:52.040]  But it comes with the cost of materializing large intermediates in memory.
+[08:52.040 --> 08:56.040]  It basically means that you need the whole column in memory at that point to process
+[08:56.040 --> 08:57.360]  for that operator.
+[08:57.360 --> 09:01.760]  And of course, the intermediates can be gigabytes each, so that's pretty problematic when the
+[09:01.760 --> 09:03.080]  data sizes are large.
+[09:03.080 --> 09:06.760]  And that's why you see, for example, that Pandas, if your data doesn't fit in memory,
+[09:06.760 --> 09:07.760]  what does it happen?
+[09:07.760 --> 09:10.440]  It crashes.
+[09:10.440 --> 09:15.640]  And then if you go to the vectorized query processing, it's actually optimized for CPU
+[09:15.640 --> 09:20.200]  cache locality, you can do SIMD instructions, pipelining, and the whole idea is that your
+[09:20.200 --> 09:24.960]  intermediates are actually going to fit here in L1 cache.
+[09:24.960 --> 09:28.480]  So basically you're going to be paying this latency of one nanosecond to be accessing
+[09:28.480 --> 09:32.880]  your data throughout your query plan instead of paying the latency of a main memory, which
+[09:32.880 --> 09:37.280]  is also the case of a column database, which is 100 nanoseconds.
+[09:37.280 --> 09:41.840]  It seems like a small difference, but when you're constantly executing this, this really
+[09:41.840 --> 09:46.320]  becomes a bottleneck.
+[09:46.320 --> 09:49.400]  And to end-score optimizations, of course, something that we have inducted to be, so
+[09:49.400 --> 09:54.240]  we have stuff like expression rewriting, join ordering, subquery flattening, filtering,
+[09:54.240 --> 10:00.240]  projection pushdown, which is a bit more simple, but it's extremely important and brings a
+[10:00.240 --> 10:02.400]  huge difference in the cost of the query.
+[10:02.400 --> 10:05.760]  So here's an example of a projection pushdown.
+[10:05.760 --> 10:10.400]  Say you have a table with five columns, A, B, C, D, E, and you want to run a query, that's
+[10:10.400 --> 10:16.920]  pretty small, but the query is like a selects minimum from column A, where there's a filtering
+[10:16.920 --> 10:19.920]  column A saying the column A is bigger than zero and you group by B.
+[10:19.920 --> 10:24.800]  So the whole point of this query is that you're only using two columns of the table, right?
+[10:24.800 --> 10:29.240]  So what the ductdb optimizer will do is like, okay, in this scanner, I know I don't need
+[10:29.240 --> 10:34.320]  all the columns, I just need N and B, and you just don't have to read the other ones.
+[10:34.320 --> 10:38.680]  If you do the same one in pandas, for example, you can apply your filter, and then you have
+[10:38.680 --> 10:42.600]  the filter, the group by the aggregator, but at the time you're doing this filter, you're
+[10:42.600 --> 10:45.880]  still filtering all the other columns you're not going to be using your query.
+[10:45.880 --> 10:51.120]  Of course, you can manually make this optimization, but it's pretty nice that the database system
+[10:51.120 --> 10:54.160]  can do that for you.
+[10:54.160 --> 10:59.440]  Of course, the ductdb also has automatic parallelism and beyond-memory execution, so ductdb has
+[10:59.440 --> 11:05.560]  parallel versions of most of its operators, I think all of our scanners, including with
+[11:05.560 --> 11:11.600]  insertion order preservation of parallelize now, aggregations, joins, pandas, for example,
+[11:11.600 --> 11:14.680]  only supports single-threaded execution.
+[11:14.680 --> 11:17.240]  We all have pretty good laptops these days, right?
+[11:17.240 --> 11:21.640]  So it's a shame if you cannot really take advantage of parallelism.
+[11:21.640 --> 11:26.400]  And ductdb, again, supports the execution of data that does not fit in memory.
+[11:26.400 --> 11:30.240]  It's kind of the never give up, never surrender approach, it's like, we're going to execute
+[11:30.240 --> 11:32.120]  this query.
+[11:32.120 --> 11:35.960]  We try to always have graceful degradation, also, that it just doesn't suddenly crash
+[11:35.960 --> 11:36.960]  in performance.
+[11:36.960 --> 11:41.640]  And the whole goal is really to never crash and always execute the query.
+[11:41.640 --> 11:46.960]  All right, so a little bit about ductdb in the Python lens.
+[11:46.960 --> 11:55.160]  Basically we have an API, it's a dbapi to.ocompliant, so, far too much what SQLite has, for example,
+[11:55.160 --> 11:59.920]  you can create a connection and can start executing queries, but we also wanted to have
+[11:59.920 --> 12:05.560]  something similar to the data frame API that still could, people that can't come from pandas,
+[12:05.560 --> 12:08.320]  for example, could still have something familiar to work on.
+[12:08.320 --> 12:11.400]  So here in this example, you can also create a connection.
+[12:11.400 --> 12:14.960]  You can create this relation, which kind of looks like a data frame, you just point it
+[12:14.960 --> 12:19.840]  to a table, you can do a show to inspect what the table is inside, and you can apply, for
+[12:19.840 --> 12:24.480]  example, these chaining operators, right, like a filter, a projection.
+[12:24.480 --> 12:31.400]  So in the end, this is all lazily executed, and this also allows you to take advantage
+[12:31.400 --> 12:36.760]  of the optimizer of ductdb, even if you do the chaining operations.
+[12:36.760 --> 12:45.600]  Of course, I talked to you about memory transfer, so we were very careful as well into being
+[12:45.600 --> 12:49.560]  very integrated with this, very common libraries in Python.
+[12:49.560 --> 12:57.040]  So with pandas and pyarrow, for example, what we actually do is that in the end, for pandas,
+[12:57.040 --> 13:02.600]  the columns are usually not pyarrows, which turns out to be RC vectors, which turns out
+[13:02.600 --> 13:04.280]  that's also kind of what we use.
+[13:04.280 --> 13:09.160]  So with a little bit of makeup in the metadata, we can just directly read them, and they're
+[13:09.160 --> 13:10.720]  all in the same process, right?
+[13:10.720 --> 13:16.560]  So we have access to that piece of memory, which in the end means that you can actually
+[13:16.560 --> 13:21.720]  access the data from pandas in ductdb without paying any transfer costs, at least constant
+[13:21.720 --> 13:26.400]  transfer costs just for doing the metadata makeup, let's say.
+[13:26.400 --> 13:28.120]  And there's the same thing with pyarrow.
+[13:28.120 --> 13:34.040]  We also have what we call zero copy, so we can read error objects and output error objects
+[13:34.040 --> 13:36.880]  without any extra costs.
+[13:36.880 --> 13:42.200]  With NumPy, we also support SQLCAMY, and in IBIS, they're actually the default back-end
+[13:42.200 --> 13:48.360]  from them, I think, since six months ago.
+[13:48.360 --> 13:55.680]  A little bit of usage, so as you can see, this is our PyPy download counts.
+[13:55.680 --> 13:58.400]  The Python library is actually our most downloaded API.
+[13:58.400 --> 14:04.120]  We have APIs for all sorts of languages, and you can see that in the last month, we had
+[14:04.120 --> 14:09.680]  like 900,000 downloads, so there are a lot of people there trying out and using ductdb
+[14:09.680 --> 14:12.160]  in their Python scripts.
+[14:12.160 --> 14:23.040]  So now it's the demo time, let me get this, all right, this looks like you can see.
+[14:23.040 --> 14:29.280]  So this is just installing ductdb PySpark and getting our yellow trip data dataset,
+[14:29.280 --> 14:35.400]  our executor, this, our database, just importing the stuff we're going to be using, and here
+[14:35.400 --> 14:41.000]  is just like getting a connection from ductdb, creating a relation that's just, okay, we're
+[14:41.000 --> 14:45.360]  going to, as a parquet file, ductdb can be parquet files, and then you can just print
+[14:45.360 --> 14:50.120]  to inspect what's out there, right, so if we run this, we can see like, okay, these
+[14:50.120 --> 14:54.880]  are the columns we have, we have vendor ID, we have pick up dates, time, passenger counts,
+[14:54.880 --> 14:59.400]  you have the types of the columns, you can also have a little result preview, just have
+[14:59.400 --> 15:05.000]  an idea of what it looks like, so I think this dataset has about like 20 columns, maybe,
+[15:05.000 --> 15:12.560]  and there's just information about the taxi rides in New York in 2016, and then you can
+[15:12.560 --> 15:17.880]  also, for example, run a simple query here, I'm just doing like accounts to know how many
+[15:17.880 --> 15:22.720]  tuples are there, and we have about 10 million tuples on this dataset.
+[15:22.720 --> 15:26.680]  All right, so this function here is just to do a little bit of benchmarking, coming from
+[15:26.680 --> 15:32.440]  academia, we do have to do something that's kind of fair, I guess, so I run just five
+[15:32.440 --> 15:37.160]  times and take the median time of everything, and then this is actually where then we start,
+[15:37.160 --> 15:41.840]  so we start off with data frame, so Pundas can also read parquet files, and the whole
+[15:41.840 --> 15:46.520]  thing about ductdb again is that it's not here as a replacement for Pundas, this is
+[15:46.520 --> 15:51.440]  not run by itself, but something that can work together with Pundas, so the cool thing
+[15:51.440 --> 15:57.320]  is that we can, again, read and output data frames without any extra cost, so let's say
+[15:57.320 --> 16:02.440]  that in the query here, we're just getting the passenger counts, then the average tip
+[16:02.440 --> 16:09.920]  amount of trips that had a short distance, right, and we group by passengers, by the
+[16:09.920 --> 16:16.680]  number of passengers, so what we want to know is for short trips, does the amount of tip
+[16:16.680 --> 16:24.280]  matters by the number of passengers in that ride, and what you can see here is that you
+[16:24.280 --> 16:29.120]  can, again, read from the data frame, that's what we're doing, and we just have to use
+[16:29.120 --> 16:35.120]  the data frame name in our SQL query, and if you call.df from the query results, you
+[16:35.120 --> 16:40.360]  also output in your data frame, and it's pretty cool because the data frames have these plots
+[16:40.360 --> 16:45.240]  bars, they have plotting capabilities that ductdb doesn't have, and you can get easily
+[16:45.240 --> 16:52.120]  a very nice chart, so you see here, apparently, there's some dirty data because before getting
+[16:52.120 --> 16:57.080]  in tips, when they don't have anyone in their rides, I'm not sure what that is, but apparently
+[16:57.080 --> 17:01.560]  like if you have more people, seven to nine, maybe like the more expensive cars, you get
+[17:01.560 --> 17:06.120]  a higher tip, and you can do the same thing in pandas, of course, right, like in pandas
+[17:06.120 --> 17:09.160]  you don't have SQL, you're going to have to do, to use their own language, to do the
+[17:09.160 --> 17:14.480]  group by, the average, and you can directly use the plots, and the whole point here is
+[17:14.480 --> 17:21.800]  to show the different execution time, like, now we're waiting, okay, so took a second,
+[17:21.800 --> 17:28.920]  and ductdb took 0.2, so this is like a 5x, right, to 0.25, so like 4x, and you also have
+[17:28.920 --> 17:32.560]  to consider that we're using like a, not a very beefy machine, right, this is a co-lib
+[17:32.560 --> 17:37.880]  machine, imagine if you had more cars, this difference would also be bigger, and then
+[17:37.880 --> 17:44.400]  I added spark for fun, so actually spark can also read data frames, but it crashes out
+[17:44.400 --> 17:49.040]  of memory in my co-lib machine, so I had to give up on this, and read directly from par
+[17:49.040 --> 17:56.040]  K files, but it does output it as a data frame, I think we're going to have to wait a little
+[17:56.040 --> 18:05.400]  bit, but as me it's best, so of course spark is not designed for small data sets, but turns
+[18:05.400 --> 18:10.000]  out there are a lot of use cases where you use these small data sets, as you're going,
+[18:10.000 --> 18:19.560]  it's warming up a little bit, it's good for the winter, it produces some energy, I think,
+[18:19.560 --> 18:28.120]  alright, okay, so it took two seconds, 2.2 seconds, the actual execution, and that's
+[18:28.120 --> 18:36.080]  already like, what, more than two times what Pandas was, so, yeah, anyway, for the demo
+[18:36.080 --> 18:40.840]  of course, I showed you something that's fairly simple, can you do actually very complicated
+[18:40.840 --> 18:44.800]  things, maybe not very complicated, but more complicated, so here I'm not really going to
+[18:44.800 --> 18:49.800]  go over the query, but the whole idea is that we can just, for example, use ductDB to run
+[18:49.800 --> 18:58.600]  linear regression, so can we predict, can we estimate the fare with the trip distance,
+[18:58.600 --> 19:04.480]  and turns out you can just calculate the alpha and beta with not such a crazy query, and
+[19:04.480 --> 19:08.800]  then you can again export it to Pandas, and you have a very nice figure there, so you
+[19:08.800 --> 19:18.880]  can really combine these two to get the best out of both, alright, that was the demo, summary,
+[19:18.880 --> 19:24.760]  oh that's my last slide, good, so yeah, ductDB is an embedded database system, again it's
+[19:24.760 --> 19:29.600]  completely open source, it's under the MIT license, since it came from academia, this
+[19:29.600 --> 19:34.080]  is something that we're always worried about, it's to also give it back to everyone, because
+[19:34.080 --> 19:39.600]  it was usually funded by taxpayers money, so everyone can use it, 100% of what we do
+[19:39.600 --> 19:45.320]  is actually open source, there's nothing that's closed source, it's designed for analytical
+[19:45.320 --> 19:52.160]  queries, so data analysis, data science, has binding for many languages, so of course
+[19:52.160 --> 19:57.760]  I'm at the Python dev room, I'm talking about Python, but we have our Java, turns out that
+[19:57.760 --> 20:03.800]  Java is like one of our most downloaded APIs, so I guess that's an interesting sign, Java
+[20:03.800 --> 20:09.280]  scripts, and a bunch of others, it has very tight integrations with the Python ecosystem,
+[20:09.280 --> 20:15.320]  again the whole idea is that you eliminate transfer costs, implements the database in
+[20:15.320 --> 20:20.520]  relation to APIs, the relation to API again is this more data frame like, and has full
+[20:20.520 --> 20:26.640]  SQL support, so anything you can imagine like window functions or what not, you can just
+[20:26.640 --> 20:36.280]  express them using duck to be, and that's it, thank you very much for paying attention,
+[20:36.280 --> 20:52.680]  happy to answer questions.
+[20:52.680 --> 21:02.920]  Thank you Petron, so we have five minutes for your questions.
+[21:02.920 --> 21:09.800]  You mentioned, thanks for the great presentation, you mentioned beyond memory execution, and
+[21:09.800 --> 21:14.960]  kind of that it tries not to degrade as much, can you shine a little bit more light on
+[21:14.960 --> 21:20.960]  kind of what happens under the hood, and how much degradation happens?
+[21:20.960 --> 21:26.000]  Of course, I think that's, there's only the ordering operator that actually does that,
+[21:26.000 --> 21:31.960]  we have Lawrence that's doing his PhD, so there's a lot of operators that need to research
+[21:31.960 --> 21:36.240]  to be developed, that's more of a goal than something that actually happens now, but the
+[21:36.240 --> 21:41.520]  whole goal is that you really don't have this sudden spike in the future, but there's research
+[21:41.520 --> 21:57.280]  going on, in the future there will be more to be shared for sure.
+[21:57.280 --> 22:01.920]  Thank you very much for the talk, and it's very exciting to see such a tool, such a powerful
+[22:01.920 --> 22:09.960]  tool, I'm working usually with data warehouses, and I saw on the website that you do not recommend
+[22:09.960 --> 22:15.320]  using this with data warehouses, I would like to know why.
+[22:15.320 --> 22:21.240]  So of course, there's no one solution for our problems, there are cases that the warehouses
+[22:21.240 --> 22:26.800]  are very good fits, it turns out that for data science for example, which is kind of
+[22:26.800 --> 22:32.000]  what we preach the most, they're usually not good because then you fall back to the senior
+[22:32.000 --> 22:36.280]  data outside your database system, like you're not really going to be running your Python
+[22:36.280 --> 22:40.880]  codes inside the system, you can do that for UDS for example, but they are messy, they're
+[22:40.880 --> 22:46.040]  a bit nasty, so you want really to have it embedded in your Python process, so you completely
+[22:46.040 --> 22:50.400]  eliminate data transfer costs, because usually what you do is like, okay, I have a table,
+[22:50.400 --> 22:57.400]  10 columns, I'm going over 4 columns, but I'm really reading huge chunks of it, so that's
+[22:57.400 --> 22:59.120]  a bottleneck we try to eliminate.
+[22:59.120 --> 23:06.600]  How do you handle updates?
+[23:06.600 --> 23:12.440]  Although we are in the analytical database system, we do do updates, so Mark, I don't
+[23:12.440 --> 23:20.160]  know where he is, but he's there, he developed MVCC algorithm for OLAP, so we have the same
+[23:20.160 --> 23:24.240]  asset transactional capabilities that you would expect from a transactional database,
+[23:24.240 --> 23:30.840]  of course, if you have a transactional workload, you should still go for Postgrease or SQLize
+[23:30.840 --> 23:37.080]  or a database that handles this type of transactions, but Mark developed like a full-on algorithm
+[23:37.080 --> 23:40.760]  to handle updates completely, yeah.
+[23:40.760 --> 23:43.200]  How do you compare to Vertica?
+[23:43.200 --> 23:45.400]  How do you compare to Vertica?
+[23:45.400 --> 23:51.800]  I have a good question, I think in terms of analytical queries, TPCH, probably similar
+[23:51.800 --> 23:58.280]  performance, but then again, the whole point is that if you go again for the Python process,
+[23:58.280 --> 24:04.480]  the data transfer costs will take most of the time there, and then it's really catered
+[24:04.480 --> 24:11.320]  for this type of scenario, the embedded scenario.
+[24:11.320 --> 24:15.280]  We have one minute left for one more question.
+[24:15.280 --> 24:22.280]  Yeah, I actually have a rappel somewhere for a bunch of examples as well, I'm very happy
+[24:22.280 --> 24:23.280]  to share it.
+[24:23.280 --> 24:24.280]  I don't know where I'll post it.
+[24:24.280 --> 24:25.280]  Ah, the false then thing, I guess.
+[24:25.280 --> 24:26.280]  All right.
+[24:26.280 --> 24:27.280]  All right.
+[24:27.280 --> 24:28.280]  Thank you a lot, Pedro.
+[24:28.280 --> 24:29.280]  Thanks a lot.
+[24:29.280 --> 24:30.280]  Thank you very much.
+[24:30.280 --> 24:46.280]  Thank you very much.

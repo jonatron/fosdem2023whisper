@@ -1,0 +1,320 @@
+[00:00.000 --> 00:21.400]  Okay, our first actual speaker today is Frederico, who is a maintainer of Metal LB, which I personally
+[00:21.400 --> 00:26.600]  use, thank you, over at RedHeads and he'll be talking to us about cognitive loads.
+[00:26.600 --> 00:31.600]  So a round of applause for Frederico.
+[00:31.600 --> 00:36.600]  Yeah, it works.
+[00:36.600 --> 00:44.600]  Yeah, so today I'm going to talk about cognitive load and how it affects our code base, why
+[00:44.600 --> 00:47.680]  it matters and how we can reduce it.
+[00:47.680 --> 00:52.560]  And the reason why I put together this talk is because over the past, I would say, two
+[00:52.560 --> 00:57.920]  years, I started contributing first and then maintaining the Metal LB project.
+[00:57.920 --> 00:59.800]  Is anyone using it?
+[00:59.800 --> 01:05.600]  Okay, so if it's gotten less stable, that's because of me.
+[01:05.600 --> 01:14.640]  But by doing that, I started reviewing a good amount of PRs and over this period, I kind
+[01:14.640 --> 01:20.760]  of identified the recurring patterns that I was keeping asking and asking over.
+[01:20.760 --> 01:26.960]  And those recurring patterns, those scattered suggestions that I try to give in code reviews
+[01:26.960 --> 01:29.960]  are what this talk is about.
+[01:29.960 --> 01:37.320]  In terms of code, Metal LB is a nicely sized project, not too big, not too small, and I
+[01:37.320 --> 01:42.200]  think it's worth keeping alive.
+[01:42.200 --> 01:47.240]  So some quick words about me, I'm Frederico, I work for RedHead, I'm part of a networking
+[01:47.240 --> 01:52.840]  team in charge of making the OpenShift platform suitable for telco workloads.
+[01:52.840 --> 01:59.960]  That means that I touch and contribute a lot of these different network-related projects,
+[01:59.960 --> 02:03.840]  but that doesn't mean that I'm a network expert because I'm not.
+[02:03.840 --> 02:09.640]  So don't come asking to fix your router, as my parents do because I won't.
+[02:09.640 --> 02:11.840]  All of these are my handles.
+[02:11.840 --> 02:16.200]  Probably the most annoying one needs to be adjusted, but you can find me there.
+[02:16.200 --> 02:23.520]  If you have questions to ask, if you need to provide feedback, I'll try to reply.
+[02:23.520 --> 02:29.760]  So let's start with cognitive load, and this is the Wikipedia definition.
+[02:29.760 --> 02:34.640]  Cognitive load is meant to be the extra energy, the amount of effort that we need to put in
+[02:34.640 --> 02:41.520]  place to understand something that applies perfectly to our codebase.
+[02:41.520 --> 02:45.520]  It might be because we are reading something that we wrote years ago where we were less
+[02:45.520 --> 02:46.520]  expert.
+[02:46.520 --> 02:51.440]  It might be because we are trying to review some code that somebody else is trying to
+[02:51.440 --> 02:52.880]  push to our project.
+[02:52.880 --> 02:57.880]  It might be because we got a bug report and we need to correlate the behavior that we
+[02:57.880 --> 03:06.080]  get from the reality and what we understand from our code.
+[03:06.080 --> 03:11.440]  And the less energy we spend, we are able to spend the better because it might be evening
+[03:11.440 --> 03:16.160]  and we might be tired and we might have some urgency about that.
+[03:16.160 --> 03:18.400]  That's why it's so important.
+[03:18.400 --> 03:23.480]  And sometimes, this complexity is proportional.
+[03:23.480 --> 03:26.920]  This extra energy is proportional to the complexity of our code.
+[03:26.920 --> 03:28.520]  Think about cryptography.
+[03:28.520 --> 03:33.800]  Think about ultra-optimized code that runs in embedded systems.
+[03:33.800 --> 03:35.840]  But some other times, it's not.
+[03:35.840 --> 03:40.440]  Take this example and take the same run through another skater.
+[03:40.440 --> 03:48.240]  This takes a lot more energy to understand that this function prints hello world.
+[03:48.240 --> 03:56.240]  So this is to say that we need to put an effort because that effort gets our reward in terms
+[03:56.240 --> 04:01.160]  of speed of development and speed of understanding.
+[04:01.160 --> 04:09.120]  So say that a disclaimer, not everything is black and white.
+[04:09.120 --> 04:14.240]  Of course, there might be exceptions to the suggestions that I'm going to say.
+[04:14.240 --> 04:20.160]  And this talk is more or less a collection of scattered robots that I collected from
+[04:20.160 --> 04:21.920]  sources that I trust.
+[04:21.920 --> 04:28.920]  So in case you don't like them, blame the sources.
+[04:28.920 --> 04:36.120]  In general, I think that the stuff that we write should take care of two sites.
+[04:36.120 --> 04:43.080]  One is, of course, the implementation, and this implementation is pretty clear, I guess.
+[04:43.080 --> 04:45.440]  This function is just doing the sum of two numbers.
+[04:45.440 --> 04:46.920]  It's easy to understand.
+[04:46.920 --> 04:48.680]  We can't argue with that.
+[04:48.680 --> 04:54.480]  But what if we land on a code base that is doing something like this, and this takes
+[04:54.480 --> 05:03.600]  more energy compared to a better version of it, where the function is named nicely.
+[05:03.600 --> 05:05.760]  So we understand what it's doing.
+[05:05.760 --> 05:10.080]  This is to say, and this is something that is going to be a requirement in this talk,
+[05:10.080 --> 05:14.480]  that what matters is not only how we care about the implementation, but also how we
+[05:14.480 --> 05:21.280]  care about the users of our packages, of our functions, of our objects.
+[05:21.280 --> 05:26.120]  So let's start with the first item, which is the line of sight.
+[05:26.120 --> 05:30.600]  And this is something that I believe every good and idiomatic code base should try to
+[05:30.600 --> 05:31.600]  foster.
+[05:31.600 --> 05:38.440]  Basically, we have this leftmost indented line where all the happy path leaves, and we have
+[05:38.440 --> 05:41.400]  this indented one where we handle all the exceptions.
+[05:41.400 --> 05:47.640]  And I expect every code base, which is well written where I land to, to respect this rule.
+[05:47.640 --> 05:55.320]  And there are a few tips to do this.
+[05:55.320 --> 05:59.840]  It wasn't me.
+[05:59.840 --> 06:04.480]  So these are just tips to do that, to implement this.
+[06:04.480 --> 06:08.440]  And let's see why it matters, how it will make our code base better.
+[06:08.440 --> 06:14.400]  This was more or less a real example that I got from a real PR, and it was really hard
+[06:14.400 --> 06:16.200]  to follow all the special cases.
+[06:16.200 --> 06:23.840]  And so I tried to give feedback and try to hammer it with suggestions in order to leverage
+[06:23.840 --> 06:32.880]  early returns and flipping errors, removing else, when a CNL is something that I try to
+[06:32.880 --> 06:33.880]  get rid of.
+[06:33.880 --> 06:40.720]  Like, it's a red flag, and I think three times before allowing it to go through.
+[06:40.720 --> 06:50.000]  And then leverage more returns and then, yeah, leverage more returns and then, sorry, yeah,
+[06:50.000 --> 06:56.280]  trapping into a function so we can leverage even more returns because now we have a smaller
+[06:56.280 --> 06:57.280]  scope.
+[06:57.280 --> 07:03.560]  So we got to something from something which looked like this to something that looked
+[07:03.560 --> 07:04.720]  like this.
+[07:04.720 --> 07:08.440]  And I dare you to say that this is easier to understand.
+[07:08.440 --> 07:13.720]  And remember, like, this is understandable, but this requires a lot of energy.
+[07:13.720 --> 07:14.720]  It's clear.
+[07:14.720 --> 07:20.080]  It's better because of all the reasons that I already said before.
+[07:20.080 --> 07:25.280]  There is this nice blog post from Matt Ryder about this very same topic.
+[07:25.280 --> 07:29.760]  He more or less gives the same set of advices.
+[07:29.760 --> 07:32.160]  Linocyte is not a nice exercise.
+[07:32.160 --> 07:38.960]  It's a rule of thumb that allows us to untangle our code and to make it slicker and easier
+[07:38.960 --> 07:41.680]  to understand.
+[07:41.680 --> 07:44.960]  Next I'm going to talk about package names.
+[07:44.960 --> 07:50.720]  This is another favorite of mine.
+[07:50.720 --> 07:58.080]  We know that naming is hard, and that is particularly true in case of package names.
+[07:58.080 --> 08:04.440]  We know that the name of a package should be small enough because that is consuming
+[08:04.440 --> 08:11.120]  screen space, but should be also good enough to let us understand the purpose of the package.
+[08:11.120 --> 08:16.800]  In Go there is even more because when we use an object, the name of the package is part
+[08:16.800 --> 08:17.800]  of the name.
+[08:17.800 --> 08:25.720]  So that is an opportunity for us to put some value in that part that the reader can consume.
+[08:25.720 --> 08:28.520]  And again, I'm starting with a bad example.
+[08:28.520 --> 08:35.600]  We have this utility package, and we have this copy node function that is totally fictional,
+[08:35.600 --> 08:38.720]  but that utility part is a wasted opportunity.
+[08:38.720 --> 08:41.680]  It's part of the name that doesn't add any value.
+[08:41.680 --> 08:49.720]  So it's better to take and split our package, smaller scoped packages that do and explain
+[08:49.720 --> 08:50.720]  what to do.
+[08:50.720 --> 08:56.880]  And in this case, from the colon side, you have node.copy, which still explains the purpose
+[08:56.880 --> 09:00.480]  of the function, and it's not wasting space.
+[09:00.480 --> 09:07.040]  And this was taken from the official Go blog, and it says basically the same thing.
+[09:07.040 --> 09:13.880]  There is no need to have these gigantic kitchen sink packages where we throw everything because
+[09:13.880 --> 09:15.520]  in Go packages are free.
+[09:15.520 --> 09:22.640]  So it's fine to split them in a better way.
+[09:22.640 --> 09:31.240]  Next one is going to be about errors, and I see also this happening very frequently.
+[09:31.240 --> 09:37.480]  In Go, errors are types, and let's say that the developer wants to handle a special error.
+[09:37.480 --> 09:41.240]  And the problem with these approaches is that we are giving away the fact that errors are
+[09:41.240 --> 09:46.720]  types, and we are converting them to a string, and we are treating them as a string.
+[09:46.720 --> 09:52.080]  And since Go 1.13, we have, like, and there are, like, that's legacy.
+[09:52.080 --> 09:55.960]  So there are no excuses not to use this.
+[09:55.960 --> 10:01.360]  There are two ways, one is to assert that the error that we are checking is an instance
+[10:01.360 --> 10:10.720]  of a given object that we have somewhere, and there is another, sorry, this is new because
+[10:10.720 --> 10:13.560]  the other one wasn't working.
+[10:13.560 --> 10:20.240]  And there is another one, which is about asserting that the error that we want to handle implements
+[10:20.240 --> 10:25.880]  the error interface against a specific real type.
+[10:25.880 --> 10:27.000]  But there is more.
+[10:27.000 --> 10:33.800]  So in this way, you can have wraps of errors, and you can assert that the error that you
+[10:33.800 --> 10:41.240]  are checking not only equals the one that you are handling, but also any error inside
+[10:41.240 --> 10:42.240]  this wrap.
+[10:42.240 --> 10:43.760]  And this is how you wrap them.
+[10:43.760 --> 10:52.320]  You can either use errors.wrap, so the return error from this function will contain the
+[10:52.320 --> 11:01.000]  value returned by this, but will also return true if we assert against the wrapped one.
+[11:01.000 --> 11:08.720]  And also there is the way suggested by the standard library, which is using the %w formators.
+[11:08.720 --> 11:14.000]  So both of them will return you a wrapped error.
+[11:14.000 --> 11:22.640]  So now let's talk about pure functions and why they are important.
+[11:22.640 --> 11:25.120]  So a pure function has two properties.
+[11:25.120 --> 11:30.400]  One is the fact that no matter how time, when you call it, no matter how many times you
+[11:30.400 --> 11:38.000]  call it, with a given set of input parameters, it will return always the same output.
+[11:38.000 --> 11:43.200]  And the other property is the fact that it shouldn't rely on the state of your system.
+[11:43.200 --> 11:47.040]  It shouldn't modify the state of the system.
+[11:47.040 --> 11:53.120]  Should it be global variables or static variables or your input parameters or anything that
+[11:53.120 --> 11:55.200]  is external to the function.
+[11:55.200 --> 11:57.880]  And why it matters.
+[11:57.880 --> 12:04.040]  This is an example where the behavior of this function depends on the state of an external
+[12:04.040 --> 12:07.600]  system that is accessed through a client.
+[12:07.600 --> 12:10.680]  And then you have the business logic after that.
+[12:10.680 --> 12:12.000]  And why this is bad.
+[12:12.000 --> 12:18.280]  I would say that mostly because this is hard to test or we can mock the external system,
+[12:18.280 --> 12:27.360]  we can do tricks to replace the client, but moving away the statefulness part of the function
+[12:27.360 --> 12:35.800]  away and having the business logic implemented as a pure function will allow us to be quicker
+[12:35.800 --> 12:39.040]  in writing the implementation and to write our tests.
+[12:39.040 --> 12:42.400]  And how about the second part.
+[12:42.400 --> 12:51.600]  So we have a function that accepts a pointer and in some random cases it changes the object.
+[12:51.600 --> 12:53.080]  And what's the problem with that?
+[12:53.080 --> 12:57.200]  The problem with that is now on the reading side because you don't know that it's not
+[12:57.200 --> 12:59.760]  clear enough that this function is changing the node.
+[12:59.760 --> 13:06.080]  So you get your bug report and you look at the code and you know that somewhere the name
+[13:06.080 --> 13:09.120]  of the node changed, but you don't know why.
+[13:09.120 --> 13:17.240]  And that's because it's not clear from outside that is what this function is doing and it's
+[13:17.240 --> 13:19.520]  harder to reason about it.
+[13:19.520 --> 13:27.560]  So a better way is to change the name of the function so it's clear, but I think that
+[13:27.560 --> 13:35.320]  and this comes quite often, a better way to do that is to delegate the responsibility
+[13:35.320 --> 13:39.240]  of changing the object outside and changing the function to be a pure function.
+[13:39.240 --> 13:46.320]  Again this version is easier to understand, it's easier to reason about, it's clear when
+[13:46.320 --> 13:49.320]  you will have something to change.
+[13:49.320 --> 13:53.680]  And this can also say about environment variables.
+[13:53.680 --> 14:00.840]  In the world of pods and containers, adding a new knob as an environment variable is so
+[14:00.840 --> 14:01.840]  convenient.
+[14:01.840 --> 14:06.240]  Just add an environment variable, you consume it from the function where you need it and
+[14:06.240 --> 14:07.400]  you are done.
+[14:07.400 --> 14:12.560]  But the problem with that is that you then don't have control anymore on all the knobs
+[14:12.560 --> 14:19.520]  on all the parameters that your program is consuming because they are all scattered across
+[14:19.520 --> 14:28.520]  the code base and that is bad because you can't foresee what a given function is doing
+[14:28.520 --> 14:33.080]  by reading its calling site.
+[14:33.080 --> 14:38.520]  So again, this is something that should be avoided, environment variables should be read
+[14:38.520 --> 14:49.520]  in your main functions and then be propagated through all the stacks.
+[14:49.520 --> 14:56.560]  So another topic that I care about is function arguments.
+[14:56.560 --> 15:03.120]  And the first one is Booleans.
+[15:03.120 --> 15:10.160]  So you start with something like this where you have a simple setup function that is easy
+[15:10.160 --> 15:19.920]  enough and then with all the good intentions of the world, thanks, with all the good intentions
+[15:19.920 --> 15:25.960]  of the world, the developer starts adding a parameter but then we need another one and
+[15:25.960 --> 15:29.360]  then we need another one.
+[15:29.360 --> 15:32.200]  And how does it look on the calling site?
+[15:32.200 --> 15:38.880]  Something like this and you think, true, false, true, true, false, what the hell?
+[15:38.880 --> 15:43.440]  And then you need to stop, you need to enter into this function, you need to understand
+[15:43.440 --> 15:48.120]  was it, where was the enable webbook parameter?
+[15:48.120 --> 15:54.400]  It was the first one and then you get back here and this works but adds friction and getting
+[15:54.400 --> 16:01.000]  a better version of it is so cheap that we should do that because we are doing a favor
+[16:01.000 --> 16:07.760]  to our future selves, we are doing a favor to the maintainer and it's going to be easier
+[16:07.760 --> 16:08.760]  to understand.
+[16:08.760 --> 16:20.000]  Another option might be to pass a structure to the function that also works but not this.
+[16:20.000 --> 16:26.400]  Now I want to talk about function overloading or the fact that God doesn't have, so it's
+[16:26.400 --> 16:28.960]  more or less the same as the other one.
+[16:28.960 --> 16:37.360]  God doesn't have function overloading so it's easy to have this full variety of the same
+[16:37.360 --> 16:40.720]  function where we need to slightly change the behavior.
+[16:40.720 --> 16:45.000]  So you start with creating a service, then you need one with a backend, then you need
+[16:45.000 --> 16:52.880]  one with an IP and then you need one with a backend and with an IP and it's clear that
+[16:52.880 --> 16:55.520]  can get easily out of hand.
+[16:55.520 --> 17:02.800]  So an approach that I really like is using a variety of the argument with some modifiers
+[17:02.800 --> 17:11.960]  that accept the parameter and do what they have to do and this is how it looks from the
+[17:11.960 --> 17:20.360]  calling site, again, it's clear, it's easy to understand, your future self will thank
+[17:20.360 --> 17:23.000]  you for this.
+[17:23.000 --> 17:27.800]  And there is also another version where you can have these generator functions.
+[17:27.800 --> 17:35.200]  I think it's on the borderline of being too magic for me but, again, this one is easy
+[17:35.200 --> 17:39.360]  to read.
+[17:39.360 --> 17:47.120]  So next one, I see this happening a lot in the world of controllers where you have one
+[17:47.120 --> 17:52.680]  file that basically implements all the methods related to a controller.
+[17:52.680 --> 17:57.320]  So you have this file and you need to add an utility function and then all the other
+[17:57.320 --> 17:59.720]  functions are methods and what do you do?
+[17:59.720 --> 18:04.280]  You add a new method, even if it doesn't have to be a method.
+[18:04.280 --> 18:09.600]  So you look at something like this and you think, hmm, why is this a method?
+[18:09.600 --> 18:12.040]  Is there something wrong with that?
+[18:12.040 --> 18:15.440]  And this, again, is adding friction that could be avoided.
+[18:15.440 --> 18:21.280]  So if a function is a function, just make it a function and not a method because also
+[18:21.280 --> 18:22.280]  testing is easier.
+[18:22.280 --> 18:27.840]  You don't have to have the instance that you are not using for anything just in order to
+[18:27.840 --> 18:30.440]  test this function.
+[18:30.440 --> 18:36.800]  And then a word about pointers.
+[18:36.800 --> 18:47.240]  Go has pointers, like not all other languages, so people might find them hard to reason about.
+[18:47.240 --> 18:52.800]  And when I see two functions like this, my first thing, thought is, like, this one is
+[18:52.800 --> 18:55.640]  not changing the object and the second one is doing that.
+[18:55.640 --> 18:58.800]  So this is the rule of thumb that I'm trying to apply.
+[18:58.800 --> 19:02.960]  If a function is not changing the object, then pass the object with a value, otherwise
+[19:02.960 --> 19:06.120]  pass the pointer.
+[19:06.120 --> 19:07.840]  But there are also exceptions.
+[19:07.840 --> 19:12.200]  There are some kind of objects that can be passed by value or they can, but they will
+[19:12.200 --> 19:15.200]  give you a bad afternoon.
+[19:15.200 --> 19:19.480]  But so mutex is file descriptors.
+[19:19.480 --> 19:22.760]  We need to pass them by reference because that's the way it works.
+[19:22.760 --> 19:28.280]  We have linters that help us in that and we have this rule of thumb that says if you look
+[19:28.280 --> 19:37.800]  at the object, if all the methods associated with the pointer, then use a pointer.
+[19:37.800 --> 19:40.040]  One might argue how about performances.
+[19:40.040 --> 19:44.280]  We are passing the whole object instead of passing just the reference.
+[19:44.280 --> 19:50.400]  Yeah, passing the reference is cheaper, but this is not see, this is go, and that's not
+[19:50.400 --> 19:51.400]  always clear.
+[19:51.400 --> 19:54.480]  So what we should care about is the readability.
+[19:54.480 --> 20:00.720]  And we have a lot of toolery that will help us to understand if that can be optimized
+[20:00.720 --> 20:04.760]  if it's in the hot path.
+[20:04.760 --> 20:15.520]  And then we need to sacrifice a bit the reliability of our program in order to have better performances.
+[20:15.520 --> 20:21.040]  So now I'm going to talk about something that was advocated in clean code where it says
+[20:21.040 --> 20:28.320]  that our code base should read like a newspaper, which means that you open a file, you should
+[20:28.320 --> 20:33.800]  have all the high level concepts on the top of the file, and then start to find all the
+[20:33.800 --> 20:37.760]  nitty details of the implementation in the bottom of the file.
+[20:37.760 --> 20:41.520]  And these applies pretty well to go.
+[20:41.520 --> 20:47.640]  So what I expect from a well-written go file is to have all the public methods, all the
+[20:47.640 --> 20:52.360]  public objects in the top of the file, because when I open the file, I see what this package
+[20:52.360 --> 20:55.600]  has to offer to the external world.
+[20:55.600 --> 21:02.280]  And so those are our high level concepts by definition.
+[21:02.280 --> 21:08.280]  And another thing that I think is sometimes underestimated is the fact that we can have
+[21:08.280 --> 21:10.560]  our packages split into files.
+[21:10.560 --> 21:18.880]  So again, in order to have a better navigability of our code base, we can split it into files,
+[21:18.880 --> 21:28.040]  have a main file related to the package that is named after the package, and then have
+[21:28.040 --> 21:34.920]  these smaller entities where we put the different logics.
+[21:34.920 --> 21:39.320]  And this is basically what I'm trying to say here.
+[21:39.320 --> 21:46.960]  So try to have the public fields on the top, try to remove or to move the utility functions
+[21:46.960 --> 21:51.080]  in the bottom, split the package into file, because again, it's free.
+[21:51.080 --> 22:00.880]  It won't cost any energy to you or to the executable, and have a main package file that
+[22:00.880 --> 22:03.920]  is named after the package.
+[22:03.920 --> 22:09.280]  Next item is about asynchronous functions.
+[22:09.280 --> 22:14.280]  And I saw this many times.
+[22:14.280 --> 22:17.440]  It's one of the nice things about Go, right?
+[22:17.440 --> 22:21.880]  It's so easy, so convenient to implement concurrent code.
+[22:21.880 --> 22:28.440]  You can just implement Go routines, you can pass channels and have fan in, fan out.
+[22:28.440 --> 22:35.000]  But the problem with that is that something like this has some flaws.
+[22:35.000 --> 22:41.480]  And I think that is way better to, again, take the business logic, move it to a synchronous
+[22:41.480 --> 22:46.600]  function that is easier to test without all the infrastructure that you need to put in
+[22:46.600 --> 22:55.000]  place with channels, with weight groups in order to reverse the synchronousness of your
+[22:55.000 --> 22:57.160]  function just in order to test it.
+[22:57.160 --> 23:02.680]  So if you can, move the business logic into a synchronous function and let the calling
+[23:02.680 --> 23:06.680]  site handle the life cycle of the Go routine.
+[23:06.680 --> 23:14.240]  So again, that part has to be delegated on the client code, and that will make our function
+[23:14.240 --> 23:19.440]  easier to test and our code base easier to reason about.
+[23:19.440 --> 23:24.160]  And again, I didn't invent this as everything else.
+[23:24.160 --> 23:31.160]  This is from the code review Go wiki, and it's basically saying the same thing, like
+[23:31.160 --> 23:39.200]  try to use synchronous functions as much as you can.
+[23:39.200 --> 23:44.120]  Next item is about functions that lie, and what I mean by that.
+[23:44.120 --> 23:50.800]  You have something that is, what would you expect this function to do?
+[23:50.800 --> 23:51.800]  Clear the node.
+[23:51.800 --> 23:52.800]  Exactly.
+[23:52.800 --> 23:53.800]  That's what I would expect.
+[23:53.800 --> 24:00.360]  But the developer found a very edgy corner case where if the name of the node is do not
+[24:00.360 --> 24:02.960]  clean, then do not clean.
+[24:02.960 --> 24:08.080]  And he was doing that with the all good faith of the word.
+[24:08.080 --> 24:10.600]  He's trying to solve a problem here.
+[24:10.600 --> 24:15.320]  But the problem is that, again, this is going to give us a bad afternoon because we'll see
+[24:15.320 --> 24:23.360]  that the node is not being cleared and we'll have to put a lot of printfs in our code or
+[24:23.360 --> 24:28.920]  to do a lot of debugging in order to understand why is this happening.
+[24:28.920 --> 24:36.760]  So again, this is done with good intentions, but the result is not so good.
+[24:36.760 --> 24:46.400]  So again, as I said multiple times today, we should defer this responsibility to the
+[24:46.400 --> 24:54.320]  calling site because that will result in a code base that requires less energy and less
+[24:54.320 --> 24:56.280]  effort to understand.
+[24:56.280 --> 25:01.400]  What if we have this function called 100 times in our code base, then I don't know.
+[25:01.400 --> 25:09.600]  Just call it clear the node, but do not clean one or have one filter function, whatever,
+[25:09.600 --> 25:14.040]  but not lie to the reader.
+[25:14.040 --> 25:22.560]  So wrapping up, there is no much to wrap up.
+[25:22.560 --> 25:26.920]  I mean, it was just a list of no related items.
+[25:26.920 --> 25:34.640]  Maybe the only take away that is globally is to say that we should be smart and let
+[25:34.640 --> 25:41.760]  our readers, the calling site over the code base do a bit more because that will give
+[25:41.760 --> 25:46.360]  us a better day in the future.
+[25:46.360 --> 25:54.680]  I'm a strong believer of the Pareto principle, most often when it's on the bad side of it,
+[25:54.680 --> 25:59.320]  but in this case, I think that by applying these set of rules that will take very less
+[25:59.320 --> 26:08.280]  to implement, those will improve the quality of the code base a lot.
+[26:08.280 --> 26:16.160]  And then I want to finish with this quote from Rob Pike, simplicity is complicated,
+[26:16.160 --> 26:19.760]  but the clarity is worth the fight.
+[26:19.760 --> 26:24.760]  And with that, I'm finished.
+[26:24.760 --> 26:25.760]  Sorry?
+[26:25.760 --> 26:39.040]  Are there any questions, I'll try to come with a microphone, if it doesn't work, we'll
+[26:39.040 --> 26:41.240]  have to repeat it.
+[26:41.240 --> 26:46.680]  Hi, thanks for the talk.
+[26:46.680 --> 26:54.720]  I was wondering, do you see any room for automating some of these rules and wisdom that you share
+[26:54.720 --> 26:59.960]  today, maybe something else as well?
+[26:59.960 --> 27:02.480]  I don't know, I should think about that.
+[27:02.480 --> 27:08.720]  Probably some of them, yes, like avoiding having functions or raising a flag if a function
+[27:08.720 --> 27:15.720]  is accepting a channel, for example, but there are exceptions to that, so that shouldn't
+[27:15.720 --> 27:16.720]  be blocking.
+[27:16.720 --> 27:22.600]  There are some others, like the function that is lying to the user is something that depends
+[27:22.600 --> 27:30.560]  on the implementation, or for example, having a function that accepts five booleans should
+[27:30.560 --> 27:31.560]  be flagged.
+[27:31.560 --> 27:42.360]  So, I see that, I think that it depends on the case, but some of them might be automated.
+[27:42.360 --> 27:44.560]  Any more questions?
+[27:44.560 --> 27:46.840]  No?
+[27:46.840 --> 27:58.520]  Thank you very much.
+[27:58.520 --> 28:18.080]  How was it?

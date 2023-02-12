@@ -1,0 +1,621 @@
+[00:00.000 --> 00:14.000]  Hello, my name is Vlad, I am a CEO and C++ developer with roughly eight years of experience.
+[00:14.000 --> 00:18.440]  Right now I work at a game dev company called Ubisoft, which some of you probably heard
+[00:18.440 --> 00:25.200]  about, with mostly low level networking and some bits of system programming.
+[00:25.200 --> 00:31.640]  And in Ubisoft, while doing a complete rewrite of our networking stack in one of game engines,
+[00:31.640 --> 00:37.920]  I managed to design, I hope, a cool algorithm for doing so-called task scheduling.
+[00:37.920 --> 00:44.840]  And today I share this algorithm in the form of this talk and an open source C++ implementation
+[00:44.840 --> 00:45.840]  of it.
+[00:45.840 --> 00:53.120]  Although, if you don't like C++, it doesn't have to be, today we focus just on the algorithms
+[00:53.120 --> 00:57.920]  and they can be implemented in some other language too, like in Rust, I'm sure it can
+[00:57.920 --> 01:01.640]  be done in Java, in C-sharp maybe.
+[01:01.640 --> 01:09.440]  So there will be a lot of content, so we will be going relatively quick and I ask you to
+[01:09.440 --> 01:10.440]  concentrate.
+[01:10.440 --> 01:16.000]  Talk will follow the plan firstly, what is task scheduling exactly, because many things
+[01:16.000 --> 01:21.840]  can be understood as it, then I explain how it's normally done, what are typical problems
+[01:21.840 --> 01:22.840]  with it.
+[01:22.840 --> 01:28.480]  I'm actually, at least, known to me and how worked an old task scheduler in my game engine
+[01:28.480 --> 01:30.200]  and how works the new one.
+[01:30.200 --> 01:35.760]  And then I will briefly show you the benchmarks, how it's verified and what are the future
+[01:35.760 --> 01:37.440]  plans for it.
+[01:37.440 --> 01:40.160]  So what is task scheduling exactly?
+[01:40.160 --> 01:47.400]  Today, in this talk, I mean, as task scheduling, any kind of execution of code, such as code
+[01:47.400 --> 01:54.280]  exec functions or something similar, and we just call it task, a generic term.
+[01:54.280 --> 02:00.560]  And so to give you a few examples, tasks can be callbacks in a thread pool, or tasks can
+[02:00.560 --> 02:08.360]  be watchers in an event loop like in LibF in C, we can have watchers as timers or wrapping
+[02:08.360 --> 02:14.600]  sockets and they also have callbacks, or we can also call tasks routines in some routine
+[02:14.600 --> 02:21.800]  engine like C++ routines or fibers in Toronto database.
+[02:21.800 --> 02:29.520]  So here is a very, very simple trivial scheduler implemented in C++ like pseudo code for simplicity,
+[02:29.520 --> 02:32.000]  which demonstrates this example.
+[02:32.000 --> 02:34.320]  So it's just a single thread.
+[02:34.320 --> 02:40.720]  It has a mutex locked queue for callbacks, and what it does is just executes those callbacks
+[02:40.720 --> 02:41.720]  one by one.
+[02:41.720 --> 02:44.080]  This is a very simple scheduler.
+[02:44.080 --> 02:50.520]  Now let's see if such a basic scheduler can solve a real task, which I had at Ubisoft.
+[02:50.520 --> 02:58.040]  Here, tasks execute requests coming to a server, and they handle save games, save game blobs.
+[02:58.040 --> 03:02.800]  And there might be tens of thousands of those requests per second, and they are also CPU
+[03:02.800 --> 03:03.800]  intensive.
+[03:03.800 --> 03:09.960]  So every task might take milliseconds of pure CPU time, and also they consist of multiple
+[03:09.960 --> 03:16.960]  steps like, I have to, in each task, lock user profile in some database, then I have
+[03:16.960 --> 03:21.680]  to download the save game blob from another database, then I have to do some pre-processing
+[03:21.680 --> 03:27.720]  of this blob, some stuff with some manipulations, then I have to upload it back and unlock the
+[03:27.720 --> 03:29.720]  user profile.
+[03:29.720 --> 03:33.800]  As you can guess, most of the time the task is not doing anything at all.
+[03:33.800 --> 03:38.880]  It just sleeps waiting for network input from the databases.
+[03:38.880 --> 03:45.560]  So literally more than 90% of times there is nothing happening in this task.
+[03:45.560 --> 03:50.440]  The trivial scheduler, which we just saw with single triad, it will not work here, it simply
+[03:50.440 --> 03:51.640]  will not scale.
+[03:51.640 --> 03:59.280]  Firstly, single triad is not enough to handle so many requests, so being so CPU intensive,
+[03:59.280 --> 04:01.280]  it will just choke on CPU.
+[04:01.280 --> 04:07.120]  Secondly, we can postpone blocked tasks and do other tasks while the first ones are waiting
+[04:07.120 --> 04:09.840]  for some events like network input.
+[04:09.840 --> 04:16.280]  So this means we need routines so that tasks could yield, so they could give up their time
+[04:16.280 --> 04:20.360]  to some other tasks in the same thread.
+[04:20.360 --> 04:26.160]  The game engine I'm working with had a good enough scheduler, which could do the job for
+[04:26.160 --> 04:29.240]  some years good enough.
+[04:29.240 --> 04:36.240]  This was just a thread pool where each thread had a list of own tasks, and when new tasks
+[04:36.240 --> 04:41.840]  were appearing, they were distributed to those threads in around Robin Manor one by one,
+[04:41.840 --> 04:45.280]  and they were pinned to those threads forever.
+[04:45.280 --> 04:47.760]  They could not migrate between threads.
+[04:47.760 --> 04:53.640]  And then what each worker thread does is updates all its tasks with some fixed hard-coded period
+[04:53.640 --> 04:57.520]  like once per 100 milliseconds or once per second.
+[04:57.520 --> 05:03.760]  Each task, after being updated, it can return false eventually, and it consider it done,
+[05:03.760 --> 05:04.920]  and it is deleted.
+[05:04.920 --> 05:11.440]  So this is some polling, basically, and we will call this scheduler updater because
+[05:11.440 --> 05:17.960]  there isn't much scheduling, really, it just updates those tasks without looking at their
+[05:17.960 --> 05:21.720]  state or anything, so we call it updater.
+[05:21.720 --> 05:27.880]  This updater thing had some typical problems, like schedulers of this type sometimes do.
+[05:27.880 --> 05:33.960]  Firstly, it was unfair, meaning that tasks were pinned to threads, they could not migrate.
+[05:33.960 --> 05:40.200]  This leads to a problem that your CPU usage will be unbalanced because some worker threads
+[05:40.200 --> 05:46.480]  will get heavy tasks, and a lot of them will stay in the queues, and other threads will
+[05:46.480 --> 05:52.000]  get light tasks and will be in idling most of the time.
+[05:52.000 --> 05:57.680]  This will happen even if you do perfect round robin, and all your tasks are the same because
+[05:57.680 --> 06:00.240]  actually tasks are never the same.
+[06:00.240 --> 06:06.040]  Like in my case, all the tasks do the same several steps, but save game blobs, they can
+[06:06.040 --> 06:11.400]  vary in size from kilobytes to megabytes, their processing, their downloading, obviously
+[06:11.400 --> 06:16.640]  takes not the same time, so some threads will be unfairly loaded, and they will perform
+[06:16.640 --> 06:22.160]  worse, at least in terms of latency, because they will have bigger queues, tasks will wait
+[06:22.160 --> 06:26.480]  longer in them, and that is not the only problem.
+[06:26.480 --> 06:31.880]  The other problem is polling, which in this case means the tasks, each task is updated
+[06:31.880 --> 06:38.200]  unconditionally with some fixed period regardless of task state, so every task is updated even
+[06:38.200 --> 06:44.120]  if it doesn't have work to do yet, so it's still waiting for network input.
+[06:44.120 --> 06:49.000]  What it means is that if you select too big polling interval, then you will have too high
+[06:49.000 --> 06:51.800]  latency, more than you could have.
+[06:51.800 --> 06:57.360]  For instance, imagine like we have a task with just three steps, each taking five milliseconds,
+[06:57.360 --> 07:03.840]  and in between it waits for some network input, and we will update it once per hundred milliseconds.
+[07:03.840 --> 07:09.440]  Then your task will always at least take 215 milliseconds.
+[07:09.440 --> 07:13.960]  The thing is, you don't always need so much time.
+[07:13.960 --> 07:18.120]  Most of the time, like almost always, the network response will arrive earlier than
+[07:18.120 --> 07:23.720]  100 milliseconds expire, and you have events to process, but you are not doing it because
+[07:23.720 --> 07:28.760]  it's not yet time to update the task, so we have higher latency than we could have.
+[07:28.760 --> 07:37.640]  If you try to fight it, try to set lower polling interval, then you will burn CPU without need,
+[07:37.640 --> 07:41.160]  because you will have spurious wakeups, so unnecessary wakeups.
+[07:41.160 --> 07:46.760]  You will sometimes wake up tasks before they have stuff to do.
+[07:46.760 --> 07:52.200]  Then it sounds too bad, like how expensive can it be, really, and imagine like spurious
+[07:52.200 --> 07:56.200]  update of a task would cost us just 10 microseconds.
+[07:56.200 --> 08:01.080]  To check a deadline or check an atomic flag, lock and lock, and you text and that's it.
+[08:01.080 --> 08:05.840]  It's not much, but if you have 10,000 tasks per second doing those unnecessary wakeups,
+[08:05.840 --> 08:13.120]  you just burned 10% of one CPU core, which already sounds worse, and this problem aggravates
+[08:13.120 --> 08:16.160]  if you have more threads than CPU cores.
+[08:16.160 --> 08:19.440]  Because then you didn't just burn the CPU time.
+[08:19.440 --> 08:24.480]  You stole it from other threads, which could spend it on something useful.
+[08:24.480 --> 08:30.080]  This problem was actually real, and during low tests, some servers were spending more
+[08:30.080 --> 08:38.320]  CPU time on spurious wakeups than on doing actual work, because they were just burning
+[08:38.320 --> 08:43.400]  so much for the green data clusters.
+[08:43.400 --> 08:48.880]  What we need on the summary from a really performance schedule, firstly, it should be
+[08:48.880 --> 08:49.880]  fair.
+[08:49.880 --> 08:53.000]  We are not allowed to pin tasks to threads.
+[08:53.000 --> 08:54.000]  It doesn't scale.
+[08:54.000 --> 08:59.960]  Secondly, we need routines, so that tasks could give up their time, so they could yield
+[08:59.960 --> 09:04.320]  and let the worker thread do some other work, other tasks.
+[09:04.320 --> 09:10.920]  And also, we have zero tolerance against polling, no polling at all, everything should be event
+[09:10.920 --> 09:11.920]  based.
+[09:11.920 --> 09:17.800]  And these goals are achieved in a new scheduler, which I do to lack of fantasy, just called
+[09:17.800 --> 09:19.280]  the task scheduler.
+[09:19.280 --> 09:25.960]  Although the name is a pretty self-explanatory, what it does, the plan is that we will go
+[09:25.960 --> 09:31.560]  firstly, we'll look at the big picture of the entire scheduler, and then we will look
+[09:31.560 --> 09:36.520]  at individual parts of the scheduler, when you will already know what they do.
+[09:36.520 --> 09:40.400]  Imagine like we have a process, this server running, it's a process.
+[09:40.400 --> 09:46.800]  It has multiple threads, and they produce tasks.
+[09:46.800 --> 09:53.160]  And we have a global object of type task scheduler in the process, like it can be C++ task scheduler,
+[09:53.160 --> 09:58.240]  Java task scheduler, whatever language you implemented it in, it is a global object in
+[09:58.240 --> 09:59.240]  the process.
+[09:59.240 --> 10:04.440]  And those threads, they produce tasks, so they receive some requests from clients and
+[10:04.440 --> 10:11.560]  post the, wrap them into tasks and post into the task scheduler in form of some callbacks
+[10:11.560 --> 10:13.280]  of some sort.
+[10:13.280 --> 10:18.600]  In the scheduler, they will gather in a so-called front queue.
+[10:18.600 --> 10:25.160]  Then the scheduler will periodically pick up, take all the tasks from the front queue,
+[10:25.160 --> 10:26.920]  and inspect them one by one.
+[10:26.920 --> 10:32.520]  It will see that some tasks are ready to be executed right now, the red ones on the slide.
+[10:32.520 --> 10:38.680]  They want to be executed at SAP, and some other tasks they do not want to be executed
+[10:38.680 --> 10:40.960]  right now, they just yielded.
+[10:40.960 --> 10:44.680]  We have routines, so there will be tasks which don't want to be executed now.
+[10:44.680 --> 10:46.720]  They are waiting for something.
+[10:46.720 --> 10:53.160]  For a deadline or for an explicit wake up for some event, they are moved into the wait
+[10:53.160 --> 10:57.840]  queue, where they will wait for their events.
+[10:57.840 --> 11:03.360]  So from the wait queue, we extract some older tasks which were already sleeping there for
+[11:03.360 --> 11:10.640]  some time, and now their deadline is up, or they were woken up explicitly, either way
+[11:10.640 --> 11:16.440]  we extract them from the queue, and all those red tasks go to the ready queue.
+[11:16.440 --> 11:22.840]  And from here, they are extracted by the worker threads, which take them from the ready queue
+[11:22.840 --> 11:26.080]  one by one and execute.
+[11:26.080 --> 11:31.160]  And this is basically the entire pipeline, it's not too complicated, although some of
+[11:31.160 --> 11:34.720]  you could already have a question, who does this part?
+[11:34.720 --> 11:37.480]  We have external threads posting tasks.
+[11:37.480 --> 11:42.400]  We have worker threads doing tasks, but who does the scheduling itself, managing management
+[11:42.400 --> 11:44.160]  of the queues?
+[11:44.160 --> 11:47.960]  The thing is, there is no dedicated thread doing just the scheduling.
+[11:47.960 --> 11:54.080]  Instead, the worker threads compete for doing the scheduling, depending on who of them is
+[11:54.080 --> 11:55.080]  idle.
+[11:55.080 --> 12:01.160]  Imagine, like this big rectangle with queues, it's a room with a single key to it.
+[12:01.160 --> 12:05.960]  And the worker threads, sometimes, depending on who of them is idle, again, will try to
+[12:05.960 --> 12:06.960]  pick out the key.
+[12:06.960 --> 12:12.760]  Whoever does it first, enters the room, does the scheduling, this queue management stuff,
+[12:12.760 --> 12:14.720]  leaves the room, and starts doing tasks.
+[12:14.720 --> 12:16.720]  So all the threads are the same.
+[12:16.720 --> 12:22.840]  There is no threads having goals of some sort, like a naive implementation could do.
+[12:22.840 --> 12:28.600]  And it's a bit like dining philosophers' problem, except that we have just one fork here.
+[12:28.600 --> 12:34.000]  And this big rectangle, in this case, is just a plate of spaghetti, but not on code, code
+[12:34.000 --> 12:36.520]  is clean.
+[12:36.520 --> 12:42.240]  To improve understanding, there is a short visual example I prepared.
+[12:42.240 --> 12:44.200]  Imagine, like, we have five tasks.
+[12:44.200 --> 12:49.280]  They are posted onto the front queue, and one of the worker threads has the scheduling
+[12:49.280 --> 12:51.480]  key right now.
+[12:51.480 --> 12:54.360]  It will extract the tasks from the queue.
+[12:54.360 --> 12:56.560]  We'll see that a couple of them yielded.
+[12:56.560 --> 13:02.960]  They go to the wait queue, waiting for something, and the others are moved into the ready queue.
+[13:02.960 --> 13:06.240]  From here, they are picked up by the worker threads.
+[13:06.240 --> 13:07.760]  Nobody is doing the scheduling right now.
+[13:07.760 --> 13:10.840]  All the threads are doing some actual work.
+[13:10.840 --> 13:16.720]  A couple of tasks are done, and suddenly, those waiting tasks are woken up, or their
+[13:16.720 --> 13:18.360]  deadline is up.
+[13:18.360 --> 13:19.920]  They want to be executed now.
+[13:19.920 --> 13:23.240]  So one of the worker threads will eventually pick up the scheduling key.
+[13:23.240 --> 13:24.240]  We'll notice this.
+[13:24.240 --> 13:28.680]  We'll move the tasks into the ready queue, and in parallel, some other thread finished
+[13:28.680 --> 13:30.200]  and older tasks.
+[13:30.200 --> 13:35.240]  Now, those two tasks are picked up by a couple of random threads.
+[13:35.240 --> 13:39.920]  They are done, and some other thread will pick up the scheduling key, and the process
+[13:39.920 --> 13:42.280]  repeats all the time when new tasks arrive.
+[13:42.280 --> 13:43.280]  This is it.
+[13:43.280 --> 13:49.880]  What we need to implement all this cool stuff, the language and the libraries, which we will
+[13:49.880 --> 13:55.000]  be using, need to provide us with the following stuff, at least.
+[13:55.000 --> 14:01.200]  We need mutexes, containers like race, lists, condition variables, and not important for
+[14:01.200 --> 14:07.000]  the algorithm, but for the implementation, for the performance, it's extremely important.
+[14:07.000 --> 14:10.760]  We will also need log-free atomic operations.
+[14:10.760 --> 14:15.720]  Just in case not all of you know what they are, here is a short pseudo code explaining
+[14:15.720 --> 14:19.760]  what these log-free atomics are, we will need three of them.
+[14:19.760 --> 14:27.600]  Firstly, it's atomic load, which is basically reading a variable, but with respect to so-called
+[14:27.600 --> 14:33.400]  memory models, which, again, Google afterwards, it's too complicated topic to dive in right
+[14:33.400 --> 14:34.400]  now.
+[14:34.400 --> 14:39.080]  We will also need atomic compare exchange, which is conditional assignment.
+[14:39.080 --> 14:45.360]  So we set a new value to some variable if it was equal to something else which we wanted
+[14:45.360 --> 14:46.360]  to check.
+[14:46.360 --> 14:48.440]  And we will also need atomic exchange.
+[14:48.440 --> 14:52.200]  So it sets a new value and returns the old value.
+[14:52.200 --> 14:58.320]  The cool stuff about those log-free atomics is that they are not only atomic, but they
+[14:58.320 --> 14:59.800]  are log-free.
+[14:59.800 --> 15:01.880]  There is no mutexes.
+[15:01.880 --> 15:06.200]  On the contrary, mutexes use this stuff inside.
+[15:06.200 --> 15:10.320]  And how they are implemented, they are special instructions right on the CPU.
+[15:10.320 --> 15:14.360]  So doing those operations doesn't even involve the kernel.
+[15:14.360 --> 15:17.120]  It's quite cheap if you use it efficiently.
+[15:17.120 --> 15:23.080]  And those three operations are basis for some very cool and extremely performant algorithms,
+[15:23.080 --> 15:24.080]  as we will see.
+[15:24.080 --> 15:25.080]  Not just here.
+[15:25.080 --> 15:29.960]  There are a lot of those algorithms based on those log-free atomic operations.
+[15:29.960 --> 15:33.400]  They are also called log-free algorithms.
+[15:33.400 --> 15:40.280]  And we will follow the task pipeline, looking at the scheduler parts, and we will start
+[15:40.280 --> 15:43.800]  from the front queue, just like the tasks.
+[15:43.800 --> 15:49.880]  We know that this queue has multiple producers, and it has a single consumer.
+[15:49.880 --> 15:54.880]  So it means this queue is multi-producer, single-consumer.
+[15:54.880 --> 15:57.680]  This is a common notation for naming queues.
+[15:57.680 --> 16:03.000]  We say multi-produce, multi- or single-producer, multi- or single-consumer, and we get four
+[16:03.000 --> 16:04.760]  combinations of queue types.
+[16:04.760 --> 16:08.080]  This is multi-producer, single-consumer.
+[16:08.080 --> 16:12.600]  We also know about this queue that it will experience high contention, because I want
+[16:12.600 --> 16:15.120]  my scheduler to be functional.
+[16:15.120 --> 16:21.180]  When I have tens of threads and millions of tasks per second, this means extreme contention
+[16:21.180 --> 16:22.680]  on the front queue.
+[16:22.680 --> 16:27.800]  This in turn means I should avoid mutexes, because mutexes most likely will choke here.
+[16:27.800 --> 16:34.120]  What you would do in a normal queue, not thread safe or anything, you would have to remember
+[16:34.120 --> 16:38.520]  two positions, head and tail, and maintain those positions.
+[16:38.520 --> 16:44.840]  If you try to turn this algorithm into a log-free thread safe implementation, it would be nightmare,
+[16:44.840 --> 16:51.520]  because the more variables you have to update in a log-free way, the more complicated the
+[16:51.520 --> 16:58.360]  algorithm gets, and queue, like with two variables, it's extremely hard to implement in a log-free
+[16:58.360 --> 16:59.360]  way.
+[16:59.360 --> 17:04.680]  We should try to avoid this if possible, and the idea is let's make it a stack instead
+[17:04.680 --> 17:06.200]  of queue.
+[17:06.200 --> 17:09.880]  So we will maintain just one position, the top item, and that's it.
+[17:09.880 --> 17:14.800]  We don't need two variables here, and then the algorithm becomes quite simple.
+[17:14.800 --> 17:22.000]  Pushing is, well, we try to link new item with the old top, set it, atomic compare exchange
+[17:22.000 --> 17:28.120]  will fail, if some other threads does it faster than we are in this push, and we don't retry
+[17:28.120 --> 17:29.120]  it.
+[17:29.120 --> 17:30.120]  It's pretty simple.
+[17:30.120 --> 17:35.200]  The more complicated part, although it looks shorter, is popping the items.
+[17:35.200 --> 17:41.600]  The thing is that how pop is implemented, we just replace top item with null, effectively
+[17:41.600 --> 17:43.720]  taking all the items at once.
+[17:43.720 --> 17:46.320]  We cannot pop them one by one.
+[17:46.320 --> 17:51.000]  And also, we have to reverse the list before we return it, because when we are pushing
+[17:51.000 --> 17:58.440]  items in FIFO order, pushing them on the stack, they are returned in LIFO order, and we want
+[17:58.440 --> 18:01.640]  to maintain the order, so we have to reverse it again.
+[18:01.640 --> 18:07.200]  These are two downsides that we can't pop one by one, and we have to reverse the result
+[18:07.200 --> 18:08.520]  before returning it.
+[18:08.520 --> 18:15.320]  On the other hand, what we get, it is completely lock free, thread safe, and it's weight free.
+[18:15.320 --> 18:20.360]  Who will win those drawbacks for being lock free and weight free?
+[18:20.360 --> 18:24.040]  We will see in the end in the benchmark section.
+[18:24.040 --> 18:27.080]  Next part of the task journey is weight queue.
+[18:27.080 --> 18:33.280]  As we know, it stores yielded tasks, so they are waiting for something, like in 99 percent
+[18:33.280 --> 18:36.080]  of cases, they are waiting for a deadline.
+[18:36.080 --> 18:40.400]  Since we are using tasks for requests, requests usually have a timeout, meaning that they
+[18:40.400 --> 18:42.120]  have a deadline.
+[18:42.120 --> 18:48.520]  So what we need is to be able to quickly pop all tasks with expired deadline, simply because
+[18:48.520 --> 18:53.720]  we have to do everything here quickly, there is a lot of tasks.
+[18:53.720 --> 18:59.480]  And we also know that this queue is always accessed by one third at a time.
+[18:59.480 --> 19:03.480]  The current scheduler worker who owns the scheduling key, so there is no concurrency
+[19:03.480 --> 19:04.800]  on this queue.
+[19:04.800 --> 19:11.000]  And that gives us quite a lot of freedom about what data structures we can use.
+[19:11.000 --> 19:13.920]  That basically means we can use binary heap.
+[19:13.920 --> 19:19.960]  It's ideal for such a job when you have to quickly pop something sorted by a thing like
+[19:19.960 --> 19:21.760]  deadline.
+[19:21.760 --> 19:26.520]  What happens is that we sort the tasks by deadlines here, basically.
+[19:26.520 --> 19:32.000]  So the task with the closest deadline will be on top and we will be able, for constant
+[19:32.000 --> 19:38.040]  time, tell immediately if any task has expired by just looking at the top.
+[19:38.040 --> 19:44.960]  And in case not all of you know what binary heap is, there is a brief explanation.
+[19:44.960 --> 19:51.720]  It's a perfectly balanced binary tree where each node value is less than values of its
+[19:51.720 --> 19:52.720]  child nodes.
+[19:52.720 --> 19:54.480]  We call this minimal heap.
+[19:54.480 --> 19:58.600]  If we reverse the order, it will be called maximal heap.
+[19:58.600 --> 20:04.840]  And this heap, it has quite good complexity.
+[20:04.840 --> 20:05.840]  Quite good complexity.
+[20:05.840 --> 20:10.720]  So for logarithmic time, we can pop any items even from the middle.
+[20:10.720 --> 20:16.560]  We can push new items also for logarithmic time, which is very nice, very fast.
+[20:16.560 --> 20:26.600]  From the weight queue, the tasks migrate to the ready queue, which as we know is populated
+[20:26.600 --> 20:33.000]  by one thread, current scheduler worker, and it is consumed by multiple threads, worker
+[20:33.000 --> 20:34.840]  threads.
+[20:34.840 --> 20:39.680]  So it means this is a multi-consumer single producer queue.
+[20:39.680 --> 20:44.720]  We also know that it will as well experience high contention because task scheduler should
+[20:44.720 --> 20:47.920]  be perfectly functional with like 10 worker threads.
+[20:47.920 --> 20:48.920]  Why not?
+[20:48.920 --> 20:52.120]  And with millions of tasks per second, we will have high contention.
+[20:52.120 --> 20:54.400]  We have to deal with it somehow.
+[20:54.400 --> 21:01.360]  Although unfortunately, I don't know a nice simple algorithm for doing unbounded and lock
+[21:01.360 --> 21:03.600]  free queue of this type.
+[21:03.600 --> 21:09.360]  For the reason why you can Google ABA problem, after the talk, it's also quite complicated.
+[21:09.360 --> 21:16.200]  We will not have time to dive into this, but just know that it is much more complicated
+[21:16.200 --> 21:19.840]  than multi-producer single consumer version.
+[21:19.840 --> 21:28.080]  Although I know a couple of other queues, unbounded log-based and bounded lock free.
+[21:28.080 --> 21:32.440]  I want my final queue to be exactly unbounded, meaning not limited in size.
+[21:32.440 --> 21:35.320]  So I don't want any limits inside the scheduler.
+[21:35.320 --> 21:38.760]  You can add them on top, but I don't want them to be inside the scheduler.
+[21:38.760 --> 21:47.320]  I don't want it to be limited by anything like queue size.
+[21:47.320 --> 21:50.200]  So let's see what we can do with those two queues.
+[21:50.200 --> 21:55.160]  The bounded lock free version, bounded lock free queue is simple.
+[21:55.160 --> 22:01.360]  It's just a cyclic rate, except that the read and write index will make atomic variables.
+[22:01.360 --> 22:07.000]  So in pushing, the only thing changes compared to normal cyclic buffer is that you increment
+[22:07.000 --> 22:11.720]  the write index atomic increment and that's it.
+[22:11.720 --> 22:15.120]  The popping is just a little bit more complicated.
+[22:15.120 --> 22:19.160]  We have to retry it sometimes because there will be multiple consumers.
+[22:19.160 --> 22:22.160]  They will compete for the same element sometimes.
+[22:22.160 --> 22:27.040]  So atomic compare exchange will eventually fail and we will have to retry, but it's still
+[22:27.040 --> 22:29.440]  quite simple.
+[22:29.440 --> 22:34.120]  And the unbounded lock queue is just trivial.
+[22:34.120 --> 22:39.400]  So it's a mutex and it's a list and we take mutex on every operation.
+[22:39.400 --> 22:43.760]  Then it becomes lock based, but it's unbounded.
+[22:43.760 --> 22:48.960]  So what we can do with the ready queue, what I had was the craziest idea.
+[22:48.960 --> 22:56.400]  The thing is, our enemy is not the mutex itself, it's the contention on the mutex.
+[22:56.400 --> 23:01.120]  So we could try to reduce the contention instead of deleting the mutex.
+[23:01.120 --> 23:06.760]  We could skip it, but somehow maybe not lock it so often.
+[23:06.760 --> 23:11.320]  Let's combine those two approaches together.
+[23:11.320 --> 23:19.160]  Let's take the bounded lock free queue and make unbounded lock based queue of those lock
+[23:19.160 --> 23:21.160]  free sub-queues.
+[23:21.160 --> 23:27.760]  So it will be like a stdq, but the blocks are lock free and the big queue of those blocks
+[23:27.760 --> 23:29.960]  is lock based.
+[23:29.960 --> 23:37.760]  And how producer works, it will push new items to the latest block in a lock free way.
+[23:37.760 --> 23:42.560]  When the block becomes full, it takes mutex, appends a new block, fills it in a lock free
+[23:42.560 --> 23:44.240]  way and so on.
+[23:44.240 --> 23:49.360]  And the consumers, they do their other thing vice versa, so they consume the first block
+[23:49.360 --> 23:51.080]  in a lock free way.
+[23:51.080 --> 23:55.360]  When it becomes empty, they take mutex, switch to the next block, consume it in a lock free
+[23:55.360 --> 23:57.440]  way and so on.
+[23:57.440 --> 24:02.920]  To see the benefit, imagine like sub-queue size, this block size, there's not four like
+[24:02.920 --> 24:05.640]  on the slide, but it's 10,000.
+[24:05.640 --> 24:14.320]  What happens then is we will take mutex lock not on IV operation, but once per 10,000 operations.
+[24:14.320 --> 24:19.400]  Mutex is still here, but it's locked so rarely that its cost is neglectable.
+[24:19.400 --> 24:24.840]  You will not see this mutex lock in any flame graphs anymore.
+[24:24.840 --> 24:31.880]  The only problem with this is that the consumers will need an explicit state, because if consumer
+[24:31.880 --> 24:37.120]  doesn't know which is the first block, in this queue of blocks, it will have to locate
+[24:37.120 --> 24:38.120]  it.
+[24:38.120 --> 24:44.760]  The queue of blocks, it's protected by a mutex, so if consumers don't have a state, if they
+[24:44.760 --> 24:50.520]  don't reference the first block having items, then on every pop, they would have to find
+[24:50.520 --> 24:54.520]  it, keeping the mutex, and that would mean mutex lock on every pop, if this is exactly
+[24:54.520 --> 24:57.400]  what we wanted to avoid.
+[24:57.400 --> 25:02.040]  Consumers need to register themselves, and then they can do the popping.
+[25:02.040 --> 25:07.240]  This is not a problem for a task scheduler itself, because it has fixed set of worker
+[25:07.240 --> 25:10.240]  threads which you specify at creation.
+[25:10.240 --> 25:14.280]  They can register themselves as consumers at start and leave just fine with it, so it's
+[25:14.280 --> 25:20.120]  just a problem for generic usage of this type of queue, but for task scheduler, it is just
+[25:20.120 --> 25:22.240]  fine.
+[25:22.240 --> 25:27.720]  Let's examine the visual example again.
+[25:27.720 --> 25:34.600]  Imagine like we have this queue, it's empty, just single block, one producer, two consumers.
+[25:34.600 --> 25:39.040]  Producer adds three items in a lock-free way.
+[25:39.040 --> 25:44.320]  Everything is lock-free so far, one consumer consumes one item, lock-free.
+[25:44.320 --> 25:48.120]  Now producer adds another item, lock-free.
+[25:48.120 --> 25:54.640]  It sees that the block became full, so we need to append a new block, we take mutex,
+[25:54.640 --> 26:01.200]  switch to the next, append a new block, switch to the next block, release the mutex, and
+[26:01.200 --> 26:04.560]  add three more items in a lock-free way.
+[26:04.560 --> 26:10.960]  Our consumers will work, they will finish consumption of the first block, consumer A will see that
+[26:10.960 --> 26:17.840]  the block is empty, so it takes mutex, switches to next block, releases the mutex, and continues
+[26:17.840 --> 26:20.000]  consumption in a lock-free way.
+[26:20.000 --> 26:24.200]  So we take mutex only when we switch from block to block.
+[26:24.200 --> 26:29.320]  And the other consumer, when we will try to consume something from it, it will see immediately
+[26:29.320 --> 26:34.120]  that its current block is empty, because those blocks, they are, as you remember, lock-free
+[26:34.120 --> 26:40.040]  bounded queues, there are read and write index, if we see that the read index of this block
+[26:40.040 --> 26:44.680]  equals its size, it means it's empty, so we don't even need to full scan it.
+[26:44.680 --> 26:51.920]  Anyway, consumer B will then lock mutex, switch to next block, release the mutex, and continue
+[26:51.920 --> 26:54.000]  the consumption.
+[26:54.000 --> 26:58.560]  And the old blocks, the completely consumed ones, can be discarded.
+[26:58.560 --> 27:03.560]  You can free them, you can reuse them, like have a pool of those blocks, and append them
+[27:03.560 --> 27:09.600]  to beginning again, if you want to, like, it's not cheap to allocate blocks having 10,000
+[27:09.600 --> 27:14.920]  items in them, so you might want to pull them, to have a pool of them.
+[27:14.920 --> 27:20.080]  About the benchmarks, we will see in the end, again, as I said, with everything combined.
+[27:20.080 --> 27:26.560]  And our progress so far is that we saw test-calular parts, those queues, and now we can have a
+[27:26.560 --> 27:28.240]  glimpse of the routines.
+[27:28.240 --> 27:35.640]  Unfortunately, we don't have enough time to dive deep into the implementation, but I can
+[27:35.640 --> 27:40.800]  show you some usage examples, show the features they have, and for the implementation, you
+[27:40.800 --> 27:46.040]  can look at the source code and ask me questions after the talk.
+[27:46.040 --> 27:51.200]  To see why do we need coroutines again, and what features we need from the coroutines,
+[27:51.200 --> 27:55.120]  let's inspect the simplified version of this save games example.
+[27:55.120 --> 27:57.800]  This time, we have just two steps.
+[27:57.800 --> 28:01.040]  Start download of a save game block, and then handle the result.
+[28:01.040 --> 28:03.680]  This is in just two steps.
+[28:03.680 --> 28:09.960]  What we know is that while the task is waiting for response from the network, it shouldn't
+[28:09.960 --> 28:14.000]  block other tasks, so it should be able to yield.
+[28:14.000 --> 28:16.840]  It should be able to step away.
+[28:16.840 --> 28:22.320]  But we also know that we can't, this task, it can't sleep infinitely.
+[28:22.320 --> 28:24.360]  There should be some sort of timeout.
+[28:24.360 --> 28:29.200]  Requests can't be executing infinitely, so we need some deadline after which the task
+[28:29.200 --> 28:33.040]  would be woken up and will cancel the request.
+[28:33.040 --> 28:38.480]  So if the response arrives in time, before the deadline, we have to wake up the task
+[28:38.480 --> 28:40.240]  before the deadline.
+[28:40.240 --> 28:44.440]  There should be some sort of explicit wake up for the task which is right now sleeping
+[28:44.440 --> 28:46.520]  in the wait queue, so it's not executing.
+[28:46.520 --> 28:49.560]  How exactly do we wake it up from there?
+[28:49.560 --> 28:50.960]  So we need an explicit wake up.
+[28:50.960 --> 28:57.800]  We need yield, deadlines, and wake ups, three main features of those coroutines.
+[28:57.800 --> 29:00.080]  Let's see an example.
+[29:00.080 --> 29:02.960]  It's almost exactly like it looks in real code.
+[29:02.960 --> 29:10.040]  Once there will be simplified version of C++, but it's very similar how it looks in reality.
+[29:10.040 --> 29:14.800]  We have a global task scheduler in the process and some HTTP client.
+[29:14.800 --> 29:20.520]  And imagine like a request from the client arrives, so we wrap it into a task and give
+[29:20.520 --> 29:22.760]  it a callback called download.
+[29:22.760 --> 29:28.200]  And we post it into the scheduler, so it will go into this front queue.
+[29:28.200 --> 29:33.680]  The scheduler will execute our callback in one of the worker threads.
+[29:33.680 --> 29:39.200]  This download callback, so what we do here is firstly set what will be the next step.
+[29:39.200 --> 29:42.800]  The next step will be handling the result.
+[29:42.800 --> 29:45.360]  Then we do the asynchronous HTTP request.
+[29:45.360 --> 29:48.680]  Assume that our HTTP client is able to do this.
+[29:48.680 --> 29:53.480]  So we start an asynchronous HTTP request and give it a future callback to execute when
+[29:53.480 --> 29:58.120]  the request is done, which we'll call wake up on our task.
+[29:58.120 --> 30:01.760]  While this will be explicit wake up when the request is done.
+[30:01.760 --> 30:03.080]  And then we start waiting.
+[30:03.080 --> 30:08.120]  So we post ourselves back into the scheduler with five seconds deadline.
+[30:08.120 --> 30:13.360]  Either the task will wake up in five seconds or it will be woken up explicitly when the
+[30:13.360 --> 30:14.680]  request is complete.
+[30:14.680 --> 30:20.120]  This goes into the scheduler, sleeps in the wait queue for some time and eventually our
+[30:20.120 --> 30:23.240]  callback handle result is executed.
+[30:23.240 --> 30:24.600]  We have to check what happened.
+[30:24.600 --> 30:26.600]  It could be two reasons.
+[30:26.600 --> 30:28.440]  It could be that the task is expired.
+[30:28.440 --> 30:32.120]  So five seconds passed and we were woken up by the deadline.
+[30:32.120 --> 30:35.240]  And we just literally check if it's expired.
+[30:35.240 --> 30:40.200]  If it is sold and we cancel the request and we start waiting for the cancellation to be
+[30:40.200 --> 30:45.480]  complete to properly free all the resources and to go back into the scheduler.
+[30:45.480 --> 30:48.320]  But now we wait for the cancellation.
+[30:48.320 --> 30:53.680]  Otherwise, if it's not expired, it means the request is finally complete with some result.
+[30:53.680 --> 30:55.160]  It could be success.
+[30:55.160 --> 31:00.320]  It could be an HTTP error code or it could be our own consolation done on a previous
+[31:00.320 --> 31:02.000]  wake up a few lines above.
+[31:02.000 --> 31:05.560]  Either way, we just handle it and delete the task.
+[31:05.560 --> 31:10.240]  This is literally, this is almost exactly how it looks in the source code.
+[31:10.240 --> 31:16.320]  There is no spurious wake ups at all, no sleeps and the request has clear state machine with
+[31:16.320 --> 31:19.840]  every state expressed at the callback.
+[31:19.840 --> 31:26.520]  And what is better, these entire routine stuff, all those wake ups, post deadlines, this is
+[31:26.520 --> 31:27.760]  all completely lock free.
+[31:27.760 --> 31:32.840]  There is no single mutics used to implement this all.
+[31:32.840 --> 31:37.800]  So this is to get you further interested into looking at the source code and asking questions
+[31:37.800 --> 31:40.560]  afterwards.
+[31:40.560 --> 31:45.560]  This is quite complicated stuff, as you can imagine, especially the implementation.
+[31:45.560 --> 31:48.520]  How do we verify such stuff?
+[31:48.520 --> 31:54.400]  Of course, there are unit tests, like literally hundreds and thousands of lines of unit tests.
+[31:54.400 --> 31:59.840]  But with multi-tried algorithms, the thing is, even if you have 100% code coverage, it
+[31:59.840 --> 32:02.360]  doesn't tell you anything.
+[32:02.360 --> 32:08.560]  It's better than, I think, not having 100% coverage, but it's still, there might be bugs
+[32:08.560 --> 32:11.520]  which can stay hidden for literally years.
+[32:11.520 --> 32:16.200]  And you will not find them except when this thing explodes in production.
+[32:16.200 --> 32:20.000]  There should be a way to at least verify the algorithm, maybe.
+[32:20.000 --> 32:26.600]  We can't verify the source code, but we can improve our confidence about the algorithm
+[32:26.600 --> 32:27.760]  itself.
+[32:27.760 --> 32:35.320]  And the solution is TLA+, TLA+, stands for temporal logic of actions, and it is a combination
+[32:35.320 --> 32:38.360]  of mathematics and temporal logic.
+[32:38.360 --> 32:42.960]  And it's also a language and runtime of this language.
+[32:42.960 --> 32:48.680]  This language allows you to verify literally any algorithms or systems, like you can verify
+[32:48.680 --> 32:57.560]  an algorithm of a queue, like I did, or how your microservices interact, or you can verify
+[32:57.560 --> 32:59.200]  how you go to a grocery store.
+[32:59.200 --> 33:01.760]  If you can algorithmize it, then you can verify it.
+[33:01.760 --> 33:02.760]  TLA+.
+[33:02.760 --> 33:06.440]  It's suitable for anything like this.
+[33:06.440 --> 33:12.920]  So in this TLA+, language, you write a specification and run the verification, and it will run
+[33:12.920 --> 33:19.400]  and it will split your system, your algorithm, into a set of all the possible states in which
+[33:19.400 --> 33:21.840]  this algorithm can be.
+[33:21.840 --> 33:27.720]  And verify your own invariance in every reachable state of your system.
+[33:27.720 --> 33:34.520]  So firstly, you define the algorithm, then you define what means validness for your algorithm,
+[33:34.520 --> 33:38.080]  the invariance, and TLA+, we'll verify all them.
+[33:38.080 --> 33:43.440]  Let's see an example, like I assume you have implemented a queue in any language, and we
+[33:43.440 --> 33:46.040]  want to verify the algorithm of this queue.
+[33:46.040 --> 33:53.600]  First you have to define what objects exist in your system, what agents you have there.
+[33:53.600 --> 33:59.160]  In my queue, I have just pipe for items, so some sort of storage, and a couple of counters
+[33:59.160 --> 34:00.640]  and limits.
+[34:00.640 --> 34:03.320]  Then you have to define actions.
+[34:03.320 --> 34:08.520]  In TLA+, every action is a set of mathematical conditions combined with some mathematical
+[34:08.520 --> 34:18.520]  operators, like you have operators and or operator, or list or set operator, or complex
+[34:18.520 --> 34:23.920]  operators like all items in the set comply with the condition operator, and many more
+[34:23.920 --> 34:26.840]  other operators which can use in your actions.
+[34:26.840 --> 34:32.680]  And the first action is always initialization, where you give initial values to your variables.
+[34:32.680 --> 34:37.680]  Here I say that storage pipe is an empty list, and my counters of sent and received items
+[34:37.680 --> 34:39.200]  are zero.
+[34:39.200 --> 34:47.080]  Then I start defining some actual actions doing stuff, like send or push or insert or
+[34:47.080 --> 34:48.080]  whatever.
+[34:48.080 --> 34:50.080]  And there are ways how to do it.
+[34:50.080 --> 34:55.680]  I'm not aware of any standard ways how to do it properly, so I invented my own.
+[34:55.680 --> 34:59.480]  Firstly, I split my actions into two groups.
+[34:59.480 --> 35:04.640]  And first group of conditions I define when the action is possible.
+[35:04.640 --> 35:11.600]  So here I say send is possible when queue is not full, and when I still have items to
+[35:11.600 --> 35:14.280]  send, so not everything pushed yet.
+[35:14.280 --> 35:20.680]  In the second group, I tell what changes should be done when the first group is true, so when
+[35:20.680 --> 35:21.800]  the condition is true.
+[35:21.800 --> 35:28.160]  Here I say if the first part is true, then I add a new item to the pipe storage, as items
+[35:28.160 --> 35:33.360]  I use numbers, and I increment the number of sent items, of pushed items.
+[35:33.360 --> 35:37.640]  The problem is, as you could see, probably there is no really distinction between those
+[35:37.640 --> 35:38.640]  two groups.
+[35:38.640 --> 35:45.200]  It's imaginary, and the only distinction is this small single code sign.
+[35:45.200 --> 35:47.320]  It means next value of the variable.
+[35:47.320 --> 35:53.200]  The problem is, since here it passes basically math, in math there is no assignment.
+[35:53.200 --> 35:56.880]  There is no action like assign new value to some variable.
+[35:56.880 --> 36:03.440]  There is only, the closest thing we have is equal operator in math, but there is no assignment.
+[36:03.440 --> 36:09.800]  But you can emulate it saying like next value of your variable equals old value and something
+[36:09.800 --> 36:10.800]  done with it.
+[36:10.800 --> 36:18.880]  So here I say literally last sent next equals last sent old plus one, which effectively results
+[36:18.880 --> 36:23.360]  into assignment and programming languages, but here you have to simulate it like this.
+[36:23.360 --> 36:29.800]  In theory plus there is no separation into groups, it's just several mathematical conditions,
+[36:29.800 --> 36:34.640]  but I do separate it for making the specification easier to read.
+[36:34.640 --> 36:36.800]  I do the same for the receive action.
+[36:36.800 --> 36:43.800]  It's possible when I have items to receive, and the changes are to receive.
+[36:43.800 --> 36:50.200]  And then you have to define what means validness for your system, so the invariance, which
+[36:50.200 --> 36:52.480]  will be validated in every Ritual state.
+[36:52.480 --> 36:57.000]  Here as they say that my queue is valid when all the items in the queue are ordered, like
+[36:57.000 --> 36:59.000]  I pushed them.
+[36:59.000 --> 37:05.600]  The queue never overflows, and then the items are received in the same order as sent.
+[37:05.600 --> 37:12.160]  And then with some technical steps, simple ones, I run the validation, and it will give
+[37:12.160 --> 37:16.760]  me a result like n states are found, like hundreds of thousands of millions of states
+[37:16.760 --> 37:23.240]  that are found, and they are valid, or it will say that I found an invalid state.
+[37:23.240 --> 37:27.960]  And here is how you get into the state from the initial one following this sequence of
+[37:27.960 --> 37:29.720]  actions.
+[37:29.720 --> 37:34.280]  And then you can turn those failure traces into unit tests in your actual code.
+[37:34.280 --> 37:41.520]  Now this actually works, and they call it a bug in the scheduler, thanks to this thing.
+[37:41.520 --> 37:48.840]  Here by links you can find the specifications for tax scheduler on the whole, and for the
+[37:48.840 --> 37:54.120]  multi-consumer queue, which was not trivial enough, so as I would try to validate it as
+[37:54.120 --> 37:55.120]  well.
+[37:55.120 --> 37:59.240]  Two specifications, they are quite big, but most of the lines are comments explaining
+[37:59.240 --> 38:00.240]  the algorithm.
+[38:00.240 --> 38:06.400]  So the specification, the code part of them is not too complicated.
+[38:06.400 --> 38:11.500]  You can read it like easily.
+[38:11.500 --> 38:17.280]  And also there are instructions how to install TLA+, in the source code repository, how to
+[38:17.280 --> 38:22.080]  run validation on those models, how to install TLA+, into the command line.
+[38:22.080 --> 38:24.960]  It's not trivial, surprisingly.
+[38:24.960 --> 38:31.600]  And there are also great course of lectures from the author of TLA+, Leslie Lampert.
+[38:31.600 --> 38:36.800]  Lectures are quite fun, if you are not even planning to use TLA+, they are still worth
+[38:36.800 --> 38:41.800]  watching, very entertaining.
+[38:41.800 --> 38:46.840]  All of this can be found on the source code repository, and now about the benchmarks.
+[38:46.840 --> 38:50.120]  How I did them, the benchmarks are comparative.
+[38:50.120 --> 38:56.400]  So I'm not just running the benchmarks against themselves in vacuum against some random stuff.
+[38:56.400 --> 39:02.800]  I compare the improved versions of those, my algorithms against trivial versions, naive
+[39:02.800 --> 39:09.200]  versions using mutexes, to see if stuff actually improved.
+[39:09.200 --> 39:14.440]  Like all the same benchmarks run on my algorithms and don't trivial implementations.
+[39:14.440 --> 39:19.120]  For example, the smart queues I benchmark against their mutex locked versions, or the
+[39:19.120 --> 39:24.280]  task scheduler I benchmark against thread pool, without coroutines, single queues, single
+[39:24.280 --> 39:26.600]  mutex and nothing else.
+[39:26.600 --> 39:32.480]  I run this on five different configurations of software and hardware with tens of scenarios
+[39:32.480 --> 39:38.600]  and all the reports, while the performance are available on GitHub, in human readable
+[39:38.600 --> 39:40.200]  markdown format.
+[39:40.200 --> 39:44.880]  And you can also run them on your system with just a single line of Python script.
+[39:44.880 --> 39:51.480]  It will generate the report for your case, and you can read it and see what's up.
+[39:51.480 --> 39:56.000]  And so there are quite a lot of results, I can show just a few of them on the slides.
+[39:56.000 --> 40:03.120]  I will use Debian Linux with eight cores running in Google Cloud, and I will show just some
+[40:03.120 --> 40:09.920]  average results, no shocking like 100 times faster, although there are extreme cases when
+[40:09.920 --> 40:15.120]  algorithms are almost the same, or when it's extremely faster, but I will show just some
+[40:15.120 --> 40:21.120]  average results which you can actually get in real production.
+[40:21.120 --> 40:24.280]  We start from the front queue again.
+[40:24.280 --> 40:29.880]  The benchmark uses five producer threads and one consumer thread, doing busy loop pushes
+[40:29.880 --> 40:35.160]  and pops all the time to get the worst case contention.
+[40:35.160 --> 40:39.560]  It's just for one and a half times faster, and this is all considering the two drawbacks
+[40:39.560 --> 40:45.160]  which you can remember, so we store items as stack in the front queue, we have to reverse
+[40:45.160 --> 40:50.000]  them, we can pop them one by one, and still it is one and a half times faster.
+[40:50.000 --> 40:55.520]  If we make it 10 producer threads, so we have more threads than CPU cores, worst case for
+[40:55.520 --> 41:00.120]  mutics contention, it becomes 2.6 times faster.
+[41:00.120 --> 41:06.880]  The ready queue, another benchmark, five consumer threads, one producer threads, one producer
+[41:06.880 --> 41:13.280]  thread, again busy loop pushes and pops, it becomes 2.6 times faster, already and you
+[41:13.280 --> 41:19.960]  can see that the mutics, the log contention is multiple orders slower than in a trivial
+[41:19.960 --> 41:21.960]  implementation.
+[41:21.960 --> 41:27.400]  This is thanks to us taking mutics log, not on every operation, but once per multiple
+[41:27.400 --> 41:30.640]  thousand operations, and this is the result.
+[41:30.640 --> 41:35.880]  Mutics is still here, but it almost doesn't affect the results at all.
+[41:35.880 --> 41:41.280]  When we make it 10, consumer threads, it becomes already four and a half times faster.
+[41:41.280 --> 41:46.240]  The naive queue degrades quite quick in this case.
+[41:46.240 --> 41:49.840]  And now everything combined, the task scheduler on the whole.
+[41:49.840 --> 41:56.640]  In this benchmark, tasks are empty, so they are just empty C++ functions.
+[41:56.640 --> 42:01.560]  Not doing anything, worst case for contention again.
+[42:01.560 --> 42:05.880]  And now we start from single worker thread, which will do both the scheduling and tasks,
+[42:05.880 --> 42:09.080]  it becomes right away 2.2 times faster.
+[42:09.080 --> 42:15.280]  Then a trivial thread pool without routine support, it becomes already 2.2 times faster.
+[42:15.280 --> 42:21.560]  And zero log contention, so log wasn't contended even once between the worker and producer.
+[42:21.560 --> 42:26.280]  When we make it five worker threads, it becomes three times faster, so it scales better than
+[42:26.280 --> 42:32.680]  naive implementation, but we make it 10 worker threads, it becomes seven and half times faster.
+[42:32.680 --> 42:36.840]  And these are not the best results, it can be even better.
+[42:36.840 --> 42:44.160]  I'm just not showing extreme cases here, but I saw like 15 times speed up as well.
+[42:44.160 --> 42:48.360]  It's just not something you will most likely get in production if you start using this,
+[42:48.360 --> 42:50.720]  but those benchmarks are also available.
+[42:50.720 --> 42:56.240]  And now about the real usage, not some random benchmarks in the vacuum, how it affects the
+[42:56.240 --> 42:57.240]  actual code.
+[42:57.240 --> 43:02.520]  Apply to this save games case from the beginning.
+[43:02.520 --> 43:09.200]  We reported one of the microservices from updater scheduler to task scheduler, and we immediately
+[43:09.200 --> 43:14.400]  without any further optimizations got 10 times speed up.
+[43:14.400 --> 43:23.760]  We went from 100s RPS to bigger than 10,000 RPS, and latency dropped five times like right
+[43:23.760 --> 43:28.720]  out of the box before we started doing some other optimizations.
+[43:28.720 --> 43:30.640]  And the algorithm is extendable.
+[43:30.640 --> 43:36.920]  Now, as you remember, there is this big rectangle where only one thread at a time can work.
+[43:36.920 --> 43:40.640]  It means this is thread safe space.
+[43:40.640 --> 43:44.640]  We can replace the binary heap with weighting task with something more complicated.
+[43:44.640 --> 43:51.000]  For instance, we can put LibF inside, or EPUL or IO completion ports from Windows inside,
+[43:51.000 --> 43:57.160]  and we get multi-threaded event loop, like multi-threaded LibF, we can store sockets
+[43:57.160 --> 44:03.240]  in tasks, and we get circuits with deadlines, with yields, and this is, in fact, what we
+[44:03.240 --> 44:10.000]  do have in Ubisoft, it's a fork of task scheduler where we just replaced weight queue with EPUL
+[44:10.000 --> 44:12.920]  on Linux and IO completion ports on Windows.
+[44:12.920 --> 44:18.040]  And we get more than millions, more than million messages per second with just several threads
+[44:18.040 --> 44:19.040]  on sockets.
+[44:19.040 --> 44:25.720]  With this thing, it's not too complicated to extend scheduler, it's just maybe next
+[44:25.720 --> 44:29.400]  time about this multi-threaded event loop.
+[44:29.400 --> 44:31.400]  What are the future plans for it?
+[44:31.400 --> 44:34.200]  Firstly, we could try to run it on ARM.
+[44:34.200 --> 44:37.200]  Maybe it already runs, but I just haven't tried.
+[44:37.200 --> 44:40.000]  Maybe it works, maybe not, I have no idea.
+[44:40.000 --> 44:41.200]  That's why it's open source.
+[44:41.200 --> 44:45.120]  You can try it, send a pull request if something's not working.
+[44:45.120 --> 44:51.520]  Also, it's currently implemented only in C++, and it's not even STL, although some people
+[44:51.520 --> 44:54.040]  might consider it good, like me.
+[44:54.040 --> 45:00.120]  I don't like STL, but it could use a port to STL as well, or to some other language.
+[45:00.120 --> 45:05.320]  And also, there could be optimizations done like the front queue.
+[45:05.320 --> 45:10.120]  Maybe there is a way not to store it as a stack, not to reverse the list of items before
+[45:10.120 --> 45:11.120]  returning it.
+[45:11.120 --> 45:16.320]  I just haven't found a simple way to do it, which would be worth trying, and this is the
+[45:16.320 --> 45:17.320]  end.
+[45:17.320 --> 45:18.320]  Thanks for your attention.
+[45:18.320 --> 45:26.840]  And here are the links to the source code, and to this talk.
+[45:26.840 --> 45:31.040]  It will be available, the animated versions with all the slides and my notes online by
+[45:31.040 --> 45:33.480]  this link and my other talks.
+[45:33.480 --> 45:38.120]  And also, there are bonus sections which some of you might ask as questions, and we will
+[45:38.120 --> 45:44.360]  quickly go for them, or you can click on them yourself after the talk if you're interested.
+[45:44.360 --> 46:07.560]  Okay, so time for questions, so show of hands, and we'll give you a mic.
+[46:07.560 --> 46:33.040]  So, for the front queue, you can use some of Dmitry Vyukov's NPSC queue, very fast, much
+[46:33.040 --> 46:37.880]  faster than the tribal stack, which is the thing you're using.
+[46:37.880 --> 46:43.720]  The other thing is for the wait queue, well, you answer this with IOCP, KQ, Epo, that would
+[46:43.720 --> 46:50.760]  be much more in line with something that uses timer or for networking.
+[46:50.760 --> 47:01.320]  And you said that we cannot have single produce, no, multi-multi-consumer single production.
+[47:01.320 --> 47:08.640]  Yes, you can, actually, you can use one of the chase left DQ, there's a paper for 2013
+[47:08.640 --> 47:15.040]  with formally verified primitives, including ARM, and those will work for you, use case.
+[47:15.040 --> 47:19.640]  I know that there exist implementations of such queues, I just couldn't find the simple
+[47:19.640 --> 47:20.880]  enough one.
+[47:20.880 --> 47:28.120]  The thing is, in Ubisoft, internally, above all, sometimes, in Harm to performance, can
+[47:28.120 --> 47:34.440]  value code simplicity, so it's not an option to use something extremely complicated, like
+[47:34.440 --> 47:40.800]  hazard pointers or stuff like this, or, for example, I saw implementations of such queues,
+[47:40.800 --> 47:46.040]  which are not wait-free, so they can be lock-free, let's say, but not wait-free, that also wasn't
+[47:46.040 --> 47:49.000]  an option, because that's basically a spin-lock.
+[47:49.000 --> 48:02.520]  There's 100 levels.

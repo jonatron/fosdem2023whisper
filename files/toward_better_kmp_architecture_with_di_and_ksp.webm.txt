@@ -1,0 +1,133 @@
+[00:00.000 --> 00:12.680]  Let's move on everyone. So we have to keep the schedule and to keep the pace for all
+[00:12.680 --> 00:20.880]  our viewers online and the rest of FOSDEM. So for this next talk we are welcoming Romain
+[00:20.880 --> 00:31.880]  We are going to talk about dependency injections. Please give Romain a warm welcome.
+[00:31.880 --> 00:37.760]  So thank you for having me. I'm really glad to be here with you. I'm Romain Boacelle and
+[00:37.760 --> 00:44.360]  today I will guide you through our journey of improving the use of codeine and dependency
+[00:44.360 --> 00:50.480]  injection library using KSP. So you already seen that commercial art so I'll make it
+[00:50.480 --> 00:55.880]  really quick. I'm really happy to work with Salomon on advocating as well as providing
+[00:55.880 --> 01:03.560]  services and trainings on codeine and I'm really grateful that TreadBrains is rewarding
+[01:03.560 --> 01:12.360]  us years after years. So let's talk about the real subject here, open source. So we are
+[01:12.360 --> 01:19.840]  maintaining a set of codeine multi-platform independent tools that are compatible on
+[01:19.840 --> 01:26.120]  every target on which we can compile codeine and obviously today we're going to talk about
+[01:26.120 --> 01:32.800]  dependency injection with codeine. So let's team up and see what are our problems today
+[01:32.800 --> 01:43.440]  and how we are trying to solve them with KSP. First a little bit of context on why we are
+[01:43.440 --> 01:49.120]  using dependency injection in our applications. So let's assume that I have a view model that
+[01:49.120 --> 01:55.920]  needs multiple instances of use cases. So I will need to initialize every one of those
+[01:55.920 --> 02:04.680]  use cases and their dependencies and so on. So to avoid managing those initializations
+[02:04.680 --> 02:12.320]  we often use the dependency injection pattern. In dependency injection the DI container has
+[02:12.320 --> 02:24.040]  the responsibility to initialize every instances we need to make our objects works and so we
+[02:24.040 --> 02:33.760]  can lazily retrieve them with a simple function call. So here we see that we used a generic
+[02:33.760 --> 02:42.480]  function that is called instance or we often see get inject or whatever. In some other
+[02:42.480 --> 02:50.280]  libraries our framework we often see a huge amount of annotations. So that sounds like
+[02:50.280 --> 02:57.760]  magic to a lot of people. Another problem with the generic instance function is that
+[02:57.760 --> 03:04.280]  I don't really know what is behind it. Is it a single term, a factory, do I need to pass
+[03:04.280 --> 03:15.600]  an argument? I don't really know. Another problem comes with the DI binding declaration.
+[03:15.600 --> 03:21.600]  As a maintainer I know what's behind all that but it can be confusing for newcomers. And
+[03:21.600 --> 03:30.040]  on top of that there is no compilation checks. So this means that if you missed, if you forgot
+[03:30.040 --> 03:37.360]  some bindings you will probably know it when your application crashes or in most cases in
+[03:37.360 --> 03:49.120]  your dashboard. So did we just create a monster? Not quite. But there is still room for improvement.
+[03:49.120 --> 03:55.920]  So let's do what we do best and refactor everything to get a better API and improve the use of
+[03:55.920 --> 04:03.480]  code in. So let's welcome KSP. It stands for Kotlin Symbol Processor. A Kotlin Symbol Processor
+[04:03.480 --> 04:09.600]  is a metaprogramming tool that allows us to generate code generally based on some existing
+[04:09.600 --> 04:19.600]  code base. Symbol Processor are generally used with annotations that are used to mark our
+[04:19.600 --> 04:25.120]  code that needs a special treatment by the processor. In short terms it's a lightweight
+[04:25.120 --> 04:36.480]  compiler plugin that because it can just generate code and not modify some. A quick example
+[04:36.480 --> 04:45.600]  here I have a full interface that is annotated to be processed. So a Kotlin Symbol Processor
+[04:45.600 --> 04:50.880]  should be able to generate a concrete class of this full interface overriding the check
+[04:50.880 --> 05:01.400]  function. So back to our initial problem. What do we need to improve the Kotlin API? First
+[05:01.400 --> 05:10.320]  we need a readable and typed API to be able to avoid the use of this generic function
+[05:10.320 --> 05:22.720]  instance everywhere. As we cannot easily have compile checks, at least we want an easy way
+[05:22.720 --> 05:35.000]  to check the dependency container consistency with a few lines of unit tests. Note that
+[05:35.000 --> 05:40.280]  the API you'll see today are still working progressive. They may change a little before
+[05:40.280 --> 05:48.240]  landing on the release. So the main idea is that you should be able to declare one or
+[05:48.240 --> 05:55.080]  more interfaces that represents the dependencies you need in your applications and that's the
+[05:55.080 --> 06:06.160]  one that you need to retrieve at least. So after that we need to annotate our interface
+[06:06.160 --> 06:11.080]  so that the Kotlin Symbol Processor should be able to generate some code to interact
+[06:11.080 --> 06:23.440]  with the DI container to retrieve your dependencies in a typed way. So let's introduce the result
+[06:23.440 --> 06:33.800]  annotation for that. Once we have annotated our interface, the Kotlin Symbol Processor
+[06:33.800 --> 06:41.600]  should be able to detect and generate code for us. So in that case, you will see that
+[06:41.600 --> 06:48.760]  we need a parameter to create a browser service so it will know that we need to interact with
+[06:48.760 --> 06:58.800]  a factory that needs a string as parameter to get a browser service instance as well
+[06:58.800 --> 07:12.520]  as the controller functions needs to return a simple instance depending on the context.
+[07:12.520 --> 07:21.160]  Here is what the Kotlin Symbol Processor will generate for us. A concrete class implementing
+[07:21.160 --> 07:28.680]  our app dependencies interface and that needs a DI container as input. So the DI container
+[07:28.680 --> 07:38.040]  will be used to retrieve the proper instances here either a factory because it can detect
+[07:38.040 --> 07:46.760]  that we need a parameter or a simple instance for the controller. Now let's see how we
+[07:46.760 --> 07:56.520]  can use it in our application code. So first we need to declare our DI bindings so our
+[07:56.520 --> 08:02.680]  implementation should be able to interact with. For that, we still use our current API
+[08:02.680 --> 08:14.760]  of Kotlin's DSL or it will improve it a little bit but we will keep it as well as it is.
+[08:14.760 --> 08:24.560]  Why? Because we have history with solutions like daggers that have gone wild with annotations.
+[08:24.560 --> 08:32.640]  Even so, it's where Kotlin was created in the first place to avoid that forest of annotations.
+[08:32.640 --> 08:44.400]  So we didn't want to introduce tons of annotations again and go full circle. Finally, we think
+[08:44.400 --> 08:50.520]  our binding declaration API is good enough to express our dependencies. So here are the
+[08:50.520 --> 08:58.200]  dependencies we need to meet the app dependencies interface contract. We need factories that
+[08:58.200 --> 09:06.120]  take a string and return a service and a single tons that return an instance of a controller
+[09:06.120 --> 09:15.640]  that itself needs an instance of a service. Welcome to that later. So now we can instantiate
+[09:15.640 --> 09:22.240]  the generated class with our DI container and retrieve our dependencies with a truly
+[09:22.240 --> 09:31.920]  typed API. As we don't want our user to know how we are generating our function or class
+[09:31.920 --> 09:40.840]  implementation, sorry, we also introduced an extension function that helps us instantiate
+[09:40.840 --> 09:51.280]  the app dependencies for us. So now that we are able to retrieve our dependencies with
+[09:51.280 --> 10:00.080]  a truly typed API, let's see how we can check their consistency. For that, we introduced
+[10:00.080 --> 10:11.720]  a DI resolver interface that only needs to respect the contract of a check function.
+[10:11.720 --> 10:19.280]  So now we can combine the DI resolver interface with an atresolve annotation. In an ideal
+[10:19.280 --> 10:25.120]  world, the atresolve annotation should be able to add that DI resolver type to our interface
+[10:25.120 --> 10:31.080]  itself. But as we are using Kotlin symbol processor, we can just generate some code
+[10:31.080 --> 10:39.280]  and not modify existing one. So now that we are fully packed with our annotation and our
+[10:39.280 --> 10:47.840]  DI resolver interface, the code in the symbol processor will be able to generate the override
+[10:47.840 --> 10:55.000]  and function check and create a requirement for everyone of the function or accessor we
+[10:55.000 --> 11:05.080]  have defined in our app dependency interface. Before, with that code, you will have taken
+[11:05.080 --> 11:13.880]  the risk to go in production without easily knowing if you forgot some bindings. No more.
+[11:13.880 --> 11:23.160]  Now we just add a test and as we saw before, we instantiate our app dependencies interface
+[11:23.160 --> 11:35.800]  with a concrete class and just call the check function. That way, if you missed a binding,
+[11:35.800 --> 11:41.480]  your test suite will warn you instantly with a proper message. So here, we saw that we
+[11:41.480 --> 11:51.240]  missed a factory binding that returns a broad service and takes a string argument as input.
+[11:51.240 --> 11:58.960]  One more thing. Earlier, we saw that the code in binding DSL was impacted with the use of
+[11:58.960 --> 12:06.000]  those instance functions. So let's see how we can improve this user as well. Let's take
+[12:06.000 --> 12:13.960]  this example. When I need a controller that needs itself a use case, that also needs a
+[12:13.960 --> 12:22.160]  service. Here is the binding we will have defined to meet our architecture expectation.
+[12:22.160 --> 12:28.080]  So you probably have seen me coming with those instance functions. In the explicit world,
+[12:28.080 --> 12:33.080]  we will have written those functions with their targeted type so we saw that we need
+[12:33.080 --> 12:44.560]  a service and a use case. So why not using a type API and get this instance directly?
+[12:44.560 --> 12:54.440]  This is not that simple because in the code in DSL, this is a type DI builder. So it doesn't
+[12:54.440 --> 13:02.920]  know anything about the app dependencies API. Thus, the code in the symbol processor will
+[13:02.920 --> 13:10.440]  also generate a new function for us that is called off with the name of the app dependencies
+[13:10.440 --> 13:21.480]  contract we have. Thus, it creates a new DI builder that is aware of the DI building API
+[13:21.480 --> 13:29.320]  and the app dependencies. Allowing us to call straight functions to get our instances as
+[13:29.320 --> 13:36.960]  long as they are part of the app dependencies API, obviously. So as a result of type dependencies,
+[13:36.960 --> 13:44.600]  I can now easily check the consistency of my DI container or retrieve dependencies in
+[13:44.600 --> 13:52.920]  my application. So I feel the tension and excitement in the room, right? No? Same question
+[13:52.920 --> 14:01.400]  on everybody's mind. Is this live? So I can spoil it earlier. It's still a work in progress
+[14:01.400 --> 14:09.880]  and we still have some corner cases to crack, like how to use tags, how to manage modules,
+[14:09.880 --> 14:18.200]  how to declare and handle scopes and context is and a few more. Here is a sneak peek of
+[14:18.200 --> 14:29.680]  some ideas we have to solve those problems. An easy one is the tag API when we can retrieve
+[14:29.680 --> 14:39.840]  a dependencies by passing a tag parameter. We could add an annotation with that tag and
+[14:39.840 --> 14:50.600]  easily retrieve our dependencies without having to pass or know the tag that is needed behind.
+[14:50.600 --> 15:01.600]  For the module management, we could just provide two ways to interact with dependencies either
+[15:01.600 --> 15:11.920]  with a fully packed DI container or a DI module or add some parameters or annotations or either
+[15:11.920 --> 15:24.000]  create a new annotations again. We'll see. Maybe not. A more complicated use case is how
+[15:24.000 --> 15:36.440]  to handle scopes. With code ends, we can define some bindings that are with some life cycle
+[15:36.440 --> 15:49.960]  depending on the scope or context and retrieve them with their own function. So to define
+[15:49.960 --> 16:03.560]  a scope with a KSP, we could define that a contract is scoped entirely and then be able
+[16:03.560 --> 16:11.320]  to retrieve our dependencies with the right context. Maybe this rings a bell. It sounds
+[16:11.320 --> 16:18.120]  like context receivers, right? But unfortunately, context receivers are not available in Kotlin
+[16:18.120 --> 16:27.400]  multi-platform yet, so we'll have to find another way. Also, we have plenty of ideas
+[16:27.400 --> 16:36.640]  to make this work. This is an open source project, so obviously, if you want to contribute,
+[16:36.640 --> 16:44.040]  you're welcome. That's it for me. Thank you for hearing me. If you have some questions,
+[16:44.040 --> 16:56.240]  I think we have time for it. Thank you very much again. We do have quite a lot of time
+[16:56.240 --> 17:04.680]  for questions now, so please raise your hand if you have any. Just shout it and you will
+[17:04.680 --> 17:30.600]  have to repeat it. So the question is, is there some support
+[17:30.600 --> 17:45.520]  in the IDE? So as for the mocking library, you will need to build your code the first
+[17:45.520 --> 17:55.440]  time to be able to have the right APIs, like the new function and the off-app dependencies
+[17:55.440 --> 18:22.280]  function, for example. No. All right. I think it's clear.
+[18:22.280 --> 18:37.600]  One question. With this dependency injection framework, are all dependencies compiled statically,
+[18:37.600 --> 18:46.880]  like the dependency injection part, or is that still dynamic runtime?
+[18:46.880 --> 18:58.800]  So the dependencies injection are resolved statically or at runtime? Is this your question?
+[18:58.800 --> 19:09.240]  So they are resolved at runtime, but as we saw, we provide tools to check that all your
+[19:09.240 --> 19:19.160]  bindings are well-defined with your test suite, but they are resolved at runtime. There is
+[19:19.160 --> 19:28.800]  no reflection like Salomon showed you earlier. That's how Dagger works, for example.
+[19:28.800 --> 19:39.480]  So it's basically the best focus between Spring and Dagger.
+[19:39.480 --> 20:02.720]  There was another. I think it's a bit of an obvious question. The question is how does
+[20:02.720 --> 20:19.120]  it compete with coin? I think we have taken different routes with coin. I think Arnault
+[20:19.120 --> 20:29.280]  will present you this afternoon. It provides an API using annotation, more that we are
+[20:29.280 --> 20:45.440]  doing. We prefer keeping the binding declaration as much explicit as possible. After that,
+[20:45.440 --> 21:03.200]  I think it's more some internal implementation that does not really compete, I think.

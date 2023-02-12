@@ -1,0 +1,299 @@
+[00:00.000 --> 00:07.320]  So, we're ready for our next talk.
+[00:07.320 --> 00:10.640]  Alex is going to talk about the new file system that they're proposing, ComposerVest, and
+[00:10.640 --> 00:13.200]  opportunistically sharing verified image file system.
+[00:13.200 --> 00:14.200]  Thank you.
+[00:14.200 --> 00:15.200]  All right.
+[00:15.200 --> 00:16.200]  Thank you.
+[00:16.200 --> 00:17.200]  Can you hear me?
+[00:17.200 --> 00:18.200]  Yeah.
+[00:18.200 --> 00:19.200]  All right.
+[00:19.200 --> 00:20.200]  All right.
+[00:20.200 --> 00:21.200]  I'm Alex.
+[00:21.200 --> 00:24.760]  You may also know me from hits such as Flatpak, FlatHub, GNOME, GTK, all such a stuff.
+[00:24.760 --> 00:31.400]  But this here is my first kernel file system, which I proposed on the list a couple of months
+[00:31.400 --> 00:33.040]  ago.
+[00:33.040 --> 00:36.120]  It's not actually like a file system, a real file system.
+[00:36.120 --> 00:41.080]  It's more targeted for read-only images such that you would typically have many of them
+[00:41.080 --> 00:42.680]  running on the system.
+[00:42.680 --> 00:50.320]  Maybe in a container host or in my case, my primary concern is the OSTree verified boot
+[00:50.320 --> 00:52.200]  use case.
+[00:52.200 --> 00:58.680]  So rather than talking about ComposeFS first, I'm going to talk about OSTree because it
+[00:58.680 --> 01:01.840]  kind of explains where this comes from.
+[01:01.840 --> 01:06.920]  So in OSTree, we have images.
+[01:06.920 --> 01:10.280]  Normally the images are not simple like this, but actually the full-root file system for
+[01:10.280 --> 01:12.800]  your boot system that you want to boot.
+[01:12.800 --> 01:16.480]  But they're used to a bunch of files, and they have metadata and permissions and names
+[01:16.480 --> 01:17.480]  and whatnot.
+[01:17.480 --> 01:20.120]  So they're basically images.
+[01:20.120 --> 01:26.520]  And we have this repository format, which is the core format of OSTree.
+[01:26.520 --> 01:31.840]  And what we do is we take all the files, like the regular files, in the image, and we hash
+[01:31.840 --> 01:33.160]  them.
+[01:33.160 --> 01:38.320]  And we store them by the hash name in this repository format.
+[01:38.320 --> 01:42.360]  So if you look at any of those files, they're just the same file with the name of their
+[01:42.360 --> 01:44.400]  own content.
+[01:44.400 --> 01:49.960]  And then we take all the directories we have, such as the sub-dir thing, and we make a small
+[01:49.960 --> 01:57.000]  descriptor of them, the names of the file in there, their permissions and whatnot, and
+[01:57.000 --> 02:01.440]  a reference to the content of the file by the checksum.
+[02:01.440 --> 02:04.600]  And we do the same for the root directory.
+[02:04.600 --> 02:09.600]  And this time, we refer to the sub-director by the checksum of the descriptor.
+[02:09.600 --> 02:16.480]  And then we add a final commit description, which describes, well, it has a pointer, meaning
+[02:16.480 --> 02:21.760]  the checksum of the root directory, and a parent doesn't have a parent, because this
+[02:21.760 --> 02:25.320]  is the first commit, some metadata.
+[02:25.320 --> 02:30.200]  And then we add the breaths file, which is basically just a file that says, we have a
+[02:30.200 --> 02:34.560]  branch called image, and this is the current head.
+[02:34.560 --> 02:40.160]  So if anyone thinks this looks like the.get directory in any of your checkouts, that's
+[02:40.160 --> 02:41.160]  true.
+[02:41.160 --> 02:44.240]  It's basically get for operating systems.
+[02:44.240 --> 02:49.520]  There are some details in exactly how the object files are stored, but basically, the
+[02:49.520 --> 02:53.000]  entire structure is get, right, just a copy of get.
+[02:53.000 --> 02:57.200]  And you can see even more clearly, if you create a new commit, the new version, we added
+[02:57.200 --> 02:58.200]  the readme.
+[02:58.200 --> 03:04.080]  So all we have to do is add the file, the new root directory, and the new commit that
+[03:04.080 --> 03:10.360]  points to the previous one, and then we update the ref to the latest head.
+[03:10.360 --> 03:16.680]  So basically, re-implementing get for large binary trees.
+[03:16.680 --> 03:21.680]  But you can't use this directly, like you can't boot from a repository like this.
+[03:21.680 --> 03:29.080]  So what you do, deploy, we call it deploy, when we run a new version of something, typically
+[03:29.080 --> 03:34.440]  you have a pre-existing version, so download the new version of the thing you want to run,
+[03:34.440 --> 03:39.600]  which is very simple, because you can just iterate over these recursive descriptions
+[03:39.600 --> 03:46.720]  of the image, and whenever you have a reference to an object you already have downloaded,
+[03:46.720 --> 03:50.720]  you can just stop because recursively you know you have all the previous things, so it's
+[03:50.720 --> 03:53.280]  very efficient to get the new version.
+[03:53.280 --> 04:01.080]  And then we create a deploy directory, which is basically a hard-linked form that points
+[04:01.080 --> 04:07.680]  back into the objects, like the regular file objects.
+[04:07.680 --> 04:12.240]  So we create the directories for the right permissions and whatnot, and whenever there's
+[04:12.240 --> 04:18.120]  a regular file, we just point it at the file, the same file, by using a hard-link to the
+[04:18.120 --> 04:20.160]  one in the repository.
+[04:20.160 --> 04:25.320]  And then we somehow set some boot configuration that points to this particular commit, which
+[04:25.320 --> 04:31.600]  names this directory, and somewhere in the Unitardee we find this directory, bind-monit,
+[04:31.600 --> 04:37.520]  read-only on the root, on top of the root, and then we boot into that.
+[04:37.520 --> 04:43.800]  And there are some clear advantages over this over what would be the alternative, which
+[04:43.800 --> 04:49.440]  is the traditional AB, like block device, you have two block devices, then you flash
+[04:49.440 --> 04:55.440]  new image on B, and then you boot into B. First of all, it's very easy to do efficient
+[04:55.440 --> 04:59.840]  downloads, and like deltas are very small.
+[04:59.840 --> 05:05.000]  You can easily store however many versions of things you want, whether they're related
+[05:05.000 --> 05:10.760]  or not, like if it's multiple versions of the same branch.
+[05:10.760 --> 05:14.800]  You can keep the last 10 or whatever, plus you can also have completely unrelated, you
+[05:14.800 --> 05:22.040]  can have botan, fedora, nrl, or debbian or whatever, and you can easily switch between
+[05:22.040 --> 05:24.640]  them atomically.
+[05:24.640 --> 05:30.240]  And all the updates are atomical, we never modify an existing thing that you're running,
+[05:30.240 --> 05:34.840]  we always create a new deploy directory, and we boot into that.
+[05:34.840 --> 05:41.400]  And also the format is very, it's very, very viable, like it's recursively describing itself,
+[05:41.400 --> 05:47.360]  and all you need is the signature, and there's a GPG signature on the commit object.
+[05:47.360 --> 05:52.800]  So if you trust the commit object, you trust the root hash, which you trust the hash of
+[05:52.800 --> 05:56.720]  the subdirectories and the files and what not.
+[05:56.720 --> 06:02.040]  The problem that I want to address is that this doesn't do runtime verification, like
+[06:02.040 --> 06:09.120]  we verify, when we download things, we can verify when we do the deploy or rather like
+[06:09.120 --> 06:13.960]  the fact that we're deploying, it's going to cause us to verify things.
+[06:13.960 --> 06:20.120]  But if after some point after that something modifies, say we have a random bit flip on
+[06:20.120 --> 06:28.560]  the disk, or we have a malicious, like, evil made style attack, someone could easily just
+[06:28.560 --> 06:34.440]  remove or modify a file in the deploy directory.
+[06:34.440 --> 06:39.960]  And to protect against this, the kernel has two features, de-inverity and fsverity.
+[06:39.960 --> 06:45.680]  De-inverity is what you use in the typical ABE image system, because it's block-based,
+[06:45.680 --> 06:51.040]  but it's completely a read-only block device, there's no way we can do OSTry-like updates
+[06:51.040 --> 06:55.120]  to its file system, you just cannot write to it.
+[06:55.120 --> 07:02.000]  So the other thing is fsverity, and fsverity sort of matches very well with the OSTry repository
+[07:02.000 --> 07:10.080]  format, because if you enable fsverity on a particular file, it essentially makes it immutable.
+[07:10.080 --> 07:17.360]  And immutable is exactly what these things, content the rest files are, so it's good.
+[07:17.360 --> 07:22.120]  But the problem is that fsverity doesn't go all the way, it only protects the content
+[07:22.120 --> 07:27.440]  of the file, while you can easily make it set UID or replace it with a different one
+[07:27.440 --> 07:33.560]  that has a different fsverity, or just add a new file or whatever.
+[07:33.560 --> 07:36.720]  So it doesn't protect structure.
+[07:36.720 --> 07:44.880]  So that's why ComposeFS was created, to have another layer that does the structure.
+[07:44.880 --> 07:52.080]  And now I'm sort of going away from the OSTry use case, and this is the native way to use
+[07:52.080 --> 07:57.840]  ComposeFS, where you just have a directory with some data, this is the same kind of example
+[07:57.840 --> 08:03.880]  that I had in the repository format, and you just run mkcomposeFS on that directory, and
+[08:03.880 --> 08:10.160]  it creates this image file that contains all the metadata for the structure of the thing.
+[08:10.160 --> 08:17.800]  And this objects directory, which is just copies of these files stored by their fsverity commit,
+[08:17.800 --> 08:20.360]  or fsverity digest.
+[08:20.360 --> 08:24.440]  And they obviously use pure files, you can cat them, and they're just regular files with
+[08:24.440 --> 08:25.440]  the same contents.
+[08:25.440 --> 08:30.160]  They're actually pure data files, you can see they don't have like the executable rights
+[08:30.160 --> 08:35.880]  or if you have some complex metadata, extended attributes or whatever, these are just regular
+[08:35.880 --> 08:38.440]  files with content.
+[08:38.440 --> 08:45.120]  And then you mount the thing using ComposeFS, pointing it at this objects directory, and
+[08:45.120 --> 08:49.640]  then you get a reproduction of the original image that you can look at.
+[08:49.640 --> 08:57.560]  Whatever you cat this, it will just do overlay fsstyle stacking, read the backing file.
+[08:57.560 --> 09:02.240]  So everything is always from the page cache, and also the actual mount is not a loopback
+[09:02.240 --> 09:10.280]  mount, we just do stacking style, direct access of the file from the page cache.
+[09:10.280 --> 09:19.240]  So that gives you the general ability to reproduce this image, but to get the fsverity or complete
+[09:19.240 --> 09:25.360]  structural verification, you actually use fsverity on the descriptor itself.
+[09:25.360 --> 09:31.440]  So if you enable safe as in that, that makes it immutable, so the file system cannot change
+[09:31.440 --> 09:38.120]  or the file can't change on the file system, at least the kernel API doesn't allow you
+[09:38.120 --> 09:45.880]  and if it's somehow otherwise modified on disk or whatnot, it will detect it.
+[09:45.880 --> 09:51.280]  And you can see like, I actually passed the digest, the expected digest, and whenever
+[09:51.280 --> 09:55.360]  it mounts it, it starts by verifying before it does any IO, does it actually have the
+[09:55.360 --> 09:57.800]  expected fsverity digest?
+[09:57.800 --> 10:03.640]  And if so, we can rely on the kernel to basically do all our verification from us, and if you
+[10:03.640 --> 10:09.640]  replace something, we have in the metadata for all these backing files, the expected
+[10:09.640 --> 10:11.720]  verity digest.
+[10:11.720 --> 10:20.200]  So if you replace something, or if there's a random bit flip, it will detect it.
+[10:20.200 --> 10:25.560]  And actually the descriptor itself is very simple, like this is not a traditional file
+[10:25.560 --> 10:33.520]  system where we have to update things at run time, we can just compute a very simple descriptor
+[10:33.520 --> 10:34.520]  of this.
+[10:34.520 --> 10:42.080]  It's basically a fixed-size header followed by a table of fixed-size INO data, like if
+[10:42.080 --> 10:49.280]  the file system has N and INOs, then there are N copies of that structure, and some of
+[10:49.280 --> 10:56.720]  them point into the variable-size data at the end, which we found with the VData offset
+[10:56.720 --> 11:00.320]  in the header, and that's basically all there is to it, right?
+[11:00.320 --> 11:06.920]  We can, INO zero is the root file system, or is the root INODE, you can look at that,
+[11:06.920 --> 11:13.360]  and you can, if it's a type directory, then the variable data points to a table of dirants,
+[11:13.360 --> 11:18.680]  which is basically a pre-sorted table of dirants plus names, that you use binary search, you
+[11:18.680 --> 11:23.400]  get a new INO, then you just look at that offset, and all this is just done by mapping
+[11:23.400 --> 11:25.760]  the page cache directly.
+[11:25.760 --> 11:32.240]  So it's very simple in terms of structure.
+[11:32.240 --> 11:36.640]  If you want to use this actually with OSTree, it's slightly different, like we can't just,
+[11:36.640 --> 11:42.280]  we don't want to take the OSTree repository, create this directory, and then run MKComposeFS
+[11:42.280 --> 11:43.280]  on it.
+[11:43.280 --> 11:51.280]  Instead, we ship a library, LibComposeFS, where you basically link OSTree with this library,
+[11:51.280 --> 11:57.240]  and it can generate these images directly from the metadata that exists in the repository.
+[11:57.240 --> 12:04.840]  So we don't have to do any kind of expensive IO to create these images, because it's just
+[12:04.840 --> 12:05.840]  the metadata, right?
+[12:05.840 --> 12:06.840]  It's not very large.
+[12:06.840 --> 12:12.160]  You can put it on into memory, generate these, optimize them, and just write a single file,
+[12:12.160 --> 12:17.560]  and the way we can do it, it's very flexible, so we can ensure that we can use the existing
+[12:17.560 --> 12:21.440]  repository for the backing files.
+[12:21.440 --> 12:24.040]  And it's also designed so that it's a standardized way.
+[12:24.040 --> 12:30.040]  We put everything, so every time you create a new image based on the same OSTree commit,
+[12:30.040 --> 12:35.160]  we will be creating the exact same binary file, bit by bit.
+[12:35.160 --> 12:40.880]  So what you do is that when you create the commit on the server, you basically generate
+[12:40.880 --> 12:46.120]  one of these, take the digest of it, like the F is very digest of it, put it in the
+[12:46.120 --> 12:53.840]  assigned commit, and then whenever you recreate, there's no need to extend the OSTree format
+[12:53.840 --> 12:59.240]  on the network or anything, what you do is when you deploy a commit, instead of making
+[12:59.240 --> 13:04.880]  this hardling farm, you recreate one of these, and then you use the supply digest as the
+[13:04.880 --> 13:12.320]  expected digest when you mount it, so if anything anywhere went wrong or was attacked or whatever,
+[13:12.320 --> 13:14.760]  it will refuse to mount it.
+[13:14.760 --> 13:21.560]  So obviously you have to put that trusted digest somewhere in your secure boot stack
+[13:21.560 --> 13:27.360]  or whatever, something would have to, it has to be trusted, but that's outside exactly
+[13:27.360 --> 13:35.480]  of the scope of ComposeFS, and it's very similar to what you would do with DMVarity in a pure
+[13:35.480 --> 13:38.400]  image based system.
+[13:38.400 --> 13:43.560]  But another interesting use case is the container use case, and Giuseppe, who is not here actually,
+[13:43.560 --> 13:49.280]  but he is one of the other people behind the ComposeFS developers, he is more, he's one
+[13:49.280 --> 13:56.400]  of the podmem developers, so his use case is to use this for containers, because containers
+[13:56.400 --> 14:03.680]  are also used in images, right, and it would be nice if we can get this very, what I call
+[14:03.680 --> 14:09.640]  opportunistic sharing of files, like if you use layers and stuff, you can sort of share
+[14:09.640 --> 14:15.360]  stuff between different containers, but you have to manually ensure you do the right thing,
+[14:15.360 --> 14:20.880]  whereas with this opportunistic style of sharing, whenever you happen to have a file that is
+[14:20.880 --> 14:27.240]  identical, it just automatically gets shared, both on disk and in page cache, because of
+[14:27.240 --> 14:31.800]  the way these things work.
+[14:31.800 --> 14:38.320]  So we also don't want to change the container format, there was a talk yesterday about using
+[14:38.320 --> 14:44.720]  DMVarity in SquashFS, for, it's not sharing, but like the similar kind of way you can mount
+[14:44.720 --> 14:53.560]  an image, but we don't want to, that forces all the users to create a new form of container,
+[14:53.560 --> 15:03.960]  but we want to use, allow this for all existing, tarble based layered BOSIAI images.
+[15:03.960 --> 15:10.960]  So an image in the OSIAI world is a list of tarbles that you extract in order, and then
+[15:10.960 --> 15:14.520]  you're mounting using over the AFS.
+[15:14.520 --> 15:20.960]  There is an extension of this called ETAR, ETARGC, which is some weird ass hack where
+[15:20.960 --> 15:26.440]  you put an index at the end of the G-SIP, and then you can use partial HTTP downloads
+[15:26.440 --> 15:30.800]  to just get the index, and you can see which part of the layer you already have, and you
+[15:30.800 --> 15:35.480]  can just range HTTP gets to only download those parts.
+[15:35.480 --> 15:41.480]  So if you happen to have one of those archives in your layers, we can in combination with
+[15:41.480 --> 15:47.680]  the locally stored content of the storage, avoid downloading the parts that we don't
+[15:47.680 --> 15:48.680]  need.
+[15:48.680 --> 15:55.040]  If you don't have them, we have to download everything, which is what we do now, but we
+[15:55.040 --> 15:56.040]  can do better.
+[15:56.040 --> 16:03.640]  But even then, you can still hash them locally and get all the sharing, and then you combine
+[16:03.640 --> 16:15.600]  this with creating an overly composed FS for the entire image, so you mount, this is for
+[16:15.600 --> 16:21.760]  the local storage of images, you can use, instead of storing these layers, you store
+[16:21.760 --> 16:31.760]  the repository, or content store repository, plus these generated composed FS images, and
+[16:31.760 --> 16:36.120]  then whenever you run this, you just mount it, and it goes.
+[16:36.120 --> 16:43.760]  It's also nice, you can easily combine all the layers, so if you have a 10-layer container,
+[16:43.760 --> 16:48.440]  and you want to resolve libc, which is in the base layer, you have to do a negative
+[16:48.440 --> 16:54.880]  entry lookup in every layer before you reach the bottom most, but since the image is metadata,
+[16:54.880 --> 17:06.800]  it's very cheap to create a completely squashed composed FS image for single-layer lookups.
+[17:06.800 --> 17:11.520]  And I don't know if anyone is following the list, but there are some discussions about
+[17:11.520 --> 17:12.520]  this.
+[17:12.520 --> 17:18.600]  We're trying to get it merged upstream, and one alternative has appeared, that there's
+[17:18.600 --> 17:26.760]  ways that you can actually use some of overlay FS features to sort of get these features.
+[17:26.760 --> 17:33.440]  If you use the not super well-known or documented features called overlay redirect and overlay
+[17:33.440 --> 17:42.440]  meta-copy, you can create an overlay FS layer that does a similar style of here or the metadata
+[17:42.440 --> 17:49.840]  for this attribute redirected to a different path, which would be the content address name
+[17:49.840 --> 17:56.360]  in the lower layer, and then you can use some kind of read-only file system for the upper
+[17:56.360 --> 18:02.600]  layer where you store all these extended attribute files that just contain this structure.
+[18:02.600 --> 18:13.000]  So this combination of overlay FS plus right now ERO FS is probably the best approach for
+[18:13.000 --> 18:16.800]  those for the upper layer.
+[18:16.800 --> 18:18.760]  You can sort of create this.
+[18:18.760 --> 18:21.800]  Unfortunately, that doesn't do the verification.
+[18:21.800 --> 18:29.980]  You can use the overlay or read-only file system itself, but you need some kind of extension
+[18:29.980 --> 18:37.760]  to overlay itself to allow this recording of the expected FS variety of the backing file.
+[18:37.760 --> 18:41.080]  But that does seem like a trivial thing.
+[18:41.080 --> 18:48.400]  The less trivial part, and this is where opinions on the list vary, is I think this kind of combination
+[18:48.400 --> 18:54.520]  of things is way more complicated than the simple one.
+[18:54.520 --> 19:01.120]  Compose FS is, I think, 1,800 lines of code.
+[19:01.120 --> 19:02.120]  It's very direct.
+[19:02.120 --> 19:05.200]  It doesn't use loopback devices, device wrapper devices.
+[19:05.200 --> 19:12.920]  When you do a lookup in this combined thing of a particular file, you would do a lookup
+[19:12.920 --> 19:22.560]  in the overlay layer in the read-only system and in all the backing layers.
+[19:22.560 --> 19:30.280]  So there's like four times more inodes around, there's four times more decash lookups, and
+[19:30.280 --> 19:35.000]  it just uses more memory and performs worse.
+[19:35.000 --> 19:37.320]  So I ran some simple lookups.
+[19:37.320 --> 19:40.680]  These are just some people complain about the measurements here.
+[19:40.680 --> 19:49.760]  I'm just comparing like a recursive find or LSDTR, which is basically just measuring the
+[19:49.760 --> 19:54.160]  performance of lookups and readers.
+[19:54.160 --> 19:57.200]  But on the other hand, that's all that Compose FS does.
+[19:57.200 --> 20:02.560]  I mean, all the actual IO performance is left to the backing file system.
+[20:02.560 --> 20:07.120]  So wherever you store your read files, that's where like streaming performance and things
+[20:07.120 --> 20:08.880]  like that would appear.
+[20:08.880 --> 20:17.240]  So I'm personally in the automotive use case right now, so we have very harsh requirements
+[20:17.240 --> 20:24.840]  on cool boot performance, so the cold cache numbers are very important to me.
+[20:24.840 --> 20:30.120]  I mean, you might not, this is like listing recursively a large developer snapshot, like
+[20:30.120 --> 20:33.400]  a three gigabyte Centro Stream 9 image.
+[20:33.400 --> 20:39.720]  So it's not an operation you might do, but just looking at the numbers, the recursive
+[20:39.720 --> 20:46.200]  listing is more than like three times slower for the cold cache situation, because it has
+[20:46.200 --> 20:50.040]  to do multiple lookups.
+[20:50.040 --> 20:58.560]  And even for the cached case, where most things should be from the decad anyway, I think I've
+[20:58.560 --> 21:03.760]  seen better numbers than this, but there's at least 10% difference in the warm cache
+[21:03.760 --> 21:07.240]  situation.
+[21:07.240 --> 21:13.080]  I hope that was useful to do something on it.
+[21:13.080 --> 21:17.280]  Yeah, we have some time for questions.
+[21:17.280 --> 21:22.880]  So you said about halfway through that one of the goals was to actually keep the reading
+[21:22.880 --> 21:28.240]  the OCI image format, but I think everybody pretty much agrees the OCI image format is
+[21:28.240 --> 21:35.120]  crap for lazy pulling of container images, basically because it has an end-to-end hash
+[21:35.120 --> 21:38.840]  so you can't do the hash until you pull the whole image, and that means signatures are
+[21:38.840 --> 21:40.200]  completely rubbish anyway.
+[21:40.200 --> 21:44.760]  In order to fix this, we have to do a Merkle tree or something else anyway, so the image
+[21:44.760 --> 21:49.040]  format is going to have to change radically to something that will be much more suitable
+[21:49.040 --> 21:50.240]  for your image.
+[21:50.240 --> 21:55.480]  So I think trying to keep the image compatibility, which is partly what the argument over this
+[21:55.480 --> 22:02.440]  versus the in kernel alternatives is not going to be a good argument for that, and I think
+[22:02.440 --> 22:03.440]  you should consider it.
+[22:03.440 --> 22:04.440]  I agree and I don't agree.
+[22:04.440 --> 22:11.640]  And I think I'm not a fan of OCI, I've been part of the OCI specification team for a
+[22:11.640 --> 22:12.640]  bit.
+[22:12.640 --> 22:15.800]  I used to be one of the Docker maintainers a long time ago.
+[22:15.800 --> 22:21.560]  It is not nice, but it is what we have, and it's everywhere.
+[22:21.560 --> 22:26.280]  It's so easy as a developer sitting around thinking this is bullshit, we should just
+[22:26.280 --> 22:32.600]  fix it, but there are like trillions of dollars invested in the existing containers, it's
+[22:32.600 --> 22:34.080]  going to be a long time.
+[22:34.080 --> 22:37.800]  But even when we replace it, this will still do the right thing.
+[22:37.800 --> 22:41.800]  But there are trillions of dollars invested in the hosting cart, so it doesn't stop us
+[22:41.800 --> 22:41.080]  going to the
+[22:41.080 --> 22:42.080]  OCI.
+[22:42.080 --> 22:49.600]  True, true, but like there are discussions of OCI V2, I don't follow them because the
+[22:49.600 --> 22:58.200]  whole thing is bullshit, but even then, if we just had a better way to get partial updates
+[22:58.200 --> 23:05.040]  for an image file, you could still use this, to use it.
+[23:05.040 --> 23:10.240]  Before taking the next question, I'm obliged to point out from the chat that these performance
+[23:10.240 --> 23:13.720]  numbers are before optimizing overlay FS and E-Rofs.
+[23:13.720 --> 23:20.240]  Yeah, yeah, so yeah, there's been some work in that and optimizing like there, there's
+[23:20.240 --> 23:26.560]  ideas to make the overlays stuff work better.
+[23:26.560 --> 23:28.560]  Would that be possible, Joe?
+[23:28.560 --> 23:29.560]  Maybe.
+[23:29.560 --> 23:39.280]  Oh, I actually still had a question.
+[23:39.280 --> 23:40.720]  So here in the back.
+[23:40.720 --> 23:44.520]  So what's not really a question, more a remark.
+[23:44.520 --> 23:48.520]  I think there's sort of like one missing slide in your deck, namely one use case that you
+[23:48.520 --> 23:53.080]  haven't considered at all, but still really worth calling out.
+[23:53.080 --> 24:00.480]  Many remote build systems, such as like GOMA, Bazel, et cetera, are all nowadays converging
+[24:00.480 --> 24:06.200]  on the single remote execution protocol called REV2, and that one is actually also using
+[24:06.200 --> 24:11.280]  a CAS as a data store for storing both input files for like compiler, binary, source files,
+[24:11.280 --> 24:15.720]  header files, but also output files, object files that are generated.
+[24:15.720 --> 24:20.880]  I actually maintain one of the implementations, and like one of the hard parts of implementing
+[24:20.880 --> 24:26.800]  such a build cluster is instantiating the data that's stored in the CAS in the form
+[24:26.800 --> 24:30.800]  of like an input route on disk, where you can just like run a compiler against certain
+[24:30.800 --> 24:35.320]  source files, and a tool like Composives would also really help in such an implementation.
+[24:35.320 --> 24:38.400]  That's just something I wanted to call out, and you should really like also market it
+[24:38.400 --> 24:41.520]  towards those kinds of use cases, and it makes a lot of sense.
+[24:41.520 --> 24:47.320]  Yeah, I'm sure images are used for all sorts of stuff, I'm sure there are many use cases
+[24:47.320 --> 24:51.080]  other than the ones I've mainly focused on.
+[24:51.080 --> 24:59.640]  Okay, then since you already ended the Q&A a bit early, then the next talk is going to
+[24:59.640 --> 25:00.640]  be recorded.
+[25:00.640 --> 25:02.640]  It gives us a bit more time to prepare.
+[25:02.640 --> 25:03.920]  Thank you very much for the talk.
+[25:03.920 --> 25:19.440]  Thank you for all the questions, and being here.

@@ -1,0 +1,59 @@
+[00:00.000 --> 00:11.640]  Hello everyone, I'm Sairper Akdemir and I work for Colobro Productivity. This talk will
+[00:11.640 --> 00:21.760]  be about an interoperability improvement in LibreOffice Impress tables. So this is a
+[00:21.760 --> 00:26.920]  screenshot from the bug report and let's talk about what was the problem on the surface
+[00:26.920 --> 00:35.760]  level. On the right you can see how it appears in PowerPoint and on the left you can see
+[00:35.760 --> 00:43.680]  how it appears when it was opened by Impress, the PPTX file exported by PowerPoint. What
+[00:43.680 --> 00:51.400]  we need to focus here is the rows pointed by the arrows are somehow shrunk when it was
+[00:51.400 --> 01:01.200]  opened in Impress and it wasn't immediately obvious. If we look at how PowerPoint exports
+[01:01.200 --> 01:12.320]  the table layout into PPTX files, what we will realize is it defines row heights. So let's
+[01:12.320 --> 01:21.760]  just focus on that part but it doesn't really define a total table height to fit inside.
+[01:21.760 --> 01:29.040]  While we are importing these row heights what we do is we first calculate what does all
+[01:29.040 --> 01:36.240]  of the row heights add up to because we use the total table height to layout a table.
+[01:36.240 --> 01:42.960]  So we calculate that by adding up each of the row heights and also we assign each row
+[01:42.960 --> 01:50.600]  with their own height. But it turns out when this specific file is exported and if you
+[01:50.600 --> 01:55.120]  look at row heights for the empty rows, they are correct, there is nothing wrong there
+[01:55.120 --> 02:02.560]  but if you look at for instance the one row that says COLA, it appears to have a row height
+[02:02.560 --> 02:14.280]  of zero which doesn't really make sense. So now let's also something to mention here
+[02:14.280 --> 02:21.800]  is if we start typing anything in one of the empty rows, there are no text properties
+[02:21.800 --> 02:28.280]  actually imported from the PPTX file, they are somehow lost in the process like the text
+[02:28.280 --> 02:34.960]  when we start typing in the empty rows in the PowerPoint one, it starts as a blue, it
+[02:34.960 --> 02:41.840]  has a blue color, etc. It has a different size but if we write it in the impressed one,
+[02:41.840 --> 02:47.760]  it is just defaulted so it's black and 18 points. So before understanding the problem
+[02:47.760 --> 02:57.400]  we need to know a little bit about how impressed layouts the table. The table is basically
+[02:57.400 --> 03:05.880]  fitted into a given total height but while doing so we also care for what each row heights
+[03:05.880 --> 03:13.360]  were. So basically we need to know the total height correctly because if it is smaller
+[03:13.360 --> 03:22.080]  than some of the rows, we basically happen to be shrinking, trying to shrink the table.
+[03:22.080 --> 03:28.320]  When that happens, what the impressed tries to do is adjust the row height proportionally
+[03:28.320 --> 03:34.280]  to what were they before and if there is text inside, there is a minimum height it can go
+[03:34.280 --> 03:45.040]  to and when that happens, like in this case when that happens, since it can't shrink
+[03:45.040 --> 03:53.000]  the line that says color further, it shrinks the empty line because it can to try to fit
+[03:53.000 --> 04:01.400]  in that wrong table height. Also, if we explore the PPTX output, we will realize that the empty
+[04:01.400 --> 04:08.760]  cell properties are exported in n-paragraph run properties. We need to import that. There
+[04:08.760 --> 04:15.320]  isn't already an implementation for that but I will discuss this a little bit later.
+[04:15.320 --> 04:21.120]  If you look at the problem in detail, let's say what we need to fix here is we need to
+[04:21.120 --> 04:27.640]  somehow care for these problematic row heights that during import which they don't have
+[04:27.640 --> 04:38.200]  a height of zero but they are defined as so, such. Empty cell, we need to know the text
+[04:38.200 --> 04:43.160]  sizes for empty cells too. We need to do this from n-paragraph run properties. Also, there
+[04:43.160 --> 04:48.240]  was some previous range of pixels here that kind of altered the layouting code instead
+[04:48.240 --> 04:55.600]  of the import code and there are some regressions that messed up some table resizing functionality
+[04:55.600 --> 05:02.720]  there. We need to revert those changes.
+[05:02.720 --> 05:09.520]  So basically, it turns out to be PowerPoint tries to export desired row heights. For instance,
+[05:09.520 --> 05:15.840]  if you try to just pull a row to zero while it has text in it, it doesn't let you do it
+[05:15.840 --> 05:26.120]  but it actually saves it as such. So, in the end, that creates a problem for us. So, to
+[05:26.120 --> 05:35.280]  fix this, what we can do and what I did was during import, before layouting the table
+[05:35.280 --> 05:43.200]  into an area which our impress usually does it, we do a pre-layouting which is we just
+[05:43.200 --> 05:49.840]  take the row sizes and we don't give the layouting code any area to layout into and we let it
+[05:49.840 --> 05:57.640]  layout itself. So, it basically just looks at the row sizes and tries to expand them
+[05:57.640 --> 06:09.200]  if they are smaller than possible. And that gives us a final height that we can use in
+[06:09.200 --> 06:20.320]  successive layouting attempts. So, we kind of correct the total table heights doing that.
+[06:20.320 --> 06:29.800]  And we also don't have the text properties for the empty rows. So, the problem there
+[06:29.800 --> 06:41.480]  was, turns out these text properties are actually imported into text nodes but when
+[06:41.480 --> 06:47.640]  there's new text is being typed, they actually inherit their properties from the cells'
+[06:47.640 --> 06:54.400]  own properties instead of the text nodes. Text nodes are just being dumped and new ones
+[06:54.400 --> 07:03.040]  are being created. So, to fix that, we need to push the text properties from the n-paragraph
+[07:03.040 --> 07:12.440]  run properties into the cells' properties that themselves to make it work correctly.
+[07:12.440 --> 07:22.280]  Well, to finish up, with these fixes, we were able to get rid of the problematic regression
+[07:22.280 --> 07:29.760]  causing code in the layout thing and we moved the conceptual fixes from there into the import
+[07:29.760 --> 07:37.800]  code, making it possible to work correctly. And additionally, some unit tests were added
+[07:37.800 --> 07:48.000]  to make sure the n-paragraph run properties stayed correctly that covered those areas.
+[07:48.000 --> 07:55.000]  Thank you. That's all from me.

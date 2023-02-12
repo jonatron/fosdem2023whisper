@@ -1,0 +1,277 @@
+[00:00.000 --> 00:10.560]  Okay, then our next talk is by Frazier.
+[00:10.560 --> 00:11.560]  Over to you.
+[00:11.560 --> 00:12.560]  Okay.
+[00:12.560 --> 00:13.560]  Thank you.
+[00:13.560 --> 00:21.800]  So I'm going to talk about user namespaces and delegation of control of C groups in container
+[00:21.800 --> 00:24.800]  orchestration systems.
+[00:24.800 --> 00:28.280]  So yeah, containers and container standards.
+[00:28.280 --> 00:33.440]  This is the containers dev room, I think, hopefully most people should have some idea.
+[00:33.440 --> 00:39.120]  Talk about Kubernetes and OpenShift, user namespaces and C groups, and then a demo of
+[00:39.120 --> 00:45.840]  a system B based workload on Kubernetes and more specifically OpenShift.
+[00:45.840 --> 00:51.880]  So container is a process isolation and confinement abstraction.
+[00:51.880 --> 00:57.840]  Most commonly it uses operating system level virtualization where the processes running
+[00:57.840 --> 01:03.280]  in the container are using the same kernel as the host system.
+[01:03.280 --> 01:09.800]  Examples of this include FreeBSD Jails and Solaris Zones as well as Linux containers.
+[01:09.800 --> 01:14.400]  And the container image is not a container, the container image just defines the file
+[01:14.400 --> 01:21.240]  system contents for a container and some metadata suggesting what process should be run, what
+[01:21.240 --> 01:25.480]  user ID it should run underneath and so on.
+[01:25.480 --> 01:32.840]  On Linux containers use a combination of the following technologies, so namespaces,
+[01:32.840 --> 01:38.600]  process ID namespaces, mount namespaces, network namespaces, et cetera, to restrict
+[01:38.600 --> 01:43.040]  what the process running in the container can see.
+[01:43.040 --> 01:48.000]  The container may have restricted capabilities or a second profile that limits which system
+[01:48.000 --> 01:52.080]  calls or operating system features it can use.
+[01:52.080 --> 01:59.760]  There may be SE Linux or app armor confinement and it can use C groups for resource limits.
+[01:59.760 --> 02:08.160]  Not necessarily all of these are used at the same time, it depends on the implementation.
+[02:08.160 --> 02:15.920]  The OpenContainer initiative defines standards around containers in the free software ecosystem
+[02:15.920 --> 02:21.440]  and its runtime specification in particular defines a low level runtime interface for
+[02:21.440 --> 02:28.880]  containers that is not just for Linux containers but it defines the runtime semantics for Linux
+[02:28.880 --> 02:35.720]  Solaris containers, Windows containers, virtual machines and so there are a bunch of implementations
+[02:35.720 --> 02:43.240]  of the runtime spec including RunC, the reference implementation, CRUN and CART containers which
+[02:43.240 --> 02:48.160]  is a virtual machine based container runtime.
+[02:48.160 --> 02:55.320]  The OCI runtime spec has a JSON configuration and there's a link to an example, it defines
+[02:55.320 --> 03:00.880]  or lets you define the mounts, what process to be executed, its environment, life cycle
+[03:00.880 --> 03:07.080]  hooks so extra code to run when the container is created, destroyed, started, stopped and
+[03:07.080 --> 03:14.440]  the Linux specific capabilities that can be controlled via the OCI runtime spec include
+[03:14.440 --> 03:22.840]  the capabilities, that's the kernel feature capabilities, namespaces, the C group, the
+[03:22.840 --> 03:29.560]  system controls that should be set for that container, the seccomp profile and so on.
+[03:29.560 --> 03:39.360]  This is what an example runtime specification looks like, so it has a process structure
+[03:39.360 --> 03:46.760]  which includes a field for the user ID and the group ID, it has this Linux structure
+[03:46.760 --> 03:53.760]  which defines the Linux specific attributes for this container and one of those attributes
+[03:53.760 --> 03:59.920]  is the namespaces list which defines a list of the different namespaces that should be
+[03:59.920 --> 04:06.320]  used or should be newly created for that container.
+[04:06.320 --> 04:11.880]  So Kubernetes is a container orchestration platform, has a declarative configuration
+[04:11.880 --> 04:19.640]  system and it integrates with many different cloud providers.
+[04:19.640 --> 04:25.680]  Anyone not know what Kubernetes is in the room?
+[04:25.680 --> 04:30.200]  So the terminology in Kubernetes, the container is an isolated or confined process or process
+[04:30.200 --> 04:38.200]  tree, a pod is one or more related containers that together constitute an application of
+[04:38.200 --> 04:46.120]  some sort, so it might be an HTTP server and a database to encapsulate the entire
+[04:46.120 --> 04:48.480]  web application.
+[04:48.480 --> 04:55.120]  A namespace in Kubernetes terminology is not a namespace in Linux kernel terminology,
+[04:55.120 --> 05:01.720]  a namespace is just an object scope and authorization scope for a bunch of objects in the Kubernetes
+[05:01.720 --> 05:07.240]  data store, so if you have a particular team or project in your organization you might
+[05:07.240 --> 05:13.720]  deploy all of the Kubernetes applications in a single namespace.
+[05:13.720 --> 05:17.760]  And a node is a machine in the cluster where pods are executed, there are different kinds
+[05:17.760 --> 05:22.560]  of nodes, there are control pane nodes, there are worker nodes where the actual business
+[05:22.560 --> 05:28.240]  applications run.
+[05:28.240 --> 05:34.600]  Kubelet is the agent that executes pods on nodes, so there's a scheduling system, the
+[05:34.600 --> 05:42.560]  scheduler will, when a pod is created, decide what node that pod should run on and Kubelet
+[05:42.560 --> 05:48.480]  is the agent on the node that takes the pod specification and turns it into a container
+[05:48.480 --> 05:51.560]  running on that node.
+[05:51.560 --> 05:57.360]  The Kubernetes terminology uses the term sandbox, that's an isolation or confinement
+[05:57.360 --> 06:03.840]  mechanism, and there's one sandbox per pod, so there could be multiple containers running
+[06:03.840 --> 06:05.960]  in the sandbox.
+[06:05.960 --> 06:14.200]  And the container runtime interface defines how Kubelet actually starts and stops the
+[06:14.200 --> 06:17.600]  containers for the sandboxes.
+[06:17.600 --> 06:23.000]  So cryo is one implementation of the container runtime interface, that's what's used in
+[06:23.000 --> 06:31.080]  OpenShift, there's also container d, that's used in some other distributions of Kubernetes.
+[06:31.080 --> 06:38.040]  So visualizing this, the whole box is one Kubernetes node, the Kubelet has the gRPC
+[06:38.040 --> 06:46.240]  client to talk to us CRI runtime, the CRI runtime does something and containers appear.
+[06:46.240 --> 06:54.320]  So we could instantiate the container runtime interface implementation as cryo, and then
+[06:54.320 --> 07:01.400]  we can see that cryo talks to an OCI runtime, it uses exec to use the OCI runtime, and we
+[07:01.400 --> 07:08.600]  can go one step further and say that the OCI runtime implementation will be run seat.
+[07:08.600 --> 07:13.840]  And this is the setup that we use on OpenShift.
+[07:13.840 --> 07:21.240]  This is a pod spec in YAML format, so we have kind pod, the specification has a list of
+[07:21.240 --> 07:26.000]  containers, in this case there's one, the container has a name, defines the image to
+[07:26.000 --> 07:33.960]  use, the command to execute, environment variables that should be set, and so on.
+[07:33.960 --> 07:39.480]  OpenShift or OpenShift container platform is an enterprise-ready Kubernetes container
+[07:39.480 --> 07:44.200]  platform, it's commercially supported by Red Hat, there's a community upstream distribution
+[07:44.200 --> 07:51.520]  called OKD, as I mentioned before, it uses cryo and run seat, and the latest stable release
+[07:51.520 --> 07:58.120]  is 4.12, I think that came out just a week ago or so.
+[07:58.120 --> 08:07.000]  And its default way that it creates containers is it uses SE Linux and namespaces to confine
+[08:07.000 --> 08:17.000]  the processes, each namespace gets assigned a unique user ID range and the processes for
+[08:17.000 --> 08:22.040]  the pods in that namespace have to run in those host UIDs.
+[08:22.040 --> 08:28.800]  You can circumvent this using the run as user security context constraint, but that is not
+[08:28.800 --> 08:35.600]  a good idea, you don't want your containers running as root on the container host because
+[08:35.600 --> 08:41.320]  if they escape the sandbox, then your cluster got owned.
+[08:41.320 --> 08:48.440]  So this is the why of user namespaces, user namespaces as we're talking about Linux kernel,
+[08:48.440 --> 08:54.640]  user namespaces can be used to improve the workload isolation and the confinement of the
+[08:54.640 --> 08:57.200]  pods in your cluster.
+[08:57.200 --> 09:01.880]  They can also be used to run applications that require or assume that they're running
+[09:01.880 --> 09:08.120]  as specific user IDs, or to phrase this a different way, you can drag your legacy applications
+[09:08.120 --> 09:16.040]  kicking and screaming into the cloud and get the benefits of all of the orchestration and
+[09:16.040 --> 09:22.840]  networking support that these platforms like Kubernetes and OpenShift can give you while
+[09:22.840 --> 09:25.480]  still running that workload securely.
+[09:25.480 --> 09:31.360]  In other words, trick it to believe it is running as root.
+[09:31.360 --> 09:38.280]  And yeah, there have been a bunch of CVEs in Kubernetes and the broader container orchestration
+[09:38.280 --> 09:46.720]  ecosystem arising from sandbox escapes where user namespaces would have prevented the vulnerability
+[09:46.720 --> 09:53.040]  or severely limited or curtailed its impact.
+[09:53.040 --> 09:58.600]  So visualizing a user namespace, we can have two separate containers with a user namespace
+[09:58.600 --> 10:08.320]  mapping of UID range 0 to 65535 inside the container's user namespace to a range of unprivileged
+[10:08.320 --> 10:12.240]  user IDs in the host's user ID namespace.
+[10:12.240 --> 10:16.760]  So the processes running in the container believe that they are running as, for example,
+[10:16.760 --> 10:24.960]  root UID 0 or some other privileged user ID when, in fact, it's running as UID 200,000
+[10:24.960 --> 10:28.360]  on the host, an unprivileged user ID.
+[10:28.360 --> 10:35.440]  Take the sandbox and you're still an unprivileged user on the host.
+[10:35.440 --> 10:40.600]  So in Linux, there's some references to some man pages about user namespaces and how to
+[10:40.600 --> 10:41.600]  use them.
+[10:41.600 --> 10:50.320]  The critical thing is the unshare system call, which is how you create and use the user namespace.
+[10:50.320 --> 10:55.480]  In the OCI runtime specification, there are some fields.
+[10:55.480 --> 11:00.720]  And again, this is Linux specific, so it's inside the Linux specific part of that configuration
+[11:00.720 --> 11:06.400]  that you can specify that a user namespace should be created or used for that container
+[11:06.400 --> 11:08.280]  and you can specify the mapping.
+[11:08.280 --> 11:16.920]  So how do we map the containers user ID range to the host user ID range?
+[11:16.920 --> 11:22.000]  User namespaces were implemented before they were implemented in Kubernetes upstream.
+[11:22.000 --> 11:31.520]  We did it in cryo, it first shipped in OpenShift 4.7, but it required a considerable amount
+[11:31.520 --> 11:34.800]  of additional configuration of the cluster to use it.
+[11:34.800 --> 11:38.640]  And since OpenShift 4.10, you've been able to use it out of the box.
+[11:38.640 --> 11:46.640]  You do still have to opt in using annotations on a per pod basis.
+[11:46.640 --> 11:53.240]  It requires the NEU ID security context constraint or an equivalent privileged security context
+[11:53.240 --> 11:58.880]  constraint in order to admit the pod because the admission machinery does not yet understand
+[11:58.880 --> 12:01.480]  about user namespaces.
+[12:01.480 --> 12:07.720]  So the pod spec says, I want to run as user ID 0 and the admission machinery says, uh-uh,
+[12:07.720 --> 12:08.720]  no way.
+[12:08.720 --> 12:15.400]  We need to circumvent that for the time being, but the workload itself will run in the user
+[12:15.400 --> 12:18.760]  namespace.
+[12:18.760 --> 12:25.120]  And depending on the workload, it may still require some additional cluster configuration.
+[12:25.120 --> 12:30.320]  So the annotations to opt in, you can say IO.OpenShift.Builder is true.
+[12:30.320 --> 12:36.960]  That activates a particular cryo, what we call a workload, basically an alternative bunch
+[12:36.960 --> 12:39.300]  of runtime settings.
+[12:39.300 --> 12:46.680]  And then we use the user NS mode annotation to specify that we want an arbitrary user
+[12:46.680 --> 12:49.920]  namespace of size 65536.
+[12:49.920 --> 12:55.600]  So that'll allocate you a contiguous host UID range for that container and map it to
+[12:55.600 --> 13:00.480]  unprivileged host user IDs.
+[13:00.480 --> 13:04.720]  In the Kubernetes upstream, it took a bit longer to get user namespace support and it's
+[13:04.720 --> 13:10.840]  still a work in progress, but the initial support was delivered in Kubernetes 1.25.
+[13:10.840 --> 13:15.360]  And that version is what we've moved to in OpenShift 4.12.
+[13:15.360 --> 13:21.920]  So you can now use the first class user namespace support in OpenShift.
+[13:21.920 --> 13:24.920]  It is an alpha feature, so it's not enabled by default.
+[13:24.920 --> 13:28.100]  You have to turn it on with a feature gate.
+[13:28.100 --> 13:34.360]  And at the moment, it only supports ephemeral volume types, so empty to a config maps, secrets,
+[13:34.360 --> 13:37.880]  no persistent volume support yet.
+[13:37.880 --> 13:47.400]  You opt in by putting host users false in your pod spec and currently gives you a fixed
+[13:47.400 --> 13:54.760]  mapping size of 65536 that will be unique to that pod.
+[13:54.760 --> 14:01.240]  It is hoped that a later phase will deliver support for the additional volume types.
+[14:01.240 --> 14:06.200]  The reason that we didn't have them is the complexity around ID mapped mounts and how
+[14:06.200 --> 14:15.500]  to adapt the volume mounts to understand how to map the user IDs between the host UID
+[14:15.500 --> 14:18.920]  namespace and the container's username space.
+[14:18.920 --> 14:22.720]  There's also very simple heuristics around the ID range assignment.
+[14:22.720 --> 14:28.440]  As I mentioned, it's a fixed size of 65536 that limits the number of pods that you could
+[14:28.440 --> 14:35.400]  run in user namespaces on a given node, and there are still some other mount point and
+[14:35.400 --> 14:39.920]  file ownership issues, for example, with the C-group FS.
+[14:39.920 --> 14:42.320]  And that takes us to the C-group's topic.
+[14:42.320 --> 14:48.840]  So OpenShift creates a unique C-group for each container, and it also creates a C-group
+[14:48.840 --> 14:58.400]  namespace so that the container in the CISFS C-group mount only sees its namespace.
+[14:58.400 --> 15:03.960]  Inside the container, CISFS C-group actually points to CISFS C-group slash a whole bunch
+[15:03.960 --> 15:11.600]  of stuff specific to that container in the host's file system.
+[15:11.600 --> 15:17.520]  If you want to run a systemD-based workload, systemD needs right access to the C-group
+[15:17.520 --> 15:24.800]  FS, but by default, the C-group FS will be mounted read only.
+[15:24.800 --> 15:31.440]  So the solution, we modify the container runtime to chone the C-group to the container's
+[15:31.440 --> 15:33.080]  process UID.
+[15:33.080 --> 15:43.520]  So that is we chone it to the host UID corresponding to UID0 in the container's user namespace.
+[15:43.520 --> 15:50.960]  But first, before we did this in an ad hoc basis, we engaged with the OpenContainer initiative
+[15:50.960 --> 15:59.800]  to define the semantics for C-group ownership in a container, and those proposals were workshopped
+[15:59.800 --> 16:07.080]  and accepted, and after that, we were able to implement those semantics in RunC.
+[16:07.080 --> 16:08.360]  So what are the semantics?
+[16:08.360 --> 16:16.480]  Well, the container's C-group will be choned to the host UID matching the process UID in
+[16:16.480 --> 16:24.240]  the container's user namespace, if and only if the node is using C-groups V2, and the
+[16:24.240 --> 16:34.200]  container has its own C-group namespace and the C-group FS is mounted read-write.
+[16:34.200 --> 16:41.320]  So only the C-group directory itself and the files mentioned in sys-kernel C-group delegate
+[16:41.320 --> 16:42.560]  are choned.
+[16:42.560 --> 16:51.600]  These are the ones that are safe to delegate to a sub-process.
+[16:51.600 --> 16:58.360]  And the container runtime, if that file sys-kernel C-group delegate is defined, then it will
+[16:58.360 --> 17:03.680]  read that file and only chone the files mentioned there.
+[17:03.680 --> 17:13.120]  So it can respond to the evolution of the kernel where new C-group nodes may come and
+[17:13.120 --> 17:19.440]  go, some of them may be safe to delegate, some of them may not.
+[17:19.440 --> 17:24.360]  In OpenShift, C-groups V2 is not yet the default when you deploy a cluster, but it does work
+[17:24.360 --> 17:35.280]  and it is supported, and to activate the C-group choned semantics that I just explained, we
+[17:35.280 --> 17:41.160]  still require an annotation in the pod spec.
+[17:41.160 --> 17:46.320]  So let's do a demo.
+[17:46.320 --> 17:57.280]  Here's a cluster I prepared earlier, and we can see new project test, okay, OC create
+[17:57.280 --> 18:03.400]  user test, maybe test already exists, okay, we'll just use test.
+[18:03.400 --> 18:12.640]  So we can now, oh, well, I'll show you the pod I'm going to create, cat pod nginx, host
+[18:12.640 --> 18:14.360]  users false.
+[18:14.360 --> 18:22.840]  So this is a pod spec, let's get some syntax highlighting.
+[18:22.840 --> 18:30.120]  This is going to run nginx, it's a system D based workload, so it's a fedora system
+[18:30.120 --> 18:38.240]  that will come up and system D will run and it will start nginx.
+[18:38.240 --> 18:42.280]  We're setting host users false so that it will run in a user namespace.
+[18:42.280 --> 18:49.720]  I have already enabled the feature flag on this cluster.
+[18:49.720 --> 18:57.760]  There's that annotation for the C-group choned, and the name of the pod will be nginx, so
+[18:57.760 --> 18:59.440]  let's create that.
+[18:59.440 --> 19:05.400]  So OC as test, create a share.
+[19:05.400 --> 19:11.120]  Okay, fingers crossed.
+[19:11.120 --> 19:29.360]  Okay, so we'll say OC admin policy add role to user edit, okay, let's try that again.
+[19:29.360 --> 19:37.040]  So the pod has been created, and we'll just check it's status to see which node it is
+[19:37.040 --> 19:45.840]  running on, and it hasn't yet started, so we don't have a container ID for it yet, but
+[19:45.840 --> 19:54.400]  in the upper pane, I'll get a shell on that worker node.
+[19:54.400 --> 20:09.920]  Okay, pod is now running, so we can run cry control, inspect, container ID, and we'll
+[20:09.920 --> 20:15.840]  just pull out the PID, so this is our PID.
+[20:15.840 --> 20:27.320]  Now if we have a look at the user ID map for this process, okay, so here we see that
+[20:27.320 --> 20:42.040]  we have a user namespace with the user ID mapping of size 65536, which is mapping user
+[20:42.040 --> 20:53.960]  ID 0 in the container's user namespace to user ID 131072 in the host user namespace.
+[20:53.960 --> 21:02.160]  And now we can look at the processes that are actually running there, so we'll do pgrep,
+[21:02.160 --> 21:12.680]  l-ns says show me everything with the same set of namespaces as this process ID, and
+[21:12.680 --> 21:24.800]  then I'll just pipe that to PS, let's print the user, the PID, and the command, sorting
+[21:24.800 --> 21:28.360]  by PID, okay.
+[21:28.360 --> 21:40.520]  So we can see that this container is running, well, in it, and then bunch of systemd processes,
+[21:40.520 --> 21:54.600]  and then eventually nginx, and these are running under, see, 131072, yeah, 132071, yeah, so
+[21:54.600 --> 22:04.360]  these are running as various user IDs in the container's user namespace, and those are
+[22:04.360 --> 22:10.640]  being mapped to the host user ID namespace as these PIDs.
+[22:10.640 --> 22:21.120]  If we look at the logs, we can see that it looks like a regular systemd system has come
+[22:21.120 --> 22:42.680]  up, indeed it has, and let's see, I see, maybe we'll get a shell on the node, on the pod,
+[22:42.680 --> 22:48.840]  and yeah, if we have a look at what is the container's view of the processes that are
+[22:48.840 --> 22:57.520]  running, it sees that systemd is running as root or other systemd-related users inside
+[22:57.520 --> 23:05.880]  the container's user namespace, nginx is running as the nginx user in that container's user
+[23:05.880 --> 23:11.200]  namespace, but as we saw, these are all mapped to unprivileged host UIDs in the host user
+[23:11.200 --> 23:16.800]  namespace.
+[23:16.800 --> 23:23.240]  So that concludes the demo, here's a link to various resources, I have a lot of blog
+[23:23.240 --> 23:28.640]  posts on this and related topics, so you can hit my blog and just look at the containers
+[23:28.640 --> 23:38.480]  tag, a recording of a demo or a similar demo, slightly earlier version, link to KEP127,
+[23:38.480 --> 23:44.240]  which is where all of the discussion around how to do the upstream support for user namespaces
+[23:44.240 --> 23:52.800]  in Kubernetes, all of that discussion happened there, the OCI runtime spec is referenced there,
+[23:52.800 --> 24:04.400]  and that's it, so I think there is time for some questions.
+[24:04.400 --> 24:10.440]  Please stay seated until 25 so we can ask questions, okay, there's one in the back, do you want
+[24:10.440 --> 24:13.080]  to read the one from the chat first?
+[24:13.080 --> 24:19.400]  There's a question in chat, I don't see it anymore, it says, why would I want to run
+[24:19.400 --> 24:24.080]  systemd in a container, it's cool that it's possible with user namespaces, but I lack
+[24:24.080 --> 24:26.640]  an idea for use case.
+[24:26.640 --> 24:34.400]  So the use case is you have a complicated legacy workload that runs under systemd or
+[24:34.400 --> 24:40.680]  makes assumptions about the environment it runs in, the user IDs that the different components
+[24:40.680 --> 24:47.640]  are running as, you've got two choices, one is to spend a whole lot of upfront engineering
+[24:47.640 --> 24:55.840]  effort to break up that application and containerize it and make it a cloud native application,
+[24:55.840 --> 25:00.760]  which is expensive and typically has a long lead time, or you can just wrap that whole
+[25:00.760 --> 25:07.760]  application up in a container and run it securely, hopefully, in a container orchestration platform
+[25:07.760 --> 25:14.640]  and get the benefit of all of the scaling, networking, observability features that the
+[25:14.640 --> 25:20.840]  orchestration platform gives you without having to spend that effort to bust your application
+[25:20.840 --> 25:23.560]  into a hundred pieces.
+[25:23.560 --> 25:28.520]  So I would say that that is the use case, I think it's a compelling one, if you were
+[25:28.520 --> 25:33.680]  building applications today you certainly wouldn't do that, but there are 100 million
+[25:33.680 --> 25:39.680]  legacy applications out there and people don't want to break them up and change them.
+[25:39.680 --> 25:48.560]  Hi, thanks for the talk, I'm actually doing this right now at my company, but basically
+[25:48.560 --> 25:55.280]  the container is running as privileged, so that's why it can access C group, it doesn't
+[25:55.280 --> 26:02.760]  use user namespaces, it just runs as a privilege, so I was wondering if using this method you
+[26:02.760 --> 26:11.920]  could set a memory max, memory high, or other values for some processes in the C group running
+[26:11.920 --> 26:13.840]  in the container, I mean.
+[26:13.840 --> 26:17.960]  I'm sorry, I couldn't hear the question because it's rather echo-y.
+[26:17.960 --> 26:26.200]  Sorry, yeah, so can you set memory high, memory max, values, CPU affinities, like all these
+[26:26.200 --> 26:32.320]  kinds of things you would set in the C group usually, can you set them from this particular
+[26:32.320 --> 26:34.440]  use case of C groups in the container?
+[26:34.440 --> 26:41.200]  Yes, absolutely, because the container still has its own C group namespace, so all of the
+[26:41.200 --> 26:47.960]  standard C group confinement and resource limit capabilities can be used.
+[26:47.960 --> 26:55.520]  Okay, I guess I got confused by the list of values that were allowed to do a listed in
+[26:55.520 --> 27:00.000]  the previous slide, there was a restricted list of values.
+[27:00.000 --> 27:09.440]  Yeah, so those were just the particular files that need to be choned in order for a safe
+[27:09.440 --> 27:19.520]  delegation of control of that branch of the C group hierarchy to another process, so
+[27:19.520 --> 27:28.480]  you can still set on the C group directory all of the limits and the container won't
+[27:28.480 --> 27:34.800]  be able to change those because those will not be choned to the container's process
+[27:34.800 --> 27:35.800]  UID.
+[27:35.800 --> 27:58.360]  Okay, thank you.
+[27:58.360 --> 28:11.280]  So I have a question regarding the CFFC group C-H own, so you mentioned it's going to be
+[28:11.280 --> 28:19.680]  changed to the UID of the container, of the process container, can you do that if you
+[28:19.680 --> 28:35.360]  want to have several ports to run their own system D?
+[28:35.360 --> 28:38.360]  Is your question around can you do it in a nested way?
+[28:38.360 --> 28:45.920]  No, not in a nested way, you have three different ports which each port needs their own system
+[28:45.920 --> 28:46.920]  D.
+[28:46.920 --> 28:48.560]  Yes, yes, absolutely.
+[28:48.560 --> 28:56.400]  So if I created more pods in my demo, you would see that they would then be mapped to
+[28:56.400 --> 29:05.240]  different host UID ranges, so the limit is only how many of the range allocations can
+[29:05.240 --> 29:09.640]  you fit into the host UID range?
+[29:09.640 --> 29:21.760]  So the limit will be a little under 6.536 because the size of the host UID range on Linux by
+[29:21.760 --> 29:27.000]  default is 2 to the 32, yeah.
+[29:27.000 --> 29:34.680]  Okay, I think we have time for one more question and thank you all for your patience.
+[29:34.680 --> 29:35.680]  Thank you Fraser.
+[29:35.680 --> 29:41.720]  I just wanted to know if v2, secret v2 by default in OpenShift is on the road map yet
+[29:41.720 --> 29:45.440]  and whether or not there's any sort of estimated time scale for that.
+[29:45.440 --> 29:51.280]  Yes it is, yep, so there is a plan to eventually move to secret v2 as the default, I don't
+[29:51.280 --> 29:56.320]  know the exact time frame.
+[29:56.320 --> 30:02.560]  Thank you so much for your talk, thank you all for your patience and I know this sounds
+[30:02.560 --> 30:17.560]  weird but you're free to leave.

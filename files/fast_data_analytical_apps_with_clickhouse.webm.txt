@@ -1,0 +1,494 @@
+[00:00.000 --> 00:11.000]  Okay, so yeah, thank you, everyone, for coming.
+[00:11.000 --> 00:16.000]  The streaming data, the last one of the day, after that, you're free to use, you know,
+[00:16.000 --> 00:17.000]  go elsewhere.
+[00:17.000 --> 00:24.000]  For the last one, we have a super cool talk with Alex, he is the CEO of the house.
+[00:24.000 --> 00:29.000]  Yes, he's going to tell us how to build real-time application with the house.
+[00:29.000 --> 00:36.000]  Yeah, thank you.
+[00:36.000 --> 00:40.000]  So, the title of my talk is very similar to the previous.
+[00:40.000 --> 00:45.000]  So, let's see what will be the difference.
+[00:45.000 --> 00:52.000]  I will try to build a small, simple analytical application, just about right now.
+[00:52.000 --> 00:55.000]  And how to build an analytical application?
+[00:55.000 --> 01:00.000]  We have to figure out what to do, where to collect our data, how to prepare and clean our data,
+[01:00.000 --> 01:04.000]  how to load it, and how to visualize it.
+[01:04.000 --> 01:12.000]  And I will use the following technologies.
+[01:12.000 --> 01:19.000]  Apache Flink, Apache Boom, Apache Kafka, Apache Pulsar, Apache Spark, Apache Plane,
+[01:19.000 --> 01:25.000]  Stringlet, the Bezier, Apache Iceberg, Apache Superset.
+[01:25.000 --> 01:32.000]  Every time I notice Apache once again, I'm looking more and more stupid.
+[01:32.000 --> 01:38.000]  So, maybe I don't actually have to use all of these technologies, because if I do,
+[01:38.000 --> 01:45.000]  at least I will have to be able to tell apart what is the difference between Apache Kafka
+[01:45.000 --> 01:47.000]  and Apache Pulsar.
+[01:47.000 --> 01:55.000]  If you cannot, don't even try to use these technologies.
+[01:55.000 --> 01:57.000]  And what I want to do?
+[01:57.000 --> 02:00.000]  Actually, I want just analyze data.
+[02:00.000 --> 02:03.000]  What power data? Give me some data.
+[02:03.000 --> 02:04.000]  I want to analyze it.
+[02:04.000 --> 02:08.000]  I have no idea what I will get in the result.
+[02:08.000 --> 02:14.000]  I want some interesting data set with logs, metrics, time series data.
+[02:14.000 --> 02:19.000]  I want clicks, whatever.
+[02:19.000 --> 02:21.000]  So, where to find this data?
+[02:21.000 --> 02:27.000]  If you want some demos, there are plenty of sources of fairly available public
+[02:27.000 --> 02:35.000]  updatable data sets, like Internet Archive or Zmodo.org, whatever does it mean,
+[02:35.000 --> 02:42.000]  or Common Core, GitHub Archive, Wikipedia, blockchain data from public blockchains,
+[02:42.000 --> 02:44.000]  whatever scans.
+[02:44.000 --> 02:51.000]  Sometimes you can do metrics scan by yourself and get away with it, but there are
+[02:51.000 --> 02:53.000]  plenty of downloads.
+[02:53.000 --> 03:01.000]  So, maybe you will be surprised by my choice, but I selected the data from Wikipedia.
+[03:01.000 --> 03:05.000]  Exactly, almost exactly as from previous talk.
+[03:05.000 --> 03:12.000]  The data is available on dumps.wikimedia.org.
+[03:12.000 --> 03:14.000]  It is public demoing.
+[03:14.000 --> 03:16.000]  You can do whatever you want with it.
+[03:16.000 --> 03:21.000]  It contains data dumps, edit history, and page view statistics.
+[03:21.000 --> 03:27.000]  And I will analyze page view statistics.
+[03:27.000 --> 03:35.000]  It is updated every hour and represented by about 70,000 gzip files,
+[03:35.000 --> 03:37.000]  3.5 terabytes.
+[03:37.000 --> 03:46.000]  What to do is 3.5 terabytes, download it.
+[03:46.000 --> 03:49.000]  So, the data looks like this.
+[03:49.000 --> 03:54.000]  It looks kind of low, and I like it.
+[03:54.000 --> 03:56.000]  And how to download it?
+[03:56.000 --> 04:03.000]  With this shell script, it looks kind of raw, and I like it.
+[04:03.000 --> 04:06.000]  So, what it is doing?
+[04:06.000 --> 04:14.000]  It writes by years, it writes by month, collects on the list of links,
+[04:14.000 --> 04:20.000]  and then simply downloading by parallel with WGET and XRX.
+[04:20.000 --> 04:26.000]  It is rate-limited to three concurrent requests, apparently.
+[04:26.000 --> 04:32.000]  Actually, WGET has recursive mode, but it does not have parallelism,
+[04:32.000 --> 04:38.000]  so I decided to simply parallelize with XRX.
+[04:38.000 --> 04:45.000]  And after about three days, data is downloaded.
+[04:45.000 --> 04:48.000]  Let's preview it.
+[04:48.000 --> 04:52.000]  If you decompress just one file, it looks like this.
+[04:52.000 --> 04:54.000]  It is kind of a strange format.
+[04:54.000 --> 05:00.000]  It is not CSV, not TSV, not JSON.
+[05:00.000 --> 05:02.000]  It does not look like ProtoBuff.
+[05:02.000 --> 05:06.000]  It is the white space separated file.
+[05:06.000 --> 05:08.000]  It was just a few fields.
+[05:08.000 --> 05:12.000]  Title, project, subproject, the number of page views,
+[05:12.000 --> 05:17.000]  and also zero, for whatever, always zero field.
+[05:17.000 --> 05:19.000]  How to load this data?
+[05:19.000 --> 05:25.000]  And I like shell scripts, but I don't want to use set, oak, and parallel.
+[05:25.000 --> 05:29.000]  Even despite I am on this open source conference,
+[05:29.000 --> 05:33.000]  I will not use set, oak, and parallel.
+[05:33.000 --> 05:37.000]  Instead, I will use ClickHouse local.
+[05:37.000 --> 05:39.000]  What is ClickHouse local?
+[05:39.000 --> 05:44.000]  It is a small tool for analytical data processing
+[05:44.000 --> 05:49.000]  on local files or remote files without a server.
+[05:49.000 --> 05:53.000]  You don't have to install ClickHouse to use ClickHouse local.
+[05:53.000 --> 05:58.000]  And it can process every data format.
+[05:58.000 --> 06:01.000]  It can process external data from external data sources,
+[06:01.000 --> 06:07.000]  data lakes, object storages, everything.
+[06:07.000 --> 06:11.000]  And actually, ClickHouse local is not a unique tool.
+[06:11.000 --> 06:14.000]  There are many tools for command line data processing.
+[06:14.000 --> 06:16.000]  Here is a list.
+[06:16.000 --> 06:21.000]  I will not pronounce this list because I like ClickHouse local.
+[06:21.000 --> 06:25.000]  I don't like all these tools.
+[06:25.000 --> 06:28.000]  Installing ClickHouse local is easy.
+[06:28.000 --> 06:29.000]  Google.sh.
+[06:29.000 --> 06:33.000]  It is also safe because, keep in mind, it is pipe.sh,
+[06:33.000 --> 06:38.000]  not pipe.sudo.sh.
+[06:38.000 --> 06:42.000]  Writing it is also easy.
+[06:42.000 --> 06:44.000]  And let's preview this data.
+[06:44.000 --> 06:46.000]  It has interactive mode.
+[06:46.000 --> 06:48.000]  Let's run ClickHouse local.
+[06:48.000 --> 06:52.000]  And we can select directly from URL.
+[06:52.000 --> 06:54.000]  What format to use?
+[06:54.000 --> 06:55.000]  CSV does not work.
+[06:55.000 --> 06:57.000]  CSV does not work.
+[06:57.000 --> 07:01.000]  But there is a format, pretty simple, named line as string.
+[07:01.000 --> 07:03.000]  What is this format?
+[07:03.000 --> 07:09.000]  It interprets a file as a table with a single column,
+[07:09.000 --> 07:13.000]  named line with type string.
+[07:13.000 --> 07:16.000]  So just a single column with all our data.
+[07:16.000 --> 07:20.000]  We can use it for just filtering.
+[07:20.000 --> 07:23.000]  We can also select from multiple files.
+[07:23.000 --> 07:28.000]  As in this example, we can select a file name.
+[07:28.000 --> 07:32.000]  We can filter by something.
+[07:32.000 --> 07:33.000]  OK.
+[07:33.000 --> 07:38.000]  Now we have some idea what our data looks like.
+[07:38.000 --> 07:41.000]  Now we have to clean up, prepare,
+[07:41.000 --> 07:46.000]  structure our data, maybe convert it into another format.
+[07:46.000 --> 07:51.000]  And I will do it with this select query.
+[07:51.000 --> 07:53.000]  What it is doing?
+[07:53.000 --> 07:59.000]  It is selecting from files all our 3 terabyte jzip files
+[07:59.000 --> 08:01.000]  with line as a string.
+[08:01.000 --> 08:07.000]  It will split the string by white space to some values,
+[08:07.000 --> 08:11.000]  represent it as array, select elements of this array
+[08:11.000 --> 08:15.000]  as project, sub-project, and path.
+[08:15.000 --> 08:19.000]  Path can be URL encoded with percent encoding.
+[08:19.000 --> 08:23.000]  I will use a function decode URL component.
+[08:23.000 --> 08:27.000]  I will also extract the date from the file name
+[08:27.000 --> 08:31.000]  with a function path date time best effort.
+[08:31.000 --> 08:34.000]  And it looks like this.
+[08:34.000 --> 08:36.000]  It is not Russian Wikipedia.
+[08:36.000 --> 08:44.000]  It is AB Wikipedia, whatever it means.
+[08:44.000 --> 08:46.000]  And what is AA Wikipedia?
+[08:46.000 --> 08:48.000]  I don't know.
+[08:48.000 --> 08:50.000]  It will be pretty interesting.
+[08:50.000 --> 08:54.000]  Also, what I did with this 3.5 terabyte of files,
+[08:54.000 --> 08:57.000]  I uploaded to my S3 bucket.
+[08:57.000 --> 09:00.000]  And I just made this S3 bucket public.
+[09:00.000 --> 09:09.000]  So until we have money, you will be able to download something.
+[09:09.000 --> 09:12.000]  But please be kind.
+[09:12.000 --> 09:17.000]  And you can select directly from this S3 bucket as well
+[09:17.000 --> 09:19.000]  from all of these files.
+[09:19.000 --> 09:24.000]  Yes, in the same way.
+[09:24.000 --> 09:30.000]  Okay, so we just previewed our data.
+[09:30.000 --> 09:34.000]  Now let's proceed to real data loading.
+[09:34.000 --> 09:37.000]  Let's install a real ClickHouse server
+[09:37.000 --> 09:39.000]  instead of ClickHouse local.
+[09:39.000 --> 09:42.000]  But actually, there is no difference
+[09:42.000 --> 09:45.000]  between ClickHouse local and ClickHouse client
+[09:45.000 --> 09:47.000]  and ClickHouse server.
+[09:47.000 --> 09:51.000]  Well, everything in a single binary.
+[09:51.000 --> 09:53.000]  You just rename it to ClickHouse server
+[09:53.000 --> 09:57.000]  and it automatically becomes a server.
+[09:57.000 --> 10:00.000]  You can create a sim link.
+[10:00.000 --> 10:03.000]  You can take this binary and install it.
+[10:03.000 --> 10:10.000]  And it will install into user bin, user and etc.
+[10:10.000 --> 10:13.000]  You can run it without installation.
+[10:13.000 --> 10:19.000]  So let's start it and let's create a table.
+[10:19.000 --> 10:22.000]  So here is a table structure.
+[10:22.000 --> 10:26.000]  Five fields, date time, because it is time-serious,
+[10:26.000 --> 10:29.000]  project, sub-project, page title,
+[10:29.000 --> 10:34.000]  name it path, the number of page views, name it hits.
+[10:34.000 --> 10:38.000]  I also enabled stronger compression with ZSTD,
+[10:38.000 --> 10:43.000]  the standard and low cardinality data types.
+[10:43.000 --> 10:46.000]  And this standard is just a compression codec.
+[10:46.000 --> 10:50.000]  I will also index it by path and time.
+[10:50.000 --> 10:55.000]  So I will be able to quickly select for specific pages.
+[10:55.000 --> 10:59.000]  And how to load data into this table?
+[10:59.000 --> 11:04.000]  Let's use Kafka or Pulsar
+[11:04.000 --> 11:11.000]  and automate with Airflow and do ETL with Airbite or DBT.
+[11:11.000 --> 11:14.000]  Actually, I don't know why DBT even exists,
+[11:14.000 --> 11:20.000]  because I can do everything without DBT.
+[11:20.000 --> 11:23.000]  I will do it with just insert select.
+[11:23.000 --> 11:27.000]  Insert into Wikistat my select query from S3.
+[11:27.000 --> 11:31.000]  And I will wait while it finishes.
+[11:31.000 --> 11:34.000]  Let's take a look. You don't see anything.
+[11:34.000 --> 11:38.000]  Let's make a font slightly larger.
+[11:38.000 --> 11:42.000]  I will make a font slightly larger.
+[11:42.000 --> 11:44.000]  Okay.
+[11:44.000 --> 11:47.000]  Now it started to load the data.
+[11:47.000 --> 11:52.000]  0%, 57 CPU consumed,
+[11:52.000 --> 11:58.000]  2 gigabytes per second and 50 million rows per second.
+[11:58.000 --> 12:01.000]  50 million.
+[12:01.000 --> 12:03.000]  I did not watch one of the previous talk.
+[12:03.000 --> 12:07.000]  It was named loading more than a million records per second
+[12:07.000 --> 12:09.000]  on a single server.
+[12:09.000 --> 12:15.000]  So we are loading more than a million records per second
+[12:15.000 --> 12:17.000]  on a single server.
+[12:17.000 --> 12:19.000]  Okay. Let's take a look what is happening,
+[12:19.000 --> 12:22.000]  because just loading data is not enough.
+[12:22.000 --> 12:24.000]  It will take a while.
+[12:24.000 --> 12:26.000]  And what to do while it is loading?
+[12:26.000 --> 12:29.000]  I will run Distat.
+[12:29.000 --> 12:32.000]  Distat will show me the system usage,
+[12:32.000 --> 12:36.000]  and I see that it is bounded by IO,
+[12:36.000 --> 12:40.000]  500 megabytes per second, Britain.
+[12:40.000 --> 12:42.000]  It is compressor data.
+[12:42.000 --> 12:44.000]  IO weighed 68%.
+[12:44.000 --> 12:47.000]  CPU weighed almost non-existing.
+[12:47.000 --> 12:51.000]  I can also run top to see what is happening.
+[12:51.000 --> 12:58.000]  CPU 16 cores, and it works, and IO weighed 70%.
+[12:58.000 --> 13:01.000]  But for me, it is not enough.
+[13:01.000 --> 13:03.000]  For me, it is not enough,
+[13:03.000 --> 13:07.000]  because I also run this tool per top,
+[13:07.000 --> 13:10.000]  because I always profile my code.
+[13:10.000 --> 13:12.000]  So what my code is doing?
+[13:12.000 --> 13:16.000]  It is doing compression, sorting, nothing.
+[13:16.000 --> 13:25.000]  Okay.
+[13:25.000 --> 13:28.000]  And after eight hours,
+[13:28.000 --> 13:31.000]  my data is loaded.
+[13:31.000 --> 13:36.000]  The table size on disk is just 700 gigabytes.
+[13:36.000 --> 13:39.000]  Original was 3.5 terabytes,
+[13:39.000 --> 13:42.000]  so it compressed like five times.
+[13:42.000 --> 13:46.000]  It was in Gzip, now it is in Clickhouse,
+[13:46.000 --> 13:49.000]  with all the column-oriented compression.
+[13:49.000 --> 13:54.000]  The speed was 50 million rows per second,
+[13:54.000 --> 13:59.000]  but actually, it was not true,
+[13:59.000 --> 14:02.000]  because after eight hours, it degraded
+[14:02.000 --> 14:06.000]  to just 14 million rows per second.
+[14:06.000 --> 14:08.000]  Still not bad.
+[14:08.000 --> 14:11.000]  It degraded because data has to be merged on disk,
+[14:11.000 --> 14:14.000]  and it takes write amplification,
+[14:14.000 --> 14:16.000]  it takes additional IO.
+[14:16.000 --> 14:19.000]  So what is the size?
+[14:19.000 --> 14:29.000]  380 billion records, 0.3 trillion.
+[14:29.000 --> 14:32.000]  The total page views on Wikipedia
+[14:32.000 --> 14:39.000]  is just 1 trillion, 300 billion page views.
+[14:39.000 --> 14:45.000]  Nothing surprising, Wikipedia is quite popular.
+[14:45.000 --> 14:48.000]  And about my table.
+[14:48.000 --> 14:55.000]  So every record took just 2.0 bytes compressed.
+[14:55.000 --> 15:01.000]  All this title, like Wikipedia main page,
+[15:01.000 --> 15:03.000]  it was like 50 bytes,
+[15:03.000 --> 15:06.000]  now it is compressed to just two bytes.
+[15:06.000 --> 15:09.000]  And if you look at compression ratio,
+[15:09.000 --> 15:15.000]  actually path is compressed to 170 times
+[15:15.000 --> 15:19.000]  because we sorted by path.
+[15:19.000 --> 15:23.000]  Okay, but so what?
+[15:23.000 --> 15:26.000]  What to do with my data?
+[15:26.000 --> 15:27.000]  I have loaded.
+[15:27.000 --> 15:30.000]  It took, it was 3.5 terabytes,
+[15:30.000 --> 15:34.000]  and I can't be proud that I wasted eight hours
+[15:34.000 --> 15:37.000]  loading this data, and it compressed so well.
+[15:37.000 --> 15:40.000]  But what to do with this data?
+[15:40.000 --> 15:46.000]  We need some actionable insights from this data.
+[15:46.000 --> 15:51.000]  Let's make real-time dashboards.
+[15:51.000 --> 15:53.000]  How to do real-time dashboard?
+[15:53.000 --> 15:56.000]  We can use Grafana, SuperSet,
+[15:56.000 --> 16:01.000]  Netbase, Tableau, Observable, or even Streamlit.
+[16:01.000 --> 16:04.000]  I don't want to use Streamlit,
+[16:04.000 --> 16:10.000]  it looks too complex, too complicated in the previous talk.
+[16:10.000 --> 16:13.000]  And actually there is no problem,
+[16:13.000 --> 16:15.000]  I can use Grafana, SuperSet,
+[16:15.000 --> 16:18.000]  Netbase with Clickhouse, it works perfectly,
+[16:18.000 --> 16:21.000]  but I am an engineer.
+[16:21.000 --> 16:30.000]  And why to use Grafana if I can write my own Grafana in a day?
+[16:30.000 --> 16:32.000]  Let's do it just now.
+[16:32.000 --> 16:36.000]  Let's decide what JavaScript framework to use.
+[16:36.000 --> 16:39.000]  I can use React, View, Swelte,
+[16:39.000 --> 16:43.000]  I don't know what is Swelte, but it is popular.
+[16:43.000 --> 16:47.000]  You know, if Rust were JavaScript framework,
+[16:47.000 --> 16:51.000]  I will use Rust.
+[16:51.000 --> 16:57.000]  Maybe I should use not JavaScript, but TypeScript.
+[16:57.000 --> 17:02.000]  But no, I will use modern JavaScript.
+[17:02.000 --> 17:07.000]  What is modern JavaScript?
+[17:07.000 --> 17:16.000]  Modern JavaScript, it is when you simply open HTML file
+[17:16.000 --> 17:20.000]  in Notepad or VI or whatever,
+[17:20.000 --> 17:23.000]  and writing a code without frameworks,
+[17:23.000 --> 17:27.000]  without build systems, without dependencies.
+[17:27.000 --> 17:33.000]  Actually, I need one dependency, some charting library.
+[17:33.000 --> 17:38.000]  And I just picked a random charting library from GitHub.
+[17:38.000 --> 17:42.000]  Name it Uplot from Lyonya.
+[17:42.000 --> 17:48.000]  The description Uplot is a fast memory-efficient library.
+[17:48.000 --> 17:54.000]  Okay, solved. I will use it.
+[17:54.000 --> 17:58.000]  Another question, how to query my database?
+[17:58.000 --> 18:04.000]  Should I write a backend in Python in Go?
+[18:04.000 --> 18:09.000]  No, I will query my database directly from JavaScript,
+[18:09.000 --> 18:13.000]  from modern JavaScript with Rust API.
+[18:13.000 --> 18:19.000]  I will use Async, await, fetch API, and post my query
+[18:19.000 --> 18:25.000]  to the database, and it will return the data in format JSON.
+[18:25.000 --> 18:30.000]  Okay, enough modern JavaScript.
+[18:30.000 --> 18:35.000]  So, Clickhouse has Rust API embedded into the server.
+[18:35.000 --> 18:39.000]  It has authentication, access control, rate limiting,
+[18:39.000 --> 18:44.000]  quotas, query complexity limiting, parameterized queries,
+[18:44.000 --> 18:48.000]  custom handlers, so you don't have to write a select query,
+[18:48.000 --> 18:51.000]  you can just define a handler like
+[18:51.000 --> 18:58.000]  slash my report, or slash insert my data.
+[18:58.000 --> 19:02.000]  And you can actually open Clickhouse to the Internet
+[19:02.000 --> 19:04.000]  and get away with that.
+[19:04.000 --> 19:10.000]  I did that, it still works.
+[19:10.000 --> 19:14.000]  Okay, here is a query for Wikipedia trends
+[19:14.000 --> 19:17.000]  that we will use for a dashboard.
+[19:17.000 --> 19:21.000]  It will simply select this time series
+[19:21.000 --> 19:27.000]  rounded to some time frame, to some page.
+[19:27.000 --> 19:30.000]  And here is a parameterized query.
+[19:30.000 --> 19:35.000]  It looks slightly different, it's not like question mark here.
+[19:35.000 --> 19:41.000]  It is actually a strictly typed substitution.
+[19:41.000 --> 19:47.000]  Okay, and how long this query will take?
+[19:47.000 --> 19:50.000]  Let me ask you, how long this query will take?
+[19:50.000 --> 19:53.000]  What do you think?
+[19:53.000 --> 19:54.000]  Eight days.
+[19:54.000 --> 19:56.000]  Eight days, why eight days?
+[19:56.000 --> 20:03.000]  It should work on a table with 0.3 trillion records.
+[20:03.000 --> 20:06.000]  How long this query will take?
+[20:06.000 --> 20:11.000]  Twenty milliseconds.
+[20:11.000 --> 20:16.000]  Okay, let's experiment nine milliseconds.
+[20:16.000 --> 20:18.000]  So, you are wrong.
+[20:18.000 --> 20:24.000]  You are also wrong.
+[20:24.000 --> 20:26.000]  I was scrolling back and forth.
+[20:26.000 --> 20:28.000]  So, maybe Clickhouse is fast.
+[20:28.000 --> 20:32.000]  What if I do my SQL, 29 milliseconds?
+[20:32.000 --> 20:34.000]  Okay, closer.
+[20:34.000 --> 20:39.000]  MariaDB, 20 milliseconds.
+[20:39.000 --> 20:43.000]  What if I will replace equality comparison to like
+[20:43.000 --> 20:45.000]  and add percent?
+[20:45.000 --> 20:48.000]  The same, because prefix also using index.
+[20:48.000 --> 20:51.000]  But what if I will add percent on the front?
+[20:51.000 --> 20:56.000]  Okay, now it started to do a full scan.
+[20:56.000 --> 20:59.000]  And this full scan was quite fast,
+[20:59.000 --> 21:02.000]  over 1 billion records per second,
+[21:02.000 --> 21:05.000]  but still not fast enough for real time.
+[21:05.000 --> 21:10.000]  But all the queries with exact matching was real time.
+[21:10.000 --> 21:17.000]  Okay, let me show you this dashboard.
+[21:17.000 --> 21:22.000]  It looks like this modern dashboard.
+[21:22.000 --> 21:24.000]  It looks actually gorgeous.
+[21:24.000 --> 21:27.000]  It has dark seam.
+[21:27.000 --> 21:33.000]  And you can see it compares trends on Wikipedia for Clickhouse.
+[21:33.000 --> 21:35.000]  Clickhouse is growing.
+[21:35.000 --> 21:39.000]  Spark is not growing.
+[21:39.000 --> 21:41.000]  Green Plum is not growing.
+[21:41.000 --> 21:43.000]  What was there?
+[21:43.000 --> 21:45.000]  Snowflake is quite okay.
+[21:45.000 --> 21:47.000]  Let's check it.
+[21:47.000 --> 21:51.000]  Let's see what is inside.
+[21:51.000 --> 21:54.000]  Every chart is defined with parameterized query.
+[21:54.000 --> 21:56.000]  You write select.
+[21:56.000 --> 21:58.000]  Actually, it's not even parameterized.
+[21:58.000 --> 22:00.000]  Okay, what about MongoDB?
+[22:00.000 --> 22:03.000]  Here I define a new chart and here is Mongo.
+[22:03.000 --> 22:05.000]  Okay, I did one mistake.
+[22:05.000 --> 22:11.000]  It was filtered by outliers for Snowflake.
+[22:11.000 --> 22:13.000]  Let's move.
+[22:13.000 --> 22:15.000]  Okay, Mongo...
+[22:15.000 --> 22:17.000]  No, Mongo is not doing great.
+[22:17.000 --> 22:19.000]  Clickhouse is doing great.
+[22:19.000 --> 22:23.000]  By the way, what if you will just open a dashboard by default?
+[22:23.000 --> 22:28.000]  It will present you observability dashboard for Clickhouse.
+[22:28.000 --> 22:31.000]  So you can see what the system is doing.
+[22:31.000 --> 22:34.000]  It is actually the same code, the same dashboard,
+[22:34.000 --> 22:38.000]  but different queries.
+[22:38.000 --> 22:41.000]  You can use parameterized queries for these parameters,
+[22:41.000 --> 22:44.000]  change parameters, change the time frame.
+[22:44.000 --> 22:49.000]  It's not like Grafana, it does not have features,
+[22:49.000 --> 22:54.000]  but it is nice.
+[22:54.000 --> 22:57.000]  And you can see, yes, it is a single HTML page
+[22:57.000 --> 23:02.000]  and here is a proof.
+[23:02.000 --> 23:06.000]  Okay.
+[23:06.000 --> 23:09.000]  So what do we have?
+[23:09.000 --> 23:13.000]  We have created real-time dashboard with Clickhouse.
+[23:13.000 --> 23:20.000]  We have loaded 0.3 trillion records of data from a public data set.
+[23:20.000 --> 23:24.000]  It works, it works fast, it looks great.
+[23:24.000 --> 23:26.000]  And if you want to build...
+[23:26.000 --> 23:30.000]  Actually, I don't insist you to use modern JavaScript.
+[23:30.000 --> 23:37.000]  I don't insist you to query Clickhouse directly from a user browser.
+[23:37.000 --> 23:41.000]  You can use Grafana superset meta-base.
+[23:41.000 --> 23:43.000]  Streamlit, maybe, I'm not sure.
+[23:43.000 --> 23:46.000]  But you can also build these small applications.
+[23:46.000 --> 23:48.000]  And I have built quite a few.
+[23:48.000 --> 23:54.000]  There is Clickhouse Playground where you can explore some data sets.
+[23:54.000 --> 23:58.000]  There is a web page for Clickhouse testing infrastructure.
+[23:58.000 --> 24:03.000]  Name it R, test green, yet you can try and check what it is.
+[24:03.000 --> 24:08.000]  And the source code, dashboard HTML, is located in our repository.
+[24:08.000 --> 24:14.000]  And just to note, this service is not original.
+[24:14.000 --> 24:19.000]  I have found multiple similar services, for example, WikiShark,
+[24:19.000 --> 24:22.000]  for the same trends on Wikipedia.
+[24:22.000 --> 24:29.000]  But on WikiShark, there is a description that the author...
+[24:29.000 --> 24:35.000]  I did not remember, maybe he made a PhD implementing a data structure,
+[24:35.000 --> 24:37.000]  custom data structure for this.
+[24:37.000 --> 24:41.000]  But he can simply load the data into Clickhouse.
+[24:41.000 --> 24:48.000]  The experience of working with Clickhouse worth multiple PhDs.
+[24:48.000 --> 24:50.000]  Okay.
+[24:50.000 --> 24:53.000]  Thank you, that's it.
+[24:53.000 --> 25:00.000]  Thank you.
+[25:00.000 --> 25:05.000]  We do have time for multiple questions.
+[25:05.000 --> 25:09.000]  More than JavaScript, for example.
+[25:09.000 --> 25:14.000]  Why is this super fast?
+[25:14.000 --> 25:16.000]  Very easy.
+[25:16.000 --> 25:20.000]  Why this dashboard is fast?
+[25:20.000 --> 25:24.000]  Because it's processing very fast.
+[25:24.000 --> 25:26.000]  Why it is inserting fast?
+[25:26.000 --> 25:28.000]  Why it is selecting fast?
+[25:28.000 --> 25:30.000]  Because I always profile it.
+[25:30.000 --> 25:35.000]  You have seen, I always look at what is happening inside the code.
+[25:35.000 --> 25:37.000]  What can be optimized?
+[25:37.000 --> 25:40.000]  If I see that, like some percent of time,
+[25:40.000 --> 25:43.000]  spent doing nothing for mem copy,
+[25:43.000 --> 25:47.000]  I'm thinking maybe I should optimize mem copy.
+[25:47.000 --> 25:54.000]  Maybe I should remove mem copy.
+[25:54.000 --> 25:59.000]  But actually a very long list about everything.
+[25:59.000 --> 26:03.000]  But still we are talking about one machine.
+[26:03.000 --> 26:06.000]  If one machine can process all the data.
+[26:06.000 --> 26:08.000]  Yeah.
+[26:08.000 --> 26:14.000]  I just created a machine on AWS with GP2 EBS,
+[26:14.000 --> 26:17.000]  just in case.
+[26:17.000 --> 26:19.000]  Data was in S3.
+[26:19.000 --> 26:20.000]  I have uploaded.
+[26:20.000 --> 26:29.000]  By the way, maybe we have time for some demos.
+[26:29.000 --> 26:41.000]  But the resolution, the screen resolution is not.
+[26:41.000 --> 26:45.000]  And Wi-Fi stopped to work.
+[26:45.000 --> 26:50.000]  So probably no demos.
+[26:50.000 --> 26:52.000]  But okay, next questions.
+[26:52.000 --> 26:54.000]  Okay.
+[26:54.000 --> 26:55.000]  Hello, thanks for the talk.
+[26:55.000 --> 26:57.000]  You mentioned compression.
+[26:57.000 --> 27:00.000]  Does that slow down select?
+[27:00.000 --> 27:01.000]  Not quite.
+[27:01.000 --> 27:04.000]  Actually compression can even improve select queries.
+[27:04.000 --> 27:07.000]  It is kind of paradoxical, but let me explain.
+[27:07.000 --> 27:11.000]  First, because less amount of data will be read from disk.
+[27:11.000 --> 27:17.000]  Second, because data read from disk is also cached in memory,
+[27:17.000 --> 27:19.000]  in the page cache.
+[27:19.000 --> 27:22.000]  And the page cache will contain compressed data.
+[27:22.000 --> 27:25.000]  And when you process this data,
+[27:25.000 --> 27:29.000]  you will decompress this data into CPU cache
+[27:29.000 --> 27:32.000]  without using main memory.
+[27:32.000 --> 27:37.000]  So even...
+[27:37.000 --> 27:38.000]  Yeah.
+[27:38.000 --> 27:43.000]  LZ4 from multiple threads can be faster than memory bandwidth.
+[27:43.000 --> 27:45.000]  ZSTD not always.
+[27:45.000 --> 27:51.000]  But on servers like AMD Epic with 128 cores,
+[27:51.000 --> 27:55.000]  if you run ZSTD decompression in every core,
+[27:55.000 --> 28:01.000]  it has a chance to be faster than memory.
+[28:01.000 --> 28:03.000]  Thank you.
+[28:03.000 --> 28:08.000]  So what is your total AWS bill for this project?
+[28:08.000 --> 28:13.000]  I prepared it yesterday and used also S3,
+[28:13.000 --> 28:16.000]  prepared before that.
+[28:16.000 --> 28:20.000]  So let's calculate S3 cost.
+[28:20.000 --> 28:24.000]  I am storing the original data, three and a half terabytes.
+[28:24.000 --> 28:27.000]  And it should be like 23.
+[28:27.000 --> 28:32.000]  But 23 is the least price per month for terabytes.
+[28:32.000 --> 28:40.000]  So it will be like $70 per month
+[28:40.000 --> 28:42.000]  if you don't have AWS discounts.
+[28:42.000 --> 28:47.000]  But I do.
+[28:47.000 --> 28:49.000]  And for the server,
+[28:49.000 --> 28:56.000]  the server was about $4 per hour for a server.
+[28:56.000 --> 28:58.000]  And something for GP2.
+[28:58.000 --> 29:01.000]  So maybe something like $5 per hour.
+[29:01.000 --> 29:03.000]  And it is still running.
+[29:03.000 --> 29:06.000]  I started up it yesterday when I prepared the talk.
+[29:06.000 --> 29:14.000]  And so 24 hours will be how many?
+[29:14.000 --> 29:18.000]  Something like maybe $50.
+[29:18.000 --> 29:22.000]  Okay, I spent $50 for this talk.
+[29:22.000 --> 29:28.000]  Is your S3 back in public?
+[29:28.000 --> 29:30.000]  Yeah, it is public.
+[29:30.000 --> 29:33.000]  So keep in mind, if you will abuse it,
+[29:33.000 --> 29:41.000]  we will simply turn it off.
+[29:41.000 --> 29:43.000]  Maybe another question about S3.
+[29:43.000 --> 29:45.000]  What type of connectors do you have to S3?
+[29:45.000 --> 29:47.000]  Is it just for uploading?
+[29:47.000 --> 29:51.000]  Or can you also use S3 for indexing and storing data?
+[29:51.000 --> 29:53.000]  Yes, you can.
+[29:53.000 --> 29:55.000]  And in multiple different ways.
+[29:55.000 --> 29:59.000]  First, just a bunch of files on S3.
+[29:59.000 --> 30:01.000]  Process them as is.
+[30:01.000 --> 30:06.000]  Parquet, protobufs, Avro.
+[30:06.000 --> 30:07.000]  Avro does not matter.
+[30:07.000 --> 30:09.000]  Everything works.
+[30:09.000 --> 30:17.000]  Second, you can process files in Apache Delta Lake
+[30:17.000 --> 30:19.000]  or Apache Hoodie.
+[30:19.000 --> 30:23.000]  Asperk will be supported maybe in the next release.
+[30:23.000 --> 30:31.000]  So you can prepare data in your data bricks or Spark.
+[30:31.000 --> 30:37.000]  And process with Clickhouse because Clickhouse is better than Spark.
+[30:37.000 --> 30:39.000]  Third option.
+[30:39.000 --> 30:49.000]  You can also plug in S3 as a virtual file system for merge three tables.
+[30:49.000 --> 30:55.000]  And it will be used not only for selects but also for inserts.
+[30:55.000 --> 30:58.000]  And you can have your servers almost stateless.
+[30:58.000 --> 31:06.000]  And the data will be in the object storage.
+[31:06.000 --> 31:19.000]  Yeah, plenty of options.
+[31:19.000 --> 31:28.000]  One more question.
+[31:28.000 --> 31:29.000]  Yeah, for sure.
+[31:29.000 --> 31:31.000]  You can use it in a cluster.
+[31:31.000 --> 31:37.000]  You can set up an insert in a distributed table and it will scale linearly.
+[31:37.000 --> 31:40.000]  And these queries will also scale.
+[31:40.000 --> 31:47.000]  The queries that take already like 9 milliseconds, 10 milliseconds will take not less.
+[31:47.000 --> 31:51.000]  Maybe they will take even more, like 15 milliseconds.
+[31:51.000 --> 32:05.000]  But the queries that took seconds, minutes, they will scale linearly.
+[32:05.000 --> 32:07.000]  Theoretically, no.
+[32:07.000 --> 32:15.000]  But in practice, some companies are using Clickhouse on over 1,000 of nodes.
+[32:15.000 --> 32:21.000]  Many companies are using Clickhouse on several hundreds of nodes.
+[32:21.000 --> 32:26.000]  When you have to deal with clusters with hundreds and thousands of nodes,
+[32:26.000 --> 32:36.000]  especially if it is geographically distributed, you will definitely have troubles.
+[32:36.000 --> 33:02.000]  But with Clickhouse, it is totally possible to have these clusters and it will work.
+[33:02.000 --> 33:10.000]  Another question.
+[33:10.000 --> 33:18.000]  Interesting question because maybe you are asking about what are the data structures inside.
+[33:18.000 --> 33:25.000]  Maybe you are asking, is Clickhouse based on some readily available data structures?
+[33:25.000 --> 33:29.000]  The data format, Clickhouse Merge 3, is original.
+[33:29.000 --> 33:36.000]  You can think that maybe it is somehow similar to Apache Iceberg, maybe.
+[33:36.000 --> 33:38.000]  But actually not.
+[33:38.000 --> 33:46.000]  The column format in memory and the network transfer format is also original,
+[33:46.000 --> 33:49.000]  but it is very similar to Apache Arrow.
+[33:49.000 --> 33:53.000]  That's slightly different.
+[33:53.000 --> 33:59.000]  The algorithms, actually, we took every good algorithm from everywhere.
+[33:59.000 --> 34:06.000]  If someone writes a blog post on the Internet like about,
+[34:06.000 --> 34:09.000]  I have implemented the best hash table.
+[34:09.000 --> 34:22.000]  Instantly, someone from my team will try and test it inside Clickhouse.
+[34:22.000 --> 34:25.000]  Okay, looks like no more questions.
+[34:25.000 --> 34:54.000]  Thank you.

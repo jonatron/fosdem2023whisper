@@ -1,0 +1,260 @@
+[00:00.000 --> 00:13.480]  Please join me in welcoming the next speaker, Roman.
+[00:13.480 --> 00:17.600]  Thank you.
+[00:17.600 --> 00:18.600]  Hi.
+[00:18.600 --> 00:25.400]  Today, I'll tell you a success story of adopting Nix at the workplace, all the way from reproducible
+[00:25.400 --> 00:30.200]  CI builds to NixOS in production, and also what we have learned in the process.
+[00:30.200 --> 00:33.840]  By the way, you can use the QR code to follow the slides on your devices if you want.
+[00:33.840 --> 00:36.960]  I have some links there as well.
+[00:36.960 --> 00:42.040]  So first of all, me, well, now ex-Principal Software Engineer at ProfiN, I've been using
+[00:42.040 --> 00:45.120]  Nix at NixOS since 2016.
+[00:45.120 --> 00:50.640]  Now ProfiN was a security company, and we were custodians of the NRX open source project.
+[00:50.640 --> 00:54.480]  We were mostly focused on, well, developing NRX and also providing network services around
+[00:54.480 --> 00:55.480]  NRX.
+[00:55.480 --> 00:58.960]  But unfortunately, just earlier this week, we actually closed the company because we
+[00:58.960 --> 01:03.000]  ran out of money and couldn't secure funding or acquisition.
+[01:03.000 --> 01:09.400]  So NRX is a confidential computing platform providing you the ability to run web assembly
+[01:09.400 --> 01:14.360]  within TEEs, so hardware secure enclaves.
+[01:14.360 --> 01:18.920]  And well, I'm not going to go into too much detail, but the relevant part here is that
+[01:18.920 --> 01:22.880]  NRX builds trust based upon a remote registration procedure.
+[01:22.880 --> 01:27.760]  And to do that, basically, how it works is that we as ProfiN, we build a portable, mostly
+[01:27.760 --> 01:33.560]  static NRX release binary, then we run it and we measure the memory pages within a TEE,
+[01:33.560 --> 01:38.520]  then we add that to an allow list in a station service, and finally, then the users are the
+[01:38.520 --> 01:44.000]  release binary, and they, well, they also run it on a TEE, and we in our station service
+[01:44.000 --> 01:47.800]  can verify that indeed they are running in a trusted system, this trusted release of
+[01:47.800 --> 01:50.400]  NRX within a real TEE.
+[01:50.400 --> 01:53.640]  So there are two questions, of course, which arise, which is what if the release version
+[01:53.640 --> 01:59.160]  of NRX is compromised, or what if actually our built pipeline is compromised.
+[01:59.160 --> 02:02.880]  So then we can also ask a question, so how can users actually verify that the source
+[02:02.880 --> 02:07.040]  code that we have released, we say, okay, this release corresponds to this source code,
+[02:07.040 --> 02:10.480]  how can I actually verify that it is indeed true, right?
+[02:10.480 --> 02:15.360]  So if you would try to just do plain cargo build with a Rust project, then you'll notice
+[02:15.360 --> 02:18.320]  that actually you get different binaries depending on the system in which you compile
+[02:18.320 --> 02:22.520]  your binary, and so the answer to this is to actually use the produceable builds, which
+[02:22.520 --> 02:26.640]  of course, Nick has a way to do.
+[02:26.640 --> 02:31.440]  So here is an example as well, so if I just compile it in the Docker container, right,
+[02:31.440 --> 02:34.760]  and if I just do it locally, I get exactly the same binary, so I get exactly the same
+[02:34.760 --> 02:37.160]  digest.
+[02:37.160 --> 02:39.640]  But so how do we actually get here?
+[02:39.640 --> 02:40.640]  It's all, of course, self-of-the-shell.
+[02:40.640 --> 02:45.680]  How do you develop anything without the next shell before in your project, right?
+[02:45.680 --> 02:53.040]  So I've got positive feedback on this, and, well, we infected the project with Nick's.
+[02:53.040 --> 02:57.520]  Just a few months later after that, something very surprising to me happens is one of our
+[02:57.520 --> 03:02.280]  first outside contributions was actually a NRX build package, so I just added a shell
+[03:02.280 --> 03:06.240]  with actual build script by Vincent from Germany, I know if you're here, but thank
+[03:06.240 --> 03:09.400]  you very much if you're looking at this.
+[03:09.400 --> 03:14.280]  And so by the time we had to ship and release, you know, like a big release of NRX, we already
+[03:14.280 --> 03:18.800]  had all our Linux and Mac binary builds in the flake, and we could also build OCI images
+[03:18.800 --> 03:19.800]  in the flake.
+[03:19.800 --> 03:21.400]  I did some changes in the meantime.
+[03:21.400 --> 03:27.680]  So yeah, it just made sense to use Nick's for this, and we quickly discovered that actually
+[03:27.680 --> 03:34.000]  building for ARM64 in QMU on X86 runners was just too slow, so that's why I implemented
+[03:34.000 --> 03:35.400]  course compilation.
+[03:35.400 --> 03:39.080]  It was tricky, but eventually it worked, but unfortunately it also made all functionality
+[03:39.080 --> 03:43.560]  parameterized by the package set, and it also made flakes very difficult to maintain a review,
+[03:43.560 --> 03:46.200]  especially for people who are not familiar with Nick's, because I was the only Nick's
+[03:46.200 --> 03:49.560]  guy in the company, so it complicates things.
+[03:49.560 --> 03:53.960]  And here's an example, I don't know if you can see, but before it looked like a just
+[03:53.960 --> 04:00.840]  normal kind of build script, you know, like if you did GEN2 packaging, you would kind
+[04:00.840 --> 04:04.200]  of understand what's happening here, if you just use Rust, it's kind of clear what's
+[04:04.200 --> 04:07.720]  happening, but when you have cross-completion, it gets difficult, right?
+[04:07.720 --> 04:10.960]  You have a linker, you have the CC target prefix, right?
+[04:10.960 --> 04:16.680]  It's not clear, like this let-in block, there are two different package sets.
+[04:16.680 --> 04:21.960]  So even worse is that, well, we had multiple repositories, and initially we just duplicate
+[04:21.960 --> 04:25.560]  our flakes, right, because we want to build everything reproducibly as well, we want to
+[04:25.560 --> 04:30.880]  have cross-completion, we want to have just consistent, you know, CI, and basically each
+[04:30.880 --> 04:34.640]  flake was branched off from a different version of the original flake, right, because we also
+[04:34.640 --> 04:36.880]  were keeping developing and changing things.
+[04:36.880 --> 04:41.320]  So they started to diverge in some supple ways, but they still largely were doing exactly
+[04:41.320 --> 04:42.520]  the same thing.
+[04:42.520 --> 04:46.400]  And another thing is that because the flake logs were actually managed independently,
+[04:46.400 --> 04:51.200]  so we could benefit from some CI caching, but we actually couldn't, because those potential
+[04:51.200 --> 04:53.400]  hits were actually becoming a miss.
+[04:53.400 --> 04:56.760]  So and the maintenance just became a burden over time.
+[04:56.760 --> 05:00.840]  So let's just take a step back and think about, okay, what do we actually want to do?
+[05:00.840 --> 05:04.680]  We just want to build some static Rust binaries, just like Cargo does, except it won't do it
+[05:04.680 --> 05:05.680]  reproducibly, right?
+[05:05.680 --> 05:09.640]  We want to have an OCI image for that binary, and ideally you also want to have a fast CI,
+[05:09.640 --> 05:12.120]  but well, if you can't, all right, fine.
+[05:12.120 --> 05:14.800]  But we don't really care how any of this is done, right?
+[05:14.800 --> 05:18.080]  All we care about is that if Cargo can do it, Nick should be able to do it as well.
+[05:18.080 --> 05:21.880]  So just add functionality, not remove any functionality, it doesn't make anything harder
+[05:21.880 --> 05:23.240]  for us.
+[05:23.240 --> 05:26.960]  And you could say, right, there are templates in flakes, right, you could just write it once
+[05:26.960 --> 05:30.080]  and then propagate across repositories and just use that.
+[05:30.080 --> 05:33.560]  But it's not much different from just duplicating the flake as I did before, right?
+[05:33.560 --> 05:38.040]  You still have to adapt your template for the actual project, and you still have to
+[05:38.040 --> 05:42.640]  maintain, it's going to get out of date, and there should be a better way.
+[05:42.640 --> 05:47.960]  So that's why I built a Mixify library, it's designed to be an easy to use, batteries include
+[05:47.960 --> 05:52.840]  library with opinionated but customizable defaults, and it just works well in CI.
+[05:52.840 --> 05:56.520]  It doesn't try to cover all use cases, but it should be good enough for most.
+[05:56.520 --> 06:01.040]  It just simply plugs into your existing language tooling and currently supports only Rust via
+[06:01.040 --> 06:05.160]  Crane back end, but it could support other back ends as well if you want to, and there
+[06:05.160 --> 06:09.520]  is also support for other languages just kind of designed for.
+[06:09.520 --> 06:11.160]  So what does it actually do?
+[06:11.160 --> 06:16.600]  So per each default system, it provides you with a flake check for linking and testing,
+[06:16.600 --> 06:21.200]  development shell of your tool chain, formatter to do Nick's FMPT, and then release and debug
+[06:21.200 --> 06:25.840]  builds for all targets with cross compilation and OCI images and whatnot.
+[06:25.840 --> 06:29.560]  Here's an example, so this is actually just a Rust Hello World application, right, that
+[06:29.560 --> 06:34.680]  has just simply one input, which is Mixify, and I have just outputs generated by this
+[06:34.680 --> 06:40.600]  make flake function, and the absolute minimum is just if I have one argument, which is a
+[06:40.600 --> 06:41.600]  source.
+[06:41.600 --> 06:44.600]  So Mixify will parse actually the Rust tool chain and cargo automobile if you're familiar
+[06:44.600 --> 06:49.200]  with Rust, so Rust tool chain defines basically what version of a tool chain I want, what
+[06:49.200 --> 06:54.280]  targets I want to have, and cargo automobile is just basically metadata about the package.
+[06:54.280 --> 06:55.960]  So let's look at the next flake show.
+[06:55.960 --> 07:00.520]  I formatted the output because it just wouldn't fit on the screen, so this is the checks,
+[07:00.520 --> 07:06.640]  so I get my linting, my formatter, the Rust formatter, and the testing on check.
+[07:06.640 --> 07:10.840]  I get also a development shell with my tool chain and all different systems.
+[07:10.840 --> 07:15.320]  I get Nick's FMPT already predefined, and I also have an overlay with actually the tool
+[07:15.320 --> 07:20.360]  chain and all the packages, so including OCI images, and finally that's the packages
+[07:20.360 --> 07:21.360]  generated.
+[07:21.360 --> 07:27.880]  So I have my native default build, I have also profiles for release builds and debug
+[07:27.880 --> 07:28.880]  builds.
+[07:28.880 --> 07:32.200]  You'll notice that there's no Darwin builds here, because again I've formatted it.
+[07:32.200 --> 07:37.000]  On Darwin you would see also builds for Darwin, but you cannot cross compile from Linux to
+[07:37.000 --> 07:40.120]  Darwin, but you could do other way around, so on Darwin you would see that as well.
+[07:40.120 --> 07:44.760]  In fact there was an issue with the next package set right now, there is no, like one of the
+[07:44.760 --> 07:50.760]  Darwin was not able to compile for the other one, unless you can check yourself.
+[07:50.760 --> 07:56.520]  So here's an example of NRX packaging with this tool, so I can also configure for example
+[07:56.520 --> 08:02.200]  some paths to ignore, to improve caching, I can configure the Clippy features, whatever
+[08:02.200 --> 08:04.200]  I want to do there.
+[08:04.200 --> 08:08.960]  So it's pretty small, pretty simple, I can add some, like for example opens a cell in
+[08:08.960 --> 08:12.240]  my shell, and yeah, it works.
+[08:12.240 --> 08:16.480]  And NRX itself is, by the way, anything but a simple project, so it's using nightly
+[08:16.480 --> 08:20.440]  Rust, it has seven crates in the workspace, we actually use bin depths as well, so sometimes
+[08:20.440 --> 08:24.560]  we build for three different targets at the same time, basically the shim and the execution
+[08:24.560 --> 08:28.440]  layer which are merged later in one binary.
+[08:28.440 --> 08:34.440]  So this what it means to actually build something in CI of this, so we just simply have a matrix
+[08:34.440 --> 08:38.400]  of all our hosts and targets, and we just simply do nix build, and this is consistent
+[08:38.400 --> 08:41.840]  in the same everywhere, right, the only difference would be like the name of the package, but
+[08:41.840 --> 08:46.120]  again it could be removed if I wanted to.
+[08:46.120 --> 08:50.600]  So next we have testing, and we have linting, it's pretty much exactly the same thing, again
+[08:50.600 --> 08:55.200]  it could be a shared github action workflow and just used everywhere.
+[08:55.200 --> 08:59.000]  So how do we actually maintain and update this, the next five changes are actually for
+[08:59.000 --> 09:03.120]  us was propagated automatically, so we used github action to actually do the next flag
+[09:03.120 --> 09:08.440]  update, so the changes were already reviewed by me, so I've audited the changes essentially
+[09:08.440 --> 09:13.040]  and then anyone in the team can actually, well you can see the bottom, but you can actually
+[09:13.040 --> 09:18.880]  review and auto merge this because the team trusts me, this actually brings me to a trust
+[09:18.880 --> 09:23.240]  question which is an open question I just wanted to raise, so the nixify state is essentially
+[09:23.240 --> 09:27.280]  a root of a miracle tree, because it includes all the dependencies and digest of those,
+[09:27.280 --> 09:31.480]  so I audit the state of the world, so the next package set and all the dependencies,
+[09:31.480 --> 09:35.880]  so team trusts me, therefore they trust the world or my audit of it, so it's a transitive
+[09:35.880 --> 09:40.520]  trust, but then how can the team actually verify my audit, so can I sign the nixify
+[09:40.520 --> 09:45.880]  a root in any way, can I maybe add my signature on this, so maybe nix could validate my signature,
+[09:45.880 --> 09:50.560]  maybe it could be like a parameter locate trust, only these projects, so that's just
+[09:50.560 --> 09:55.120]  an open question, if you have answers please let me know.
+[09:55.120 --> 09:59.480]  So eventually it was time to deploy our services and for NRX we require some auto tree kernel
+[09:59.480 --> 10:05.840]  patches until provided asmd pccs service running some use of rules for the hardware, we had
+[10:05.840 --> 10:11.520]  no dedicated operations engineer and all our repositories were already nixified, so we just
+[10:11.520 --> 10:15.960]  made, well we also had two cloud providers, which is AWS and Equinix, both had nixwire
+[10:15.960 --> 10:22.840]  support out of the box, before we had nix we actually used custom OCI images for pccs
+[10:22.840 --> 10:27.000]  and asmd and those were basically just compiled once to some binaries just put inside the
+[10:27.000 --> 10:32.120]  image and those images were outdated, largely amante, no one knew what to do with them,
+[10:32.120 --> 10:36.400]  we required custom provisioning steps like to do podman, secret, create or something
+[10:36.400 --> 10:42.000]  and we also needed manual udev rule setup, so once again open source come to help, so
+[10:42.000 --> 10:46.880]  the pccs and asmd were actually turned out to actually be supported by nixOS already,
+[10:46.880 --> 10:50.720]  also the Intel SGX hardware was supported, by the way again it's either Vincent or one
+[10:50.720 --> 10:55.560]  of his team, someone from his team who added this, so again thank you, so it was just these
+[10:55.560 --> 11:01.760]  six lines were enough for us to just enable the services and all the hardware support.
+[11:01.760 --> 11:06.600]  So next step was that I just added some simple nixOS modules for our services, I set up secret
+[11:06.600 --> 11:12.600]  management with SOPS with nix and deploy RS, again like simple tooling, I automated deployments
+[11:12.600 --> 11:18.680]  to testing environments, I set up CI to just test all PRs, so if CI fails PR doesn't go
+[11:18.680 --> 11:22.360]  through right, so we don't update anything and of course we have the automated updates
+[11:22.360 --> 11:26.560]  just like everywhere else, just for every other repository.
+[11:26.560 --> 11:30.640]  So to begin with we actually ended up doing this, so we actually were tracking tags of
+[11:30.640 --> 11:36.080]  different projects, so you can see there are three groups of, well these are the services,
+[11:36.080 --> 11:40.280]  different environments, so we just have three different inputs and essentially we progress,
+[11:40.280 --> 11:43.760]  we test things and staging, then we go to production, right.
+[11:43.760 --> 11:47.360]  If I were to redo this I would actually use branches, something like mixed package that
+[11:47.360 --> 11:52.200]  channels where you essentially just do a release rather than you merge it to say unstable,
+[11:52.200 --> 11:57.400]  eventually you test that, you promote it to stable, so I think that's more work upstream,
+[11:57.400 --> 12:02.520]  but it's easier to, well, maintain downstream, it just makes sense.
+[12:02.520 --> 12:07.040]  So you could ask, okay, why don't we just use OCI for this, but the thing to understand
+[12:07.040 --> 12:11.280]  with nix, we get source code references, not binary references, so essentially we get all
+[12:11.280 --> 12:14.720]  the benefits of binaries without actually sacrificing and usability, in fact we even
+[12:14.720 --> 12:19.680]  get things like updates and the flag.log is nothing else than really a software build
+[12:19.680 --> 12:23.840]  material, which is the buzzword today and everyone really cares about it, so because
+[12:23.840 --> 12:27.880]  in the flag.log which you get is that you can audit the whole state of the world, right,
+[12:27.880 --> 12:33.040]  you can audit all the service source code, you can audit all the build dependencies and
+[12:33.040 --> 12:37.520]  you can audit also all the tooling that you used to actually deploy this stuff, right,
+[12:37.520 --> 12:42.080]  and you have a consistent simple update procedure, which is nix flag update, it's super fast
+[12:42.080 --> 12:46.320]  to deploy once you have your module set up and you know how to use nix, it's just, boom,
+[12:46.320 --> 12:51.760]  you're just there and of course you get rollbacks with nixOS or really any deployment tool is
+[12:51.760 --> 12:53.920]  used nix.
+[12:53.920 --> 12:58.560]  So next step was actually providing things like AMIs and whatever else, so I used just
+[12:58.560 --> 13:04.520]  nixOS generators for it and like the way I did it, I just simply imported the nixOS module,
+[13:04.520 --> 13:08.200]  like a common module from our infrastructure and it took me a less than a day to set up
+[13:08.200 --> 13:13.200]  and this is for SGX and AMD SCV, again it's extremely powerful and just extremely simple
+[13:13.200 --> 13:15.600]  to use.
+[13:15.600 --> 13:20.200]  I do have to mention that we asked ourselves a question, okay, so how many enterprises
+[13:20.200 --> 13:25.360]  would actually use nixOS to deploy NARCs, that was probably not so many, so once we
+[13:25.360 --> 13:29.720]  actually got a dedicated operations engineer, we eventually moved most of our services to
+[13:29.720 --> 13:35.560]  Kubernetes, but there was a little win because for every service that actually required custom
+[13:35.560 --> 13:40.440]  kernel, custom services, custom udev rules, those things are difficult to set up and those
+[13:40.440 --> 13:46.200]  actually were kept in nixOS, which brings me to the next point, that nix and nixOS actually,
+[13:46.200 --> 13:51.160]  in my opinion at least, make difficult things simple and in this case for me it was great
+[13:51.160 --> 13:55.560]  for prototyping, it was great for productivity, for composability, for building literally
+[13:55.560 --> 13:59.800]  anything anywhere and for audibility and trust.
+[13:59.800 --> 14:03.920]  One particular thing I want to mention about productivity here is like if you ask me, one
+[14:03.920 --> 14:08.800]  killer feature of nix, at least from my perspective, this is that, so we had for example lab machines
+[14:08.800 --> 14:13.840]  with SGX and AMD SCV hardware and I did it countless times when I was just developing
+[14:13.840 --> 14:18.280]  something as a feature branch and I just needed to test it out, I just SSH and do nix run,
+[14:18.280 --> 14:23.600]  GitHub call, my repository, my branch and I just run it, I don't need to use git to add
+[14:23.600 --> 14:28.880]  a new remote, I don't need to set up my toolchain, nothing, I can just SSH and run it, so I think
+[14:28.880 --> 14:31.120]  that's really powerful.
+[14:31.120 --> 14:35.400]  So another thing is that if you introduce nix, of course it's also your responsibility
+[14:35.400 --> 14:42.120]  to teach it, so you are the FM in RT FM, so for my case I had the nix 101 classes on Fridays
+[14:42.120 --> 14:48.560]  and the real uncommon thing about nix, I think the people is a functional programming part,
+[14:48.560 --> 14:52.520]  so I ended up teaching a lot of functional programming principles to actually explain
+[14:52.520 --> 14:58.680]  nix and also just introducing teams with ecosystem because well, if you just newcomer to nix,
+[14:58.680 --> 15:02.840]  it may be overwhelming, it's not clear what is, why there's nix, a nix package set, nix
+[15:02.840 --> 15:07.720]  the way, how they're related and I also create a nix channel for questions, so whenever people
+[15:07.720 --> 15:10.280]  had questions I would just answer them.
+[15:10.280 --> 15:16.240]  So some derivations from this, it's really important to give people examples of how to
+[15:16.240 --> 15:21.080]  get things done, like real examples and it's very great also to give analogies with known
+[15:21.080 --> 15:26.480]  technologies and okay, so this is not exactly what you would do in nix, but I implement
+[15:26.480 --> 15:31.880]  Fibonacci in nix and in Rust, I just show them two side by side, I have a main function
+[15:31.880 --> 15:38.000]  here in nix, I have a main function over here, both free to sum in both print Fibonacci examples,
+[15:38.000 --> 15:43.080]  so it just works, you don't see but opposite here the same and yeah, so this kind of is
+[15:43.080 --> 15:47.320]  an example of how you can show the people that you know, it's not so scary after all
+[15:47.320 --> 15:52.000]  right, it's just the same function, just look at it right, the same thing.
+[15:52.000 --> 15:56.720]  So one thing I noticed also that nix is perceived as being pretty novel, so I ask people the
+[15:56.720 --> 16:01.840]  question like okay, so how long do you think nix exists and I got answers all the way from
+[16:01.840 --> 16:05.960]  two to ten years where ten was like a real stretch or not, it can be so long, but the
+[16:05.960 --> 16:09.480]  real answer is twenty years, if you look at the git log right, I don't know, maybe it
+[16:09.480 --> 16:15.200]  was not before, maybe it was earlier, but that's what I see from the git log.
+[16:15.200 --> 16:20.120]  Some frequently asked questions I've received is okay, I'm not on nixOS, how do I use nix
+[16:20.120 --> 16:24.640]  or I'm trying to use the flakes but I get an error, why are flakes experimental, is it
+[16:24.640 --> 16:29.600]  safe to depend on some other features, what if they get abandoned, for us our show.nix.
+[16:29.600 --> 16:34.840]  So a few things we can note here that at least in my experience nix is tightly associated
+[16:34.840 --> 16:40.640]  with nixOS, but we need to understand or at least explain to newcomers, I believe, that
+[16:40.640 --> 16:45.640]  nix is not just another package manager, so nixOS is just one possible output for nix
+[16:45.640 --> 16:52.440]  build but it's just that, it can build many other things and I think we should present
+[16:52.440 --> 16:57.200]  it as a generic build tool which is not tied to a particular OS and sometimes for people
+[16:57.200 --> 17:01.400]  familiar with Docker, I even presented something like Docker or Podman where you basically have
+[17:01.400 --> 17:05.080]  a docker file, you can build a docker file, it's put in your store and you can run it
+[17:05.080 --> 17:11.440]  afterwards, it's something like that, maybe.
+[17:11.440 --> 17:17.800]  And yeah, this thing was such a pain, so come on guys, we need to do something about this,
+[17:17.800 --> 17:22.760]  I mean you hear about this nix thing, it's so cool but it's so difficult, so out there
+[17:22.760 --> 17:26.440]  and your very first try in nix is a failure.
+[17:26.440 --> 17:30.680]  I understand that this error is descriptive, yes, you read this, you kind of understand
+[17:30.680 --> 17:36.080]  what to do, mostly, but it's just not a good developer experience, right, and I think we
+[17:36.080 --> 17:40.600]  should, I don't know, I don't know what to do, there could be possible solutions but
+[17:40.600 --> 17:44.880]  we really need to do something about this as a community.
+[17:44.880 --> 17:57.680]  So thank you at this, you can, yeah, as I said, profing close, I'm looking for a job
+[17:57.680 --> 18:15.680]  by the way, but yeah, any questions maybe, yeah, good, right.
+[18:15.680 --> 18:22.200]  So the question is, can nix be a generic build system like Maison or Autotools, whatever,
+[18:22.200 --> 18:27.080]  so I'm not a C developer, I've never was, I believe so, I believe you will be able to
+[18:27.080 --> 18:31.480]  do, at least for Rust, it was a breeze to do, I can definitely imagine doing that for
+[18:31.480 --> 18:37.560]  Go as well, and I think that was pretty, so for example, I compile, so we had a collection
+[18:37.560 --> 18:43.000]  of examples where we mostly compiled to Wasi, so for C it was actually very, very simple,
+[18:43.000 --> 18:45.160]  so I would think so.
+[18:45.160 --> 18:49.800]  The only thing to care about though, so it's great for releases, not so great for development
+[18:49.800 --> 18:53.360]  because, for example, with Rust you have this target directory with all your cache, so you
+[18:53.360 --> 18:58.000]  don't get that anymore, right, or, I mean, you have to, you can do things around it,
+[18:58.000 --> 19:04.680]  you can maybe build some libraries to actually achieve that.
+[19:04.680 --> 19:05.680]  Maybe you can do it and contribute.
+[19:05.680 --> 19:23.960]  If I may add about this, there is some RFC on how you enable nix to make replacements,
+[19:23.960 --> 19:30.960]  but there are much more things which are a bit complicated on how you make it fast.
+[19:30.960 --> 19:59.760]  Okay, okay, I'll check it out, thanks, I don't know that.
+[19:59.760 --> 20:04.520]  Thank you.

@@ -1,0 +1,291 @@
+[00:00.000 --> 00:15.880]  Okay, now we have Charles Brozegard and he's going to speak to us of binary pattern matching
+[00:15.880 --> 00:20.200]  in Elixir and Erlang, one of the cool features of Erlang and Elixir.
+[00:20.200 --> 00:26.040]  So if you speak binary to me, give it up for Charles.
+[00:26.040 --> 00:35.440]  Thank you, don't worry, I'm not going to speak binary, but yes, this is a talk about speaking
+[00:35.440 --> 00:37.800]  binary to other devices.
+[00:37.800 --> 00:47.160]  And this is me and you can find me around the web at ARTRARBR, yes.
+[00:47.160 --> 00:53.000]  I work as a software developer in Denmark in a company called Indelab and part of my job
+[00:53.000 --> 00:57.560]  is to work on innovations in the Internet of Things realm.
+[00:57.560 --> 01:03.280]  So things like smart buildings, smart cities, and smart factories.
+[01:03.280 --> 01:08.440]  In practice, this involves building gateways that link many different kinds of stupid things
+[01:08.440 --> 01:14.160]  together and then when we have a network of things, they can exchange information and
+[01:14.160 --> 01:17.640]  we can embed the smartest into the system.
+[01:17.640 --> 01:21.520]  And by many different stupid things, I mean things like remote terminal units which are
+[01:21.520 --> 01:28.240]  used in the grid, electric grid and all the utilities, PLCs which are used heavily in factories
+[01:28.240 --> 01:36.360]  for automation, solar inverters, heat pumps, thermostats, all kinds of smart home equipment.
+[01:36.360 --> 01:41.840]  And at the lowest level, we have simple sensors and actuators.
+[01:41.840 --> 01:47.640]  And the thing that all these things have in common is that I had to speak binary to them.
+[01:47.640 --> 01:52.960]  They don't speak JSON, they don't know XML, they don't know protocol even.
+[01:52.960 --> 02:00.960]  They had their own custom binary dialects depending on the protocol that they are using.
+[02:00.960 --> 02:06.040]  And later in this talk I show an example of a simple binary dialect so that we all know
+[02:06.040 --> 02:09.120]  what it is.
+[02:09.120 --> 02:13.960]  When I'm building an integration for a system like this, I always reach for Elixir first.
+[02:13.960 --> 02:18.160]  This is because Elixir has some special affordances that makes it extremely good at this kind
+[02:18.160 --> 02:20.720]  of work.
+[02:20.720 --> 02:27.160]  This is also the case for Erlang and LFE and Beam and Gleam and the other languages on the
+[02:27.160 --> 02:32.040]  Erlang virtual machine, but Elixir happens to be my happy space.
+[02:32.040 --> 02:37.080]  Some of the Beam's known strong points in this area are fault tolerance, state machines
+[02:37.080 --> 02:39.440]  and concurrency.
+[02:39.440 --> 02:43.920]  And then there's business acts and that's what I'll be talking about today.
+[02:43.920 --> 02:45.360]  This is a beginner level talk.
+[02:45.360 --> 02:50.720]  I don't assume you know anything about Elixir or the previously mentioned systems, but my
+[02:50.720 --> 02:54.120]  hope is that if you should find yourself in a situation where you need to speak binary
+[02:54.120 --> 02:59.240]  to something, this talk will help you get started.
+[02:59.240 --> 03:02.600]  So binaries.
+[03:02.600 --> 03:08.040]  Computers today work by manipulating electric signals and a signal can be either a logic
+[03:08.040 --> 03:10.360]  high or a logic low.
+[03:10.360 --> 03:15.600]  Because a signal is known as a bit and a sequence of 8 bits is a byte.
+[03:15.600 --> 03:18.280]  And this is also how computers communicate.
+[03:18.280 --> 03:23.560]  No matter if it's Ethernet or Wi-Fi or whatever, it's about transferring a logic signal of
+[03:23.560 --> 03:27.760]  high and low bits.
+[03:27.760 --> 03:34.160]  There are different ways we can write down the binary signals.
+[03:34.160 --> 03:40.560]  The first notation that I highlighted here is in binary where we just take every bit
+[03:40.560 --> 03:45.520]  in the sequence and we write it down as a 0 or a 1.
+[03:45.520 --> 03:52.040]  And then it prefix it with a 0B so that it's easier to tell from other numbers.
+[03:52.040 --> 03:59.720]  And in this case, the sequence of 8 bits, which is a byte, can also be turned into a
+[03:59.720 --> 04:05.960]  decimal number because in a byte we can have 256 different combinations.
+[04:05.960 --> 04:09.520]  So it's a number from 0 to 255.
+[04:09.520 --> 04:16.960]  And in decimal notation, this sequence of bits is 75.
+[04:16.960 --> 04:24.960]  There's also Hex notation, where we use the characters 0 to 9 and 8 to F.
+[04:24.960 --> 04:31.120]  This means we can describe the constant of a byte with just two characters.
+[04:31.120 --> 04:37.760]  So this is very convenient when we are dealing with binary numbers.
+[04:37.760 --> 04:41.480]  Just a common example of where we write the bytes as decimals.
+[04:41.480 --> 04:47.080]  We do that with IPv4 addresses because an IPv4 address is just four bytes.
+[04:47.080 --> 04:54.000]  But then for human consumption, we write it as a binary number, or sorry, a decimal number.
+[04:54.000 --> 05:05.360]  And MAC addresses use Hex notation instead of the binary notation.
+[05:05.360 --> 05:11.440]  While all the operations in our computers are processing bits and bytes, we rarely think
+[05:11.440 --> 05:14.120]  about them when we are programming.
+[05:14.120 --> 05:21.280]  We think in terms of integers, floats, strings, lists, maps, and all the structures.
+[05:21.280 --> 05:26.720]  But binary data is just a flat stream of bits.
+[05:26.720 --> 05:33.080]  There's nothing inherent in it to tell one field from the other, or any kind of structure.
+[05:33.080 --> 05:37.120]  It's all down to how we interpret those bits.
+[05:37.120 --> 05:41.480]  This means that when we need to speak binary to something from our programs, we need to
+[05:41.480 --> 05:47.600]  write a translation layer that can take whatever list of maps we have in our program and turn
+[05:47.600 --> 05:52.840]  it into a binary sequence.
+[05:52.840 --> 05:58.160]  I prefer calling this translation layer a codec because it's short to write.
+[05:58.160 --> 06:04.360]  And you can say that a codec encodes our data structures in bytes for sending.
+[06:04.360 --> 06:14.440]  And then when we receive data, the codec decodes that data into our high-level data structures.
+[06:14.440 --> 06:18.440]  And sometimes we're lucky we can find a library that will do that for us, but sometimes we
+[06:18.440 --> 06:20.360]  need to do it ourselves.
+[06:20.360 --> 06:24.160]  And that's where bit syntax comes in handy.
+[06:24.160 --> 06:29.080]  So let's take a look at that.
+[06:29.080 --> 06:34.400]  Let's say I need to send a sequence of free bytes to some other system.
+[06:34.400 --> 06:38.920]  They need to have values 10, 20, and 30.
+[06:38.920 --> 06:48.720]  To do that, I use distance x, so I use double ankle brackets to start the binary sequence.
+[06:48.720 --> 06:54.440]  And then I write the bytes that I need in sequence and separate it by a comma.
+[06:54.440 --> 06:57.720]  So that's pretty simple.
+[06:57.720 --> 06:58.960]  Yes.
+[06:58.960 --> 07:05.480]  And when I need to receive that data, like if I'm receiving the same sequence of bytes,
+[07:05.480 --> 07:11.480]  I need to decode that into free variables, a, b, and c.
+[07:11.480 --> 07:15.520]  Then I use this syntax, again, double brackets.
+[07:15.520 --> 07:21.760]  Then I put the variables instead of the numbers that I want to extract.
+[07:21.760 --> 07:24.360]  So it's pretty simple.
+[07:24.360 --> 07:30.400]  But of course, we are not really done yet.
+[07:30.400 --> 07:37.080]  It's very few domains where we only work with integers in the sequence of 0 to 255.
+[07:37.080 --> 07:38.080]  We need larger numbers.
+[07:38.080 --> 07:39.080]  We need negative numbers.
+[07:39.080 --> 07:42.640]  We need floats and strings.
+[07:42.640 --> 07:48.800]  But many languages will just give you a byte stream, and then you need to sort of do a
+[07:48.800 --> 07:56.480]  lot of strange computations to turn that into lists and strings.
+[07:56.480 --> 08:05.000]  But in Elixir and on the Beam, we have the bits and sacks, and we can do more.
+[08:05.000 --> 08:12.160]  Specifically with bits and sacks, we have the option or the ability to specify modifiers.
+[08:12.160 --> 08:25.320]  And the modifiers can specify the type, the sign, the size, unit, and indianess of the
+[08:25.320 --> 08:30.640]  sequence of bits we want to extract from the binary.
+[08:30.640 --> 08:34.560]  So here you see that the type is integer.
+[08:34.560 --> 08:37.720]  It is unsigned, so it's positive numbers only.
+[08:37.720 --> 08:43.760]  It has a size of eight units, and one unit is said to be one bit long.
+[08:43.760 --> 08:47.280]  And it's big indian, which I will talk about later.
+[08:47.280 --> 08:53.240]  So these are all equivalent 10, 20, 30, they are encoded the same way.
+[08:53.240 --> 08:57.840]  It's just different syntaxes.
+[08:57.840 --> 09:07.760]  So you can see if you don't specify any modifiers, these are the defaults that I used instead.
+[09:07.760 --> 09:13.440]  And the second line I used, I omitted size, I just wrote eight.
+[09:13.440 --> 09:17.520]  That's something you can do when you know it has a constant at compile time.
+[09:17.520 --> 09:24.080]  If the size is variable, you will need to use the full size modifier.
+[09:24.080 --> 09:30.720]  And the modifiers can be combined in any order, so you can do whatever you like.
+[09:30.720 --> 09:34.120]  And when we decode it, we use exactly the same syntax.
+[09:34.120 --> 09:39.000]  We can say the same things, like grab the first byte, tell it to compile it that it's
+[09:39.000 --> 09:46.200]  an integer, and then it will extract it like this.
+[09:46.200 --> 09:52.000]  And instead of just going through all the different modifiers and the combinations, I move on
+[09:52.000 --> 09:55.040]  to showcasing some examples.
+[09:55.040 --> 10:00.600]  But before we do that, I want to mention where the bits and text came from.
+[10:00.600 --> 10:04.880]  Bits and text comes from a place of pain.
+[10:04.880 --> 10:11.800]  These two guys, Clairs, Wichström, and Tony Rockwell, were working at the computer science
+[10:11.800 --> 10:23.000]  laboratory at AXN on implementing networking protocols for Erlang, and it was painful.
+[10:23.000 --> 10:28.760]  And so they sat down, since they were so close to the makers of the language, they could
+[10:28.760 --> 10:33.480]  invent a new syntax for use in Erlang.
+[10:33.480 --> 10:38.760]  And this paper, which is published in 1998, describes the first version of the syntax
+[10:38.760 --> 10:44.000]  as it was implemented in an experimental version of Erlang.
+[10:44.000 --> 10:49.880]  I think a few months later, it was released with slightly different syntax, but with all
+[10:49.880 --> 10:55.040]  the same concepts.
+[10:55.040 --> 11:01.080]  And that paper also explains what Indianness is, and it's actually just a fun word for
+[11:01.080 --> 11:08.320]  byte order, because if you have a 16-bit integer that you need to send to some other system,
+[11:08.320 --> 11:10.240]  that's two bytes, right?
+[11:10.240 --> 11:15.200]  And you have to figure out, the one byte is A2, and the other byte is C1.
+[11:15.200 --> 11:20.920]  And you have to figure out which byte do you send first.
+[11:20.920 --> 11:27.920]  Some systems will send the most significant byte first, so that's A2.
+[11:27.920 --> 11:34.560]  But other systems will send the least significant byte first, that's C1.
+[11:34.560 --> 11:41.080]  And so this obviously has consequences, because you need to know the byte order that the system
+[11:41.080 --> 11:46.520]  you're talking to, what it expects, otherwise it just gets confused.
+[11:46.520 --> 11:53.680]  And yes, the byte ordering is said to be big Indian when you start with the most significant
+[11:53.680 --> 11:58.480]  byte, and it's said to be little Indian if you start with the least significant byte.
+[11:58.480 --> 12:04.000]  And this is kind of a thing, I've been working with this for years, but I didn't really know
+[12:04.000 --> 12:09.000]  what Indian means, because it's a sort of weird name, right?
+[12:09.000 --> 12:14.080]  But the paper by Claes and Tony hinted me in the direction of finding that by pointing
+[12:14.080 --> 12:21.560]  me to this Internet experiment note from 1980, which is, I think, the first sort of place
+[12:21.560 --> 12:29.120]  where Indian and byte order was used together on holy wars of the plea for peace.
+[12:29.120 --> 12:39.280]  And that sort of shows that this is an important topic, sort of like Vim vs. T-Max, I guess.
+[12:39.280 --> 12:44.840]  And it's actually just, Indian is just a pop culture reference to a book called Gulliver's
+[12:44.840 --> 12:51.160]  Travels, where a seagull travels out into the world and meets the people of Lilliput
+[12:51.160 --> 12:59.360]  and Plefusco, I think, and they are in conflict, because the emperor of Lilliput has commanded
+[12:59.360 --> 13:05.880]  that X must be broken at the little end when you eat them for breakfast or whatever.
+[13:05.880 --> 13:10.560]  So that's obviously absurd, and so they wage a war.
+[13:10.560 --> 13:14.920]  So big Indian means we send the big end of the number first, and the little end means
+[13:14.920 --> 13:20.080]  we send the little end of the number.
+[13:20.080 --> 13:24.320]  So examples of bits and texts.
+[13:24.320 --> 13:29.520]  For the purpose of this talk, I have invented the T-Box, which is a very simple device.
+[13:29.520 --> 13:34.600]  It has a name, and it can measure the temperature, and it can tell you if there's an error in
+[13:34.600 --> 13:37.560]  the time stamp or the measurement.
+[13:37.560 --> 13:44.160]  It has a binary dialect or protocol, which I also invented, and this sort of mirrors
+[13:44.160 --> 13:51.560]  what you will find in a real protocol description for some kind of device.
+[13:51.560 --> 13:57.680]  A client can connect to a T-Box and can send requests to the T-Box, and the T-Box will
+[13:57.680 --> 14:00.640]  respond with a reply.
+[14:00.640 --> 14:07.640]  Every message that is sent includes a header, which is one byte long, and replies from the
+[14:07.640 --> 14:13.120]  T-Box will also contain a value.
+[14:13.120 --> 14:19.880]  The header starts with four bits of magic, which is a constant value that is always there
+[14:19.880 --> 14:25.400]  and is used to sort of make sure this is the beginning of a message.
+[14:25.400 --> 14:30.840]  Then there's a direction bit, which tells whether this message is a request or a reply,
+[14:30.840 --> 14:37.000]  and there's the attribute, three bits, which are used to tell if this is a name or temperature
+[14:37.000 --> 14:42.000]  message.
+[14:42.000 --> 14:46.520]  There are extra, we only use one bit in the attribute, but that's just because they expect
+[14:46.520 --> 14:51.200]  to expand the protocol someday.
+[14:51.200 --> 14:55.600]  This is an example of a sequence request-reply.
+[14:55.600 --> 15:02.760]  First we send the request with the header, with the magic bits first, then it's a zero
+[15:02.760 --> 15:08.080]  because the direction is a request, and then we're requesting one, which means we're requesting
+[15:08.080 --> 15:14.040]  the temperature, and then the reply has almost the same header at the beginning, it's just
+[15:14.040 --> 15:25.640]  one in place of the direction, and then the bytes with the value after that.
+[15:25.640 --> 15:33.400]  If you're requesting the name of the T-Box, then it will respond with 12 bytes, and it's
+[15:33.400 --> 15:35.800]  always 12 bytes.
+[15:35.800 --> 15:42.480]  If the name is shorter than 12 bytes, then the rest of the bytes are just null bytes,
+[15:42.480 --> 15:43.880]  and that looks like this.
+[15:43.880 --> 15:52.680]  If the name of the box is fustum, then you have six bytes of actual characters, and then
+[15:52.680 --> 15:57.560]  null bytes for the rest.
+[15:57.560 --> 16:00.320]  The temperature is a little more complicated.
+[16:00.320 --> 16:01.320]  It has three fields.
+[16:01.320 --> 16:06.840]  There's the time, which is a 32-bit integer, counting the number of seconds since 1st
+[16:06.840 --> 16:09.360]  of January, 1970.
+[16:09.360 --> 16:14.040]  Then there's the temperature, which is a 16-bit float, and then there's the quality byte,
+[16:14.040 --> 16:19.960]  which tells you whether there's an error in some of the measurements.
+[16:19.960 --> 16:23.160]  It's the two last bits in the Q-byte that are used.
+[16:23.160 --> 16:27.120]  The second to last bit tells you there's an error in the clock, and the last bit tells
+[16:27.120 --> 16:30.360]  you there's an error in the temperature measurement.
+[16:30.360 --> 16:34.960]  It's important to note that the numbers are little in the end.
+[16:34.960 --> 16:38.040]  This is what a temperature value looks like.
+[16:38.040 --> 16:41.720]  First, it has a timestamp, which is a couple days ago.
+[16:41.720 --> 16:47.400]  Then the temperature, which is 32 degrees about that, and then both of the error bits
+[16:47.400 --> 16:53.480]  are high, so you should not trust the sample.
+[16:53.480 --> 17:00.840]  This syntax, we want to send a request to the T-box to get the name.
+[17:00.840 --> 17:03.360]  I use the double anchor brackets again.
+[17:03.360 --> 17:08.160]  It's all integers, and it's all unsigned, so the only thing I have to specify is the
+[17:08.160 --> 17:09.160]  size.
+[17:09.160 --> 17:17.080]  Here I specify the magic is four bits, then I have my direction, one bit, and the attribute
+[17:17.080 --> 17:21.960]  which is zero for getting the name.
+[17:21.960 --> 17:27.120]  This shows how we can use the bits and tags to encode, easily encode things which are
+[17:27.120 --> 17:31.120]  smaller than bytes.
+[17:31.120 --> 17:37.160]  The reply that comes back looks like this.
+[17:37.160 --> 17:41.080]  When we receive the goodbye, we do like this.
+[17:41.080 --> 17:49.680]  First I want to assert that the message I get back is what I expect.
+[17:49.680 --> 17:53.920]  In place of the header, I assert that the values are what I expect.
+[17:53.920 --> 18:00.400]  I assert that I get the magic bits first, that the direction bit is high so that I know
+[18:00.400 --> 18:08.560]  it's a reply, and that the attribute is zero so that I know it's the name.
+[18:08.560 --> 18:09.560]  This is all true.
+[18:09.560 --> 18:19.160]  I know that the rest of the message is 12 bytes long, and I want to assign that to the
+[18:19.160 --> 18:20.160]  variable name.
+[18:20.160 --> 18:24.360]  Here you can see I will use the bytes modifier.
+[18:24.360 --> 18:31.040]  This changes the type, and it changes the size, or it changes the unit property.
+[18:31.040 --> 18:35.120]  Before with integers, I would specify, like in the header you can see it's two colon
+[18:35.120 --> 18:36.880]  colon four for the magic.
+[18:36.880 --> 18:43.320]  That means four bits, but when I specify bytes, that the type of name is bytes, then
+[18:43.320 --> 18:54.040]  I also say that the 12 means 12 bytes long and not 12 bits long.
+[18:54.040 --> 19:01.880]  That's just to say that the bytes is a type and has different defaults than integers.
+[19:01.880 --> 19:07.240]  When I get the Tbox temperature, I request it like this, pretty much the same as before,
+[19:07.240 --> 19:13.680]  just with a one for the attribute, and for the reply, I again assert on the header that
+[19:13.680 --> 19:17.040]  I get back what I expect.
+[19:17.040 --> 19:22.960]  Then I have the timestamp, which was the 32-bit integer, but little indian, so let's put that
+[19:22.960 --> 19:29.920]  in there, and the temperature, which is a float, 16 bits, also little indian.
+[19:29.920 --> 19:34.440]  Then I discard six bits from the cube byte because they were not used, and then I just
+[19:34.440 --> 19:44.800]  plug the second to last and the last bit out as clock error and temperature error.
+[19:44.800 --> 19:48.680]  That's the basics of bits and tacks.
+[19:48.680 --> 19:52.840]  There's so much more to cover with writing whole applications or libraries to do this
+[19:52.840 --> 19:57.880]  kind of stuff, like what do we do when you don't receive the entire message at once,
+[19:57.880 --> 20:05.200]  you have to frame messages when you're streaming them or receiving them as a stream.
+[20:05.200 --> 20:11.280]  There's generators, there's a special, well, it looks like just a normal forward generator,
+[20:11.280 --> 20:16.520]  but it actually has some special optimizations for working with binaries when you need to
+[20:16.520 --> 20:18.680]  generate a binary.
+[20:18.680 --> 20:23.720]  We could talk about performance tuning, but as I said, I've been working with this for
+[20:23.720 --> 20:26.880]  years and I've never had to really do any performance tuning.
+[20:26.880 --> 20:29.600]  It's pretty performant as is.
+[20:29.600 --> 20:36.560]  That's also one of the points in the paper by Claes and Tony is that this is performant.
+[20:36.560 --> 20:43.800]  Yeah, there are many other tools for working with binaries that help us when we're looking
+[20:43.800 --> 20:48.280]  at this data and not understanding why it's not doing what we expect.
+[20:48.280 --> 20:51.360]  Wireshark is definitely one of them.
+[20:51.360 --> 20:55.960]  I recommend checking that out.
+[20:55.960 --> 21:01.920]  I also recommend if you want to explore more depth, that you check out Protohackers, which
+[21:01.920 --> 21:11.240]  is a sort of advent of code challenge thing about their networking protocols, and Andrea
+[21:11.240 --> 21:16.160]  Lopardi from the Elixir core team has a live stream on YouTube or has streams on YouTube
+[21:16.160 --> 21:21.080]  where he sort of goes through the problems one by one, so that's very good for learning
+[21:21.080 --> 21:22.080]  that.
+[21:22.080 --> 21:27.800]  Andrea has also started writing a book about this kind of stuff.
+[21:27.800 --> 21:28.800]  So that's it.
+[21:28.800 --> 21:29.800]  Thank you.
+[21:29.800 --> 21:39.360]  Thank you for your thoughts, Rolf.
+[21:39.360 --> 21:44.560]  Do you have any questions?
+[21:44.560 --> 21:46.600]  Hi.
+[21:46.600 --> 21:48.400]  Thanks.
+[21:48.400 --> 21:58.200]  So I've done, I've implemented a few binary protocols like network protocols like HTTP
+[21:58.200 --> 22:00.800]  2 or other stuff like that.
+[22:00.800 --> 22:09.720]  I'd love to know how you, if you have done any streaming of data and passing of messages
+[22:09.720 --> 22:14.280]  coming from streaming data and generators also would be interesting just to know how
+[22:14.280 --> 22:19.560]  you approached it because I know I did something but I don't know how we did it.
+[22:19.560 --> 22:24.320]  I think I've implemented a few protocols that use, for example, TCP as the underlying
+[22:24.320 --> 22:27.240]  transport and then that's like a stream.
+[22:27.240 --> 22:31.000]  And then there are a few patterns for how you want to handle that.
+[22:31.000 --> 22:40.680]  I think Frank Honloth and the nerve team wrote a sort of framing behavior, which way
+[22:40.680 --> 22:44.800]  you have a couple of callbacks that you need to implement in order to handle a stream so
+[22:44.800 --> 22:50.880]  that they give you bytes and then you return back messages when you see a full message.
+[22:50.880 --> 22:54.960]  It's actually a very good sort of guideline for how to do that.
+[22:54.960 --> 23:01.760]  Another approach is taken by Andrea Leopardi in his library for Redis where it's like
+[23:01.760 --> 23:09.160]  you call, when you call the decoding function and it returns a result, the result will be
+[23:09.160 --> 23:14.400]  whatever messages was in that binary you gave it and then a continuation function which
+[23:14.400 --> 23:25.520]  you call next time with more bytes so that it continues to return new messages, yeah.
+[23:25.520 --> 23:31.840]  Any question?
+[23:31.840 --> 23:38.360]  If I would buy a T-box from you, do I still get support in about 16 years from now?
+[23:38.360 --> 23:42.880]  Maybe five minutes.
+[23:42.880 --> 23:46.760]  I actually have a question for you if there are no other questions.
+[23:46.760 --> 23:52.040]  Do you have a library you suggest to see?
+[23:52.040 --> 23:59.400]  Because I implemented a library to decode the QOEI which is the quite okay image format
+[23:59.400 --> 24:05.240]  which is a new image format just to get my irons dirty with binary pattern matching in
+[24:05.240 --> 24:09.280]  Elixir but it gets very unwieldy very fast.
+[24:09.280 --> 24:14.400]  So I saw like in JSON they have some macros that generate binary pattern matching.
+[24:14.400 --> 24:19.520]  Do you have any libraries you recommend to check out?
+[24:19.520 --> 24:24.560]  I think the Redis library is pretty nice.
+[24:24.560 --> 24:30.200]  I also have a KNX library which is like a smart home protocol which I don't know if
+[24:30.200 --> 24:37.800]  I would recommend but when I wrote it I thought it was made sense, yeah.
+[24:37.800 --> 24:38.800]  Thank you.
+[24:38.800 --> 24:43.080]  Any other questions?
+[24:43.080 --> 24:45.800]  The last one I guess.
+[24:45.800 --> 24:50.000]  Maybe a word about exceptions when patterns don't match.
+[24:50.000 --> 24:51.000]  Yeah.
+[24:51.000 --> 24:53.360]  You didn't talk about that if I'm correct.
+[24:53.360 --> 24:54.360]  That's true.
+[24:54.360 --> 24:58.800]  I mean sometimes we say we should just let it crash in this community.
+[24:58.800 --> 25:00.960]  That's not always the case.
+[25:00.960 --> 25:07.160]  Sometimes the protocol will say that if you're unable to decode a message you must ignore
+[25:07.160 --> 25:08.920]  it and just continue going.
+[25:08.920 --> 25:19.000]  In that case what I usually do is I define functions where I match on the data I received
+[25:19.000 --> 25:23.480]  and then I always need to have a fallback clause in case it didn't match anything and
+[25:23.480 --> 25:28.640]  then just lock an error and continue.
+[25:28.640 --> 25:36.720]  But I mean probably the proper thing to do in Erlang is to try to just die.
+[25:36.720 --> 25:40.520]  There's also you could when you receive a message you could have a special process that
+[25:40.520 --> 25:47.160]  is only for decoding so you start a task, decode a message and get the data structure
+[25:47.160 --> 25:54.360]  back but I think it depends on the use case how you want to handle bad data.
+[25:54.360 --> 25:58.800]  Okay, thank you very much.

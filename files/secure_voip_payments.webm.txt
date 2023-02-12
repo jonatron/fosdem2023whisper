@@ -1,0 +1,127 @@
+[00:00.000 --> 00:14.720]  Okay, my name is Nuno, I've been around VoIP and RTC for the last, I think, 15 years.
+[00:14.720 --> 00:22.720]  The last 10 were more involved with open source and, well, right now I'm working at Talk Desk,
+[00:22.720 --> 00:31.560]  which is a contact center cloud-driven company and we are adopting more and more open source
+[00:31.560 --> 00:37.960]  technology into the company and, well, that's what also drives me.
+[00:37.960 --> 00:42.440]  So my talk will be about secure pavements over VoIP calls in the cloud.
+[00:42.440 --> 00:48.960]  It's something that all contact centers probably need and in order to do this we have to follow
+[00:48.960 --> 00:57.640]  some rules and specifications and let's dive into that.
+[00:57.640 --> 01:05.720]  Okay, so I'll be telling you what PCI DSS is, what was the existing problem and what
+[01:05.720 --> 01:14.920]  was the solution for our own implementation, the actual architecture of the solution and
+[01:14.920 --> 01:21.920]  how to do it.
+[01:21.920 --> 01:35.480]  Yes, payment card industry data security standard, well, it's a standard that was put
+[01:35.480 --> 01:44.800]  up together by a bunch of companies like American Express, Discover, BasterCard, Visa, etc.
+[01:44.800 --> 01:52.280]  So they created a bunch of mandatory rules for the industry, this is called the PCI data
+[01:52.280 --> 02:01.160]  security standard and, well, in PCI, all business that process credit cards are referred as
+[02:01.160 --> 02:10.360]  merchants, which is our case at Talk Desk and whenever we are big or small we have to
+[02:10.360 --> 02:19.600]  follow these rules for credit card security and basically there are very different levels
+[02:19.600 --> 02:28.560]  for the merchants, the ones that process like six million transactions, whatever, so they
+[02:28.560 --> 02:35.920]  are level one, usually contact centers, if they're not that big they end up in the levels
+[02:35.920 --> 02:48.200]  three or four, again, SAQs, so SAQs are self-assessment, questionary levels, so we have to kind of
+[02:48.200 --> 03:00.240]  answer some questions to see where we fit and basically since we are an electronic processing
+[03:00.240 --> 03:10.240]  company we fit in under SAQA and so no face-to-face merchants, everything is done with e-commerce
+[03:10.240 --> 03:17.800]  or telephone, so this is where we are at.
+[03:17.800 --> 03:26.080]  So the existing problem and solution, why we did something different, so in order to
+[03:26.080 --> 03:37.480]  do this kind of payments we were using some proprietary equipment like SPCs, etc., and
+[03:37.480 --> 03:44.880]  everything in the end sometimes had some failures, there's the usage of DTMFs on this
+[03:44.880 --> 03:52.720]  a lot, at least for typing the credit card number we need to use DTMFs, but besides the
+[03:52.720 --> 04:00.480]  credit card numbers itself we have also to use DTMFs like to tell the partner that the
+[04:00.480 --> 04:09.520]  actual partner will be speaking more about it later, the partner basically needs to know
+[04:09.520 --> 04:16.520]  when you want to have your channel secure for the actual customer to be able to start
+[04:16.520 --> 04:25.560]  typing the credit card information, that was being done by the usage of a PIN on the Asian
+[04:25.560 --> 04:32.280]  side, so the agent would basically use his dialer in the screen most of the times to
+[04:32.280 --> 04:41.680]  type a PIN in order to engage with the PCI partner and if all went well the actual customer
+[04:41.680 --> 04:48.560]  would be hearing a voice telling him the call is now in a secure situation you can follow
+[04:48.560 --> 04:56.280]  up like typing the credit card, most of the times this works but there are a lot of times
+[04:56.280 --> 05:05.400]  that the DTMFs are not well recognized, sometimes the SBC failed completely because there was
+[05:05.400 --> 05:11.520]  a need, in order I will be on that later on again, but there was a need of transcoding
+[05:11.520 --> 05:23.600]  the actual DTMF from the RTP to SIP Infos in order to tell the partner about the actual
+[05:23.600 --> 05:33.360]  DTMF number and well we also had a very hard time integrating the SBC world, the proprietary
+[05:33.360 --> 05:45.480]  world with modern APIs in order to have more fluent scenarios, the alternative, the solution
+[05:45.480 --> 05:55.080]  basically we decided to use Camille and RTP engine for the new solution, it lets us have
+[05:55.080 --> 06:04.160]  more easy to adapt and evolve, it's easy to integrate with modern APIs, everything can
+[06:04.160 --> 06:12.000]  be done with SIP and we will get into the actual architecture next.
+[06:12.000 --> 06:22.560]  So about architecture, the PCI environment itself needs to be like contained from whatever
+[06:22.560 --> 06:31.240]  you have in your void for normal calls, it has to be separate and contained, so in order
+[06:31.240 --> 06:39.720]  to actually use payments, so the phone number that the customer uses to call and do a payment
+[06:39.720 --> 06:47.400]  basically goes through a contained environment, in our case we are all in AWS, so we have
+[06:47.400 --> 06:56.920]  basically a separate account just for this and for our new implementation we did everything
+[06:56.920 --> 07:07.080]  with infrastructure as code and by doing CI CD we were able to deploy without the need
+[07:07.080 --> 07:16.960]  of like logging into a machine or having SSH access or that kind of stuff.
+[07:16.960 --> 07:23.920]  So about the actual architecture for this, so we have the actual carrier and we have
+[07:23.920 --> 07:33.000]  this SIPAS, it's our asterisk, it can be cloud, a cloud provider like Twilio or Neximo
+[07:33.000 --> 07:40.280]  or SignalWire or whatever and this secure router is what we call this new solution that
+[07:40.280 --> 07:50.080]  we developed, it's basically several possible instances of Camellio and RTP engine and there
+[07:50.080 --> 07:56.920]  is in the top the PCI partner, this is the actual partner that processes the payments
+[07:56.920 --> 08:04.840]  so we don't process and we don't touch the actual credit card data and the way this works
+[08:04.840 --> 08:12.600]  is basically the call comes in from the carrier side if it's an inbound one and it goes through
+[08:12.600 --> 08:21.720]  like this, this is the media for the normal call without being still under the secure
+[08:21.720 --> 08:29.480]  channel for payments, so the call comes in, it ends up in the agent on this side and whenever
+[08:29.480 --> 08:38.760]  the agent wants to, in this case this blue arrow here, it goes always through the PCI
+[08:38.760 --> 08:46.640]  partner, the PCI partner injects a new weather in the SIP with a token, so the token comes
+[08:46.640 --> 08:55.360]  back down here and it's extracted and is sent to a smaller helper microservice that we have,
+[08:55.360 --> 09:03.640]  this microserver basically then uses an internal API to tell the C pass and the actual call
+[09:03.640 --> 09:11.600]  that is coming in as that token for starting the secureization process in case of a payment
+[09:11.600 --> 09:14.360]  needs to be done.
+[09:14.360 --> 09:21.520]  So the signaling goes always through the PCI partner, the media goes from the carrier
+[09:21.520 --> 09:31.000]  to the C pass side without leaving and whenever the agent on the C pass wants to start the
+[09:31.000 --> 09:39.600]  secure process for starting a payment, basically he uses the token that was passed into his
+[09:39.600 --> 09:49.280]  UI and that triggers, re-invites from the PCI partner down to our secure routers and
+[09:49.280 --> 09:58.080]  basically the media starts flowing through them for the actual time of the payment processing,
+[09:58.080 --> 10:01.680]  so this is basically how this works.
+[10:01.680 --> 10:12.280]  So this yellow square here means that we are under a closed environment just for PCI,
+[10:12.280 --> 10:22.240]  we have to follow that because rules imply that and basically some snippets on the infrastructure
+[10:22.240 --> 10:31.840]  as code for this, so we are using a bunch of Terraform with Ansible in order to deploy
+[10:31.840 --> 10:42.680]  everything automatically, sorry it doesn't read too much here, but here we are telling
+[10:42.680 --> 10:49.000]  for in this part it's the dispatcher that we are populating for Camelio, there's some
+[10:49.000 --> 10:55.360]  also some information about how the process of Camelio is started, the certifiers that
+[10:55.360 --> 11:23.840]  are used for TLS, a lot of description for the services, so yeah, the one before, okay.
+[11:23.840 --> 11:31.760]  Here it's a small snippet of the Camelio config file itself, so in this case, sorry about
+[11:31.760 --> 11:40.040]  it, it's unreadable, but it's where the actual engage with RTP agent was happening, so we
+[11:40.040 --> 11:51.060]  have a bunch of ciphers here that need to be used, but by using this and with containerization,
+[11:51.060 --> 11:59.960]  so the actual Camelio is put inside the container, the container is then launched, mapping an
+[11:59.960 --> 12:08.480]  external volume with some defaults and that way we don't need basically to touch, human
+[12:08.480 --> 12:15.680]  touch this deployment.
+[12:15.680 --> 12:24.440]  Okay, another important part, we rely a lot on DNS, so we use NAPTR records with SRVs
+[12:24.440 --> 12:34.480]  for basically describe where our instances are, so the PCI partner uses DNS to speak
+[12:34.480 --> 12:40.600]  to us, the carrier the same thing, the CPAS the same thing and by doing this and without
+[12:40.600 --> 12:49.640]  need to be stateful for anything, we can basically launch the number of instances that we want,
+[12:49.640 --> 12:55.200]  since we are using AWS and we need basically this kind of deploys to happen in several
+[12:55.200 --> 13:02.720]  regions of the world, we also do that very easily by using this approach and as I say
+[13:02.720 --> 13:14.480]  here, art coding is almost not a great thing, but in this case, as I say around here, it
+[13:14.480 --> 13:23.640]  gives the rigidity that we need to fulfill the requirements and the standards and it
+[13:23.640 --> 13:26.720]  proved to work well.
+[13:26.720 --> 13:35.720]  So how it actually works, this is a screenshot of the UI that the agent sees, so basically
+[13:35.720 --> 13:41.040]  these are what we call context cards for the agent.
+[13:41.040 --> 13:46.400]  One of the context cards gives the PCI token that comes in the SIP and then it's extracted
+[13:46.400 --> 13:55.560]  in Camellia and sent to our internal API for the contact center layer and it appears there,
+[13:55.560 --> 14:04.520]  so whenever the agent needs to start the payment, it just needs to press a button that will
+[14:04.520 --> 14:15.680]  use that token and the call will be in what is known as a secure state for payment.
+[14:15.680 --> 14:21.920]  Okay, wrapping up.
+[14:21.920 --> 14:30.040]  So something about the certification process and the audit, every entity that wants to
+[14:30.040 --> 14:35.720]  be processing payments needs to go through this every year, the certification needs to
+[14:35.720 --> 14:39.520]  be renewed every year.
+[14:39.520 --> 14:49.240]  The one that we did more recently was last November and the year before it still was
+[14:49.240 --> 14:59.120]  on the old proprietary stuff, there were several small issues that kept open from last year
+[14:59.120 --> 15:09.840]  to this year and by using the new implementation, we basically passed everything, the solution
+[15:09.840 --> 15:19.600]  is put under the test for pen tests, it's something that is in the runbook of the audit,
+[15:19.600 --> 15:26.200]  so everything passed, I didn't mention, but the actual infrastructure as code also configures
+[15:26.200 --> 15:37.200]  the firewalls in AWS, so we just have the ports that we need to work with Open and we
+[15:37.200 --> 15:44.480]  have also ACLs for the PCI partners that we are using to process payments, the carriers,
+[15:44.480 --> 15:51.920]  the same thing, so that's the way we did it and in the end basically the audit identified
+[15:51.920 --> 15:57.880]  some strengths for this, so they thought there was excellent management and procedures
+[15:57.880 --> 16:06.400]  in this, we adopted a risk treatment approach and we always used certified service providers
+[16:06.400 --> 16:15.520]  for carriers and for the partners that do the payments, they also need to be PCI certified
+[16:15.520 --> 16:26.360]  about the carriers, this architecture basically lets you use any carrier you want, but you
+[16:26.360 --> 16:34.680]  have to kind of decide if you really trust some of the carriers that you put into this
+[16:34.680 --> 16:43.000]  because basically if you integrate this with PBX or so from a client, let's say, you can
+[16:43.000 --> 16:52.440]  always intercept a call on his side and that could not be good, so yeah, that was it and
+[16:52.440 --> 17:09.880]  that's what I add, thank you. Okay, I guess any questions? There's one over there.
+[17:09.880 --> 17:37.680]  Yeah, there's small differences when you basically switch a PCI partner that processes
+[17:37.680 --> 17:44.800]  the payments, right? There are small differences between them, but we basically worked with
+[17:44.800 --> 17:53.080]  three, four partners for this and they must use SIP, if they use only SIP, that's the
+[17:53.080 --> 17:59.720]  best option. The one that I presented here, it's the most complex one because it involves
+[17:59.720 --> 18:08.440]  reinvites sending media to them during the actual payment process, but it will depend,
+[18:08.440 --> 18:16.840]  so sometimes it's more direct and easy. The case that I spoke about was the most complex
+[18:16.840 --> 18:23.440]  one that involves media redirects and that kind of stuff. Can you recommend any specifically?
+[18:23.440 --> 18:34.880]  Any partner? Not really. I really don't want to say names here, but if you basically look
+[18:34.880 --> 18:53.840]  for the most relevant ones in the Internet, they're the ones that will work under this.

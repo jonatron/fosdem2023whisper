@@ -1,0 +1,345 @@
+[00:00.000 --> 00:07.520]  So, welcome again.
+[00:07.520 --> 00:12.280]  The next speaker is Leonard Pettering, known for SystemD, PostAudio, and other fundamental
+[00:12.280 --> 00:13.280]  projects.
+[00:13.280 --> 00:20.360]  And, yeah, he will talk about his journey and learnings of fusing TPMs and, yeah, how
+[00:20.360 --> 00:27.120]  that is working with four image-based Linux operating systems, measuring boots, and so
+[00:27.120 --> 00:28.120]  on.
+[00:28.120 --> 00:29.120]  Hi.
+[00:29.120 --> 00:30.120]  Yeah.
+[00:30.120 --> 00:31.120]  What he said.
+[00:31.120 --> 00:34.400]  So, I'm going to talk about image-based Linux and TPMs.
+[00:34.400 --> 00:35.400]  We don't have much time.
+[00:35.400 --> 00:38.440]  I think it's just 20 minutes, and it's a complex topic.
+[00:38.440 --> 00:42.240]  I already know right now that I'm not going to be able to finish, but, yeah, that's not
+[00:42.240 --> 00:43.240]  too bad.
+[00:43.240 --> 00:47.440]  I hope the slides should be online sooner or later, so, if we don't finish, it's not
+[00:47.440 --> 00:48.440]  too bad.
+[00:48.440 --> 00:49.800]  So, let's jump right in.
+[00:49.800 --> 00:50.800]  What's an image-based Linux?
+[00:50.800 --> 00:54.360]  I don't think I have to say too much about that, because Luca already gave an introduction
+[00:54.360 --> 00:55.360]  about this.
+[00:55.360 --> 01:00.240]  But, yeah, it's really about having a core file system images instead of fine-grained
+[01:00.240 --> 01:01.240]  images.
+[01:01.240 --> 01:02.240]  Many benefits.
+[01:02.240 --> 01:03.240]  I'm not going to go into detail.
+[01:03.240 --> 01:07.280]  Here, we'll focus simply on the relevance for building trusted systems.
+[01:07.280 --> 01:10.040]  These images, we now call DDIs.
+[01:10.040 --> 01:13.920]  Luca had that on the slides as well, which is like this coverable disk image.
+[01:13.920 --> 01:18.200]  It just means that there's a GPT partition table which describes what's on it and usually
+[01:18.200 --> 01:20.920]  has a variety and things like that.
+[01:20.920 --> 01:23.240]  The other thing in the title of my talk was a TPM.
+[01:23.240 --> 01:26.600]  Yeah, I hope some of you have a rough idea what a TPM is.
+[01:26.600 --> 01:27.880]  It's a security chip.
+[01:27.880 --> 01:32.800]  Traditionally, it's a discrete one, but nowadays, it can also be in firmware or even in software.
+[01:32.800 --> 01:36.360]  It's a cryptographic scope processor in a way, and usually, people then think, oh, it
+[01:36.360 --> 01:38.440]  must be something fast, but it's usually not.
+[01:38.440 --> 01:44.040]  It's just, it's actually terribly slow, usually, but it's not what it's supposed to
+[01:44.040 --> 01:45.040]  be.
+[01:45.040 --> 01:49.600]  It's standardized, widely available, all your laptops, and particularly, like, the business
+[01:49.600 --> 01:53.840]  laptops usually have it as a discrete chip, the cheaper ones nowadays have it in firmware.
+[01:53.840 --> 01:55.040]  It's pretty universal.
+[01:55.040 --> 02:01.120]  Conceptually, similar to smart cards and fighter keys, right, like it's a storage for keys,
+[02:01.120 --> 02:03.000]  but it's also very different.
+[02:03.000 --> 02:07.880]  Supposedly, temp-approved, it can store at least one key securely, actually, more than
+[02:07.880 --> 02:11.840]  this, but yes, the primary purpose is like, there's a seed key stored on it, and then
+[02:11.840 --> 02:13.760]  everything else can be derived from this.
+[02:13.760 --> 02:18.880]  That key cannot be extracted, that's the fun part about it, so ideally, you have to have
+[02:18.880 --> 02:26.560]  that specific chip, or if you don't have that chip, then, yeah, you can't retrieve the keys.
+[02:26.560 --> 02:28.720]  You can do lots of things with these things.
+[02:28.720 --> 02:34.240]  Most interesting, I think, is one that you can ask the TPM to encrypt and decrypt data.
+[02:34.240 --> 02:37.080]  Ultimately, it was that seed key that stored on it.
+[02:37.080 --> 02:44.080]  That basically means, while you don't have that much storage on the TPM, you can see
+[02:44.080 --> 02:49.680]  me store as many keys as you want with the TPM simply by wrapping that key, as they say,
+[02:49.680 --> 02:54.080]  by taking any secret key you have, passing it to the TPM so that it encrypts it with
+[02:54.080 --> 02:59.240]  its own built-in seed key, or some key derived of that, and then you get it back and stored
+[02:59.240 --> 03:07.200]  on disk, and so you basically have infinite ways how to bind keys to the TPM.
+[03:07.200 --> 03:11.760]  What's fun about this part is that this encryption can involve policy.
+[03:11.760 --> 03:18.080]  Policy basically means that you can make restrictions about how the key can be decrypted.
+[03:18.080 --> 03:22.600]  For example, you can require that also a pin is provided, like a human-typed pin.
+[03:22.600 --> 03:26.120]  Pin just means password, by the way, it doesn't mean it has to be a number.
+[03:26.120 --> 03:31.440]  It can also imply that system has to be in a specific state for the key to be decrypted.
+[03:31.440 --> 03:37.600]  State means, for example, that specific software firmware bootloader runs, that the system
+[03:37.600 --> 03:43.400]  is in a specific boot phase, that the specific disk encryption volume key has been used
+[03:43.400 --> 03:44.400]  and things like that.
+[03:44.400 --> 03:47.200]  That's why a concept called PCR is more about that.
+[03:47.200 --> 03:49.560]  It's probably mostly we're going to actually talk about that part.
+[03:49.560 --> 03:56.440]  It can also mean you can bind policy to time, like so that it can specify time when a key
+[03:56.440 --> 04:00.080]  can be decrypted and prohibited otherwise.
+[04:00.080 --> 04:01.080]  It's actually a useful feature.
+[04:01.080 --> 04:04.520]  It sounds crazy, but it's actually pretty useful, and hopefully we can quickly talk
+[04:04.520 --> 04:07.960]  about that later.
+[04:07.960 --> 04:11.720]  The prior slide, that's just the TPM stuff that I find interesting that we're going
+[04:11.720 --> 04:15.160]  to touch in this talk, but there's a lot more about it.
+[04:15.160 --> 04:20.400]  It has an RNG, you can actually do store stuff there, dictionary, tag protection, like millions
+[04:20.400 --> 04:23.480]  of things you cannot just encrypt, you can sign, I don't know.
+[04:23.480 --> 04:27.360]  I'm not going to go into detail with that, only 20 minutes.
+[04:27.360 --> 04:29.800]  These PCR policies, I want to go into detail.
+[04:29.800 --> 04:34.040]  It's the most interesting type of access policy, and most people who deal with TPMs,
+[04:34.040 --> 04:40.000]  I think, have encrypted their hard disk and linked it to the TPM, usually just played
+[04:40.000 --> 04:41.800]  around with the PCR policies.
+[04:41.800 --> 04:42.800]  That's something.
+[04:42.800 --> 04:45.120]  PCR is short for platform configuration registers.
+[04:45.120 --> 04:50.320]  They're basically just registers, like little data variables on the chip.
+[04:50.320 --> 04:52.640]  Usually you have 24 of those.
+[04:52.640 --> 04:54.080]  Initially they boot up as zero.
+[04:54.080 --> 04:56.440]  You cannot set them to anything you like.
+[04:56.440 --> 05:01.640]  The only thing you can do is you can pass some data to the PCR, and then it's going to execute
+[05:01.640 --> 05:02.640]  this.
+[05:02.640 --> 05:09.160]  You can update the PCR with the number N, like you have 24, like that's zero to 23, and we'll
+[05:09.160 --> 05:14.240]  calculate a hash value of the old value plus concatenate it with the new data.
+[05:14.240 --> 05:19.480]  I said that it's chart 256 because it's effectively what people use these days, but it actually
+[05:19.480 --> 05:20.720]  can't be anything.
+[05:20.720 --> 05:24.000]  But that's the only operation it does.
+[05:24.000 --> 05:30.320]  That basically means if you pass data and later data and later data, it's going to come
+[05:30.320 --> 05:36.040]  up with a value, and this value is derived from all the data you pass to it.
+[05:36.040 --> 05:39.760]  This is a way of how we can implement a chain of trust.
+[05:39.760 --> 05:45.280]  This operation where you send the data to the PCR is called extension of the PCR, or
+[05:45.280 --> 05:51.800]  you can also say the measurement of the data, depending which way you look.
+[05:51.800 --> 05:55.600]  How are these PCRs used on most of the laptops that you have?
+[05:55.600 --> 05:58.240]  The firm will already start writing data to it.
+[05:58.240 --> 06:00.040]  What data does it actually write to it?
+[06:00.040 --> 06:04.520]  Basically all the code it executes right before it executes it, and also all the configuration
+[06:04.520 --> 06:09.560]  for that code right before it makes use of this.
+[06:09.560 --> 06:16.760]  Afterwards, the PCRs have a specific value, and this value you can then use to prove that
+[06:16.760 --> 06:22.000]  the system went through certain stages, because every part of the system always measures the
+[06:22.000 --> 06:28.640]  next thing so that if every element in the chain originally was trusted, then it will
+[06:28.640 --> 06:34.440]  pass on the trust and so on and so on, and nobody can change the past, but only the future,
+[06:34.440 --> 06:42.680]  and that's how you implement a chain of trust for the formatted boot.
+[06:42.680 --> 06:46.360]  The other good thing is that if you know the elements of that chain that you're going to
+[06:46.360 --> 06:50.240]  measure in advance, you can pre-calculate PCR values.
+[06:50.240 --> 06:57.480]  You can basically say offline, okay I'm using this firmware, this boot loader and this kernel.
+[06:57.480 --> 07:01.920]  I can tell you what the PCR is going to look like ahead of time, because I can actually
+[07:01.920 --> 07:08.280]  calculate this hash operation myself in a very, very trivial way.
+[07:08.280 --> 07:10.680]  You can pre-calculate PCR values.
+[07:10.680 --> 07:17.720]  This is awesome, because if you can pre-calculate the PCR values, and these PCR values can be
+[07:17.720 --> 07:24.360]  used in policy and secrets on keys that you encrypt with CTPM, then you basically can
+[07:24.360 --> 07:30.040]  say with that that keys can only be decrypted if the system booted up with software that
+[07:30.040 --> 07:36.240]  I actually trust, and that's what is kind of useful about PCRs.
+[07:36.240 --> 07:44.680]  You can do even other stuff with that, but this is like the key takeaway.
+[07:44.680 --> 07:52.240]  If we can bind the decryption of secrets by the TPM to the state of these PCR values,
+[07:52.240 --> 07:59.280]  we can protect the secrets so that only on very specific systems running specific software,
+[07:59.280 --> 08:03.680]  running specific configuration, these secrets can be recovered.
+[08:03.680 --> 08:11.000]  This is, yeah, for disk encryption that's a primary use case.
+[08:11.000 --> 08:18.280]  Image-based OSes have this benefit that they can be measured as a whole.
+[08:18.280 --> 08:23.480]  If you have the entire OS in an image, it's very easy to calculate the hash value of it,
+[08:23.480 --> 08:28.120]  and then it's very easy if you take that hash value and pass it to the TPM to know in advance
+[08:28.120 --> 08:33.800]  what the PCR is going to be at the end when the system is fully booted up.
+[08:33.800 --> 08:37.360]  This is systematically different if you have a package-based OS, right, and package-based
+[08:37.360 --> 08:42.960]  OS where locally you create a file system, locally you unpack all these packages, and
+[08:42.960 --> 08:47.800]  sometimes you update them at this time, and sometimes you update them in another time.
+[08:47.800 --> 08:52.040]  Image-based OSes, you would end up as a file system that is going to be widely different
+[08:52.040 --> 08:55.680]  from everybody else who installs the same OS, right?
+[08:55.680 --> 08:59.960]  Image-based OSes don't have this vulnerability because their cores, their updates as a whole,
+[08:59.960 --> 09:03.800]  you can do these precalculations, and they're going to have the same hash values in every
+[09:03.800 --> 09:09.800]  single system, and hence the same PCR values in every single system.
+[09:09.800 --> 09:15.920]  Yeah, what's also great is it's not just about hash values in the PCRs that eventually
+[09:15.920 --> 09:20.440]  will show up because that sucks a little bit because it basically means that if you have
+[09:20.440 --> 09:26.240]  a secret that you bind to a specific hash value and then you update the image that you
+[09:26.240 --> 09:29.800]  ultimately calculated this from, then all these hash values will change.
+[09:29.800 --> 09:33.200]  That sucks because it basically means that you can't update your software anymore because
+[09:33.200 --> 09:35.920]  if you do, you lose access to all your secrets.
+[09:35.920 --> 09:43.240]  Nonetheless, this is what Windows actually does, but we can do better and actually assign
+[09:43.240 --> 09:47.160]  these things because if we can precalculate them, right, we know that this OS version
+[09:47.160 --> 09:53.000]  is going to end up with these PCR values, then we can actually sign them on like the
+[09:53.000 --> 10:01.960]  vendor can do this and provide the user both with the OS itself, plus information about
+[10:01.960 --> 10:09.560]  what's the expected PCR is, plus the signature for it, then you can actually use a TPM and
+[10:09.560 --> 10:13.320]  link secrets instead to the hash values can link them to the public key that belongs to
+[10:13.320 --> 10:15.680]  the signature that you will get.
+[10:15.680 --> 10:19.160]  This is awesome because it basically means that you can update as many as you want, you
+[10:19.160 --> 10:21.600]  will not lose access to your secrets.
+[10:21.600 --> 10:25.400]  Now I'm going to talk about system D because I'm the system D guy.
+[10:25.400 --> 10:31.640]  Quick overview about all the TPM stuff we now have in the most current system D version,
+[10:31.640 --> 10:35.480]  like it actually covers the unreleased version that's coming up 253.
+[10:35.480 --> 10:40.600]  But yeah, system D stuff, it's a stuff that, like a UFI stuff that you can glue in front
+[10:40.600 --> 10:44.840]  of a kernel and it does measurements of the kernel that's about the boot, it does lots
+[10:44.840 --> 10:48.560]  of other things, but this is, yeah, for this context about TPMs, this is what I find interesting
+[10:48.560 --> 10:49.560]  about it.
+[10:49.560 --> 10:55.720]  It still runs in UFI mode before Linux is invoked and then passes control to Linux.
+[10:55.720 --> 11:01.640]  There's a service system called system D PCR phase, what that does, it measures certain
+[11:01.640 --> 11:07.880]  strings at specific times of the boot into a specific PCR.
+[11:07.880 --> 11:09.880]  What's the purpose of this?
+[11:09.880 --> 11:13.720]  Sometimes, or I guess always, it's kind of useful that, for example, the encryption key
+[11:13.720 --> 11:18.880]  for the root volume can only be an unlock in the iterative, but not after.
+[11:18.880 --> 11:22.320]  And that's an awesome property because it basically means that when somebody exploits
+[11:22.320 --> 11:28.040]  your system after the root file system is actually activated, then they can't talk to
+[11:28.040 --> 11:33.800]  the TPM to get the password back because basically these phases stuff can destroy the PCRs and
+[11:33.800 --> 11:38.120]  because the PCRs that are used for the policy, yeah, the key is inaccessible until a reboot
+[11:38.120 --> 11:40.600]  is done and we end up in an iterative again.
+[11:40.600 --> 11:46.320]  The system D PCR FS, what that measures is like FS identity, like file system identity,
+[11:46.320 --> 11:50.480]  that's UUIDs of a file system, things like that, the thinking about that is that there
+[11:50.480 --> 11:55.840]  should be PCR where you can basically say, okay, that identifies a specific installation
+[11:55.840 --> 12:01.520]  that I have, do we use PCR-15 for this?
+[12:01.520 --> 12:06.040]  So basically, that you can guarantee, yeah, my laptop is going to have that value there,
+[12:06.040 --> 12:08.960]  another laptop is definitely going to have a different one.
+[12:08.960 --> 12:13.920]  So it's about being able to bind policy to specific installations.
+[12:13.920 --> 12:18.080]  There's a system PCR machine that measures etsy-machinity, etsy-machinity is just a explicit
+[12:18.080 --> 12:20.800]  system ID that we introduced a while back.
+[12:20.800 --> 12:24.800]  System re-crypt setup is now something that can consume all this stuff that I was talking
+[12:24.800 --> 12:26.560]  about there.
+[12:26.560 --> 12:31.680]  These things measure, this one then actually is able to unlock disk secrets based on these
+[12:31.680 --> 12:34.240]  PCR policies.
+[12:34.240 --> 12:40.960]  There's something, yeah, the crypt setup is actually not just about making use of the
+[12:40.960 --> 12:48.480]  PCR policies, it also measures a hash derived from the volume key of the root file system,
+[12:48.480 --> 12:51.640]  for example, or actually you can measure any volume key with that.
+[12:51.640 --> 12:56.320]  So the idea is basically that the secret is also measured to DPM and that this gives a
+[12:56.320 --> 13:02.120]  much stronger protection of the PCR-15 stuff that I was talking about.
+[13:02.120 --> 13:06.960]  In future we probably also add something similar to system de-varity so that basically, yeah,
+[13:06.960 --> 13:12.480]  you can very protect file systems and have the top level hash measured.
+[13:12.480 --> 13:17.120]  Crypt setup can consume this, then there's also system de-crets in the service manager,
+[13:17.120 --> 13:21.720]  that's the concept we recently learned, system de-crets is basically how you can pass secrets
+[13:21.720 --> 13:25.400]  into services and they can be encrypted via TPM stuff and things like that.
+[13:25.400 --> 13:32.240]  So it's kind of useful that you basically can say, I want my X509 secret key encrypted
+[13:32.240 --> 13:40.040]  in a way that it can only be unlocked on my specific server running my specific OS during
+[13:40.040 --> 13:44.520]  the inner dirty boot phase but not later or something like this.
+[13:44.520 --> 13:50.400]  We measure as a tool that can pre-calculate expected PCR values for UKIs, UKIs, unified
+[13:50.400 --> 13:54.360]  kernel images, we had talked about that before, so I'm not going to explain that, can also
+[13:54.360 --> 13:59.320]  sign them so that you can basically have a UKI that carries both like the signature
+[13:59.320 --> 14:05.000]  along with it so that then later people can just make use of this to unlock their volumes.
+[14:05.000 --> 14:13.080]  There's recently added tool, UKi-fi, UKi-fi, I don't know how we're supposed to pronounce
+[14:13.080 --> 14:17.760]  that yet, but anyway, it builds on system measuring a couple of other tools and you
+[14:17.760 --> 14:22.160]  give it just a component that builds the UKI stuff, signs it with secure boot, signs it
+[14:22.160 --> 14:26.480]  with the system you measure and then you have this one blob that you can ultimately deploy.
+[14:26.480 --> 14:35.840]  The net result of this is three relevant PCRs, in 11 we're going to measure the kernel and
+[14:35.840 --> 14:39.840]  the root file system into, in PCR 12 there's going to be basically the configuration you
+[14:39.840 --> 14:43.640]  pass to the kernel, that's primarily kernel parameters and things like that, but it's
+[14:43.640 --> 14:49.040]  also more is like, we have this credentials concept that I mentioned is going to measure
+[14:49.040 --> 14:54.040]  it into that if they are passed into the system and we'll have soon something called
+[14:54.040 --> 15:01.160]  SysCVG, which is like a secure way how you can manage Etsy stuff, it's also going to
+[15:01.160 --> 15:02.160]  be measured into that.
+[15:02.160 --> 15:06.120]  And then PCR 15 I mentioned is kind of the identity of the local system.
+[15:06.120 --> 15:10.640]  So yeah, and then you can consume this, and I mentioned this already with system decryptin
+[15:10.640 --> 15:17.800]  roll, where you can basically say, now this disk can only be unlocked on a system that
+[15:17.800 --> 15:23.320]  has physical access to this very TPM, so to hardware, that can only be locked if it's
+[15:23.320 --> 15:30.080]  booted with properly signed OS UKIs and DDIs by a specific random, so I can say, I install
+[15:30.080 --> 15:35.640]  Fedora here and this secret key shell, only be unlocked ever if it's actually Fedora that
+[15:35.640 --> 15:39.720]  is booted, but not if Hacker OS or something is booted.
+[15:39.720 --> 15:48.440]  I can say, it will link it to the configuration, I can say that secrets can only be available
+[15:48.440 --> 15:52.680]  during a specific boot phase, for example in the NRAD but not later, so that you know
+[15:52.680 --> 15:58.520]  that if you leave your booted up laptop somewhere in your hotel room or something like that,
+[15:58.520 --> 16:03.240]  and you're not supervising it, that at least they'll not be able to get your root volume
+[16:03.240 --> 16:08.480]  encryption key via directly talking to TPM.
+[16:08.480 --> 16:14.040]  You can also add a PIN, you can do rate limiting and things like that, so that like this is
+[16:14.040 --> 16:19.200]  dictionary attack protection, so that people cannot just go and hammer the TPM trying a
+[16:19.200 --> 16:22.520]  couple of things, trying a couple of PINs or something like that, because the TPM eventually
+[16:22.520 --> 16:26.800]  says no, you have to wait or something, or you have to provide an unlocked PIN.
+[16:26.800 --> 16:34.920]  I'm good at time actually, so far so good, PCRs are really useful stuff and you're probably
+[16:34.920 --> 16:39.720]  going to extend users them all across the system before other things.
+[16:39.720 --> 16:43.120]  They have other uses like remote attestation, like you can use them to basically remotely
+[16:43.120 --> 16:47.760]  say, like verify that a system in a specific state.
+[16:47.760 --> 16:51.200]  People usually use that for servers and stuff, so that if you have a cloud and you have lots
+[16:51.200 --> 16:55.640]  of notes, that before you give a workload to a specific survey, you can verify that
+[16:55.640 --> 17:00.600]  it's still running exactly the software that it should be and nobody hacked with it and
+[17:00.600 --> 17:03.320]  booted something else and things like that.
+[17:03.320 --> 17:10.080]  It's also useful actually, yeah, back to the hotel situation, I leave my hotel, in my laptop
+[17:10.080 --> 17:15.880]  in the hotel, I come back and I can use the remote attestation so that this device can
+[17:15.880 --> 17:20.040]  prove to me that it's actually my device, running my software as I intended and not something
+[17:20.040 --> 17:21.040]  else.
+[17:21.040 --> 17:24.880]  So, yeah, configuration and images I already mentioned, credentials I already mentioned
+[17:24.880 --> 17:25.880]  briefly.
+[17:25.880 --> 17:26.880]  Yeah.
+[17:26.880 --> 17:31.840]  Last thing, second boot and measured boot, people shouldn't confuse, measured boot is
+[17:31.840 --> 17:35.560]  what I was just talking about with all the measurement, like this chain of PCRs and things
+[17:35.560 --> 17:36.560]  like that.
+[17:36.560 --> 17:40.080]  There's also second boot in UFI, usually you do both, but they have different purposes,
+[17:40.080 --> 17:41.080]  right?
+[17:41.080 --> 17:45.440]  Like one is ahead of time stuff where it doesn't even allow software to boot that isn't signed
+[17:45.440 --> 17:46.440]  properly.
+[17:46.440 --> 17:50.600]  The measured boot is different, like the software can all run, but it will not get access to
+[17:50.600 --> 17:52.960]  secrets if it's the wrong software.
+[17:52.960 --> 17:54.480]  Anyway, we don't have much time anymore.
+[17:54.480 --> 17:58.640]  I would like to take at least some questions, so let's do that.
+[17:58.640 --> 17:59.640]  Hello.
+[17:59.640 --> 18:08.400]  So, all these measurements, are they going to be in TPM event log for SIMD2 where I can
+[18:08.400 --> 18:09.400]  debug that stuff?
+[18:09.400 --> 18:10.400]  Yeah, that's a good question.
+[18:10.400 --> 18:18.640]  So, yeah, the, like, we currently mention this in the login framework, like the regular,
+[18:18.640 --> 18:20.640]  like syslog and third journal.
+[18:20.640 --> 18:22.960]  We do not write a TPM event log.
+[18:22.960 --> 18:26.520]  I know that there's a specification for actually writing a TPM event log.
+[18:26.520 --> 18:28.040]  We totally should.
+[18:28.040 --> 18:33.400]  But I didn't want to implement this TCG spec for that yet, and I didn't find a good library
+[18:33.400 --> 18:35.400]  doing this that I wanted to use.
+[18:35.400 --> 18:39.320]  But ultimately, like for the remote attestation case, we absolutely need this.
+[18:39.320 --> 18:47.080]  Eventually, I want to get to this world where we can, like before we run any service, any
+[18:47.080 --> 18:51.240]  container or any VM or something, we can measure ahead of time what we do and we write
+[18:51.240 --> 18:55.120]  that result to that event log and then people can consume the event log.
+[18:55.120 --> 18:56.600]  So, I think system we should write that.
+[18:56.600 --> 18:57.600]  Yeah.
+[18:57.600 --> 19:02.680]  I mean, I'm not a direct fan of the former two, but if you implement that stuff, we have
+[19:02.680 --> 19:03.680]  now three event logs.
+[19:03.680 --> 19:08.000]  We have the UFO one, we have the IMA one, and then now we have the system D1, so it's kind
+[19:08.000 --> 19:12.160]  of, it's a kernel thing that actually the kernel should provide, I think, at least.
+[19:12.160 --> 19:15.880]  Well, I mean, it can grow indefinitely, and I'm not sure you want the kernel to write
+[19:15.880 --> 19:16.880]  stuff indefinitely.
+[19:16.880 --> 19:17.880]  I don't know.
+[19:17.880 --> 19:18.880]  I'm amazed that.
+[19:18.880 --> 19:23.880]  If you care about these things, like, I don't think we should come up with our own standard
+[19:23.880 --> 19:29.040]  for this, so I kind of, if we write anything, it probably should be the TCG one, but I
+[19:29.040 --> 19:30.040]  don't know.
+[19:30.040 --> 19:32.360]  I didn't look into details like rotation or whatever else.
+[19:32.360 --> 19:33.360]  Anyway.
+[19:33.360 --> 19:34.360]  Okay.
+[19:34.360 --> 19:35.360]  Thanks.
+[19:35.360 --> 19:44.960]  So, right at the moment, system D krypton roll has a least privilege problem in that
+[19:44.960 --> 19:49.080]  whenever you're handling cryptographic materials, you should always expose them to the least
+[19:49.080 --> 19:50.080]  number of subsystems.
+[19:50.080 --> 19:55.760]  And the problem is that system D krypton roll is unwrapping the TPM key and then passing
+[19:55.760 --> 19:58.120]  the unwrapped key down into the kernel.
+[19:58.120 --> 20:03.360]  But the kernel itself has a system for handling the unwrapping of TPM keys, so what we should
+[20:03.360 --> 20:07.800]  be doing is passing the TPM key straight into the kernel and allowing the kernel to unwrap
+[20:07.800 --> 20:08.800]  it.
+[20:08.800 --> 20:11.600]  Are there any plans to actually implement that?
+[20:11.600 --> 20:13.240]  I didn't know this existed.
+[20:13.240 --> 20:15.520]  So I don't know, is it documented anywhere?
+[20:15.520 --> 20:18.520]  Yeah, it's called the trusted key subsystem.
+[20:18.520 --> 20:24.440]  Yeah, I mean, yeah, so far we don't really make much use of the key rings thing because
+[20:24.440 --> 20:30.280]  of complex beast, but if it exists, I see no reason why we wouldn't use it.
+[20:30.280 --> 20:38.960]  Okay, thanks.
+[20:38.960 --> 20:42.960]  I have a talk on that tomorrow on trusted keys if you are interested.
+[20:42.960 --> 20:47.480]  My question is about something else, do you know about systems where the TPM2 communication
+[20:47.480 --> 20:54.200]  is encrypted and authenticated to avoid someone desoldering the TPM and messing with it?
+[20:54.200 --> 20:59.320]  We do parameter encryption, and originally it was just bound to the PIN and in the recent
+[20:59.320 --> 21:03.960]  versions there's some salting going on, but I think we are like, you know, the good thing
+[21:03.960 --> 21:09.240]  is that nowadays even the TPM2S maintainers themselves send us all the patches to fix
+[21:09.240 --> 21:10.240]  these things.
+[21:10.240 --> 21:14.480]  So I think we're pretty, like, at least we're way better than what Windows currently does
+[21:14.480 --> 21:18.760]  and we keep on improving.
+[21:18.760 --> 21:29.120]  Hi, how to integrate this into a grub boot process?
+[21:29.120 --> 21:35.560]  So you always need, so as far as I know, see, you always need an initial run file system
+[21:35.560 --> 21:43.400]  to set up or to process all these TPM functionality and then initializing a looks key store and
+[21:43.400 --> 21:46.520]  then switch root into the root file system.
+[21:46.520 --> 21:50.040]  So is there a better way?
+[21:50.040 --> 21:54.200]  You're asking me if grub is a better way for anything?
+[21:54.200 --> 22:00.480]  You're asking the wrong guy, I think grub, yeah, I'm not going to say bad things, but
+[22:00.480 --> 22:05.960]  you know, we have this other bootloader like a system, I mean it's not a bootloader, it's
+[22:05.960 --> 22:13.160]  just a boot menu, but SD boot, and I'm not a fan of grub in these things, and I systematically
+[22:13.160 --> 22:17.600]  think it's really, really stupid to do disk encryption in grub because it's not what you
+[22:17.600 --> 22:25.960]  want there, you want authentication, not encryption, and so, I don't know, it's, like, to build
+[22:25.960 --> 22:32.600]  a trusted boot chain, I'm not convinced that grub should be part of the solution, it should
+[22:32.600 --> 22:37.240]  just like, you know, an EFI systems at least if you sac your boot and things like that,
+[22:37.240 --> 22:41.560]  you have all the buildings block that you need, you don't need another way of protecting
+[22:41.560 --> 22:42.560]  things.
+[22:42.560 --> 22:45.760]  I know that many distributions, if they want to, like, because they use unencrypted, like,
+[22:45.760 --> 22:52.160]  they want to use encrypted slash boot, which I think is stupid, but if they do this, then
+[22:52.160 --> 22:57.040]  yeah, of course, you need to add a disk encryption support to grub, but I think the problem is
+[22:57.040 --> 23:00.880]  you shouldn't have an encrypted boot, you should use UKIs and things like that, and
+[23:00.880 --> 23:05.280]  then have your secrets come in once the, and it already initializes and tells a system
+[23:05.280 --> 23:06.280]  what to do.
+[23:06.280 --> 23:08.760]  So, if you ask me, is there a better way?
+[23:08.760 --> 23:15.200]  No, what you're proposing is the worst way, this is the better way, so yeah.
+[23:15.200 --> 23:27.360]  Thank you for your quick question, you didn't talk a lot about recovery, and I'm more interested
+[23:27.360 --> 23:35.520]  into, through your test, have you encountered TPM2 wearing and TPM2 dying, and what can
+[23:35.520 --> 23:40.840]  happen in those situations regarding field recovery, disaster recovery, and so on.
+[23:40.840 --> 23:46.040]  So, you know, in all the stuff we're doing, like, the TPM stuff is just one option among
+[23:46.040 --> 23:52.200]  many, right, like, we have multiple key slots and locked stuff, and so we added actually
+[23:52.200 --> 23:57.560]  to system decryption role high-level support for concept like recovery keys, which are
+[23:57.560 --> 24:01.960]  just regular passwords, the only difference is they're generated by the system instead
+[24:01.960 --> 24:06.040]  of selected by users, so they have high entropy and should be good quality.
+[24:06.040 --> 24:11.440]  But I would say, yeah, if, like, it's what everybody else does too, right, like on MacOs
+[24:11.440 --> 24:15.280]  you can have a recovery key, on Windows you can have a recovery key, and this is what
+[24:15.280 --> 24:21.000]  we should do here as well, right, like use TPMs absolutely, and then hide entropy recovery
+[24:21.000 --> 24:26.520]  keys that things are fucked up, things are fucked up, but yeah, it's a matter ultimately
+[24:26.520 --> 24:30.920]  for the distributions to have a nice UI for this, right.
+[24:30.920 --> 24:34.840]  With all of this, I kind of want to push into the direction that the TPM stuff is a default,
+[24:34.840 --> 24:40.080]  and then if you want something else, like FIDO or whatever else you enroll in addition
+[24:40.080 --> 25:05.800]  to that, and that's, yeah, anyway, here, thank you very much.

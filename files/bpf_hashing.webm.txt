@@ -1,0 +1,133 @@
+[00:00.000 --> 00:16.200]  All right, so let's get started again.
+[00:16.200 --> 00:22.040]  The next talk is by Anton about optimizing BPF hash map and friends.
+[00:22.040 --> 00:29.960]  Hello, I'm Anton, working at Datapart team at Isovalent and yeah, this is talk about
+[00:29.960 --> 00:35.920]  how simple it is to optimize BPF hash map.
+[00:35.920 --> 00:44.680]  So about a year ago, like a little less, Andreina Kricker proposed, suggested to try new hash
+[00:44.680 --> 00:51.920]  functions for BPF hash map and BPF tech trace map.
+[00:51.920 --> 01:00.160]  And in Selume we use, and in Tatragon we use hashes extensively, so for us it's a big
+[01:00.160 --> 01:04.120]  deal and I decided to give it a try.
+[01:04.120 --> 01:12.360]  So I will briefly provide some like benchmarking how to one-on-one and then we will take a
+[01:12.360 --> 01:22.600]  look at different hash functions and then we will see benchmarks for hash maps which utilize
+[01:22.600 --> 01:24.960]  old hash functions and new hash functions.
+[01:24.960 --> 01:34.000]  So first thing to do when your benchmark is to try to reduce noise because modern CPUs
+[01:34.000 --> 01:36.400]  do everything to ruin your benchmarking.
+[01:36.400 --> 01:46.120]  They will run on different frequency, hyperthreading will get in and in the best case you benchmark
+[01:46.120 --> 01:50.160]  inside kernel because you can disable preemption and interrupts.
+[01:50.160 --> 01:58.480]  So benchmark, we take, if you want to benchmark some function, we first measure some kind
+[01:58.480 --> 02:03.560]  of time source or clock source and then we execute our function, maybe in a loop and
+[02:03.560 --> 02:12.080]  then we measure time once again and then we divide the number of observations by the number
+[02:12.080 --> 02:15.160]  of loops and get our result.
+[02:15.160 --> 02:19.240]  So in some cases we can't execute our function in a loop.
+[02:19.240 --> 02:23.560]  For example, if it's not like an abstract hash function, it's just, if it's just part
+[02:23.560 --> 02:30.440]  of kernel then n is obviously equal to 1 and we need to take an account the time it takes
+[02:30.440 --> 02:40.760]  to get time and one obvious way to do this is to benchmark an empty loop and this give
+[02:40.760 --> 02:48.040]  us roughly how long the get time function works and typically people benchmark with
+[02:48.040 --> 02:54.440]  something like rdtc instruction and if you don't reduce noise then rdtc instruction
+[02:54.440 --> 02:56.400]  is pretty unstable.
+[02:56.400 --> 03:03.880]  So here my CPU obviously runs on two different frequencies and if my function which I want
+[03:03.880 --> 03:18.080]  to benchmark runs 30, 40 cycles then deviation in this case is bigger than function itself
+[03:18.080 --> 03:19.120]  so I can't rely on it.
+[03:19.120 --> 03:26.680]  So if we disable like reduce noise as I said then results become way more stable so here
+[03:26.680 --> 03:33.520]  it's like maybe it looks scary but it's actually like 37 plus minus one cycle so even for very
+[03:33.520 --> 03:41.840]  small functions this makes benchmarking more reliable but in this form rdtc doesn't work
+[03:41.840 --> 03:47.280]  because it's not a serializing instruction which means that if you insert your code here
+[03:47.280 --> 03:55.040]  then it can be executed in the middle of code and even after your code so and it can differ
+[03:55.040 --> 04:03.600]  from execution to execution and so we need some way to serialize it and luckily there
+[04:03.600 --> 04:10.040]  are no ways to do this so just serialize it and there is a white paper written maybe ten
+[04:10.040 --> 04:16.960]  years ago about titanium and it's still valid with some changes from architecture to architecture
+[04:16.960 --> 04:19.820]  but yeah we can do this.
+[04:19.820 --> 04:27.440]  In this case benchmarking like the offset takes a little bit more like it's not 37 cycles
+[04:27.440 --> 04:34.200]  anymore it's 70 cycles but again it's pretty stable and we can use this number to offset
+[04:34.200 --> 04:41.320]  our measurements and in fact I did such benchmarking when I don't run in a loop it's then switch
+[04:41.320 --> 04:48.200]  it to like more dumb benchmarks when you do loops over bpf maps because it's harder to
+[04:48.200 --> 04:54.760]  port things and if you want someone else to try these benchmarks they will have to patch
+[04:54.760 --> 04:57.960]  their kernel and this is not simple.
+[04:57.960 --> 05:06.600]  So let's take a look at several hash functions of interest so jhash is currently used hash
+[05:06.600 --> 05:14.920]  function in the bpf it's Bob Jenkins hash and it's probably was developed some 30 years
+[05:14.920 --> 05:21.600]  ago so spooky hash is another it's a newer version it's not not a newer version it's
+[05:21.600 --> 05:32.720]  a newer hash from Bob Jenkins and then there goes xxhashes xxh32n64 it's a previous generation
+[05:32.720 --> 05:41.880]  of these functions they are available in kernel and we can try them as well and xxh3 is like
+[05:41.880 --> 05:45.160]  the state of art hash function.
+[05:45.160 --> 05:53.480]  So if we just take a look at this plot the orange line which goes there is jhash which
+[05:53.480 --> 06:00.880]  is currently used the green line which looks to be winning here is like the previous generation
+[06:00.880 --> 06:13.040]  xxh64 the blue line this is the newest generation xxh3 and while it looks here that it doesn't
+[06:13.040 --> 06:24.560]  perform as well as xxh64 for small keys it does outperform it and for bpf hash maps we
+[06:24.560 --> 06:31.280]  primarily interested in using it for small keys like I don't know like actually I never
+[06:31.280 --> 06:42.040]  use it like huge keys and in any case this like xxh3 works faster than Jenkins hash and
+[06:42.040 --> 06:46.840]  later I will show that it can be actually run even more faster but one interesting thing
+[06:46.840 --> 06:53.120]  is that the spooky hash it actually like it it performs pretty bad for small keys because
+[06:53.120 --> 06:58.640]  it has a lot of like setup which it does in any case but later it starts outperform like
+[06:58.640 --> 07:03.640]  every hash function I was interested when it does it so it does it at about key size
+[07:03.640 --> 07:12.000]  of 9000 it's cool but it's not the key size of interest for us.
+[07:12.000 --> 07:22.200]  So if we take a look at xxh3 and jhash we can see that the blue line xxh3 it actually
+[07:22.200 --> 07:33.080]  outperforms like jhash for all key sizes and there is also this green line it's jhash2
+[07:33.080 --> 07:40.320]  it's optimized version of jhash which can be used if your key size is multiple of 4
+[07:40.320 --> 07:45.360]  and it's actually used in bloom filters but for some reason not in hash maps.
+[07:45.360 --> 07:55.920]  So if we take closer look at small key sizes we see that yes xxh3 outperforms jhash so
+[07:55.920 --> 08:05.360]  for me it's enough reason to try to benchmark maps with it and let's take a look now at
+[08:05.360 --> 08:15.960]  BPF maps which use hash functions so first one is stack trace map and then hash map in
+[08:15.960 --> 08:16.960]  bloom filters.
+[08:16.960 --> 08:25.280]  So stack trace was actually the main reason for Andrey to propose xxh3 because what it
+[08:25.280 --> 08:34.160]  does it takes a stack trace and then it hashes it and creates a map of IDs which refers to
+[08:34.160 --> 08:42.080]  this traces and if there are hash collisions then old stack traces are lost and we get
+[08:42.080 --> 08:51.880]  incorrect picture about the system and stack traces is not too random so if your hash function
+[08:51.880 --> 08:59.280]  is not very good if it doesn't have very good like avalanche properties then it will create
+[08:59.280 --> 09:09.040]  more collisions for less random data and xxh3 behaves way better than jhash for avalanche
+[09:09.040 --> 09:17.840]  properties and this is like one of reasons and the main reason to use it for stack trace.
+[09:17.840 --> 09:23.160]  The other reason as a benchmark that's also like for stack trace it also runs about twice
+[09:23.160 --> 09:30.080]  faster for typical key sizes because typical key size it's like 8 bytes per stack depth
+[09:30.080 --> 09:44.840]  and this is typically like 60, 80, 100 bytes so xxh3 is like is a very good candidate here
+[09:44.840 --> 09:50.680]  so for hash benchmarks I was primarily focused on lookups because this is what we do the
+[09:50.680 --> 10:00.480]  most and this is the thing which like is easy to measure compared to like more complex pictures
+[10:00.480 --> 10:05.200]  so there are some links to benchmarks I used and scripts to actually execute benchmark
+[10:05.200 --> 10:13.680]  and plot it because like for every change I had to draw some like 100 or 150 pictures
+[10:13.680 --> 10:18.760]  for different key sizes for different fullness of hash maps so it's impossible to do otherwise
+[10:18.760 --> 10:28.760]  like and I had a few pictures here so if we just use xxh3 then it looks like it like the
+[10:28.760 --> 10:38.080]  new map which is orange it outperforms the original map which is blue and here is lookup
+[10:38.080 --> 10:48.960]  speed in cycles vertical and horizontal axis is a key size so the bigger the key the better
+[10:48.960 --> 10:55.360]  the more gain from using the new hash function but if we take like a bigger map I see that
+[10:55.360 --> 11:03.320]  xxh3 as it is degrades for key size 4 and this is already like for me it's a blocker
+[11:03.320 --> 11:12.040]  I can't like propose a change which degrades existing applications so then I went to a
+[11:12.040 --> 11:20.120]  different architecture micro architecture and here I saw that it degrades for different
+[11:20.120 --> 11:27.120]  key size like here it degrades for key size 12 and if you if we take like a bigger map
+[11:27.120 --> 11:37.960]  it degrades for like key size 24 and then I thought how to fix this because it's if
+[11:37.960 --> 11:44.280]  it works for bigger keys then maybe I can utilize this and I did the same thing as bloom bloom
+[11:44.280 --> 11:51.440]  filter currently does so bloom filter executes jh2 for key sizes divisible by 4 and it uses
+[11:51.440 --> 11:59.120]  jhash in other cases so I did the same utilize jhash 2 for key sizes of which are divisible
+[11:59.120 --> 12:10.840]  by 4 but for small ones like it's this keyln divided by 4 keyln 32 it's actually computed
+[12:10.840 --> 12:17.880]  it's just keyln divided by 4 but it's computed during hash initialization and we can decide
+[12:17.880 --> 12:23.800]  for which key sizes we do this and with this hash function I finally see that it doesn't
+[12:23.800 --> 12:33.080]  degrade anywhere so this is like 10k 100k and 100% full which is like the worst case
+[12:33.080 --> 12:42.400]  and if we take another slice this is 100k 100k map with key size 8 and on the left side
+[12:42.400 --> 12:50.320]  it's almost empty on the right side it's 100% full and the bigger key size the bigger gain
+[12:50.320 --> 12:58.400]  for particular key size so for key size 64 new like map with new hash function runs about
+[12:58.400 --> 13:07.040]  50% faster and for key size 128 it runs almost twice faster and bloom filters as I mentioned
+[13:07.040 --> 13:17.160]  they use the jhash 2 for keys divisible by 4 so I don't expect any gain for keys divisible
+[13:17.160 --> 13:22.720]  by 4 at least for small keys and it looks like this so this is like an extreme case
+[13:22.720 --> 13:31.880]  of bloom filter with 9 hashes but and I just did it so it reproduces the plot of hash function
+[13:31.880 --> 13:39.640]  here and yes for small keys it is the same and for bigger keys we have a gain and here
+[13:39.640 --> 13:50.800]  is the key size 240 where xh3 function originally utilizes vector instructions and we can't use
+[13:50.800 --> 13:57.080]  obviously vector instructions in BPF maps and for key size 240 it's like it is expected
+[13:57.080 --> 14:03.400]  to start using vector instructions but there is also scalar implementation which works
+[14:03.400 --> 14:14.440]  faster than jhash but it degrades at this point so and another thing to mention that
+[14:14.440 --> 14:25.880]  old hash functions jhash xxh64 they were designed and optimized it with O2 option in mind so
+[14:25.880 --> 14:36.960]  if we switch to O3 then they will behave the same but xxh3 actually runs like 50-60% faster
+[14:36.960 --> 14:48.720]  so it actually performs way better with O3 so I just jump like here so and I know that
+[14:48.720 --> 14:56.080]  like O3 is no go for kernel like there were several attempts to introduce it and the reason
+[14:56.080 --> 15:03.720]  was that there are no candidates which benefit from this O3 but this one is a particular
+[15:03.720 --> 15:15.160]  candidate like hash if we could use O3 for hash map because not only for xxh3 because
+[15:15.160 --> 15:26.240]  it should be inline then in this case we would be able to get rid of this composite hash
+[15:26.240 --> 15:37.040]  which mixes hashes and just use it as is so yeah as I said for stuck trace map it definitely
+[15:37.040 --> 15:49.080]  makes sense to use it so there is both benefit in speed small one because stuck trace map
+[15:49.080 --> 15:54.960]  the bottleneck for speed is not the hash but the bottleneck for hash collisions is the
+[15:54.960 --> 16:03.240]  hash and for hash map it's a question maybe someone would advise me on what to do with
+[16:03.240 --> 16:14.680]  O3 and after I run like benchmarks on slightly bigger number of architectures then I think
+[16:14.680 --> 16:21.400]  this is also like a good candidate to use in the hash map so here are some links for
+[16:21.400 --> 16:26.840]  benchmarks and paper which I use it for those who will be reading this and thank you
+[16:26.840 --> 16:44.840]  all right thanks a lot any questions you for the O3 thing can you only compile maybe the
+[16:44.840 --> 16:51.120]  like the hash map file with O3 yeah yeah if it is like currently it is disabled like
+[16:51.120 --> 16:57.520]  for every file in kernel for custom build we can enable it but like generally we just
+[16:57.520 --> 17:03.880]  pass O2 everywhere if it's possible just to compile BPF maps with O3 this will solve the
+[17:03.880 --> 17:08.440]  thing yes it's it's not such a big change so you don't have to compile the whole kernel
+[17:08.440 --> 17:24.560]  with O3 yeah yeah yeah it's local code okay any other questions no then thanks a lot
+[17:38.440 --> 17:40.500]  you

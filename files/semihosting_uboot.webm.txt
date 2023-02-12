@@ -1,0 +1,245 @@
+[00:00.000 --> 00:11.760]  Hi, I'm Sean. Today I'm going to talk about semi-hosting in the context of Uboot and what
+[00:11.760 --> 00:19.200]  it is and how it works and maybe why you might want to use it. So, first I want to ask how
+[00:19.200 --> 00:24.240]  do you boot Strapasystem? So, you might do this for two reasons. One, you have a new
+[00:24.240 --> 00:28.400]  board right from the factory and it has nothing on it at all and you have to get something
+[00:28.400 --> 00:33.440]  on it and the other one is maybe you bricked it and this happens to me sometimes. It actually
+[00:33.440 --> 00:38.960]  happens quite a lot especially when I'm working on Uboot and the board will no longer boot.
+[00:40.880 --> 00:46.160]  So, there's two basic steps usually. The first one is you want to get something running on your
+[00:46.160 --> 00:51.280]  board and the second one is you want to then write something to storage so you don't have to do
+[00:51.280 --> 00:58.160]  the process again. So, there's a variety of protocols you can use. USB of course. I like
+[00:58.160 --> 01:05.200]  UMS. It's very nice. It makes your device look like a USB flash drive which is very, very convenient.
+[01:06.320 --> 01:11.840]  There's also a bunch of Ethernet stuff. The classic TFTP. Baskoot makes an appearance twice
+[01:11.840 --> 01:17.200]  because it can do both. If you have an SD card, bootstrapping is super easy. You just pop out
+[01:17.200 --> 01:22.240]  the SD card and put whatever you want on it and put the SD card back in but a lot of boards don't
+[01:22.240 --> 01:29.680]  have SD cards. So, this is not always an option. There's Serial. This is usually kind of slow
+[01:30.320 --> 01:34.480]  so you might only want to use it for the code execution part but it's definitely there.
+[01:34.480 --> 01:38.160]  Some boards have it built into the boot loader. You can just flash something over Serial.
+[01:39.520 --> 01:45.760]  And there's also JTAG and JTAG is kind of a classic one. Also slow. You probably wouldn't
+[01:45.760 --> 01:52.000]  want to flash your whole root file system over it but it's pretty reliable and a lot of boards have it.
+[01:53.440 --> 01:57.840]  What if you only have JTAG and you don't have any of these other nice protocols?
+[01:58.800 --> 02:02.960]  So, I'd like to take a little bit of a different approach to the problem
+[02:04.400 --> 02:09.280]  and let's talk about something totally different which is the NXP Core IQ line of
+[02:09.280 --> 02:16.400]  communications processors. These are the newest iterations of a very old line
+[02:17.200 --> 02:22.960]  which stretches to the M68K and there's a very long lineage of PowerPC stuff in there
+[02:24.400 --> 02:31.200]  and they tend to have lots of Ethernet, some PCIe, some USB but not any display interfaces. So,
+[02:31.200 --> 02:36.160]  they're not really media sucks and they often have hardware accelerated networking
+[02:36.160 --> 02:41.120]  so you can do some stuff in hardware which you would normally do in software.
+[02:41.120 --> 02:44.400]  And this is kind of the main selling point on why you might want to use these.
+[02:46.000 --> 02:50.400]  So, all of these have something they call a reset configuration word or RCW
+[02:51.040 --> 02:57.040]  and this started back in the PowerPC days as just basic initialization. What enviousness
+[02:57.040 --> 03:02.160]  your sock is going to be, maybe what dividers you're going to have on some clocks, how wide
+[03:02.160 --> 03:06.800]  your boot bus is, what are you going to do with your debug pins and this is kind of a small amount
+[03:06.800 --> 03:12.800]  of data so they stuck it on there some pull-ups and pull-downs on some of the pins and this is a
+[03:12.800 --> 03:19.040]  very standard thing you'll see on a lot of different socks and then they wanted some pin
+[03:19.040 --> 03:23.360]  boxing because when they originally started with this they all the pins were fixed function
+[03:23.360 --> 03:28.320]  and you can sell more chips if you can change the function of some of the pins so that you can use
+[03:28.320 --> 03:34.400]  like USB on one chip and maybe ethernet on another so they added some pin boxing and they added it
+[03:34.400 --> 03:41.040]  to the RCW and then they added a lot more pin boxing because the more pin boxing you have the
+[03:41.040 --> 03:46.640]  more applications your chip can fit into and so they started running out of pins because they
+[03:46.640 --> 03:55.120]  started getting maybe like 128, 256, 512 bits of stuff that they needed to configure and so they
+[03:55.120 --> 04:01.120]  decided they were going to put the RCW on the boot device so the first thing the sock does when it
+[04:01.120 --> 04:06.080]  boots up is it reads off this RCW and it configures all the pins and then it continues with the boot
+[04:06.880 --> 04:13.840]  and this is kind of convenient but it creates a chicken and egg problem where in order for your
+[04:13.840 --> 04:20.640]  sock to boot up there has to be something on your initial device and if you're in a situation where
+[04:20.640 --> 04:26.480]  you have to bootstrap it there's nothing there so the sock won't boot up so what they did is they
+[04:26.480 --> 04:32.880]  created a hard-coded reset configuration word this is for maximum compatibility they would disable
+[04:32.880 --> 04:37.840]  all the peripherals and you would just have your boot device and so you could always boot into this
+[04:37.840 --> 04:45.440]  and be safe and not break your board but this is not so great because they never added runtime pin
+[04:45.440 --> 04:51.840]  muxing so this chip you select a function for your pins and you can't change it there are a few
+[04:51.840 --> 04:56.560]  pins where you can change it but for the most of them you're stuck so when you have this maximum
+[04:56.560 --> 05:02.880]  compatibility RCW with everything disabled you have no ethernet you have no usb you have no serial
+[05:02.880 --> 05:10.800]  even and all you get is jtag and your boot device so nxp knew they had a problem and they decided to
+[05:10.800 --> 05:18.960]  solve it by introducing this override so you would boot via the hard-coded reset configuration word
+[05:18.960 --> 05:23.760]  and then you would program via jtag the values that you actually wanted that would enable all your
+[05:23.760 --> 05:28.880]  peripherals for your board and then you would do a partial reset and it would come up and it would
+[05:28.880 --> 05:34.480]  load everything like it was supposed to but there's a couple problems with this the main one is that
+[05:34.480 --> 05:42.240]  they never documented this stuff so in order to use it you you have to use the jtag probe which is
+[05:42.960 --> 05:47.360]  like most jtag probes kind of a gouge because they they know you're buying the chip so you
+[05:47.360 --> 05:52.960]  gotta have the jtag probe and you have to use their IDE which is a yearly subscription and they're
+[05:52.960 --> 06:00.160]  not cheap so this is not a great situation and if you didn't think this was great here's a glowing
+[06:00.160 --> 06:05.840]  review i found on the forums our manufacturer uses a single pc to perform the initial programming
+[06:05.840 --> 06:11.280]  on this pc they have an evaluation copy of code warrior which is their IDE every time that evaluation
+[06:11.280 --> 06:16.640]  copy expires they erase the hard drive of the pc install the os again and load another evaluation
+[06:16.640 --> 06:25.920]  copy uh so this is not ideal uh and i thought about how i might address this uh and make it better
+[06:25.920 --> 06:31.600]  and i remembered um something that i learned about a couple months ago it's called semi hosting
+[06:32.400 --> 06:36.960]  and the basic idea of semi hosting is that you attach a debugger in my case it's over jtag
+[06:37.520 --> 06:42.480]  and uh your code is going to execute a special breakpoint instruction and when your debugger
+[06:42.480 --> 06:49.200]  sees this it will read out there on opcode in r0 and an argument in r1 and it will do something for
+[06:49.200 --> 06:55.680]  you and then it will give you a return code back in r0 and this is very very similar to how sys calls
+[06:55.680 --> 07:00.960]  work because your program will execute a special instruction the operating system will read out
+[07:00.960 --> 07:07.920]  your registers it will do something for you and give you a return code so what do you get well
+[07:07.920 --> 07:14.400]  the thing that i wanted most is serial because i didn't have any so first i looked at some of the
+[07:14.400 --> 07:20.480]  sys write c and sys write c is basically put char uh you uh so we can implement put s here
+[07:21.120 --> 07:24.800]  and so we're going to take in a string and we're going to loop over all the characters in the
+[07:24.800 --> 07:30.400]  string and for each character we're going to trap or execute our breakpoint instruction
+[07:30.400 --> 07:35.280]  and we're going to pass for our opcode the write c and we're also going to pass a pointer to the
+[07:35.280 --> 07:42.560]  character uh and if you may know that put char actually just takes the character um and so this
+[07:42.560 --> 07:48.480]  is kind of an unfortunate uh performance implication because we have one breakpoint
+[07:48.480 --> 07:55.040]  and one memory access per character in the string and for j tag this is not very performant
+[07:56.320 --> 08:02.640]  if you've ever used a 300 bod modem you know that's very slow this is even slower so this is
+[08:02.640 --> 08:07.600]  really not useful if you actually want to use your serial output so we can do better though
+[08:08.320 --> 08:11.600]  they also have something called sys write zero this is basically put s
+[08:11.600 --> 08:18.320]  so uh our pit of implementation gets very simple uh we're just going to trap with write zero
+[08:19.120 --> 08:24.960]  and now we get one breakpoint per string uh but we still have to do one memory access per character
+[08:24.960 --> 08:29.600]  and the problem is that we don't want to read off the end of the string we have to make sure
+[08:29.600 --> 08:33.360]  that we don't go past the null terminator so the debugger has to read a character
+[08:34.000 --> 08:37.840]  and then see it was at the null terminator and if it's not you read another character
+[08:37.840 --> 08:43.120]  and you keep doing this uh and we really don't want to go off the end uh but the problem is that
+[08:43.120 --> 08:49.520]  for j tag setting up a read is a pretty intensive process um there's a lot of overhead and it can
+[08:49.520 --> 08:56.800]  be still pretty slow so this is faster uh about 10 times as fast but it's still slow uh really
+[08:56.800 --> 09:03.440]  not usable but we can do even better um so we're going to use sys write which is basically the
+[09:03.440 --> 09:09.360]  write system call and for this one because we have multiple parameters uh the previous ones
+[09:09.360 --> 09:13.520]  only had one parameter so it just goes in the argument but for this one we're going to fill
+[09:13.520 --> 09:18.720]  in our arguments inside of a struct and we're going to take the file descriptor and the buffer
+[09:18.720 --> 09:24.320]  and the length of the buffer and we're going to fill this in with standard out and uh there are
+[09:24.320 --> 09:29.600]  string and the length of our string and then we're going to trap and we're going to pass a pointer
+[09:29.600 --> 09:36.720]  to our struct and this is generally how we pass multiple arguments um to semi-hosting because
+[09:36.720 --> 09:42.560]  there's only one argument register so they will take a pointer to the struct and so now we get
+[09:42.560 --> 09:49.120]  one breakpoint per string and two memory accesses per string and this is reasonably fast we can do
+[09:49.120 --> 09:55.200]  stuff with this and it's not glacially slow um so this is the kind of implementation I ended up
+[09:55.200 --> 10:00.160]  using it uh and if you've been paying attention you'll note that sys write kind of implies the
+[10:00.160 --> 10:07.360]  existence of sys open and you can open any file on your host system which is pretty convenient
+[10:08.240 --> 10:12.000]  and you can do all the standard stuff like seeking it and reading it
+[10:12.000 --> 10:18.160]  and closing it uh we don't get stat but we do get the file length which is mostly what we want
+[10:18.160 --> 10:22.320]  because usually we just want to open it find out how long it is and then read the whole thing
+[10:22.320 --> 10:29.680]  uh so in uboot you may classically do something like this if you want to load your linux and
+[10:29.680 --> 10:34.000]  then boot it you're going to load it from mmc0 add a particular address uh and then you're
+[10:34.000 --> 10:40.320]  going to give your file name and then you'll boot it uh and so we can replace this with load host fs
+[10:40.320 --> 10:48.480]  which is the something on your host debugger file system uh and that linux image will get
+[10:48.480 --> 10:54.240]  read from the directory that you're running your debugger from um and it it's the same structure
+[10:54.240 --> 11:02.000]  because under the hood it's using the same api and there's a dash because there's only one host fs
+[11:02.000 --> 11:08.800]  and we don't need to have multiple debugger support uh and there's a special file called
+[11:08.800 --> 11:13.760]  colon tt uh which i think stands for teletype and this is your standard in and standard out
+[11:13.760 --> 11:19.280]  and almost everybody uses this uh except q mu because q mu doesn't have this huge overhead
+[11:19.280 --> 11:25.600]  for memory accesses so they don't actually care uh if you can use your console with uh read and write
+[11:25.600 --> 11:34.720]  and so you just use uh write zero with them and it's works uh so one classic problem with
+[11:34.720 --> 11:40.560]  booting with j tag is that your regular boot process is going to look something like load spl
+[11:40.560 --> 11:46.240]  and spl is going to initialize d ram and then spl is going to load regular u boot into d ram
+[11:46.240 --> 11:52.560]  and execute it and when you do this with j tag instead you have to load spl over j tag and j
+[11:52.560 --> 12:00.880]  tag is going to run and initialize d ram and sometime you have to uh load u boot into j you
+[12:00.880 --> 12:07.360]  load u boot into d ram over j tag but we don't really know when um and so a really classic way
+[12:07.360 --> 12:15.520]  to do this is uh you just pick a time and you wait that long and then you load u boot but this
+[12:15.520 --> 12:20.960]  is kind of awful because if you have any kind of variance in how long d ram initialization takes or
+[12:20.960 --> 12:25.600]  how long it takes especially if you're doing other hardware initialization um you have to
+[12:25.600 --> 12:30.640]  just wait a lot longer and in the average case you're going to be doing nothing and this can
+[12:30.640 --> 12:34.720]  really drive you nuts as a developer because you might be waiting like 20 seconds because
+[12:34.720 --> 12:41.120]  sometimes it takes 20 seconds but most of the time it doesn't um so you can also reimplement
+[12:41.120 --> 12:48.800]  d ram in tickle and uh this is a really common thing for vendors to do because they love just
+[12:48.800 --> 12:52.720]  you know it's it's very simple for them they just write all the registers and it happens over j tag
+[12:53.680 --> 12:58.000]  and this avoids the whole timing problem because we know exactly when d ram has vision is sliced
+[12:59.280 --> 13:03.440]  but it's a totally different process from normal you have to specify your parameters in a different
+[13:03.440 --> 13:09.040]  format in a different language it's not going to be tested as much and it probably won't initialize
+[13:09.040 --> 13:15.440]  things in the same way so it's it can be more buggy um and it's kind of uh worrisome especially
+[13:15.440 --> 13:20.480]  when you have to uh your regular u boot will work fine and maybe this doesn't work so well
+[13:21.360 --> 13:28.320]  but semi hosting makes this really simple because spl can load and then it will over j tag
+[13:28.320 --> 13:32.160]  and initialize d ram and it says to your host please load u boot at this address
+[13:32.160 --> 13:39.280]  and your host will do that and then it continues on its way and it's um extremely simple to use
+[13:39.280 --> 13:44.400]  and it solves this whole timing problem which can be very annoying uh so what else do you get
+[13:45.040 --> 13:49.680]  well we get some error handling uh error no is practically essential um to find out why
+[13:49.680 --> 13:55.520]  something failed uh is error is not uh the idea of is errors that you will pass in a return code
+[13:55.520 --> 14:00.880]  and is there will tell you if it's an error or not but the problem is that some of these semi
+[14:00.880 --> 14:05.920]  hosting commands um have different semantics for the return code and most of the time the
+[14:05.920 --> 14:11.680]  semantic is negative numbers are errors so effectively you're doing this whole big semi
+[14:11.680 --> 14:17.600]  hosting call just to compare to zero um so i don't really know why this is in here and there's
+[14:17.600 --> 14:23.280]  actually several functions that are kind of like that um for example sys uh sys time will get you
+[14:23.280 --> 14:28.720]  the real time which can be helpful if you're uh if your device doesn't have an rtc or you don't
+[14:28.720 --> 14:33.680]  want to initialize it um but sys elapsed will get the number of ticks that your program has been
+[14:33.680 --> 14:40.400]  running so maybe you would use this for uh benchmarking but the overhead of doing semi hosting is
+[14:41.200 --> 14:46.800]  a lot larger than the the amount of precision that you're going to get so i'm not really sure
+[14:46.800 --> 14:52.640]  why you use that one either um there's some libc emulation uh you can pass in a command line you
+[14:52.640 --> 14:56.480]  but we don't really need this because we have the environment and we have the device tree and those
+[14:56.480 --> 15:01.600]  are kind of classic ways to pass in um parameters but if you're not using uboot and you don't have
+[15:01.600 --> 15:07.840]  this sort of system set up uh you can get command line parameters pretty easily there's also a sys
+[15:07.840 --> 15:13.360]  heap which is where you tell the device where it thinks the heap is and where it should malloc stuff
+[15:14.160 --> 15:18.400]  but usually you know this when you compile you say this address range is going to be or i'm going
+[15:18.400 --> 15:24.400]  to stick my heap so also i'm not really sure why that's in there um and as you may have noticed uh
+[15:24.400 --> 15:31.440]  you can write files um so of course you can mess things up especially on unix where you can open
+[15:31.440 --> 15:36.400]  up a lot of files that aren't really files and do some fun stuff with them but you can also just
+[15:36.400 --> 15:42.320]  run arbitrary commands and you can remove files too um so you have to really trust this stuff that
+[15:42.320 --> 15:47.280]  you're going to run uh because as far as i know no one does sandboxing they just implement all this
+[15:47.280 --> 15:55.600]  stuff uh so maybe they shouldn't but that's how it is uh so if you've ever used semi-hosting before
+[15:55.600 --> 16:00.800]  you may be familiar with the this problem uh break points are actually invalid instructions
+[16:00.800 --> 16:05.360]  and your program will crash unless there is a debugger attached and the debugger will handle it for
+[16:05.360 --> 16:11.520]  you and you won't end up executing it um so typically you would have to have two programs one
+[16:11.520 --> 16:16.400]  with semi-hosting enabled and one with semi-hosting not enabled and the one with semi-hosting enabled
+[16:16.400 --> 16:22.800]  you'd have to run with a debugger but we can get around this using a pretty simple trick um this
+[16:22.800 --> 16:28.240]  one is from uh tom verbuer uh and the idea is that in your synchronous support handler
+[16:30.240 --> 16:34.800]  you first check to make sure that we have an invalid instruction and otherwise you panic which
+[16:34.800 --> 16:39.920]  you know probably involves printing out the registers or doing something um complaining loudly on
+[16:39.920 --> 16:46.400]  the serial which you might not have uh then you would do you we need to check to make sure our
+[16:46.400 --> 16:54.720]  instruction which is held in elr is the semi-hosting arm 64 halt instruction which is the special
+[16:54.720 --> 17:03.920]  breakpoint um and the lower bits of the pc are actually not the pc on uh arm because they have
+[17:03.920 --> 17:08.960]  stuff like are you in thumb mode or not um so we need to mask those off well you could probably
+[17:08.960 --> 17:16.160]  just do and uh till the three um and if we actually find out that it was supposed to be a semi-hosting
+[17:16.160 --> 17:20.480]  instruction we're going to disable semi-hosting which on your processor can do whatever it wants
+[17:20.480 --> 17:24.560]  but on u boot it just sits a global variable that says we don't have semi-hosting don't try it again
+[17:25.520 --> 17:29.760]  and then we pretend that we get a failure negative one is almost always a failure
+[17:30.320 --> 17:33.520]  and then we advance the pc by four bytes
+[17:33.520 --> 17:41.040]  so if you want to use semi-hosting in u boot uh you can enable these configs uh the first one
+[17:41.040 --> 17:48.400]  enables semi-hosting of any kind um and also enables this uh command uh the second one semi-hosting
+[17:48.400 --> 17:53.360]  serial will get you some serial input and output and you'll probably want this serial put s uh
+[17:53.360 --> 17:58.960]  because normally u boot will print a character at a time uh and put s will group those characters
+[17:58.960 --> 18:04.960]  into strings and print them all at once and if you want to have this thing you will need to enable
+[18:04.960 --> 18:10.960]  config semi-hosting fallback and if you want to use an spl then you can enable the spl versions
+[18:10.960 --> 18:16.160]  there's no serial version because u boot always enables the uh serial device in spl that it's
+[18:16.160 --> 18:22.480]  using in the regular u boot um and these are the things that i worked on adding uh and i also worked
+[18:22.480 --> 18:28.080]  on config semi-hosting a lot but uh the basic support was already there uh there's also risk
+[18:28.080 --> 18:34.640]  five support from a kautok console and this is pretty recently added so it's either in the january
+[18:34.640 --> 18:40.000]  release or maybe the march release i'm not sure um and if you want to know more about how to enable
+[18:40.000 --> 18:47.120]  this we have a documentation link and of course you're also going to need a debugger so i like to
+[18:47.120 --> 18:56.000]  use open ocd um maybe because i'm a masochist uh and open ocd is a debug server for j tag so the
+[18:56.000 --> 19:02.640]  idea is you launch open ocd and it connects to your debug probe and then you can you can tell the
+[19:02.640 --> 19:08.080]  debug probe to do things like uh start or stop your processor and you can also attach gdb to it
+[19:08.080 --> 19:14.400]  like it's a running process so this is pretty simple for open ocd you just halt the processor
+[19:14.400 --> 19:19.360]  you enable semi-hosting and then you resume it and typically what you would do is in between this
+[19:19.360 --> 19:23.600]  enabling semi-hosting and resuming you would load your program and then resume out a particular
+[19:23.600 --> 19:31.040]  address and this you could stick in a script and just run and automate the whole thing uh so there's
+[19:31.040 --> 19:37.200]  a couple of downsides to open ocd uh you can kind of think of this as like a wish list or
+[19:37.200 --> 19:42.640]  things that are knowing me but not enough that i fixed them uh the one of them is that uses the
+[19:42.640 --> 19:47.920]  same terminal for regular like logging messages like uh you know i attached a debugger um and that
+[19:47.920 --> 19:52.960]  sort of thing as semi-hosting output so they can be kind of get intermixed so you have to watch
+[19:52.960 --> 19:59.040]  out for that uh the serial is cooked which means that when you type something uh nothing happens
+[19:59.040 --> 20:05.200]  until you hit enter and then everything happens uh and this can is kind of okay because if you're
+[20:05.200 --> 20:11.680]  editing a command line um it it's generally really slow if like you hit backspace and then you have
+[20:11.680 --> 20:17.120]  to go to u boot and u boot interprets the backspace and echoes it back and then it gets displayed on
+[20:17.120 --> 20:24.160]  your terminal so cooked is nice here um the problem is that open ocd is single threaded so while it's
+[20:24.160 --> 20:29.200]  waiting for you to input it's not doing anything so if you unplug the device or you hit control c
+[20:29.200 --> 20:37.120]  in your debugger it won't notice until you hit enter uh so this is uh can be kind of fun especially
+[20:37.120 --> 20:43.440]  because even if you know about it you might forget um and this single threaded thing also ties into
+[20:43.440 --> 20:48.400]  there's no sandboxing so ideally you would do something like fork off another process and
+[20:48.400 --> 20:54.240]  maybe unshare some stuff or put it in a ch route and then that would be where you would run all your
+[20:54.240 --> 20:59.440]  semi-hosting stuff like it would open the file and you could limit it to just a few files but
+[20:59.440 --> 21:04.880]  there's no sandboxing so uh your whole system is there uh once again you have to trust your stuff
+[21:05.760 --> 21:11.120]  so should you use semi-hosting uh i would say not unless you have to especially not the serial
+[21:11.120 --> 21:17.680]  stuff but it's good to have if you have to use it it's nice uh and sometimes it's convenient if
+[21:17.680 --> 21:22.240]  you're doing emulation it can be really simple because you don't have to emulate an mmc device
+[21:22.240 --> 21:27.680]  you don't have to write a driver for an mmc device you just uh call your semi-hosting instruction
+[21:27.680 --> 21:31.600]  and you can load the file right into where you want it um and you don't have to do any hardware
+[21:32.480 --> 21:36.800]  and if you're already using jtag boot this can be really nice to solve some of your sequencing
+[21:36.800 --> 21:43.760]  stuff uh but i wouldn't recommend it in general um so i'd like to thank a couple people uh tom
+[21:43.760 --> 21:49.040]  verberware wrote a blog post on this stuff that got me thinking about the whole thing uh andre
+[21:49.040 --> 21:55.120]  psivara uh did the initial semi-hosting and uh i'm he also worked with me when i was upstreaming
+[21:55.120 --> 22:00.400]  my stuff so i'm grateful for that and of course tom rini and simon glass who reviewed and merged
+[22:00.400 --> 22:06.080]  all of this code and a lot of other patches along the years um and of course maric who put me up to
+[22:06.080 --> 22:12.400]  this talk and seiko who employed me while i was writing the code and if you're interested in this
+[22:12.960 --> 22:18.560]  there's that blog post i was talking about uh there is the risk five software spec which is
+[22:18.560 --> 22:24.080]  just the arm software spec but they use a different instruction and different registers and of course
+[22:24.080 --> 22:30.160]  the arm software spec and this link may die because arm has a tendency to rearrange things but uh for
+[22:30.160 --> 22:40.160]  now it works thank you
+[22:44.320 --> 22:46.160]  anyone have a question questions
+[22:47.680 --> 22:55.600]  yeah i do um can you actually use semi-hosting for serial control in linux uh yes but only
+[22:55.600 --> 23:02.960]  for debug prints and i haven't looked into it that closely um i think the whole uh stopping
+[23:02.960 --> 23:08.480]  linux to do a breakpoint is kind of invasive because linux tends not to like that because like
+[23:08.480 --> 23:13.840]  your interrupts for that core will just not happen while it's stuck on the debugger and uh you can
+[23:13.840 --> 23:18.080]  kind of break your devices that expect there to be an interrupt that gets handled in a reasonable
+[23:18.080 --> 23:26.800]  manner um so typically when you stop the processor in linux uh like your emmc will just break um so
+[23:26.800 --> 23:31.440]  generally i've only seen it for debug prints and usually only if like you can't get to the real
+[23:31.440 --> 23:54.880]  serial console yeah okay since we have a couple minutes i have a one more slide
+[23:54.880 --> 24:02.240]  um so normally when you boot print something uh this is what it gets it'll get like hello uh
+[24:02.240 --> 24:09.280]  slash n and it'll normally print this like h e l l o slash r slash n and it inserts the slash r
+[24:09.280 --> 24:13.920]  and it'll do it one character at a time but as we've established earlier this is glitchily slow
+[24:13.920 --> 24:20.720]  on semi-hosted hardware so what i initially did was this and i printed out hello slash n and then
+[24:20.720 --> 24:27.120]  i added the dash slash r um but this will actually break things because they expect it to be r n and
+[24:27.120 --> 24:32.720]  not n r even though like functionally they're the same um so i ended up having to do it the other
+[24:32.720 --> 24:42.240]  way uh so if you're implement this stuff be aware of that although uh if if you are doing this like
+[24:42.240 --> 24:53.200]  on a microcontroller you can probably just put hello r n in your strings and maybe that's better

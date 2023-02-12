@@ -1,0 +1,162 @@
+[00:00.000 --> 00:11.800]  Please sit down, if you can.
+[00:11.800 --> 00:18.000]  So the next speaker is Spicknev Yanderevsky-Smak.
+[00:18.000 --> 00:27.680]  And he will talk about MK OSI InitRD, a new project to build InitRDs from system packages.
+[00:27.680 --> 00:33.400]  Yeah, so my talk builds on previous talks.
+[00:33.400 --> 00:44.560]  So my name is Zbyszek, I work in Red Hat in the Plumbers group, and I work on system D and Fedora.
+[00:44.560 --> 00:51.600]  Brought to RPM, RPM Autospec build tools and stuff like that.
+[00:51.600 --> 01:08.800]  And so we're here today about a new approach to delivering the kernel and the user space, the root file system to computers.
+[01:08.800 --> 01:21.560]  And all the stuff that was mentioned today, so secure boot, to trust your code, PCR measurements, boot phases.
+[01:21.560 --> 01:27.240]  Locking secrets to the PCR state.
+[01:27.240 --> 01:35.720]  This creates a situation where we should think how we build InitRDs.
+[01:35.720 --> 01:47.760]  And I think it's a good opportunity to kind of throw away a lot of old approaches and use a new approach.
+[01:47.760 --> 01:59.000]  And the things the way that I'm talking about today would have been very hard a few years ago,
+[01:59.000 --> 02:07.640]  because we didn't have those mechanisms that we have right now, like credentials and system extensions.
+[02:07.640 --> 02:25.760]  So look, I talked about system extensions, so the compact disk images that carry a file system and one partition,
+[02:25.760 --> 02:36.480]  the inverted data in another partition and a signature for the root hash of the inverted data in a third partition.
+[02:36.480 --> 02:41.760]  And this is squished into an image with minimal padding.
+[02:41.760 --> 02:53.240]  So actually it sounds kind of awful, but it's basically just a file system image with some metadata that can be trusted.
+[02:53.240 --> 03:05.600]  And those tools allow us to do things in a completely different fashion than we used to do them in the past.
+[03:05.600 --> 03:07.280]  So what do we do now?
+[03:07.280 --> 03:15.040]  I mean, this varies between distributions, but the approach is generally that on a general-purpose distribution like Fedora,
+[03:15.040 --> 03:22.080]  the user wants to have an InitRD, so they scrape some files of the file system,
+[03:22.080 --> 03:27.040]  whatever is installed there, sometimes with some local modifications, sometimes not.
+[03:27.040 --> 03:35.280]  You use LDD to figure out what libraries should be loaded and whenever there are extra files that need to be put in the InitRD,
+[03:35.280 --> 03:43.240]  well, somebody has to remember to do that, so essentially we duplicate the packaging layer.
+[03:43.240 --> 03:55.320]  And we do it on every user machine, so this costs time during upgrades, it's actually quite noticeable because of compression.
+[03:55.320 --> 04:00.960]  And so this was before we booted, and after we have booted into the InitRD,
+[04:00.960 --> 04:06.400]  generally, for example, the Fedora InitRDs, they have SystemD,
+[04:06.400 --> 04:12.800]  but they also have lots of extra functionality added that came before SystemD was there.
+[04:12.800 --> 04:19.000]  And over time, this functionality has been moving into SystemD.
+[04:19.000 --> 04:26.840]  And now we're at the point where it's completely useless, I mean, the part that is apart from SystemD is not useful
+[04:26.840 --> 04:35.680]  because we can just get rid of it and because it is implemented by SystemD in a better way, in general.
+[04:35.680 --> 04:45.200]  And while people hear, OK, now we should do something, some kind of access a file system in the InitRD,
+[04:45.200 --> 04:52.480]  oh, let's like some bash to do it. And why? I mean, we should just do the same thing we do in the host file system
+[04:52.480 --> 05:00.720]  and use proper tools. And if those tools are not good enough, then we should fix them so that it's nice to use them in the host file system
+[05:00.720 --> 05:05.400]  and they're also nicer to use in the InitRD.
+[05:05.400 --> 05:12.880]  And it's like a legacy that this InitRD environment used to be much different,
+[05:12.880 --> 05:19.440]  but we use SystemD and SystemD does the setup where it sets up slash proc and slash dev
+[05:19.440 --> 05:23.160]  and mounts everything that needs to be mounted.
+[05:23.160 --> 05:29.640]  And in reality, the environment in the InitRD doesn't have to be.
+[05:29.640 --> 05:36.760]  The fact that it's different from a real system is just something that we should get rid of.
+[05:36.760 --> 05:43.360]  So we have this duplication where we have the SystemD way to do things and the Non-SystemD way to do things in parallel.
+[05:43.360 --> 05:48.400]  It just adds complexity and doesn't, it's not beneficial.
+[05:48.400 --> 05:56.800]  And everybody does the InitRD in a very, very different way, every distribution.
+[05:56.800 --> 06:02.320]  And even some distributions have multiple ways.
+[06:02.320 --> 06:08.080]  I know that one of the goals of Chacut was to unify the approach between distributions,
+[06:08.080 --> 06:14.400]  it didn't really work, so this is another approach we'll see in 10 years.
+[06:14.400 --> 06:22.880]  So, okay, so we sign stuff. If we sign the kernel, but not the InitRD, then we are just pretending, right?
+[06:22.880 --> 06:26.880]  It's a waste of time. We need to sign both.
+[06:26.880 --> 06:34.880]  But in general, users want to have the thing, the users don't want to play with local key management.
+[06:34.880 --> 06:41.440]  It should be signed by the distro. If it's signed by the distro, then the InitRD must be also built by the distro.
+[06:41.440 --> 06:50.720]  So all this functionality that we have to inject things into the InitRD based on local configuration, well, we cannot use it.
+[06:50.720 --> 06:59.920]  So essentially, the idea is that, okay, if we are going to move the whole build of the InitRD into distro infrastructure and build it like a package,
+[06:59.920 --> 07:04.120]  then let's do it in a clean way.
+[07:04.120 --> 07:10.960]  And for me, this means taking a declarative set of distribution package names,
+[07:10.960 --> 07:15.720]  letting the distribution package manager figure out all the dependencies,
+[07:15.720 --> 07:29.320]  and then using the distribution package manager to put the files in a directory and then just zipping it up into any InitRD.
+[07:29.320 --> 07:39.560]  So, before I talk about the specifics of how to do this,
+[07:39.560 --> 07:44.840]  let's talk about some problems that immediately appear, right?
+[07:44.840 --> 07:58.840]  If we try to build one InitRD for, let's say, whole Fedora, then we will end up with this straight genetic blob that will take 60 seconds to load whenever the kernel boots.
+[07:58.840 --> 08:06.640]  This is not nice. So we need different InitRDs for different people.
+[08:06.640 --> 08:13.480]  And one option is to just build multiple variants, and we definitely plan to do this.
+[08:13.480 --> 08:28.480]  For example, like a simplified InitRD that works for VMs that only has some basic stuff that you need in the VM and no other drivers and no other tools and like one for laptops and so on.
+[08:28.480 --> 08:35.280]  But this only scales so far. We can have maybe five variants, but anything more than that would be annoying.
+[08:35.280 --> 08:55.280]  And the other approach is to use SystemD extensions. So the idea would be that you have the basic InitRD, and let's say you want, I don't know, SSHD in your InitRD, and you install this additional extension.
+[08:55.280 --> 09:20.280]  And I should mention what happens with trust here. So the bootloader verifies the kernel and the InitRD before loading it, and then after the InitRD has been loaded, and we want to use, we want to, the InitRD code loads the extension.
+[09:20.280 --> 09:36.280]  So it checks the signature of the extension before loading it. So SystemD extensions are a mechanism to add code in a way that it is trusted before, I mean, the trust is checked before it is used.
+[09:36.280 --> 09:57.280]  And if we use UKIs, we need some way to inject configuration into the, well, I mean, we build an image that's supposed to work everywhere so it cannot have local configuration and we need to deal with this issue somehow.
+[09:57.280 --> 10:06.280]  And one approach is to use the, just out of discovery of partitions and not have any local configuration, which is nice if we can make it work.
+[10:06.280 --> 10:22.280]  But a more general approach is to use credentials and to inject a configuration that has been signed and bound somehow to the local system using SystemD credentials.
+[10:22.280 --> 10:33.280]  And I would say that this is an area of active research because I don't think that anybody really knows how this is supposed to work in details.
+[10:33.280 --> 10:55.280]  And I wanted to mention that if we build InitRDs from packages, we have build reproducibility because we have an exact list of packages that was used and we can download them again and unpack them again in the same, I mean, the exact same way.
+[10:55.280 --> 11:05.280]  And we should have bit for bit identical result, which is good for checking that the idea was put together correctly.
+[11:05.280 --> 11:19.280]  But it's also very useful if you want to build some system extension afterwards because you build the extension by adding additional stuff and then taking the difference between the old image and the new image.
+[11:19.280 --> 11:46.280]  And the tool that we are using for this is, well, the project is called MQSI InitRD because it takes MQSI, which is a very simple tool that takes a list of packages and calls the package manager to download the packages and put them into an image.
+[11:46.280 --> 11:53.280]  And it does all the things that we happen to need.
+[11:53.280 --> 12:01.280]  So it supports GPT tables and DMVarity and signatures so we can do some extensions.
+[12:01.280 --> 12:07.280]  And it can also do archives and this is what you need for InitramFS format.
+[12:07.280 --> 12:29.280]  And MQSI itself is just a set of configuration scripts or configuration files for MQSI right now only for Fedora, but the concept carries very cleanly into other distributions so I think that if it works in Fedora maybe other people will pick it up too.
+[12:29.280 --> 12:40.280]  So just a list of packages and some tweaks to turn the install packages into an InitRD.
+[12:40.280 --> 12:45.280]  And the same for system extensions.
+[12:45.280 --> 12:59.280]  And well, in general the plan is to do it on the distro side but right now this hasn't happened yet so we have a kernel install plugin and you update the kernel and you very slowly build the InitRD from packages on the local system.
+[12:59.280 --> 13:05.280]  It's not very efficient but it works surprisingly stably.
+[13:05.280 --> 13:20.280]  And for Fedora 39 we want to propose changes to the build system to allow InitRDs to be built in this way in the build system and deliver these packages for people who want to try it out.
+[13:20.280 --> 13:25.280]  I think it's like years from being the default if ever.
+[13:25.280 --> 13:35.280]  And so this works, I mean it works without too much issue.
+[13:35.280 --> 13:42.280]  The InitRDs are bigger but they're not infinitely bigger, they're maybe just twice as big.
+[13:42.280 --> 13:59.280]  And the biggest difference surprisingly comes from kernel modules because what Dracut and other InitRD builders do, they select a specific list of modules, kernel modules that are needed for the local system.
+[13:59.280 --> 14:10.280]  I wanted to avoid this, I wanted to take all the modules from a kernel package and just put them in without knowledge about specific modules.
+[14:10.280 --> 14:17.280]  I think that this is not feasible, we'll have to do some kind of filtering too.
+[14:17.280 --> 14:38.280]  But the code itself, there's very little difference in the size of executables and libraries installed into the InitRD and this is because the code that we use in the InitRD is the same code from the host file system.
+[14:38.280 --> 14:54.280]  So it has the same library dependencies and you need to put the same set of libraries and actually most of the space is taken by libraries because the functionality has been moving more and more into shared libraries because we build more complicated stacks.
+[14:54.280 --> 15:03.280]  So this means that in principle the size overhead is not too big and can be reduced.
+[15:03.280 --> 15:14.280]  And I mean this works in some cases but like for simple cases for laptops and for some types of storage but certainly not for everything.
+[15:14.280 --> 15:29.280]  And what do we get? We have less things, we use the package dependency resolution mechanism so we don't duplicate packaging, we don't need to care about installation because we have RPM to do it for us or whatever.
+[15:29.280 --> 15:42.280]  We have fair principle builds because we don't take files from the host and everybody has the same image which is important for people trying to debug errors reported by users.
+[15:42.280 --> 15:53.280]  And well if we build things centrally we can assign them and we use systemd and just get rid of the extra stuff so our life is simpler.
+[15:53.280 --> 16:01.280]  And you know there's like a common set of things that people complain about, I mean like arrays when this is discussed.
+[16:01.280 --> 16:08.280]  So I wanted to underline that systemd is already used in the entirety so we're just removing things not adding new things.
+[16:08.280 --> 16:14.280]  And systemd sets up the environment so things are already like they should be.
+[16:14.280 --> 16:24.280]  So like all the extra work that people have put into having scripts that work without slash prop mounted, it's not useful.
+[16:24.280 --> 16:35.280]  And we remove stuff and we would be moving from scripts to demons anyway, right, and shared libraries.
+[16:35.280 --> 16:49.280]  Because if somebody tells you to provide, find the two authentication decryption for the root disk, you're not going to script it, you're going to use some compiler code to do it anyway.
+[16:49.280 --> 17:01.280]  And like, I don't know, netling, timeouts, retries, localization, debuts, all this stuff is just semi incompatible with scripting.
+[17:01.280 --> 17:07.280]  And we would be moving in the direction of normal compiler code anyway.
+[17:07.280 --> 17:20.280]  And so MKSI in the RD as itself is kind of, it's implemented and it mostly works.
+[17:20.280 --> 17:23.280]  The stuff that is happening is like in the surrounding areas.
+[17:23.280 --> 17:34.280]  So in particular, this development in systemd rated credentials is very important because we want to make use of this.
+[17:34.280 --> 17:39.280]  And support for unified kernel images is growing.
+[17:39.280 --> 17:51.280]  There are patches, there's a link here, patches for grab2 to load unified kernel images.
+[17:51.280 --> 17:58.280]  And I mentioned that we want to build MKSI internal images in Fedora.
+[17:58.280 --> 18:02.280]  So this will require changes in the Koji build system.
+[18:02.280 --> 18:05.280]  And that's what I have.
+[18:05.280 --> 18:09.280]  I do have time for questions.
+[18:09.280 --> 18:15.280]  One minute, three minutes, okay.
+[18:15.280 --> 18:25.280]  When I was thinking about systems that boot from network and, for instance, the root system is on iSCSI or NVME over fiber,
+[18:25.280 --> 18:29.280]  do you need some information that is really device specific?
+[18:29.280 --> 18:34.280]  How can we separate that from the init ID?
+[18:34.280 --> 18:37.280]  Because you want a single init ID for all the systems.
+[18:37.280 --> 18:38.280]  Yes.
+[18:38.280 --> 18:44.280]  So one option is to put it on the kernel command line if this is an option.
+[18:44.280 --> 18:57.280]  And the second option is to provide a credential that is unpacked and becomes part of the configuration in the init ID.
+[18:57.280 --> 19:04.280]  So essentially, yes, you just inject this configuration, but it wouldn't be part of the init ID itself.
+[19:04.280 --> 19:09.280]  It would be delivered in a different way.
+[19:09.280 --> 19:15.280]  The same question is what would you do if you want to have files from the local file system?
+[19:15.280 --> 19:20.280]  For example, you need a custom mount command that does more than a feature mount.
+[19:20.280 --> 19:24.280]  Well, I mean, I would say ask why do you need that?
+[19:24.280 --> 19:28.280]  But if you need that, then just do the build locally.
+[19:28.280 --> 19:37.280]  And the difference is, I think it was kind of the same question was asked before about unified kernel images.
+[19:37.280 --> 19:49.280]  You can do the build locally, you just don't have the distro signatures.
+[19:49.280 --> 19:50.280]  Thank you.
+[19:50.280 --> 19:56.280]  It might be a bit similar to the previous question, but thinking from a distribution standpoint,
+[19:56.280 --> 20:02.280]  there is a lot of hardware out there which is incompatible with default configurations or default init energies.
+[20:02.280 --> 20:08.280]  And you need to add patches to kernels and you need to add special kernel modules which are not enabled by default.
+[20:08.280 --> 20:16.280]  What is going to be the flow to support this hardware, to use it on distribution by default?
+[20:16.280 --> 20:22.280]  So I think that this is much less common than people think, right?
+[20:22.280 --> 20:32.280]  Because, I mean, how many people build their kernels nowadays? Small minority.
+[20:32.280 --> 20:36.280]  Like from the distro point of view, this is already outside of scope, right?
+[20:36.280 --> 20:43.280]  If you come, report a bug that your custom compiled kernel does not work, then nobody is going to help you.
+[20:43.280 --> 20:50.280]  Because people have too much bugs reported for the standard distribution.
+[20:50.280 --> 20:56.280]  The existing ways of building things locally, they will always be there, right?
+[20:56.280 --> 20:57.280]  I mean, they are not going away.
+[20:57.280 --> 21:04.280]  So basically the answer is, well, I mean, if you are doing something specific, then you keep doing this specific thing.
+[21:04.280 --> 21:16.280]  And this, I mean, this is the way to make the life for the distro easier, but it's not going to cover all cases, maybe like 90%.
+[21:16.280 --> 21:26.280]  Any more questions?
+[21:26.280 --> 21:35.280]  Yeah, you mentioned the kernel module making the integer bigger. Could this be shipped in a standard extension somehow?
+[21:35.280 --> 21:36.280]  Can you repeat, please?
+[21:36.280 --> 21:41.280]  Could you ship the kernel modules which are in very nearly, in a standard extension?
+[21:41.280 --> 21:43.280]  Yes, definitely.
+[21:43.280 --> 21:52.280]  So the kernel, the initial NTRD, the kernel must have enough stuff built in to understand the NTRD,
+[21:52.280 --> 21:59.280]  and the NTRD must have enough modules to be able to load system extensions.
+[21:59.280 --> 22:10.280]  But once you do that, you can have an extension with kernel modules and whatever. Yes.
+[22:10.280 --> 22:17.280]  So last question.
+[22:17.280 --> 22:25.280]  Is there a path to getting your init ramfs core from somewhere and running a different distro?
+[22:25.280 --> 22:35.280]  Like essentially to your project or some project providing the core init ramfs with the system d init inside it and everything inside of it.
+[22:35.280 --> 22:40.280]  You get the modules from elsewhere and then when you pivot, is that a hard line that you can live?
+[22:40.280 --> 22:51.280]  I think that technically it's doable because system d is kind of used everywhere and there's really no reason why it wouldn't work.
+[22:51.280 --> 23:03.280]  I assume that distro would want their own code in the init rd, but technically it's not required.
+[23:03.280 --> 23:04.280]  Okay, thank you.
+[23:04.280 --> 23:14.280]  I mean, there's this general requirement that, because there's a switch route where state is passed from the NTRD to the host,
+[23:14.280 --> 23:20.280]  and you don't want to pass the state from newer system d to an older system d.
+[23:20.280 --> 23:30.280]  So the NTRD would have to be just older, old enough.
+[23:30.280 --> 23:37.280]  Thank you very much.

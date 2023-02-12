@@ -1,0 +1,209 @@
+[00:00.000 --> 00:26.400]  I'm here to talk to you about graphics programming in Python on an embedded microcontroller,
+[00:26.400 --> 00:30.000]  which is hilarious because I'm none of these things, I'm not a graphics programmer, I'm
+[00:30.000 --> 00:36.880]  not a Python programmer and I'm not an embedded programmer, so we'll see how this goes.
+[00:36.880 --> 00:41.800]  It's for that reason I just, you know, I can't emphasise enough this part of the talk description,
+[00:41.800 --> 00:48.760]  this is not an instructional talk, this is just what I did.
+[00:48.760 --> 00:57.680]  So there's some background, EMF camp is this weekend camping festival for hackers and makers
+[00:57.680 --> 01:07.320]  and it's in a similar vein to the chaos communication camp and the Dutch hacker festival, you know,
+[01:07.320 --> 01:11.040]  there's robots and lasers and geodesic domes and things, it's great fun if you get the
+[01:11.040 --> 01:17.480]  opportunity to go, I highly recommend it and it's a bit of a tradition of these style
+[01:17.480 --> 01:34.520]  of events to give the attendees electronic event badges and the aim of these is to give
+[01:34.520 --> 01:42.480]  attendees opportunity to play with some hardware that they might not have come across before.
+[01:42.480 --> 01:50.200]  These are the two most recent badges from EMF camp, the one on the left here.
+[01:50.200 --> 01:57.640]  If I told you they had, they put a SIM card on it and a GSM modem and then they set up
+[01:57.640 --> 02:03.280]  an onsite cell phone network, you'll understand why it's made to look like a Nokia Engage,
+[02:03.280 --> 02:09.400]  but it's got all of the usual like peripherals and sensors and things on there as well like
+[02:09.400 --> 02:16.360]  accelerometers and humidity and temperature and things and because it runs micropycin
+[02:16.360 --> 02:23.040]  it allows people to easily get started with experimenting with that kind of hardware.
+[02:23.040 --> 02:27.960]  The one on the right there is the newest one, these photographs aren't to scale by the
+[02:27.960 --> 02:34.080]  way, let me just hold them up for comparison, the newest one is much smaller.
+[02:34.080 --> 02:41.320]  The reasons for that you might guess is because of the silicon shortage that's been caused
+[02:41.320 --> 02:49.160]  by fire, flood and plague as you might expect, but it's still a lovely device.
+[02:49.160 --> 02:53.120]  The one on the left here you can see, you might recognise this as a version of the settlers
+[02:53.120 --> 03:02.200]  of Ketan, I spent a lot of time trying to isolate small parts of the screen to redraw
+[03:02.200 --> 03:08.080]  because the update speed on that screen was so slow, it was almost, it's almost unusable
+[03:08.080 --> 03:09.920]  for anything in real time.
+[03:09.920 --> 03:14.720]  So when I got my hands on the new one this year I obviously wanted to see what this one
+[03:14.720 --> 03:18.960]  could do.
+[03:18.960 --> 03:24.440]  And so the first thing I wanted to do was to just try and glitter full screen of pixels
+[03:24.440 --> 03:31.040]  to the device using the display driver directly and let's talk about 70 milliseconds which
+[03:31.040 --> 03:35.960]  is already orders of magnitude faster than the old badge.
+[03:35.960 --> 03:44.320]  If I draw to an off-screen buffer instead that's way faster, but you know if you're
+[03:44.320 --> 03:49.080]  doing that you then you have to get into the business of implementing your own drawing
+[03:49.080 --> 03:54.640]  functions for primitives and I didn't really want to do that.
+[03:54.640 --> 04:00.080]  That is ominous foreshadowing by the way.
+[04:00.080 --> 04:05.280]  But I did discover that MicroPython has this frame buff module which provides you with
+[04:05.280 --> 04:10.600]  an off-screen frame buffer and also some drawing functions which is great.
+[04:10.600 --> 04:15.800]  So 41 milliseconds, I thought that was fair compromise, that's a good start.
+[04:15.800 --> 04:21.160]  Now I've got a baseline for how fast I can draw to the screen.
+[04:21.160 --> 04:28.280]  So obviously what this is about is drawing 3D things to the screen of this device and
+[04:28.280 --> 04:37.320]  so this is just here to, in case you don't know this is basically, I guess this is 3D
+[04:37.320 --> 04:42.880]  rasterization 101, this is like the minimum we have to do in order to get 3D points onto
+[04:42.880 --> 04:44.200]  the screen.
+[04:44.200 --> 04:48.080]  You know we start with our vertex coordinates and then that's multiplied by the model matrix
+[04:48.080 --> 04:53.320]  to get into world space and then you multiply that by the view matrix to get the view space
+[04:53.320 --> 04:59.920]  and then by the projection matrix you get the clip space and then the clip space allows
+[04:59.920 --> 05:04.440]  you to see which vertices will be eclipped by the edges of the screen or not.
+[05:04.440 --> 05:10.480]  So then once we know we've got the list of vertices we want to render then we can do
+[05:10.480 --> 05:16.640]  the perspective division to bring that into normalize device coordinate space or NDC space.
+[05:16.640 --> 05:20.640]  The perspective division is just the part that makes the further away points closer
+[05:20.640 --> 05:24.600]  together so it gives you that illusion of 3D.
+[05:24.600 --> 05:29.400]  And then we've got to convert the normalize device coordinates which are like between
+[05:29.400 --> 05:36.440]  minus one and one to screen space which is like our pixel coordinates.
+[05:36.440 --> 05:46.840]  And so when I was doing this, these, to render these eight points on the screen from a cube
+[05:46.840 --> 05:53.320]  it was pretty, it wasn't too bad 53 seconds and then if you like join those up to create
+[05:53.320 --> 05:58.040]  your cube wireframe it's not that much, not that much slower there's 12 triangles there
+[05:58.040 --> 06:02.200]  obviously.
+[06:02.200 --> 06:08.120]  The next step is to then start filling in these triangles you want to draw solid shapes after
+[06:08.120 --> 06:18.960]  all, annoyingly there's no method or no function for doing that in the frame buff module for
+[06:18.960 --> 06:20.400]  MicroPython.
+[06:20.400 --> 06:29.280]  There is in the display driver but as I mentioned like using the display driver directly is
+[06:29.280 --> 06:33.600]  much slower because we're making many more calls to hardware and you know we're setting
+[06:33.600 --> 06:36.880]  pins high and low and stuff for every time we want to draw something and we just want
+[06:36.880 --> 06:41.880]  to do that once when we blip the whole thing to the screen.
+[06:41.880 --> 06:50.200]  And yeah so frame buff doesn't provide a like polygon or polygon fill method and so
+[06:50.200 --> 06:57.160]  I do have to get into the business of writing these sort of functions myself after all.
+[06:57.160 --> 07:02.600]  So yeah the display driver itself does have these methods so obviously that's the first
+[07:02.600 --> 07:09.440]  place I looked for implementation clues, they have a polygon and a fill polygon method
+[07:09.440 --> 07:21.040]  only obviously there are problems with it and it's a little bit rubbish here's the figure
+[07:21.040 --> 07:29.640]  on the left there is just using the outline polygon method and then the second one here
+[07:29.640 --> 07:35.920]  is where I've tried to draw in a filled polygon over the top of the wireframe polygon and
+[07:35.920 --> 07:39.960]  you can see it just doesn't quite match up.
+[07:39.960 --> 07:45.640]  And so reading the code there is it seems to be implementing like quite a well known
+[07:45.640 --> 07:52.480]  or well documented fill polygon method and there's a link to the website where this algorithm
+[07:52.480 --> 07:57.680]  is described and that also supplies a reference implementation so I was able to like copy the
+[07:57.680 --> 08:04.480]  reference implementation to see if that if the display drivers implementation was different
+[08:04.480 --> 08:08.520]  and it isn't it's exactly the same it looks like the display drivers inherited the same
+[08:08.520 --> 08:14.600]  problems that we're in the reference implementation and you'll notice that it's not only incorrect
+[08:14.600 --> 08:18.480]  on this side but like the left edge here is completely different to this edge here so
+[08:18.480 --> 08:23.880]  it's like over drawing on this side and not drawing enough on that side.
+[08:23.880 --> 08:31.240]  A lot of the problems with it were sort of like rounding errors and like floating point
+[08:31.240 --> 08:37.880]  to integer truncation and that sort of thing which I've managed to mostly fix except for
+[08:37.880 --> 08:45.720]  this really annoying pixel down here that I just couldn't get and when I submitted because
+[08:45.720 --> 08:50.240]  I wanted to submit like this enhancement to the frame buff module upstream to the micro
+[08:50.240 --> 08:56.720]  platform project and so we spent a few days scratching our heads over this to try and figure
+[08:56.720 --> 09:02.480]  out what we could do we were initially we proposed just drawing the outline again on top of that
+[09:02.480 --> 09:06.960]  on top of the filled polygon just to like sweep it under the rug but eventually we
+[09:06.960 --> 09:12.720]  managed to figure out a much better way of doing it we just like try to detect when these
+[09:12.720 --> 09:19.840]  stray pixels were we're going to happen and then fill them in explicitly instead of letting
+[09:19.840 --> 09:38.640]  the algorithm do it oh yeah I you know these it was quite it's pretty obvious that the
+[09:38.640 --> 09:45.240]  algorithm I think was developed by a physicist or a mathematician because in the article
+[09:45.240 --> 09:54.880]  that describes the algorithm it says and I'm quoting here the detecting points on the
+[09:54.880 --> 10:02.840]  polygon edge will deliver unpredictable results but that is quote not generally a problem
+[10:02.840 --> 10:12.840]  because quotes the edge of the polygon is infinitely thin now my polygons have an edge
+[10:12.840 --> 10:20.720]  of one pixel so this is obviously why we had to like it fix the problems of it anyway now
+[10:20.720 --> 10:27.440]  we can draw arbitrary polygons to the screen and let's see what that looks like this is
+[10:27.440 --> 10:35.520]  the cube here again which is like basically you know the hello world of 3d graphics programming
+[10:35.520 --> 10:44.800]  and it seems to work pretty well 66 milliseconds there but you can see on the on the left hand
+[10:44.800 --> 10:49.120]  screenshot there that's not the inside it looks like you're looking at the inside of
+[10:49.120 --> 10:54.320]  the cube but it's just because we are drawing the back face of the back of the cube on top
+[10:54.320 --> 11:01.560]  of the front face of the front of the cube so as part of this 3d rasterization process
+[11:01.560 --> 11:07.800]  that you've now got to do like back face calling which is more maths added on to that pipeline
+[11:07.800 --> 11:15.640]  you know you've got to take the you've got to calculate the normal vector of the face
+[11:15.640 --> 11:21.280]  which is the direction the face is facing and then compute the dot product of that with
+[11:21.280 --> 11:25.960]  the direction you're looking so that you can know if the face if the triangle is facing
+[11:25.960 --> 11:30.520]  you or not and then just don't bother drawing the ones that aren't facing you but yeah that's
+[11:30.520 --> 11:37.240]  much it's just more maths so it adds more time and oh yeah get the occasional like really
+[11:37.240 --> 11:45.160]  long frame and that coincides with a garbage collection I guess we'll talk a bit more about
+[11:45.160 --> 11:53.040]  that in a bit yeah so like there's some really low hanging fruit things we can do to improve
+[11:53.040 --> 11:59.000]  the performance initially which is basically amounts to being smarter about the algorithms
+[11:59.000 --> 12:04.080]  we use we pre-calculate the normals instead of calculating them every frame which for
+[12:04.080 --> 12:12.120]  like static model like this makes total sense and yeah avoid doing the perspective division
+[12:12.120 --> 12:19.040]  if we can help it because it's like part of the I'd implemented it as part of the matrix
+[12:19.040 --> 12:26.220]  multiplication process and usually it's a and usually it's a no op unless you're multiplying
+[12:26.220 --> 12:33.080]  it by the perspective matrix and only then is it doing something so we can just avoid
+[12:33.080 --> 12:40.640]  doing those those divisions at all on you know on every vertex in every face in every
+[12:40.640 --> 12:46.440]  frame that's quite a lot of time saved but it does mean I can add more things to it and
+[12:46.440 --> 12:51.560]  make it do extra work like you know add as rudimentary lighting model and make the cube
+[12:51.560 --> 13:04.840]  nice looking by adding shading and whatnot and the what I'm trying to do basically is
+[13:04.840 --> 13:12.240]  to keep the rendering time below 100 milliseconds as well because that seems like a good target
+[13:12.240 --> 13:18.160]  to have if I can do that then I get like a reasonable performance of 10 frames per second
+[13:18.160 --> 13:26.920]  and so this is although this is this works well that's within that target it's close
+[13:26.920 --> 13:33.760]  to that target so I want to try something a bit more complex so I download a model of
+[13:33.760 --> 13:43.360]  the industry standard teapot and try and render that this is about 240 faces 240 triangles
+[13:43.360 --> 13:52.040]  and this obviously completely destroyed my 100 millisecond time limit so I've got to
+[13:52.040 --> 13:58.080]  think of I had to think of more ways to make this faster and the obvious way is to rewrite
+[13:58.080 --> 14:06.120]  all the hottest math functions in C as a micro Python native module the two ones that are
+[14:06.120 --> 14:11.120]  called the most often are like the matrix vector matrix multiplying method and the dot
+[14:11.120 --> 14:21.800]  product method and yeah you can see that more than cuts the time in half and with the success
+[14:21.800 --> 14:31.200]  of that it's pretty clear I should write rewrite all of the math in C because you know if I've
+[14:31.200 --> 14:35.480]  got the bonnet up I might as well and but that you know that brings the time right down
+[14:35.480 --> 14:44.720]  to a glorious glorious glorious six frames per second but yeah like as a general strategy
+[14:44.720 --> 14:50.400]  if you find yourself calling a method you know 12 1200 times a frame it's probably a good
+[14:50.400 --> 15:03.480]  target to be to be pushed down into the native layer so yeah a note on writing a native code
+[15:03.480 --> 15:11.200]  for micro Python there's really two ways of doing it there's the what is called the external
+[15:11.200 --> 15:20.440]  C modules which is basically C code that you write there's a module exposed to the Python
+[15:20.440 --> 15:28.960]  runtime those are compiled directly into the firmware which is a bit suboptimal because
+[15:28.960 --> 15:36.200]  I yeah it would be nice if I didn't require other people who have these devices to reflash
+[15:36.200 --> 15:42.520]  the firmware every time I changed this program so the other way of doing it is to write what
+[15:42.520 --> 15:51.200]  they call a native module which allows your application to supply native code as an MPY
+[15:51.200 --> 15:56.080]  file and then that can be dynamically loaded by your application at runtime which is much
+[15:56.080 --> 15:59.880]  nicer the way of doing it so obviously that's what I wanted to do but I did come across
+[15:59.880 --> 16:07.040]  problems when I tried to build the native code because I'd used a floating point division
+[16:07.040 --> 16:13.880]  in there for the perspective division step of the pipeline I got this problem which is
+[16:13.880 --> 16:24.120]  a linker error from the expressive tool chain for the ESP32 I'd love to know why this happens
+[16:24.120 --> 16:28.240]  and if anyone from expressive is here I'd love to know if it's fixed in a newer version
+[16:28.240 --> 16:32.200]  as well but it seems like it can't link this software implementation of floating point
+[16:32.200 --> 16:40.920]  division so obviously what I did was I downloaded the source for their tool chain and found
+[16:40.920 --> 16:46.960]  the assembly implementation of this method to add into my project which also didn't
+[16:46.960 --> 16:51.560]  work the micro Python build system wasn't prepared to accept that but that was an easy
+[16:51.560 --> 16:55.520]  fix and that was actually the first change I got accepted into micro Python they were
+[16:55.520 --> 17:01.120]  very good they're very good at or in my experience they're very good at accepting patches and
+[17:01.120 --> 17:09.160]  then once I got that building I got it to just cause my application to crash I'm not
+[17:09.160 --> 17:16.480]  sure why this happens but there seems to be like a reference to the native stuff that
+[17:16.480 --> 17:23.440]  gets collected erroneously by the garbage collection and I spent a lot of time like
+[17:23.440 --> 17:29.120]  trying to reduce my object allocations you know in the frames but all that did was just
+[17:29.120 --> 17:38.280]  like push out the crash to further in the future so you know I had to settle for compiling
+[17:38.280 --> 17:45.120]  my maths functions directly into the firmware there's some other things I did to try and
+[17:45.120 --> 17:51.240]  make it faster the big one is trying to reduce object insatiations it's super costly in
+[17:51.240 --> 17:59.880]  Python and wherever you can pre-allocate like lists and arrays and things and then just
+[17:59.880 --> 18:10.840]  reuse them I initially wanted to have like a lot of my classes to be totally immutable
+[18:10.840 --> 18:17.000]  as a good programmer I am but they just totally wasn't feasible so I just you know you just
+[18:17.000 --> 18:23.120]  have to mutate when you do calculations on your vertices just mutate one of the operands
+[18:23.120 --> 18:31.640]  and send it back that way you can also the other thing I found that saved some time was
+[18:31.640 --> 18:36.280]  reducing crossing reducing the amount of times that we cross from Python into native code
+[18:36.280 --> 18:43.560]  and back again I found I was doing like lots of the same operation to vertices and matrices
+[18:43.560 --> 18:48.880]  so if I could just send them all as one batch in a single function call into the native
+[18:48.880 --> 18:54.160]  side then that made it perform a lot quicker I think there's a lot of function and stack
+[18:54.160 --> 19:02.240]  manipulation overhead there that you save and also pass arrays and not lists into the
+[19:02.240 --> 19:06.960]  native functions as well especially for this kind of stuff where we know that the data
+[19:06.960 --> 19:13.480]  that we're passing our floats or whatever you know ahead of time what type is in your
+[19:13.480 --> 19:17.440]  array which means you can make some assumptions that my Python can't make and when and when
+[19:17.440 --> 19:25.080]  you manipulate this the data objects in a native side you can like skip a bunch of like
+[19:25.080 --> 19:31.840]  type safe stuff you can just write directly to the to the data structure which is useful
+[19:31.840 --> 19:37.440]  and also I this wrong surprise me as well that I well I don't know if it's surprising
+[19:37.440 --> 19:46.240]  maybe it's obvious to people who are veteran Python Easter's but I didn't expect to a native
+[19:46.240 --> 19:55.200]  the libc qsort function to be so much faster than the sort function in Python but I was
+[19:55.200 --> 20:02.800]  if you look at the if you look at this this picture here you can see that some parts of
+[20:02.800 --> 20:07.720]  the teapot are drawn on top of that should be occluded drawn on top of the body of the
+[20:07.720 --> 20:15.040]  teapot so what I had to do was Z sort the faces so that we draw the faces from from
+[20:15.040 --> 20:21.240]  back to front and that's what I was doing I was what I was using the list sort method
+[20:21.240 --> 20:27.160]  for here but just like implementing this sorting this face sorting as a native function as
+[20:27.160 --> 20:35.480]  well was like as it says it's 100 times faster and the other thing that was made a measurable
+[20:35.480 --> 20:41.160]  difference as well was locally caching object references in your functions as well so like
+[20:41.160 --> 20:48.160]  instead of if you're using an object value more than once instead of doing self food
+[20:48.160 --> 20:54.080]  self food self food just have yeah just created a local reference a local variable in their
+[20:54.080 --> 21:00.280]  function and use that instead so there's some like dereferencing overheads there that is
+[21:00.280 --> 21:10.880]  quite significant that we're saving and so after applying all of this sort of stuff this
+[21:10.880 --> 21:19.480]  is the final result or the results so far I'm pretty happy with it getting the teapot
+[21:19.480 --> 21:37.520]  model down to under 100 milliseconds per frame was really pleasing and yeah I'm pretty happy
+[21:37.520 --> 21:49.080]  with the performance so what can this be used for honestly this was a this this was just
+[21:49.080 --> 21:54.840]  a fun way to spend a few weekends after the festival had happened but you know it seems
+[21:54.840 --> 22:01.320]  to be performing enough the way you could do some kind of like small 3d game like a
+[22:01.320 --> 22:07.560]  lunar lander or something like that or you know make yourself a Jurassic Park style 3d
+[22:07.560 --> 22:15.960]  user interface for your home automation but really the chief lesson for me I think was
+[22:15.960 --> 22:22.040]  that the the best way to get involved with a project like micro python was to just start
+[22:22.040 --> 22:30.160]  using it and eventually you come across some kind of limitation that probably your best
+[22:30.160 --> 22:36.680]  place to overcome because you know you're the one who's trying to solve the problem
+[22:36.680 --> 22:42.560]  you've got the vested interest in it you have you know all of the information is currently
+[22:42.560 --> 22:52.640]  paged into your brain so yeah and then the the micro python people were extremely helpful
+[22:52.640 --> 23:03.080]  in helping me whip up whip my year contributions into shape so yeah thanks to them for helping
+[23:03.080 --> 23:17.640]  me get involved in micro python and thanks to you for listening I can try and answer
+[23:17.640 --> 23:29.880]  questions but I'm not super expert on anything I've been talking about hi and thanks for
+[23:29.880 --> 23:35.440]  your talk I had a question about the ESP 2 that you were implementing on this did you
+[23:35.440 --> 23:41.960]  ever look at using like the dual core setup to try to sort of accelerate any of the mass
+[23:41.960 --> 23:47.800]  but that is a good question and someone has mentioned this to me before but when I was
+[23:47.800 --> 23:53.000]  writing this I was actually unaware that it had more than one core so I haven't yet but
+[23:53.000 --> 24:02.400]  it's a great idea thanks very much for your talk if you're interested in micro python
+[24:02.400 --> 24:08.320]  in the building a there is a stance about micro python and also a stand by pine 64 who make
+[24:08.320 --> 24:15.000]  like smartwatch that can run micro python and stuff

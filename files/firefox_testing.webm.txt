@@ -1,0 +1,310 @@
+[00:00.000 --> 00:13.120]  Hello, everyone. I'm Marco. Thank you for being here to listen to my talk. I'm an engineer
+[00:13.120 --> 00:21.720]  manager at Mozilla. I've been at Mozilla for almost 10 years now. I started as a contributor,
+[00:21.720 --> 00:27.920]  then an intern, then I was hired, and I've been here for almost 10 years. I started working
+[00:27.920 --> 00:34.840]  on some funny projects, like writing a Java VM in JavaScript, and then more recently I
+[00:34.840 --> 00:41.240]  started focusing on using machine learning and data mining techniques to improve developer
+[00:41.240 --> 00:53.400]  efficiency, which has also been the subject of my PhD. During this talk, I will show you
+[00:53.400 --> 01:01.120]  how we will all be out of a job in a few years, joking. I will just thank you through our journey
+[01:01.120 --> 01:09.720]  of how we incrementally built features based on machine learning for improving software
+[01:09.720 --> 01:25.080]  engineering, one on top of each other. I'm the father of two, Luna and Nika. Before we start
+[01:25.080 --> 01:31.640]  with the presentation, I wanted to explain a little why we need to do all these complex
+[01:31.640 --> 01:41.760]  machine learning things on top of bugs, CI, patches, et cetera, et cetera. Firefox is a very
+[01:41.760 --> 01:47.840]  complex software. It's a browser. We have hundreds of bug reports and feature requests
+[01:47.840 --> 01:56.240]  open per day. We have 108 million bug reports at this time, which is almost the price of
+[01:56.240 --> 02:04.240]  one bedroom apartment in London. We release every four weeks with thousands of changes,
+[02:04.240 --> 02:12.320]  and during 2022 we had 13 major releases and 45 million minor releases. As you can see,
+[02:12.320 --> 02:24.640]  we even sometimes party when we reach a certain number of bugs. As I said, Firefox is one
+[02:24.640 --> 02:31.320]  of the biggest software in the world. We have a lot of legacy. Netscape was open sourced
+[02:31.320 --> 02:41.160]  25 years ago. A few days ago we celebrated the 25 birthday. Over time we had 800,000
+[02:41.160 --> 02:49.960]  commits made by 9,000 unique contributors representing 25 million lines of code. We had 37,000 commits
+[02:49.960 --> 02:57.240]  only last year by 1,000 unique contributors. Not all of them are paid. Many of them are
+[02:57.240 --> 03:04.040]  volunteers. And this is a list of the languages that we use. As you can see, we use many of
+[03:04.040 --> 03:11.200]  them. We have C++ and Rust for low-level things. Rust is gaining ground and is probably going
+[03:11.200 --> 03:21.800]  to overcome C soon. We use JavaScript for front-end and for tests. And we use Python for CI and
+[03:21.800 --> 03:28.000]  build system. But we have many more. So if anybody is interested in contributing, you
+[03:28.000 --> 03:39.920]  have many options to choose from. But let's see. So as I said, the complexity is really
+[03:39.920 --> 03:47.120]  large. We have thousands and thousands of bugs. And we need some way to control the
+[03:47.120 --> 03:53.800]  quality, to increase the visibility into the quality of the software. And we cannot do
+[03:53.800 --> 04:00.440]  that if the bugs are left uncontrolled. One of the first problems that we had was that
+[04:00.440 --> 04:06.640]  there is no way to differentiate between defects and feature requests. We call them bugs on
+[04:06.640 --> 04:12.520]  bugzilla. But they are actually just reports. Many of them are defects. Many of them are
+[04:12.520 --> 04:20.000]  actually just feature requests. And so at the time, we had no way to measure quality.
+[04:20.000 --> 04:26.360]  We had no way to tell in this release we have 100 bugs. In this other release, we had 50.
+[04:26.360 --> 04:32.640]  So this release is better than the previous. And so we need a way to make this differentiation
+[04:32.640 --> 04:36.960]  in order to measure the quality. And it was also hard to improve workflows if we had no
+[04:36.960 --> 04:42.960]  way to differentiate between them. So we thought of introducing a new type field. This might
+[04:42.960 --> 04:50.160]  seem simple. It's just choice between defect, enhancement and task. But in practice, when
+[04:50.160 --> 04:57.320]  you have 9,000 unique contributors, some of them not paid. It's not easy to enforce a
+[04:57.320 --> 05:05.600]  change like this. And we also had another problem. We have 100 million bugs. If we just
+[05:05.600 --> 05:13.280]  introduce this type, it's not going to help us at all until we reach a mass of bugs that
+[05:13.280 --> 05:20.320]  we change. So if we just introduce it at this time, it will only start to be useful six
+[05:20.320 --> 05:26.240]  months from now. So we thought, how do we set the field for existing bugs so that this
+[05:26.240 --> 05:33.160]  actually becomes useful from day one? And we thought of using machine learning. So we
+[05:33.160 --> 05:42.560]  collected a dataset. I'm not sure it can be considered large nowadays. With 2,000 manually
+[05:42.560 --> 05:53.080]  labelled bugs, few of us labelled independently. And then we shared the labelling so that we
+[05:53.080 --> 05:58.960]  were consistent. And we had 9,000 labelled with some heuristics based on fields that
+[05:58.960 --> 06:05.920]  were already present in bugzilla. Then we, using the fields from bugzilla and the title
+[06:05.920 --> 06:13.840]  and comment through an NLP pipeline, we trained an XGB boost model. And we achieved accuracy
+[06:13.840 --> 06:25.440]  that we deemed good enough to be used on production. And this is how the bug, bug project started.
+[06:25.440 --> 06:32.000]  It was just a way to differentiate between defects and non-defects on bugzilla. We saw
+[06:32.000 --> 06:39.920]  it worked and then we decided, we thought, what if we extend this to something else?
+[06:39.920 --> 06:47.600]  What is the next big problem that we have on bugzilla? And it was assigning components.
+[06:47.600 --> 06:54.960]  Again, we have lots of bugs, millions of, hundreds of thousands of bugs. We need a way
+[06:54.960 --> 07:01.280]  to split them in groups so that the right team sees them, so that the right people see them.
+[07:01.280 --> 07:05.880]  And the faster we do it, the faster we can fix them. At the time, it was manually done
+[07:05.880 --> 07:11.080]  by volunteers and developers. So you can see a screenshot here, product and component,
+[07:11.080 --> 07:22.400]  PDF viewer. In this case, we didn't need to manually create a data set because all of
+[07:22.400 --> 07:30.760]  the 1 million bugs were already manually split into groups by volunteers and developers
+[07:30.760 --> 07:39.760]  in the past. So we had, in this case, a very large data set, two decades worth of bugs.
+[07:39.760 --> 07:48.240]  The problem here was that we had to roll back the bug to the initial state because otherwise,
+[07:48.240 --> 07:53.880]  by training the model on the final state of the bug, we would have used future data to
+[07:53.880 --> 07:58.720]  predict the past. And it was not possible, of course. So we rolled back the history of
+[07:58.720 --> 08:04.240]  the bug to the beginning. We also reduced the number of components because, again, with
+[08:04.240 --> 08:09.440]  the Firefox scale, we have hundreds of thousands of components. Many of them are no longer
+[08:09.440 --> 08:15.240]  actually maintained and no longer relevant. So we reduced them to a smaller subset. And
+[08:15.240 --> 08:23.720]  again, we had the same kind of architecture to train the model. With a small tweak, we
+[08:23.720 --> 08:33.600]  didn't have perfect accuracy. And so we needed a way to choose confidence and recall. So
+[08:33.600 --> 08:41.360]  pay the price of lower quality but catching more bugs or catching fewer bugs but be precise
+[08:41.360 --> 08:47.880]  more time. So we can control this easily with a confidence level that is output by the model,
+[08:47.880 --> 08:53.280]  which allows us to sometimes be more aggressive, sometimes be less aggressive. But at least
+[08:53.280 --> 09:00.160]  we can have a minimum level of quality that we enforce. The average time to assign a bug
+[09:00.160 --> 09:08.600]  then went from one week to a few seconds. Over time, we auto-classified 20,000 bugs.
+[09:08.600 --> 09:15.960]  And since it worked, we also extended it to webcompad.com, which is yet another bug reporting
+[09:15.960 --> 09:21.480]  system that we have at Mozilla, which if you find web compatibility bugs, please go there
+[09:21.480 --> 09:25.640]  and file them because it's pretty important. And you can see here an action of the bot
+[09:25.640 --> 09:31.800]  moving the bug to, again, the Firefox PDF viewer component. Maybe I should have used
+[09:31.800 --> 09:41.240]  another example just for fun. Now we had something working. And it was starting to become promising.
+[09:41.240 --> 09:46.400]  But we needed to make it better. We needed to have a better architecture for the machine
+[09:46.400 --> 09:51.560]  learning side of things. We needed to retrain the models. We needed to collect new data.
+[09:51.560 --> 09:56.880]  We needed to make sure that whenever a new component comes in, we retrain the model with
+[09:56.880 --> 10:03.760]  the new components. If a component stops being used, we need to remove it from the dataset
+[10:03.760 --> 10:10.880]  and things like that. So we built, over time, a very complex architecture. I won't go into
+[10:10.880 --> 10:17.080]  too many details because it will take too long. But maybe if somebody has questions later,
+[10:17.080 --> 10:30.800]  we can go into that. And then with the architecture now, it was easier to build new models. So
+[10:30.800 --> 10:41.080]  we even had contributors building models just all by themselves. In particular, there was
+[10:41.080 --> 10:49.840]  a contributor, Ayush, which helped us build a model to root out spam from bugzilla. So
+[10:49.840 --> 10:55.480]  it seems weird, but yes, we do have spam on bugzilla as well. People are trying to get
+[10:55.480 --> 11:02.120]  links to their websites into bugzilla because they think the search engine will index them.
+[11:02.120 --> 11:08.080]  It's not actually the case. We tell them all the time, but they keep doing it anyway. We
+[11:08.080 --> 11:18.320]  have university students. Bugzilla is probably the most studied bug tracking system in research.
+[11:18.320 --> 11:29.440]  And we have many university students from many countries that use bugzilla as a playing field.
+[11:29.440 --> 11:35.640]  Many times we even contact the universities and professors asking them if we can help
+[11:35.640 --> 11:45.480]  them give more relevant topics to students, et cetera, but they keep filing bugs. And
+[11:45.480 --> 11:50.120]  this contributor maybe was from one of these schools, was tired of it and helped us build
+[11:50.120 --> 11:57.840]  a model. And the results were pretty good. I'll show you a few examples of bugs that
+[11:57.840 --> 12:06.760]  were caught by the model. So this one was, if you look just at the first comment of the
+[12:06.760 --> 12:12.640]  bug, it looks like a legit bug. But then the person created a second comment with a link
+[12:12.640 --> 12:23.000]  to the website. And it was pretty clear that it was spam. This one is another example. This
+[12:23.000 --> 12:31.160]  is actually a legit bug. It's not spam. Maybe it's not so usable as a bug report, but it
+[12:31.160 --> 12:39.320]  was not spam. And then somebody else, a spammer, took exactly the same contents, created a
+[12:39.320 --> 12:46.360]  new bug injecting the link to their website in the bug report. And somehow, I don't know
+[12:46.360 --> 12:53.120]  how the model was able to detect that it was spam. It's funny because you can see that,
+[12:53.120 --> 12:59.560]  so when you file a bug on bugzilla, bugzilla will automatically insert a user agent so
+[12:59.560 --> 13:05.880]  that we have more information as possible to fix bugs. But in this case, he was filing
+[13:05.880 --> 13:11.680]  the bug, copying the contents of the other bug, so we have two user agents. And they're
+[13:11.680 --> 13:24.240]  even on different platforms, one on Mac and one on Chrome, actually. Okay. So we were
+[13:24.240 --> 13:30.280]  done with bugs. We are not done with the bugs. We will have plenty of things to do in the
+[13:30.280 --> 13:40.400]  future forever. But we were happy enough with bugs and we thought, what can we improve next?
+[13:40.400 --> 13:48.600]  One of the topics that we were focusing on at the time was testing and cost associated
+[13:48.600 --> 13:55.480]  to testing. We were experimenting with code coverage, trying to collect coverage to select
+[13:55.480 --> 14:07.000]  relevant tests to run on a given patch. But it was pretty complex for various reasons.
+[14:07.000 --> 14:13.680]  So we thought maybe we can apply machine learning here as well. But before we go into that,
+[14:13.680 --> 14:19.680]  let me explain a bit about RCI because it's a little complex. So we have three branches,
+[14:19.680 --> 14:25.760]  three repositories, which all kind of share the same code, Firefox. We have Try, which
+[14:25.760 --> 14:35.480]  is on demand CI. We have AutoLand, which is the repository where patches land after they've
+[14:35.480 --> 14:42.080]  been reviewed and approved. And we have Mozilla Central, which is the actual repository where
+[14:42.080 --> 14:51.440]  Firefox source code lives and from which we build Firefox nightly. On Try, we run whatever
+[14:51.440 --> 14:58.080]  the user wants. On AutoLand, we run a subset of tests. At the time, it was kind of random,
+[14:58.080 --> 15:05.200]  what we decided to run. And on Mozilla Central, we run everything. To give you an idea on
+[15:05.200 --> 15:10.480]  Try, we will have hundreds of pushes per day. On AutoLand, the same. And on Mozilla Central,
+[15:10.480 --> 15:21.000]  we have only three or four. And it's restricted only to certain people that have the necessary
+[15:21.000 --> 15:27.000]  permissions since you can build Firefox nightly from there. And it's going to be shipped to
+[15:27.000 --> 15:38.520]  everyone. The scale here is similar to the bug case. We have 100,000 unique test files.
+[15:38.520 --> 15:47.280]  We have around 150 unique test configurations. So combinations of operating systems, high
+[15:47.280 --> 15:53.960]  level Firefox configurations. So old style engine versus new style engine, certain graphics
+[15:53.960 --> 16:01.760]  engine versus another graphics engine, et cetera, et cetera. We have debug builds versus optimized
+[16:01.760 --> 16:09.160]  builds. We have asan, code coverage, et cetera, et cetera. Of course, the matrix is huge and
+[16:09.160 --> 16:15.480]  you get to 150 configurations. We have more than 300 pushes per day by developers. And
+[16:15.480 --> 16:23.160]  the average push takes 1,500 hours if you were to run it all one after the other. It
+[16:23.160 --> 16:33.160]  takes 300 machine years per month and we run around 100 million machines per month to run
+[16:33.160 --> 16:40.640]  these tests. If you were to run all of the tests, you would need to run all of the tests
+[16:40.640 --> 16:46.480]  in all of the configurations. You would need to run around 2.3 billion test files per day.
+[16:46.480 --> 16:56.800]  Which is, of course, unfeasible. And this is a view of our tree herder, which is the user
+[16:56.800 --> 17:04.200]  interface for Mozilla test results. You can see that it is almost unreadable. The green
+[17:04.200 --> 17:12.120]  stuff is good. The orange stuff is probably not good. You can see that we have lots of
+[17:12.120 --> 17:20.560]  tests and we spend a lot of money to run these tests. So what we wanted to do, we wanted
+[17:20.560 --> 17:25.320]  to reduce the machine time, spend to run the tests. We wanted to reduce the end-to-end
+[17:25.320 --> 17:31.640]  time so that developers, when they push, they get a result, yes or no, your patch is good
+[17:31.640 --> 17:37.880]  or not, quickly. And we also wanted to reduce the cognitive overload for developers. Looking
+[17:37.880 --> 17:48.280]  at a page like this, what is it? It's impossible to understand. Also, to give you an obvious
+[17:48.280 --> 17:58.160]  example, if you're changing the Linux version of Firefox, I don't know, you're touching
+[17:58.160 --> 18:05.040]  GTK, you don't need to run Windows tests. At the time, we were doing that. At the time,
+[18:05.040 --> 18:13.840]  if you touched GTK code, we were running Android, Windows, Mac, that was totally useless. And
+[18:13.840 --> 18:20.400]  the traditional way of running tests on browsers doesn't really work. You cannot run everything
+[18:20.400 --> 18:28.080]  on all of the pushes. Otherwise, you will have a huge bill from the cloud provider.
+[18:28.080 --> 18:33.400]  So we couldn't use coverage because of some technical reasons. We thought, what if we
+[18:33.400 --> 18:44.440]  use machine learning? What if we extend bug, bug to also learn patches and tests? So the
+[18:44.440 --> 18:54.560]  first part was to use machines to try to parse this information and try to understand what
+[18:54.560 --> 19:01.040]  exactly failed. It might seem like an easy task if you have 100 tests or 10 tests, but
+[19:01.040 --> 19:07.800]  when you have two billion tests, you have lots of intermittently failing tests. These
+[19:07.800 --> 19:15.840]  tests fail randomly. They are not always the same. Every week, we see 150 new intermittent
+[19:15.840 --> 19:23.360]  tests coming in. It's impossible to, it's not easy to automatically say if a failure
+[19:23.360 --> 19:30.920]  is actually a failure or if it is an intermittent. Not even developers are able to do that sometimes.
+[19:30.920 --> 19:37.560]  So not all of the tests are run on all of the pushes. So if I push my patch and a test
+[19:37.560 --> 19:46.200]  doesn't run, but runs later on another patch and it fails, I don't know if it was my fault
+[19:46.200 --> 19:57.080]  or somebody else's fault. And so we have sheriffs, people that are only focused, whose only focus,
+[19:57.080 --> 20:03.600]  whose main focus is watching the CI, and they are pretty experienced at doing that, probably
+[20:03.600 --> 20:11.760]  better than most developers. But human errors still exist. Even if we have their annotations,
+[20:11.760 --> 20:20.720]  it's pretty hard to be sure about the results. You can see a meme that some sheriff created.
+[20:20.720 --> 20:29.200]  Lucky tests are the infamous intermittently failing tests. So the first step, the second
+[20:29.200 --> 20:36.360]  step after we implemented some heuristics to try to understand the failures due to a
+[20:36.360 --> 20:46.080]  given patch was to analyze patches. We didn't have readily available tools, at least not
+[20:46.080 --> 20:53.280]  fast enough for the amount of data that we are talking about. We just used Mercurial
+[20:53.280 --> 21:01.800]  for authorship info. So who's the author of the push? Who's the reviewer? When was it
+[21:01.800 --> 21:08.680]  pushed? Et cetera, et cetera. And we created a couple of projects written in Rust to parse
+[21:08.680 --> 21:14.200]  patches efficiently and to analyze source code. The second one was actually a research partnership
+[21:14.200 --> 21:27.520]  with the Politecnico di Torino. And the machine learning model itself, it's not a multi-label
+[21:27.520 --> 21:37.080]  model as one might think, where each test is a label. It would be too large with the
+[21:37.080 --> 21:44.040]  number of tests that we have. The model is simplified. The input is the table, test,
+[21:44.040 --> 21:52.160]  and patch. And the label is just fail, not fail. So the features actually come from both
+[21:52.160 --> 21:57.680]  the test, the patch, and the link between the test and the patch. So, for example, the
+[21:57.680 --> 22:04.200]  past failures, when the same files were touched, the distance from the source files to the
+[22:04.200 --> 22:11.040]  test files in the tree. How often source files were modified together with test files? Of
+[22:11.040 --> 22:17.040]  course, if they're modified together, probably they are somehow linked. Maybe you need to
+[22:17.040 --> 22:23.440]  fix the test. And so when you push your patch, you also fix the test. This is a clear link.
+[22:23.440 --> 22:31.760]  But even then, we have lots of test redundancies. So we used frequent item set mining to try
+[22:31.760 --> 22:39.880]  to understand which tests are redundant and remove them from the set of tests that are
+[22:39.880 --> 22:52.360]  selected to run. And this was pretty successful as well. So now we had architecture to train
+[22:52.360 --> 23:01.000]  models on bugs, to train models on patches and tests. The next step was to reuse what
+[23:01.000 --> 23:10.520]  we built for patches to also try to predict defects. This is actually still an experimental
+[23:10.520 --> 23:16.320]  phase. It's kind of a research project. So if anybody is interested in collaborating
+[23:16.320 --> 23:25.240]  with us on this topic, we will be happy to do so. I will just show you a few things that
+[23:25.240 --> 23:32.920]  we have done in the space for now. So the goals are to reduce the regressions by detecting
+[23:32.920 --> 23:39.120]  the patches that reviewers should focus on more than others, to reduce the time spent
+[23:39.120 --> 23:46.680]  by reviewers on less risky patches, and to when we detect that the patch is risky, trigger
+[23:46.680 --> 23:54.000]  some risk control operations. For example, I don't know, running phasing tests more comprehensively
+[23:54.000 --> 23:59.520]  in these patches and things like this. Of course, the model is just an evaluation of
+[23:59.520 --> 24:06.600]  the risk. It's not actually going to tell us if there is a bug or not. And it will never
+[24:06.600 --> 24:17.080]  replace a real reviewer who can actually review the patch more precisely.
+[24:17.080 --> 24:24.520]  The first step was, again, build a data set. It is not easy to know which patches cause
+[24:24.520 --> 24:29.920]  regressions. It's actually impossible at this time. There are some algorithms that are used
+[24:29.920 --> 24:38.320]  in research. The most famous one is SZZ. But we had some answers that it was not so good.
+[24:38.320 --> 24:44.640]  So we started here, again, introducing a change in the process that we have. We introduced
+[24:44.640 --> 24:54.520]  a new field, which is called regressed by, so that developers, QA users, can specify
+[24:54.520 --> 25:00.760]  what caused a given regression. So when they file a bug, if they know what caused it, they
+[25:00.760 --> 25:06.840]  can specify it here. If they don't know what caused it, we have a few tools that we built
+[25:06.840 --> 25:16.400]  over time to automatically download builds from RCI that we showed earlier. Automatically
+[25:16.400 --> 25:23.320]  download builds from the past and run a bisection to try to find what the cause is for the given
+[25:23.320 --> 25:31.360]  bug. With this, we managed to build a pretty large data set, 5,000 links between bug introducing
+[25:31.360 --> 25:43.400]  and bug fixing commits. Actually, commit sets. And then this amounts to 24,000 commits. And
+[25:43.400 --> 25:48.600]  then we were able, with this data set, to evaluate the current algorithms that are presented
+[25:48.600 --> 25:54.880]  in the literature. And as we thought, they are not working well at all. So this is one
+[25:54.880 --> 26:06.240]  of the areas of improvement for research. One of the improvements that we tried to apply
+[26:06.240 --> 26:15.920]  and to SZZ was to improve the blame algorithm. If you're more familiar with Mercurial annotate
+[26:15.920 --> 26:26.360]  algorithm, to try to, instead of looking at lines, splitting changes by words and tokens,
+[26:26.360 --> 26:33.080]  so you can see changes, past changes by token instead of by line. This is a visualization
+[26:33.080 --> 26:39.640]  from the Linux kernel. This is going to give you a much more precise view of what changed
+[26:39.640 --> 26:47.960]  in the past. For example, it will skip over tab only changes, white space only changes
+[26:47.960 --> 26:55.320]  and things like that. If you add an if, your code will be intended more, but you're not
+[26:55.320 --> 27:01.640]  actually changing everything inside. You're changing only the if. This actually improved
+[27:01.640 --> 27:08.640]  the results, but it was not enough to get to an acceptable level of accuracy. But it's
+[27:08.640 --> 27:15.280]  nice and we can actually use it in the IDE. We're not doing it yet, but we will to give
+[27:15.280 --> 27:24.160]  more information to users because developers use annotate and get blame a lot. And this
+[27:24.160 --> 27:31.080]  is a UI that is work in progress for analyzing the risk of a patch. This is a screenshot
+[27:31.080 --> 27:38.000]  from our code review tool. So we are showing the result of the algorithm with the confidence.
+[27:38.000 --> 27:44.920]  So in this case, it was a risky patch with 79% confidence. And we give a few explanations
+[27:44.920 --> 27:50.640]  to the developers. This is one of the most important things. Developers do not always
+[27:50.640 --> 27:57.560]  trust developers like any other user. Do not always trust results from machine learning.
+[27:57.560 --> 28:08.160]  And so you need to give them an explanation. And this is another part of the output of
+[28:08.160 --> 28:15.160]  our tool. This is again on our code review tool. We're showing on the functions that
+[28:15.160 --> 28:23.120]  are being changed by the patch if the function is risky or not. And which bugs in the past
+[28:23.120 --> 28:30.920]  were involved in this function. So developers can try to see if the patch is reintroducing
+[28:30.920 --> 28:38.920]  a previously fixed bug. And they can also know what kind of side effects there are when
+[28:38.920 --> 28:45.840]  you make changes to a given area of the code.
+[28:45.840 --> 28:56.200]  Now we did a lot of stuff for developers. We trained models for bugs. We trained models
+[28:56.200 --> 29:02.720]  for patches. We trained models for tests. We trained models to predict the facts. Now
+[29:02.720 --> 29:10.640]  I'm going to go to a slightly different topic even though it's connected. Privacy-friendly
+[29:10.640 --> 29:20.560]  translations. So we're working on introducing translations in Firefox. The subtitle was
+[29:20.560 --> 29:30.280]  actually translated automatically using Firefox translate, which you can use nowadays. The
+[29:30.280 --> 29:36.600]  idea is that translation models improved a lot in recent times. Current cloud-based
+[29:36.600 --> 29:42.480]  services do not offer the privacy guarantees that we like to offer in Firefox. They are
+[29:42.480 --> 29:49.800]  closed source. They are not privacy-preserving. So we started a project. It was funded by
+[29:49.800 --> 29:56.960]  the European Union to investigate client-side private translation capabilities in Firefox
+[29:56.960 --> 30:03.960]  itself. It is currently available as an add-on that you can install in Firefox. We support
+[30:03.960 --> 30:09.840]  many European languages and we're working on supporting even more. We're going to also
+[30:09.840 --> 30:20.680]  work on supporting non-European languages like Chinese, Korean, Japanese, etc.
+[30:20.680 --> 30:26.560]  And in this case, we use machine learning on the client side to perform the translation.
+[30:26.560 --> 30:34.160]  So your data never leaves your Firefox. The models are downloaded from our servers, but
+[30:34.160 --> 30:41.280]  they run locally on your machine. So the contents of the web page that you're looking at will
+[30:41.280 --> 30:47.400]  never go to Google Bing or whatever. They will be translated locally on your machine.
+[30:47.400 --> 30:54.880]  We use a few open data sets. Luckily, we have lots of them from past research. Not all of
+[30:54.880 --> 31:01.000]  them have good quality, but many of them have. But we are looking for more. So if you have
+[31:01.000 --> 31:07.600]  suggestions for data sets that we can use, please let us know.
+[31:07.600 --> 31:14.560]  On the data sets, we perform some basic data cleaning. And we use machine learning-based
+[31:14.560 --> 31:23.240]  techniques to clean the data, to remove bad sentence pairs that we believe are bad. Of
+[31:23.240 --> 31:27.920]  course, the data set that I showed before are open, but sometimes they are just crawled
+[31:27.920 --> 31:38.680]  from the web, so they contain all sorts of bad sentences. Also, HTML tags and stuff
+[31:38.680 --> 31:44.040]  like that, we need to clean them up. Otherwise, the translations will learn to translate HTML
+[31:44.040 --> 31:50.120]  tags. And we use some techniques to increase the size of the data set automatically, like
+[31:50.120 --> 31:56.120]  back translations, translating sentences from one language to the other, and back translating
+[31:56.120 --> 32:04.280]  it in order to increase the size of the data sets.
+[32:04.280 --> 32:16.480]  So we trained a large model on cloud machines, which is pretty large. You can see it's around
+[32:16.480 --> 32:22.400]  800 megabytes, so every language pair, you would need to download 800 megabytes, and
+[32:22.400 --> 32:30.640]  it is super slow, so we can only use that on cloud.
+[32:30.640 --> 32:35.480]  So we use some techniques in order to reduce the size of these models and to make them
+[32:35.480 --> 32:45.360]  faster. We use knowledge distillation, basically using the model, the large model that we trained
+[32:45.360 --> 32:51.800]  as a trainer for a student model, which is much smaller, so you can see that from 800
+[32:51.800 --> 32:56.880]  megabytes we got to 16, I think now we're around 5, 6, something like that, so it's
+[32:56.880 --> 33:01.920]  much smaller and you can actually download it on demand from our servers. And we use
+[33:01.920 --> 33:08.080]  quantization for further compression and perf improvements, so moving the data from the
+[33:08.080 --> 33:14.120]  model from float 32 to int 8.
+[33:14.120 --> 33:21.840]  Then we compiled the machine translation engine to WebAssembly in order to be able to use it
+[33:21.840 --> 33:29.360]  inside Firefox. We introduced some SIMD extensions into WebAssembly and into Firefox in order
+[33:29.360 --> 33:36.920]  to be able to be even faster when translating, even though we translate a bit at a time,
+[33:36.920 --> 33:47.640]  so it's pretty fast. And the engines are downloaded and updated on demand.
+[33:47.640 --> 34:15.320]  Let me show you a demo.
+[34:15.320 --> 34:25.920]  So, you can see my Firefox is in Italian, but you can see that it automatically detected
+[34:25.920 --> 34:33.560]  that the page is in French and it is suggesting me to translate it to Italian. I will change
+[34:33.560 --> 35:00.920]  it to English. Oh, fuck.
+[35:00.920 --> 35:09.240]  So it is downloading the model. Now it's translating. So while it was translating, you already
+[35:09.240 --> 35:13.360]  saw the contents of the first part of the page was already translated, so it's super
+[35:13.360 --> 35:20.240]  quick in the end. And the translation seems to be pretty good. I don't speak French, but
+[35:20.240 --> 35:34.800]  I think it makes sense. You can also use it from the toolbar, so you can choose a language
+[35:34.800 --> 35:59.800]  and translate it to another. Let's do Italian to French. It works.
+[35:59.800 --> 36:23.040]  All right. So if you know any data set that we can use, in addition to the ones that we
+[36:23.040 --> 36:28.640]  already use, or if you're interested in building a new great feature in Firefox, or if you
+[36:28.640 --> 36:33.360]  want to add support for your language or improving support for your language, come and talk to
+[36:33.360 --> 36:39.840]  us at our booth. We would be really happy if you could help us. And before we come to
+[36:39.840 --> 36:46.920]  an end, let me show you how far we've come. The dogs have grown, and we have learned that
+[36:46.920 --> 36:54.040]  it is possible to tame the complexity of a large-scale software. It is possible to use
+[36:54.040 --> 37:01.400]  the past history of development to support the future development, and it is possible
+[37:01.400 --> 37:08.760]  to use machine learning in a privacy-friendly way and in the open. What else could we do
+[37:08.760 --> 37:14.280]  with the data and the tools that we have at our disposal? I don't know. I'm looking forward
+[37:14.280 --> 37:21.720]  to know. I'm looking forward to see what other wild ideas you and us at Mozilla can come
+[37:21.720 --> 37:24.920]  up with. Thank you.
+[37:24.920 --> 37:36.680]  Thank you very much, Marco, for the amazing talk. Now we're open for questions. If anyone
+[37:36.680 --> 37:43.240]  would like to make a question, please raise your hand so I can take the microphone. Questions,
+[37:43.240 --> 37:55.480]  questions, hands up. There. Okay, okay. I'm sorry, I'm learning. I'm new to this. I'm
+[37:55.480 --> 38:21.400]  coming up. Hello. I have actually two questions. First question is, have you actually think
+[38:21.400 --> 38:28.600]  about the idea to use this mechanism to automatically translate interface of Mozilla products?
+[38:28.600 --> 38:38.760]  Sorry? This thing? Yes. Yeah. So the question is, have you think about mechanism of automatically
+[38:38.760 --> 38:44.920]  translating the interface of Mozilla Firefox products, or maybe documentation you already
+[38:44.920 --> 38:49.000]  have like MDN, because it's still a demand to translate this stuff?
+[38:49.000 --> 39:10.360]  I'm sorry. I'm not hearing well. Can you maybe come closer?
+[39:10.360 --> 39:16.720]  From here? Okay. Now it's better? Yes. Okay. So my question is, have you trying to use
+[39:16.720 --> 39:23.840]  this mechanism of automatic translation to use this translation for existing interface
+[39:23.840 --> 39:28.720]  you have in the products, and especially also documentation part? Because it's kind of vital
+[39:28.720 --> 39:33.360]  part when you need to translate new functionality, or you have to translate something new in
+[39:33.360 --> 39:37.680]  the interface, you need the help of translator. But if you already know how to translate in
+[39:37.680 --> 39:41.520]  doing this stuff, so that means like you already have a data set, you can actually automatically
+[39:41.520 --> 39:47.560]  translate new parts of interface without translator? Yes. So it is definitely something
+[39:47.560 --> 39:54.160]  that could be used to help translators do their job. We could translate parts of the
+[39:54.160 --> 40:00.000]  interface automatically. And of course, there will always be some review from actual translator
+[40:00.000 --> 40:04.400]  to make sure that the translation makes sense in the context, especially because Firefox
+[40:04.400 --> 40:10.160]  UI sometimes you have very short text and it needs to make sense. But yeah, it's definitely
+[40:10.160 --> 40:15.040]  something that we have considered. And actually one of the data sets that we use from the
+[40:15.040 --> 40:22.080]  list, it's not possible to see from the slide, but it's called Mozilla L10N and they are
+[40:22.080 --> 40:31.600]  sentence pairs from our browser UI. People are actually using it in research for automating
+[40:31.600 --> 40:39.760]  translations. Does anyone have any other question? Please raise your hands. If you have any
+[40:39.760 --> 40:50.960]  other questions, Marco? Okay. If not, thank you very much again, Marco.
+[40:50.960 --> 41:10.240]  Thank you.

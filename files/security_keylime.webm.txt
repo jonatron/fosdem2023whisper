@@ -1,0 +1,201 @@
+[00:00.000 --> 00:17.120]  Hello? Okay. Now it works. Kind of, right? Okay. So hello everyone. Welcome to Security
+[00:17.120 --> 00:22.880]  Dev Room and we've got our next talk about key lime and thermal attestation which will
+[00:22.880 --> 00:35.560]  be given by Anderson and Thorsen. Okay. So welcome. Sorry about the trouble. So I'm Anderson
+[00:35.560 --> 00:41.960]  as I am a software engineer at Red Hat and I'm here with Thorsen. Yeah, I'm Thorsen and I'm a
+[00:41.960 --> 00:47.000]  maintainer of Linux distribution for school and universities and I'm also a maintainer of key lime.
+[00:47.000 --> 00:52.720]  Yeah, so we are here to talk about remote attestation with key lime. So let's get started.
+[00:52.720 --> 01:00.200]  Imagine you are like a car vendor who maintains and updates the systems running in cars but you
+[01:00.200 --> 01:06.920]  want to make sure that the systems in the cars were not modified so that you can check if the
+[01:06.920 --> 01:13.320]  customer is still eligible to receive the latest updates or something like that. Or you are a
+[01:13.320 --> 01:20.600]  software company building software in the cloud but you want to make sure that the build tooling
+[01:20.600 --> 01:27.440]  was not modified or you are a telecom company that wants to make sure that the systems you deployed
+[01:27.440 --> 01:37.160]  that controls antennas they were not modified. So what all these cases have in common is first
+[01:37.160 --> 01:45.120]  they are remote, second you don't really have full control of the systems in the world. So the
+[01:45.120 --> 01:53.360]  question is how can you check that the system was not modified in the in the world. So our way
+[01:53.360 --> 02:00.200]  would be if you could somehow get some information about the system and then check if it's what
+[02:00.200 --> 02:08.840]  you expected from that. And of course in case it's not then you would want to have a way to
+[02:08.840 --> 02:17.080]  react on that. So if you can do that continuously get the information checked then you have like
+[02:17.080 --> 02:25.920]  monitoring of the integrity of the system. So that's what one of the things the remote
+[02:25.920 --> 02:34.680]  attestation can provide is to check remote integrity, remote machine integrity, how it works. So you
+[02:34.680 --> 02:42.040]  have a trusted entity running in some controlled environment and then you have a trusted agent
+[02:42.040 --> 02:49.560]  on the other side running on the monitored system and you ask for the information to that agent
+[02:49.560 --> 02:58.560]  and gets back some information called a quote then you can verify that that agent is running in a
+[02:58.560 --> 03:08.720]  machine in a state that you trust. So that comes with the problem of trust. So how can you trust
+[03:08.720 --> 03:16.320]  the machine or the agent running in some machine that you don't control. So you don't really trust
+[03:16.320 --> 03:24.440]  directly the agent but you trust on a hardware root of trust which is the trusted platform model
+[03:24.440 --> 03:33.840]  or TPM. What are the TPMs? They are pieces of hardware that can perform crypto operations such
+[03:33.840 --> 03:42.960]  as generating keys, signing data and it has this special key and certificate called endorsement
+[03:42.960 --> 03:52.040]  key which are generated during manufacturing. So the manufacturer generates the key and publishes
+[03:52.040 --> 04:02.720]  the CA certificate so that you can verify that it is legitimate. And then this EK, the endorsement
+[04:02.720 --> 04:09.360]  keys can't sign data directly but you can generate the attestation keys that are associated with
+[04:09.360 --> 04:17.680]  that endorsement key in a way that you can verify the origin of some assigned data so that you can
+[04:17.680 --> 04:27.400]  make sure that that data was signed by that specific TPM. So and another important thing that the
+[04:27.400 --> 04:35.640]  TPM has are the platform conversion registers which are special registers designed to store
+[04:35.640 --> 04:45.120]  measurements about the system and in a way that you can verify the integrity. So how these
+[04:45.120 --> 04:55.440]  measurements are done? During boot, each step of the boot is measured by the UFI into the TPM
+[04:55.440 --> 05:06.480]  via the PCR extend operation. So each step the boot process goes, you get a hash of the binary
+[05:06.480 --> 05:18.120]  or the software that is running and extend into a PCR. I will explain that soon. And so during
+[05:18.120 --> 05:26.560]  boot, the UFI is responsible for measuring the boot steps into the TPM and after boot, then the
+[05:26.560 --> 05:34.600]  kernel integrity measurement architecture or IMA will measure any open file that matches a policy
+[05:34.600 --> 05:45.240]  you can configure the IMA and it will measure the files open into a PCR as well. So if you have
+[05:45.240 --> 05:54.240]  the information like the state of the PCR and the event log or all the operations, extend
+[05:54.240 --> 06:00.960]  operations that were performed, then you can verify the integrity of the machine. So how this
+[06:00.960 --> 06:08.760]  PCR extend algorithm works is kind of simple. You'll get the old value stored in the PCR,
+[06:08.760 --> 06:18.800]  concatenated with the measurement from the data. So this measurement is basically a hash. So you
+[06:18.800 --> 06:25.640]  concatenate the old value with the hash of the measurement, calculate the hash of all of these
+[06:25.640 --> 06:39.760]  and put back into the PCR. So that's done for each step. So of course these PCRs, if you know a bit
+[06:39.760 --> 06:47.560]  of TPM, they don't match the actual numbers, but this is just for illustration. So all of these,
+[06:47.560 --> 06:57.080]  after measuring all these steps, you have the final value in the PCR that you can calculate
+[06:57.080 --> 07:05.280]  like a called golden value, which you calculate like the hash of all the PCR values and you have a
+[07:05.280 --> 07:16.840]  representation of the state of the machine and that can be verified. So how key lime works. So in
+[07:16.840 --> 07:24.600]  the left side, you have trusted entity where you like probably a machine that you control where you
+[07:24.600 --> 07:33.560]  run the verifier side of the key lime. It's a server and on the right side, you have the monitored
+[07:33.560 --> 07:39.560]  system. It is remote. You don't have complete control of it, but the agent has access to the
+[07:39.560 --> 07:50.240]  TPM installed in that machine and so the server can verify, the verifier can request a state to the
+[07:50.240 --> 07:58.280]  agent. Then the agent will access the TPM to get the quote, meaning the PCR values and also
+[07:58.280 --> 08:08.200]  together with the event logs or all the PCR extend operations that were performed and throw it back
+[08:08.200 --> 08:21.360]  to the verifier. And then the verifier can verify first the origin of that piece of data because
+[08:21.360 --> 08:28.000]  it's signed by the AK key. So you can make sure that that data came from that machine that contains
+[08:28.000 --> 08:36.040]  that TPM and you can verify the identity of the TPM using the EK certificate. And with the values
+[08:36.040 --> 08:45.680]  you obtained for the PCRs and the event log, you can replay all the extend operations so that in
+[08:45.680 --> 08:52.680]  the end, you can get the values that it should have. And so with all these information, you can
+[08:52.680 --> 09:03.040]  verify the integrity of the machine. Since you also got the information from AIMA, like all the
+[09:03.040 --> 09:12.840]  files that were open and matched some policy, the AIMA will calculate the hash of open files
+[09:12.840 --> 09:20.160]  that match some policy and extend to the PCR. So you get this log containing the file names and
+[09:20.160 --> 09:29.920]  the matching hashes. So you can also with some policy engine verify the integrity of individual
+[09:29.920 --> 09:42.120]  files in the remote machine. So you can like a full integrity view of the remote machine. So with
+[09:42.120 --> 09:49.080]  that information, the verifier can check. If it's okay, it's okay. The attestation was successful.
+[09:49.080 --> 09:55.960]  But if it was not, it doesn't match what you expected, then it's a failure. So in case of
+[09:55.960 --> 10:06.080]  failure, we have a revocation framework, which is a way to, so you can configure some actions to
+[10:06.080 --> 10:13.960]  the verifier, some script that it can run to perform some action. It can be some webhooks. So
+[10:13.960 --> 10:20.720]  if some attestation fails, it sends some request to some webhook, or you can notify the agents
+[10:20.720 --> 10:28.360]  directly via REST API, and send some payload to the trigger some operation there. The simplest
+[10:28.360 --> 10:34.240]  scenario, for example, if you had a cluster with various machines, and one of them failed
+[10:34.240 --> 10:40.960]  attestation, you cannot find the others to remove that node from the cluster by blocking the
+[10:40.960 --> 10:48.600]  network connectivity, for example. So that's how key lime works in general. So now I'm passing the
+[10:48.600 --> 10:57.560]  mic to Thor. He will continue with the real world stuff. Yeah. So now we heard how key lime works,
+[10:57.560 --> 11:05.320]  and we want to show that you can use that in production, and what are the challenges that you
+[11:05.320 --> 11:12.760]  will run into if you want to try that. We have three main scenarios there. We have first policy
+[11:12.760 --> 11:20.520]  creation, then the monitoring, and then how to react on that. So the first part is, we want to
+[11:20.520 --> 11:27.480]  create policies for our system. For that, we need to know what is actually on our system, and what
+[11:27.480 --> 11:34.360]  are our systems. So from a software side perspective, it's normal that we integrate, we have a CI CD
+[11:34.360 --> 11:40.000]  pipeline, we get what data gets into that, and we want to save the hashes there. But we need also
+[11:40.000 --> 11:46.040]  a lot of other stuff. We want to know what packages are installed, where they end up on our system,
+[11:46.040 --> 11:52.880]  have their signatures, can we verify that? That is what we normally want to have, and either this
+[11:52.880 --> 11:59.160]  information is already provided by the distribution, or we need to generate that on our own. Then on
+[11:59.160 --> 12:04.280]  the hardware side, we need to know what kind of hardware we're running. So as we said, we have the
+[12:04.280 --> 12:11.080]  EK, so the endorsement key, we need to at least know that to trust the TPM in some regard. And then
+[12:11.080 --> 12:15.960]  ideally, we want to also know what firmware is running on that device, and which configuration do
+[12:15.960 --> 12:22.240]  we have. For example, do we allow CQB to be disabled and enabled? Do we have our own keys on
+[12:22.240 --> 12:29.440]  there? And stuff like that. So if you have all that information, we can go to the other side,
+[12:29.440 --> 12:36.680]  which is the monitoring. That part is implemented by KeyLine. You can, if you have all the necessary
+[12:36.680 --> 12:41.640]  information, we provide documentation and tools to generate a policy for that, and you can feed it
+[12:41.640 --> 12:49.320]  in that, and it's all there. The challenge that you run into here is that for many of you, probably
+[12:49.320 --> 12:58.040]  IMA, measured boot, and TPMs are new. And if you run into issues, then you also try, need to try
+[12:58.040 --> 13:04.560]  understand how that works to debug it. So that is a challenge you run into, that you still need a
+[13:04.560 --> 13:11.920]  good understanding of those technologies to make your life easier. But yeah, that is mostly solved
+[13:11.920 --> 13:18.880]  by KeyLine. And then we come to the non-technical side, which is we need to react somehow when we
+[13:18.880 --> 13:25.800]  have a revocation failure. So is that a lot actually relevant for us? Because if we have like
+[13:25.800 --> 13:32.040]  file changes in TAMP, we don't really care. But then who needs to be notified if you have that?
+[13:32.040 --> 13:37.200]  Then how do we tie that in our current monitoring infrastructure? For example, like with the web
+[13:37.200 --> 13:43.320]  hooks. And lastly, if you are a company and you're, it's a potential security breach if KeyLine
+[13:43.320 --> 13:48.520]  fails in the way that you configured it. So there are service agreements in place, which need you
+[13:48.520 --> 13:57.040]  notify and how do you respond for that. So, but going now from the general part to actual examples,
+[13:57.040 --> 14:06.440]  I work on the Linux distribution that does exams for schools and universities called Lensdijk.
+[14:06.440 --> 14:13.000]  And we developed with the University of Applied Sciences and Arts Northwestern Switzerland,
+[14:13.000 --> 14:22.440]  also called FANV, a system called Kampler, which is secure, bring your own device exams. So what
+[14:22.440 --> 14:27.760]  is the problem here? The students want to bring their own device, their own notebook into the
+[14:27.760 --> 14:33.240]  lecture hall and want to write their exams on that. We don't want to touch their operating system.
+[14:33.240 --> 14:37.840]  So we do something what we call bring your own hardware. They bring their own hardware and we
+[14:37.840 --> 14:45.520]  boot a live Linux system on that system and remotely attest if that system is running correctly. So
+[14:45.520 --> 14:52.120]  what do we have? We have our hardware, which has a hard drive and a TPM. Now we boot the distribution
+[14:52.120 --> 14:57.880]  called Lensdijk. And on that we have the KeyLine agent running and also Imr and our measured boot
+[14:57.880 --> 15:04.400]  stuff. And now the interesting part is we just care about the TPM. We don't care about the hard
+[15:04.400 --> 15:13.960]  drive and what is on that system otherwise. So now we have the actual server solution. So we
+[15:13.960 --> 15:22.040]  register to the exam system. And this also includes that we register to KeyLine. Then we check in
+[15:22.040 --> 15:27.920]  return if the system is actually in a trustworthy state. And if that's the case, we release the
+[15:27.920 --> 15:35.800]  exam files, which is in our case normally RDP session, which then connects to the cloud where
+[15:35.800 --> 15:45.560]  the people are actually writing their exams. So why are we doing that this way? The first one is
+[15:45.560 --> 15:52.480]  that we guarantee that the environment for every student is the same because they only provide
+[15:52.480 --> 15:58.320]  their hardware and it's basically terminal to connect to the actual exam. So if there's computing
+[15:58.320 --> 16:04.480]  intensive stuff, then it doesn't really matter. And also because they only bring their own hardware
+[16:04.480 --> 16:11.760]  and don't need to install monitoring software on their system to write the exam, we don't care
+[16:11.760 --> 16:17.560]  what they does on that. We don't want to know it's first for privacy and also to make setup
+[16:17.560 --> 16:26.280]  way easier. Now back to a more traditional scenario that more of you are probably familiar with the
+[16:26.280 --> 16:32.680]  cloud. And there we have the example that IBM uses this for hypervisor attestation. And they
+[16:32.680 --> 16:40.720]  don't use runtime attestations or not anymore. They use measure boot to see if the hypervisor
+[16:40.720 --> 16:49.720]  booted up correctly. So their challenges were that implementing the actual response procedures,
+[16:49.720 --> 16:59.440]  so the procedure from we have an alert to how do we deal with that now. That is the difficult part
+[16:59.440 --> 17:04.600]  because the one is the technical side, but how do we structure our teams in a way that we can
+[17:04.600 --> 17:12.040]  guarantee that. Then also the other ones are eliminating false positives that ties into the
+[17:12.040 --> 17:18.400]  first point because if a human needs to react, then we want to have no false positives and also
+[17:18.400 --> 17:24.840]  no false negatives ideally. And false negatives are for security very, very bad. So we don't want
+[17:24.840 --> 17:31.440]  to have that. And lastly is keeping the policies up to date. Even if you roll your own distribution
+[17:31.440 --> 17:37.600]  and are big enough, it's very difficult to be up to date on that policies and integrate them
+[17:37.600 --> 17:43.920]  automatically. And lastly, they have an escalation chain just for illustration purposes. They use
+[17:43.920 --> 17:50.120]  key lime to monitor that, tie that into their JIRA system, and then have an actual person react
+[17:50.120 --> 17:59.480]  on the other side. So and then one point from a distribution. So in this case from SUSE, I asked
+[17:59.480 --> 18:06.440]  them and they integrated key lime into pretty much any product. So it's an open SUSE today. If you
+[18:06.440 --> 18:12.040]  want to use it in microS, there's instruction to do that. And then also in SUSE Enterprise Linux
+[18:12.040 --> 18:20.320]  and an ALP. Their challenges also we're like integrating it with as a Linux fully and making
+[18:20.320 --> 18:29.160]  IMA usable. So do we have signatures? How do we provide the hashes? And the general thing for
+[18:29.160 --> 18:38.880]  distribution is how do we provide robust policies in general? Because we want users to try out
+[18:38.880 --> 18:45.600]  the technology and want to experiment with that. But how do we give them the starting point? And
+[18:45.600 --> 18:50.320]  that is still a very difficult because as we saw, there are many data points that needs to be
+[18:50.320 --> 18:55.760]  collected. And that is a challenge that they're trying to solve actively by making, getting the
+[18:55.760 --> 19:05.600]  signatures and the hashes easier. Yeah. So to say for the end, try remote attestation today. The
+[19:05.600 --> 19:13.120]  technology that you need to do that is pretty much in every device that you have like in a notebook
+[19:13.120 --> 19:27.880]  that you can use. So you can find Keelem at Keelem.dev. And yeah, thank you. So do we have
+[19:27.880 --> 19:40.120]  questions? Lots of questions. Thank you for a great presentation. One question. You talked a
+[19:40.120 --> 19:45.800]  lot about the verification side of the processing. You talked a lot about the verification side,
+[19:45.800 --> 19:53.560]  but to have the golden values or the PCRs in your verified system, you need to provision them. So I
+[19:53.560 --> 20:00.520]  was not sure the distribution side of things was how do you manage that in Keelem? Could you shed
+[20:00.520 --> 20:09.520]  some light on that? Yeah. So with the golden values, we have the values in the TPM and then
+[20:09.520 --> 20:15.760]  they're also tied to an event log and IMA and like a measure boot. And we solve the issue that we
+[20:15.760 --> 20:21.760]  don't actually need golden values by having a policy engine basically that verifies the logs
+[20:21.760 --> 20:28.520]  itself checks if that those match the values, but then we check the logs and not the end value. So
+[20:28.520 --> 20:33.640]  and then the distribution can help because they can provide like a lot of the signatures already
+[20:33.640 --> 20:40.160]  and which files are in which packages and how they end up. That makes the life for the distribution
+[20:40.160 --> 20:51.360]  easier. Yes, sir. What is the performance of such a check? How much time does it take and how much
+[20:51.360 --> 21:01.440]  data is required for such a monitoring? From what I saw, I don't have like a benchmarks for that,
+[21:01.440 --> 21:13.120]  but it's pretty quick, like 200 milliseconds, something like that. So the round trip from the
+[21:13.120 --> 21:20.600]  request to the response is like 200 milliseconds in my test, but of course it's on my machine, right?
+[21:20.600 --> 21:27.280]  We don't have benchmarks for the performance. Yeah, so it heavily also depends what you want to
+[21:27.280 --> 21:33.120]  test. If you just have measured boot, it's the crow time on the hardware TPM maximum to a second,
+[21:33.120 --> 21:40.440]  and then it's like a couple of most megabytes of a single digits that you have at data that is
+[21:40.440 --> 21:47.520]  transferred. You had said that one of the challenges of implementation was dealing with false
+[21:47.520 --> 21:54.440]  positives and maybe false negatives. Can you give some examples of when that would occur? Yeah,
+[21:54.440 --> 22:01.920]  because we are still talking over the network. That is like a false positive if the network
+[22:01.920 --> 22:07.560]  connection goes down. And the other one is it's kind of a false positive and not really is if
+[22:07.560 --> 22:13.800]  your policy is not up to date. For the system, it's not a false positive in the traditional sense,
+[22:13.800 --> 22:19.520]  but it's in the false positive because we don't want that alert actually to happen. For the
+[22:19.520 --> 22:24.080]  university use case, how do you know that you're actually talking to the real TPM in the laptop?
+[22:24.080 --> 22:35.480]  So we have two ways. First, we verify against the hardware manufacturer. So they have a CA that
+[22:35.480 --> 22:42.040]  we can verify against. And also we can enroll the notebooks directly. So we check if the devices,
+[22:42.040 --> 22:48.320]  which I forgot to say that the university part is still proof of concept. So we are currently
+[22:48.320 --> 23:00.920]  working on it, but it's not rolled out like large scale. How do you make sure that an alert event,
+[23:00.920 --> 23:08.400]  a new change happened? How do you make sure that it's not intercepted over the network? Sorry,
+[23:08.400 --> 23:15.920]  once again. How do you make sure that when there's an event saying that there's a change on the
+[23:15.920 --> 23:21.440]  machine, a new measurement that appears? How do you make sure that the event is not intercepted
+[23:21.440 --> 23:29.040]  in the network between the monitored machine and the trusted system? So is the question,
+[23:29.040 --> 23:36.320]  how do we deal with the losing connection between the agent, the monitored system and the verifier?
+[23:36.320 --> 23:43.560]  Losing connection or having maybe something in between, making sure that it does not go to the
+[23:43.560 --> 23:50.720]  trusted system. There's something in between that makes sure that you're never going to be
+[23:50.720 --> 23:56.240]  notified that a system is going to be compromised or just became compromised.
+[23:56.240 --> 24:05.720]  Did you get that? Yes. So if we have a blocking connection between the agent and the verifier
+[24:05.720 --> 24:11.840]  side, then we get a timeout and then the agent gets automatically distressed. And if you said
+[24:11.840 --> 24:18.400]  like from the notification system itself, if you say we notify all the other agents, of course,
+[24:18.400 --> 24:22.960]  then there is an issue if you cannot reach to them on a trusted channel, then it's basically
+[24:22.960 --> 24:28.000]  game over in that direction. So you need to get your revocation alerts if you want to guarantee
+[24:28.000 --> 24:33.360]  them all the time through a trusted channel. So the trust boundary is for the attestation part
+[24:33.360 --> 24:38.960]  that we see that, but the revocation part, if you want to reach that, then it needs to go through
+[24:38.960 --> 24:45.880]  a trusted channel. Yeah. So continuing on this question, actually, I think, how do you make
+[24:45.880 --> 24:51.240]  sure that your actual verifiers connect to the right agent and you don't have a man in the middle
+[24:51.240 --> 24:58.160]  attack that's happening and rerouting this to a fake agent and fake TPM? Yeah. So that's tied
+[24:58.160 --> 25:05.000]  with the EK certificate. So you trust the manufacturer because when they manufacture the
+[25:05.000 --> 25:12.680]  TPM, they will create this key that cannot be modified or removed in any way. So it provides
+[25:12.680 --> 25:19.880]  the identity to the TPM. So when you get the information from the TPM or from some agent,
+[25:19.880 --> 25:29.920]  you can verify that that data came from the TPM that has some EK key because it's signed and you
+[25:29.920 --> 25:39.600]  can verify the origin using the CA certificate provided by the manufacturer. So you can check that
+[25:39.600 --> 25:46.480]  the TPM is exactly the one you expected using the EK certificate. Okay. Thank you for the talk.
+[25:46.480 --> 26:00.240]  Thank you for all the questions. We are out of the diamond. Thank you.

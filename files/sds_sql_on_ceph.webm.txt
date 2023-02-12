@@ -1,0 +1,328 @@
+[00:00.000 --> 00:26.000]  Okay, welcome everyone, starting with the next session, so yeah, try to find a place,
+[00:26.000 --> 00:32.000]  if you're free to use the reserved spaces if nobody comes. Let's welcome Patrick on the
+[00:32.000 --> 00:36.000]  talk on SQL on stuff like this.
+[00:36.000 --> 00:44.000]  Alright, hey everybody, I'm Patrick Donnelly, I know I got Red Hat slides up, but I'm actually
+[00:44.000 --> 00:49.000]  part of the storage group at Red Hat that got moved over to IBM as of this year, so technically
+[00:49.000 --> 00:56.000]  I'm at IBM now, if that matters for anybody who wants to ask me questions. Today I'm talking
+[00:56.000 --> 01:03.000]  about SQL on CIF, it's kind of a small project that started about two years ago, it was actually
+[01:03.000 --> 01:11.000]  a COVID project for me while I was dealing with the newborn baby that had lots of, or
+[01:11.000 --> 01:17.000]  some time on my hands, but anyway, this is kind of like an overview for what we're going to talk
+[01:17.000 --> 01:24.000]  about. Yeah, go ahead. Yeah, I do.
+[01:24.000 --> 01:27.000]  We don't have a PA, unfortunately.
+[01:27.000 --> 01:34.000]  Oh, yeah, I just have to speak up, so I'm naturally soft spoken, so if you can't hear me in the back,
+[01:34.000 --> 01:37.000]  just wave your hand and I'll try to speak up more, okay?
+[01:37.000 --> 01:43.000]  I'm okay right now, alright. Where was I?
+[01:43.000 --> 01:50.000]  So just a quick canvassing the audience, who's used CIF before?
+[01:50.000 --> 01:56.000]  Oh, wow, okay. Who's used SQLite before?
+[01:56.000 --> 02:00.000]  Fewer people, that's interesting, okay, but not much fewer.
+[02:00.000 --> 02:07.000]  Alright, so I'm going to quickly talk about CIF and what it is.
+[02:07.000 --> 02:11.000]  I won't spend too much time on it due to the time I have available in my talk.
+[02:11.000 --> 02:15.000]  I'll give you a brief introduction to RATOS for anyone who's not familiar with it.
+[02:15.000 --> 02:18.000]  Then I'm going to talk a little bit about SQLite.
+[02:18.000 --> 02:24.000]  Then some typical storage patterns we use for storing data on RATOS.
+[02:24.000 --> 02:30.000]  I'll give you an introduction to this new library, LibCefSQLite.
+[02:30.000 --> 02:37.000]  And then I'm going to talk about how we use that today within CIF,
+[02:37.000 --> 02:42.000]  just to show that this library is not being used by anyone.
+[02:42.000 --> 02:46.000]  Although I am interested if anyone's using it in the community.
+[02:46.000 --> 02:50.000]  I'll give you a brief, go through a brief tutorial,
+[02:50.000 --> 02:53.000]  an interactive tutorial using the library,
+[02:53.000 --> 02:59.000]  and then I'll end the talk with some retrospective and talk about future work.
+[02:59.000 --> 03:01.000]  So what's CIF?
+[03:01.000 --> 03:04.000]  CIF is an ecosystem for distributed object storage.
+[03:04.000 --> 03:12.000]  It's composed of numerous projects centered around managing a large storage cluster.
+[03:12.000 --> 03:17.000]  The underpinning of CIF is RATOS, which I'll talk about on the next slide,
+[03:17.000 --> 03:20.000]  but it's basically a distributed object store.
+[03:20.000 --> 03:24.000]  Most people don't use it, use RATOS directly.
+[03:24.000 --> 03:28.000]  What they use instead is the storage abstractions we built on top of RATOS,
+[03:28.000 --> 03:34.000]  which provide the more popular storage mechanisms that people are familiar with,
+[03:34.000 --> 03:38.000]  including CIFFS, which gives you your file storage as a distributed file system,
+[03:38.000 --> 03:44.000]  RGW, providing the S3 object storage gateway,
+[03:44.000 --> 03:50.000]  and RBD, which gives you your block device storage on top of RATOS.
+[03:50.000 --> 03:55.000]  CIF has kind of evolved more and more recently to become more user-friendly.
+[03:55.000 --> 03:59.000]  If you had maybe poor experiences in the past with CIF,
+[03:59.000 --> 04:01.000]  I encourage you to give it another shot.
+[04:01.000 --> 04:08.000]  The dev team has dedicated a lot of time recently to improving the user experience,
+[04:08.000 --> 04:17.000]  and also taking the hassle out of managing your storage cluster out of the experience.
+[04:17.000 --> 04:21.000]  There are things like monitoring device health.
+[04:21.000 --> 04:26.000]  We now have a very mature dashboard for interacting with the CIF cluster,
+[04:26.000 --> 04:32.000]  and the cluster management itself is now largely being done through CIFADM,
+[04:32.000 --> 04:36.000]  which, as you saw in the previous talk,
+[04:36.000 --> 04:42.000]  you can start up a CIF cluster with just a simple command and then start adding hosts to it.
+[04:42.000 --> 04:46.000]  It's never been simpler.
+[04:46.000 --> 04:48.000]  Oops, went backwards.
+[04:48.000 --> 04:55.000]  So what's RATOS? RATOS is a number of object storage demons that run on physical disks.
+[04:55.000 --> 04:59.000]  They can be hard disks, SSDs, and VMEs.
+[04:59.000 --> 05:03.000]  On top of these object storage devices, we have this concept of pools,
+[05:03.000 --> 05:06.000]  which allows you to have various administrative policies
+[05:06.000 --> 05:09.000]  regarding what kind of hardware the pool should use,
+[05:09.000 --> 05:12.000]  how the data should be replicated.
+[05:12.000 --> 05:19.000]  Clients of RATOS talk directly to the primary object storage device for a given object,
+[05:19.000 --> 05:24.000]  and you can look up which object storage device an object belongs to in constant time
+[05:24.000 --> 05:27.000]  using a library called crush.
+[05:27.000 --> 05:32.000]  You don't need to use that directly. That's just under the covers.
+[05:32.000 --> 05:39.000]  And then, as part of the name suggests, reliable, autonomic object storage.
+[05:39.000 --> 05:42.000]  Distributed object storage, the cluster heals.
+[05:42.000 --> 05:47.000]  Self-heals, it's autonomic, and the replication is done automatically.
+[05:47.000 --> 05:51.000]  You don't have to worry about how any of that works.
+[05:51.000 --> 05:56.000]  So what's an object?
+[05:56.000 --> 06:01.000]  The object storage device is composed of a number of objects,
+[06:01.000 --> 06:07.000]  and that is the logical unit you have when you're storing things in RATOS.
+[06:07.000 --> 06:11.000]  An object is composed of three different parts. You can use one or all.
+[06:11.000 --> 06:16.000]  They have the data blob, which is analogous to, like, a regular file.
+[06:16.000 --> 06:19.000]  Like, you put data in the file, you get data out of the file.
+[06:19.000 --> 06:21.000]  You have key value X-Satters.
+[06:21.000 --> 06:25.000]  This is sort of an older technology that was used in the early days with CEPFS
+[06:25.000 --> 06:31.000]  for storing certain information about files, which is typically very small data.
+[06:31.000 --> 06:35.000]  It's not usually used anymore, except in some parts of CEPFS.
+[06:35.000 --> 06:42.000]  Now, the key value store that's used most often in CEPFS, also RGW,
+[06:42.000 --> 06:50.000]  is OMAP, and that is much more of a general purpose key value store used today.
+[06:50.000 --> 06:55.000]  So this is how you interact with RATOS through these objects.
+[06:55.000 --> 06:59.000]  Now, it's not that simple to take, like, a number of objects,
+[06:59.000 --> 07:02.000]  distribute all over the cluster and try to build something with that,
+[07:02.000 --> 07:05.000]  because you've got consistency issues that you have to deal with.
+[07:05.000 --> 07:09.000]  You've got to manage how you're going to stripe the data across all these objects,
+[07:09.000 --> 07:13.000]  which is why we have these more popular abstractions that I talked about,
+[07:13.000 --> 07:18.000]  CEPFS, RBD, RGW, which is how you typically interact with RATOS.
+[07:18.000 --> 07:23.000]  So what I'm going to talk about today is a SQLite library
+[07:23.000 --> 07:28.000]  that operates alongside these other three storage abstractions,
+[07:28.000 --> 07:36.000]  gives you something on top of LibRATOS, but you can also now run SQL on CEPFS.
+[07:36.000 --> 07:41.000]  So how do you typically do application storage on RATOS?
+[07:41.000 --> 07:45.000]  Well, we have various bindings you can use to talk to RATOS.
+[07:45.000 --> 07:50.000]  We have the typical CC++ bindings, which are part of the broader project,
+[07:50.000 --> 07:52.000]  also used within CEPFS.
+[07:52.000 --> 07:57.000]  We also have a Python interface, which is used for manipulating the objects.
+[07:57.000 --> 08:04.000]  That's somewhat used in the broader community for various projects,
+[08:04.000 --> 08:08.000]  but also within CEPFS we use it for some of the new CEPFS manager daemon,
+[08:08.000 --> 08:10.000]  which I'll talk about more later.
+[08:10.000 --> 08:15.000]  And again, it's not that simple to stripe data across the objects,
+[08:15.000 --> 08:17.000]  which is why we have these other abstractions.
+[08:17.000 --> 08:21.000]  One of the more notable exceptions is this LibRATOS striper,
+[08:21.000 --> 08:26.000]  which is one of the ways you can create a file concept on top of objects,
+[08:26.000 --> 08:33.000]  where you open and close, read and write and sync to a number of objects,
+[08:33.000 --> 08:35.000]  and it looks like a regular file.
+[08:35.000 --> 08:37.000]  That was developed by some folks at CERN,
+[08:37.000 --> 08:51.000]  and it's mostly, I think, in terms of use, it's stayed confined to that space.
+[08:51.000 --> 08:56.000]  Well, even though we do have these other storage abstractions,
+[08:56.000 --> 08:59.000]  it's still useful to talk to RATOS directly,
+[08:59.000 --> 09:03.000]  because sometimes you want to do something that is not dependent
+[09:03.000 --> 09:05.000]  on these other storage abstractions,
+[09:05.000 --> 09:08.000]  which may, in the case of within CEPFS internals,
+[09:08.000 --> 09:10.000]  may not actually be available,
+[09:10.000 --> 09:14.000]  which is why a number of CEPFS manager plugins,
+[09:14.000 --> 09:18.000]  the CEPFS manager has a number of Python modules,
+[09:18.000 --> 09:21.000]  and they talk directly to RATOS.
+[09:21.000 --> 09:24.000]  So this was something I wanted to address,
+[09:24.000 --> 09:28.000]  because it was a little bit awkward,
+[09:28.000 --> 09:30.000]  and I'll talk about that more.
+[09:30.000 --> 09:33.000]  So a quick overview of SQLite.
+[09:33.000 --> 09:35.000]  For those who've never used it before,
+[09:35.000 --> 09:38.000]  it's a user application library for allowing you,
+[09:38.000 --> 09:41.000]  the X is a SQL engine,
+[09:41.000 --> 09:45.000]  and lets you store a SQL database as a regular file,
+[09:45.000 --> 09:47.000]  usually two files.
+[09:47.000 --> 09:51.000]  It'll be a journal, and then the database object itself.
+[09:51.000 --> 09:53.000]  And depending on how you use it,
+[09:53.000 --> 09:56.000]  the journal is transient, may come and go.
+[09:56.000 --> 10:00.000]  It's widely recognized as one of the most used SQLite engines
+[10:00.000 --> 10:01.000]  in the world.
+[10:01.000 --> 10:02.000]  It's very popular.
+[10:02.000 --> 10:04.000]  They estimate on their website,
+[10:04.000 --> 10:09.000]  there's billions of SQLite databases in use.
+[10:09.000 --> 10:11.000]  It's at least tens of billions at this point,
+[10:11.000 --> 10:14.000]  because it's in every Android phone.
+[10:14.000 --> 10:17.000]  So it was easy choice to make.
+[10:17.000 --> 10:18.000]  It's a very simple library,
+[10:18.000 --> 10:21.000]  and bindings exist for numerous SQL systems.
+[10:21.000 --> 10:26.000]  In particular, of interest to me, was Python.
+[10:26.000 --> 10:30.000]  Actually, extending SQLites is fairly simple.
+[10:30.000 --> 10:34.000]  They have this VFS concept, virtual file system concept.
+[10:34.000 --> 10:41.000]  It lets you swap in different virtual file systems as needed.
+[10:41.000 --> 10:45.000]  The basic one is the UNIX VFS that's what comes with SQLite
+[10:45.000 --> 10:48.000]  by default, and it's very intuitive.
+[10:48.000 --> 10:50.000]  It just passes on open, read, write,
+[10:50.000 --> 10:57.000]  closed off to the local file system for execution.
+[10:57.000 --> 11:05.000]  So Libsef SQLite is a library for a SQLite VFS library
+[11:05.000 --> 11:10.000]  that lets you put a database, SQLite database in RATOS.
+[11:10.000 --> 11:14.000]  It's composed of two parts.
+[11:14.000 --> 11:16.000]  Libsef SQLite and simple RATOS striper.
+[11:16.000 --> 11:21.000]  I'll talk about simple RATOS striper on the next slide.
+[11:21.000 --> 11:24.000]  The use of this library does not require any application
+[11:24.000 --> 11:27.000]  modification, and that's kind of like the killer feature here,
+[11:27.000 --> 11:29.000]  because you can just set some environment variables
+[11:29.000 --> 11:32.000]  and modify the database URI,
+[11:32.000 --> 11:37.000]  and you can automatically start storing your database in SEF.
+[11:37.000 --> 11:40.000]  And all of these, you know, the journal objects,
+[11:40.000 --> 11:42.000]  the database objects are striped across the OSDs.
+[11:42.000 --> 11:44.000]  You don't need to do anything differently.
+[11:44.000 --> 11:47.000]  The simple RATOS striper is based loosely off
+[11:47.000 --> 11:51.000]  of the Lib RATOS striper developed by CERN.
+[11:51.000 --> 11:54.000]  The main reason I didn't end up using CERN's library
+[11:54.000 --> 11:57.000]  was because it had some locking behavior
+[11:57.000 --> 12:01.000]  that was not really desirable for a highly asynchronous use
+[12:01.000 --> 12:05.000]  case, and I didn't want to modify their library
+[12:05.000 --> 12:10.000]  out from under their feet, so I just wrote a simple version.
+[12:10.000 --> 12:15.000]  It provides the primitives that SQLite needs,
+[12:15.000 --> 12:19.000]  open, read, write, close, sync, and all the writes
+[12:19.000 --> 12:23.000]  are done asynchronously, and then the sync call
+[12:23.000 --> 12:26.000]  that comes from SQLite actually flushes them all out.
+[12:26.000 --> 12:30.000]  So these are all stored across RATOS with these names,
+[12:30.000 --> 12:33.000]  you know, foo.db, and it's got like the block number
+[12:33.000 --> 12:37.000]  associated with the database, and so on.
+[12:37.000 --> 12:40.000]  Using LibSeph SQLite, again, it's very easy.
+[12:40.000 --> 12:45.000]  You just have to load a VFS library.
+[12:45.000 --> 12:49.000]  This is done with the SQLite command.loadLibSephSQLite,
+[12:49.000 --> 12:54.000]  and then you just provide a URI for the database.
+[12:54.000 --> 12:58.000]  This is the pool ID or the pool name,
+[12:58.000 --> 13:01.000]  the namespace within that pool, which is optional,
+[13:01.000 --> 13:04.000]  and then you give the database a name and specify
+[13:04.000 --> 13:07.000]  the VFS is Seph, and that's it.
+[13:07.000 --> 13:09.000]  It just works.
+[13:09.000 --> 13:12.000]  You may have to specify some environment variables
+[13:12.000 --> 13:17.000]  if you're using the SQLite binary to give it,
+[13:17.000 --> 13:19.000]  tell it which Seph cluster to use,
+[13:19.000 --> 13:21.000]  or which Seph configs to read, things like that,
+[13:21.000 --> 13:26.000]  but that's all fairly unobtrusive, not obtrusive.
+[13:26.000 --> 13:28.000]  Within the Seph manager, so the Seph manager
+[13:28.000 --> 13:31.000]  is one of the newer demons in Seph
+[13:31.000 --> 13:33.000]  that takes care of certain details
+[13:33.000 --> 13:35.000]  of managing your Seph cluster
+[13:35.000 --> 13:39.000]  and trying to provide easier interfaces.
+[13:39.000 --> 13:41.000]  A particular interest to us is one that handles
+[13:41.000 --> 13:44.000]  health metrics that come from the OSDs,
+[13:44.000 --> 13:46.000]  giving the Seph manager information
+[13:46.000 --> 13:49.000]  about the smart data associated with the disks,
+[13:49.000 --> 13:52.000]  being able to anticipate failures in disks,
+[13:52.000 --> 13:56.000]  again, Seph trying to reduce the management burden
+[13:56.000 --> 13:59.000]  of storage clusters, and then also a portal
+[13:59.000 --> 14:02.000]  to higher level commands like managing volumes
+[14:02.000 --> 14:07.000]  within Seph that is a subvolume concept
+[14:07.000 --> 14:13.000]  that's used by OpenStack or Kubernetes, CSI.
+[14:13.000 --> 14:15.000]  Within the Seph manager demon, what I observed
+[14:15.000 --> 14:17.000]  was that there were several modules
+[14:17.000 --> 14:20.000]  that were just storing data in the OMAP key value
+[14:20.000 --> 14:22.000]  of a particular object, and it turned out
+[14:22.000 --> 14:24.000]  this doesn't scale very well.
+[14:24.000 --> 14:26.000]  We know it won't scale well because if you have
+[14:26.000 --> 14:30.000]  more than 10,000 key value pairs in a single object,
+[14:30.000 --> 14:32.000]  the performance starts to degrade.
+[14:32.000 --> 14:34.000]  In fact, you'll start getting cluster warnings
+[14:34.000 --> 14:37.000]  that there's objects with too many key value pairs.
+[14:37.000 --> 14:43.000]  So it was also pretty awkward in terms of how it was being used,
+[14:43.000 --> 14:49.000]  and just by how we were managing the data,
+[14:49.000 --> 14:52.000]  it was a perfect match for a SQL database,
+[14:52.000 --> 14:55.000]  except it was not very easy to put a SQL database
+[14:55.000 --> 14:58.000]  on Seph at the time.
+[14:58.000 --> 15:03.000]  In fact, Jan here worked on SNAP schedule,
+[15:03.000 --> 15:07.000]  which is a module for creating snapshots
+[15:07.000 --> 15:11.000]  and maintaining snapshots in Seph FS
+[15:11.000 --> 15:14.000]  and handling retention policies,
+[15:14.000 --> 15:16.000]  and that actually used a SQL database
+[15:16.000 --> 15:20.000]  that was flushed to RATOS objects and then loaded
+[15:20.000 --> 15:23.000]  in anticipation of the project that I'm working on now,
+[15:23.000 --> 15:25.000]  and that's all been updated now to use this
+[15:25.000 --> 15:29.000]  of Seph SQLite library.
+[15:29.000 --> 15:31.000]  All right.
+[15:31.000 --> 15:37.000]  So in terms of how it actually looks within the Seph manager,
+[15:37.000 --> 15:40.000]  on the left we have a schema.
+[15:40.000 --> 15:41.000]  It's fairly simple.
+[15:41.000 --> 15:43.000]  Just creating a table with the device ID
+[15:43.000 --> 15:45.000]  as the primary key, and then another table
+[15:45.000 --> 15:47.000]  with device health metrics.
+[15:47.000 --> 15:49.000]  With the time we got the metrics,
+[15:49.000 --> 15:52.000]  the device ID associated with that metric,
+[15:52.000 --> 15:54.000]  and then the raw smart text.
+[15:54.000 --> 15:59.000]  And then they actually put the device metrics in the database.
+[15:59.000 --> 16:01.000]  It's as simple as this.
+[16:01.000 --> 16:05.000]  Within the manager I've taken out a few unnecessary lines
+[16:05.000 --> 16:08.000]  just for space or unnecessary keywords
+[16:08.000 --> 16:10.000]  for space in the SQL.
+[16:10.000 --> 16:11.000]  You create the device ID,
+[16:11.000 --> 16:13.000]  which just calls another SQL statement
+[16:13.000 --> 16:15.000]  to insert into this table,
+[16:15.000 --> 16:18.000]  and actually execute the SQL statement
+[16:18.000 --> 16:21.000]  with the Epic dev ID and data.
+[16:21.000 --> 16:23.000]  It's that simple.
+[16:23.000 --> 16:26.000]  And now that's stored, persisted, and RATOS.
+[16:26.000 --> 16:30.000]  So here's a quick Libsep SQLite in action series
+[16:30.000 --> 16:32.000]  of gifts I've created.
+[16:32.000 --> 16:35.000]  Here we're running the Seph status command,
+[16:35.000 --> 16:37.000]  just showing us the state of the cluster.
+[16:37.000 --> 16:41.000]  We have two pools right now, a.manager and an A pool
+[16:41.000 --> 16:43.000]  that I'm creating for this demo.
+[16:43.000 --> 16:47.000]  Here I'm purging A just to show that there's nothing in it.
+[16:47.000 --> 16:50.000]  It removed one object.
+[16:50.000 --> 16:54.000]  And here I'm just listing all the objects within this pool.
+[16:54.000 --> 16:57.000]  There's none because I just purged it.
+[16:57.000 --> 16:59.000]  So that's just a starter.
+[16:59.000 --> 17:02.000]  And then here we're actually going to run the Libsep SQLite.
+[17:02.000 --> 17:04.000]  So to do that, again, I mentioned there were
+[17:04.000 --> 17:05.000]  some environment variables.
+[17:05.000 --> 17:08.000]  If I'm using the SQLite command directly,
+[17:08.000 --> 17:11.000]  I have to specify some environment variables.
+[17:11.000 --> 17:14.000]  So the library knows what to do.
+[17:14.000 --> 17:16.000]  Here, because this is a dev cluster,
+[17:16.000 --> 17:18.000]  I have to tell it to use the library path
+[17:18.000 --> 17:20.000]  associated with my build.
+[17:20.000 --> 17:25.000]  I specify which Seph config to load, which key ring associated
+[17:25.000 --> 17:30.000]  with the admin user that I'm going to specify here.
+[17:30.000 --> 17:32.000]  I was actually going to also add some logging data,
+[17:32.000 --> 17:37.000]  but I ended up not doing that, just to save space.
+[17:37.000 --> 17:40.000]  And then here I'm actually running a SQLite command.
+[17:40.000 --> 17:44.000]  I'm loading the Libsep SQLite library.
+[17:44.000 --> 17:48.000]  That's one of the first command that Libsep SQLite is going to run.
+[17:48.000 --> 17:52.000]  And here I'm opening a database in pool A,
+[17:52.000 --> 17:55.000]  namespace B within that pool,
+[17:55.000 --> 18:00.000]  and then a database named a.db with vfsf.
+[18:00.000 --> 18:02.000]  All right, now I'm in SQLite.
+[18:02.000 --> 18:08.000]  Here I create a simple table with an integer column.
+[18:08.000 --> 18:11.000]  There's the schema, exactly what I wrote.
+[18:11.000 --> 18:16.000]  And then we're going to insert into the table one value
+[18:16.000 --> 18:20.000]  and then dump it.
+[18:20.000 --> 18:22.000]  So it's now in RATOS.
+[18:22.000 --> 18:26.000]  And now just to confirm that, I'm going to run the RATOS command
+[18:26.000 --> 18:29.000]  on the pool A, list all the objects in the pool.
+[18:29.000 --> 18:34.000]  You can see namespace B. I have this a.db.
+[18:34.000 --> 18:38.000]  So now I'm going to use this striper command.
+[18:38.000 --> 18:42.000]  I'm actually, if this database were composed of many objects,
+[18:42.000 --> 18:45.000]  you can use the striper command to actually pull the database out.
+[18:45.000 --> 18:47.000]  And you can see here I've done that.
+[18:47.000 --> 18:49.000]  It's an 8k database.
+[18:49.000 --> 18:53.000]  It's small because there's just one table with one value.
+[18:53.000 --> 18:56.000]  And I loaded that locally.
+[18:56.000 --> 18:58.000]  I pulled it out of RATOS.
+[18:58.000 --> 18:59.000]  Sorry, the GIF loops.
+[18:59.000 --> 19:01.000]  I pulled it out of RATOS.
+[19:01.000 --> 19:05.000]  And then I now have the database as a local file.
+[19:05.000 --> 19:09.000]  I ran SQLite on that local file database.
+[19:09.000 --> 19:13.000]  And just dumped it to confirm that it actually wrote the data out
+[19:13.000 --> 19:14.000]  to RATOS correctly.
+[19:14.000 --> 19:19.000]  And I can pull it out of RATOS and verify that it actually worked.
+[19:19.000 --> 19:27.000]  So here's another demo with just rerunning the same SQLite command
+[19:27.000 --> 19:28.000]  I had earlier.
+[19:28.000 --> 19:31.000]  And sorry, this is going to be a big paste.
+[19:31.000 --> 19:33.000]  But I'm creating a table.
+[19:33.000 --> 19:38.000]  This is just some magic in SQLite to basically create an infinite loop.
+[19:38.000 --> 19:41.000]  And I'm just going to insert a number.
+[19:41.000 --> 19:45.000]  I think it's 100,000 integers into the table.
+[19:45.000 --> 19:48.000]  And just see how many objects are in the database now.
+[19:48.000 --> 19:53.000]  There's four objects composed of that database.
+[19:53.000 --> 19:57.000]  So I think for time reasons, I'm not going to go through the performance notes,
+[19:57.000 --> 20:00.000]  but it's on the slide if you want to look at it later.
+[20:00.000 --> 20:06.000]  And just as a retrospective for Quincy, when the database got used live,
+[20:06.000 --> 20:10.000]  it's being used in the two manager modules right now,
+[20:10.000 --> 20:13.000]  the device health and the SNAP scheduling module.
+[20:13.000 --> 20:14.000]  It's been fairly successful.
+[20:14.000 --> 20:24.000]  We had a few minor hiccups that weren't really too much related to the library.
+[20:24.000 --> 20:29.000]  And just for some future work, I want to add support for supporting concurrent
+[20:29.000 --> 20:30.000]  readers.
+[20:30.000 --> 20:32.000]  That's not yet possible right now.
+[20:32.000 --> 20:36.000]  All readers and writers obtained exclusive locks when accessing the database.
+[20:36.000 --> 20:41.000]  But there's not a technical reason why we can't add concurrent reader support.
+[20:41.000 --> 20:45.000]  And then I also want to look at adding read-ahead performance,
+[20:45.000 --> 20:47.000]  improving read-ahead performance.
+[20:47.000 --> 20:53.000]  Because right now every read call in Libsef SQLite is synchronous.
+[20:53.000 --> 20:55.000]  So that's the end of my talk.
+[20:55.000 --> 20:56.000]  Thank you.
+[20:56.000 --> 21:02.000]  Do we have any time for questions?
+[21:02.000 --> 21:04.000]  Sorry, no time for questions to this session.
+[21:04.000 --> 21:33.000]  You have to find Patrick and I'll send him.

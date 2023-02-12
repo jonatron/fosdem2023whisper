@@ -1,0 +1,522 @@
+[00:00.000 --> 00:10.800]  Okay. Thank you. Thank you, Rassan. Actually, after hearing your talk, I'm kind of considering
+[00:10.800 --> 00:13.960]  I should join the Unicraft community. Sounds to be fun there.
+[00:13.960 --> 00:16.600]  It's a threshold there, Kim.
+[00:16.600 --> 00:17.600]  Yeah, I see.
+[00:17.600 --> 00:19.600]  Well, you don't have to test it.
+[00:19.600 --> 00:25.960]  Okay. So, my name is Simon Kunzer. As you now heard, I'm the lead maintainer, also the
+[00:25.960 --> 00:31.760]  original person that started that Unicraft project while being still a researcher at
+[00:31.760 --> 00:38.800]  NEC Labs Europe. In the meantime, we spinned off. We have now a startup also called Unicraft.
+[00:38.800 --> 00:45.040]  It's the Unicraft GmbH, and I'm their CTO and co-founder. And, yeah, we're building
+[00:45.040 --> 00:49.160]  a community and a startup at the same time.
+[00:49.160 --> 00:58.040]  So first question into the room. Who has used Unicraft before? I would like to know. Okay.
+[00:58.040 --> 01:07.400]  Who has maybe more theoretical background, what our key concepts in Unicraft are? Okay.
+[01:07.400 --> 01:15.040]  So then, yeah, also, I have some background slides to bring everybody on the same stage.
+[01:15.040 --> 01:20.400]  And then we jump directly into the binary compatibility topic, but I won't spend too
+[01:20.400 --> 01:24.280]  much time here. Okay.
+[01:24.280 --> 01:33.320]  So with this picture, I usually start that. You see on the left side the traditional setup
+[01:33.320 --> 01:40.720]  when you have virtual machines and your applications running on them, so stuff that you know since
+[01:40.720 --> 01:48.760]  20 years now. Then you have a setup which is more recent and more popular is using containers
+[01:48.760 --> 01:56.040]  where you basically run a host address on your hardware and then you use isolation primitives
+[01:56.040 --> 02:04.200]  on your host kernel to separate your containers from each other. And then there's Unicurnals.
+[02:04.200 --> 02:11.160]  I don't know. Is this interrupted somewhere? Okay.
+[02:11.160 --> 02:15.520]  So we think this could be a different execution environment, especially for the container
+[02:15.520 --> 02:22.720]  setup bringing kind of marriage what you had before with virtual machines with strong isolation
+[02:22.720 --> 02:30.120]  and really more minimal hypervisors underneath that are much more secure as well. And don't
+[02:30.120 --> 02:37.480]  need to do a shared host base which can become an attack surface. And then you want the flexibility
+[02:37.480 --> 02:43.320]  of containers and this is where we think a Unicurnal can come in, so where you build
+[02:43.320 --> 02:47.560]  a kernel per application.
+[02:47.560 --> 02:54.800]  So the thing is, since you know the application that you run on, you can also give up a lot
+[02:54.800 --> 03:01.400]  of principles you had in standard operating systems and do simplifications which is totally
+[03:01.400 --> 03:08.520]  okay because it's not hitting your attack vector actually. So if you say one application
+[03:08.520 --> 03:12.080]  you can go for a flat and single address space because that kernel that you have underneath
+[03:12.080 --> 03:17.440]  is just for your application for nothing else.
+[03:17.440 --> 03:23.520]  We in Unicraft build a single monolithic binary usually, so it's your application plus the
+[03:23.520 --> 03:34.600]  kernel layers and everything ends up in function calls into drivers. And you get then further
+[03:34.600 --> 03:41.200]  benefits, first by this simple setup, but also since you know your environment, you
+[03:41.200 --> 03:46.960]  know where you run on, you know what you run, so you can specialize the kernel layers that
+[03:46.960 --> 03:52.960]  you need underneath. So you put only drivers that you need to run on your target hypervisor.
+[03:52.960 --> 03:57.360]  You build a separate image if you run that application on a different hypervisor. So
+[03:57.360 --> 04:02.960]  floppy drivers, forget it, you don't need it. VertiU only for KVM guests, Zen NetFront
+[04:02.960 --> 04:09.480]  for instance, only for Zen guests. And you know the application, you have knowledge
+[04:09.480 --> 04:16.480]  which features of the OS is needed and that way you can also from the top down specialize
+[04:16.480 --> 04:25.600]  the operating system to just provide that what you need. So this makes us also slightly
+[04:25.600 --> 04:30.280]  different from the other Unicraft projects maybe that you had heard of, so we are for
+[04:30.280 --> 04:39.120]  sure not the first ones. But we claim we are the ones that follow at least this principle
+[04:39.120 --> 04:43.520]  as the most strongest because we build it from the beginning with that in mind, which
+[04:43.520 --> 04:54.200]  is specialization. So everything that we implement should never dictate any design principles.
+[04:54.200 --> 05:00.200]  The concept is you know what you need for your application, you know what you need to
+[05:00.200 --> 05:07.480]  run your Unicron, so I want to give you a highly customizable base where you pick and
+[05:07.480 --> 05:19.480]  choose and configure of components and specialize the kernel layers for you. So that led us
+[05:19.480 --> 05:25.400]  to this principle, everything is a micro library, which means for us even OS primitives are
+[05:25.400 --> 05:31.040]  micro libraries, meaning a scheduler is a micro library, a specific scheduler implementation
+[05:31.040 --> 05:37.640]  is a micro library, so like a cooperative scheduler or some schedulers do preemptive scheduling,
+[05:37.640 --> 05:44.560]  different libraries, memory allocators, also things like VFS, network stacks, the architectures,
+[05:44.560 --> 05:49.680]  the platform supports and the drivers are all libraries and because we are also going
+[05:49.680 --> 05:54.320]  up the stack the application interfaces, so everything that has to do with POSIX even
+[05:54.320 --> 06:00.840]  that is split it into multiple subsystems, POSIX subsystem libraries. The Linux system
+[06:00.840 --> 06:07.280]  called ABI, which you will see in this talk now, and even language runtimes, if you let's
+[06:07.280 --> 06:19.040]  say run a JavaScript Unicron, you can build it with a JS engine. And the project consists
+[06:19.040 --> 06:26.720]  basically of a Kconfig based configuration system and a build system, also make based
+[06:26.720 --> 06:33.280]  to not come up with yet another build system, to make actually entrance easy when people
+[06:33.280 --> 06:41.720]  are familiar with Linux before, and our library pool actually. And to give you a rough idea
+[06:41.720 --> 06:49.120]  how this library pool is organized, I find this diagram nice, so let's see if this works
+[06:49.120 --> 06:58.200]  at this point. Yeah, so we divide roughly, so you don't find it that way in the repos,
+[06:58.200 --> 07:04.120]  but we divide roughly the libraries into these different categories, so you have like here
+[07:04.120 --> 07:09.840]  on the bottom, the platform layer, which basically includes drivers and platform support
+[07:09.840 --> 07:15.880]  where you run on. Then we have this OS preemptive layer, these are then libraries that implement
+[07:15.880 --> 07:21.960]  like a TCP IP stack, or file systems, or something regarding scheduling, memory allocation,
+[07:21.960 --> 07:28.200]  et cetera, et cetera. And then always in mind there's like, first the opportunity for you
+[07:28.200 --> 07:34.920]  to replace components in here, and also that we provide also alternatives, so you don't
+[07:34.920 --> 07:39.120]  need to stick with IP if you don't like it, so you can provide your own network stack
+[07:39.120 --> 07:46.520]  here as well, and reuse the rest of the stack too. Then we have this POSIX compatibility
+[07:46.520 --> 07:51.400]  layer, this is basically, you know, things here, FD tab, this is for instance file descriptor
+[07:51.400 --> 07:57.880]  handling, as you know it. POSIX process has then aspects about process IDs, process handling,
+[07:57.880 --> 08:05.600]  et cetera, pthread API, of course. And then we have a libc layer, where we also have at
+[08:05.600 --> 08:12.440]  the moment actually three libcs, muscle, which is becoming our main thing now, a new lib
+[08:12.440 --> 08:17.480]  that we had in the past, to actually provide all the libc functionally to the application,
+[08:17.480 --> 08:22.760]  but also actually for the other layers too, right, it provides also things like memcopy,
+[08:22.760 --> 08:31.800]  which is like all over the place used, right. Okay. Then Linux application compatibility,
+[08:31.800 --> 08:39.320]  that was now a big topic for this release. Why do we do application compatibility? It's
+[08:39.320 --> 08:47.840]  actually for us, for adoption, to drive the adoption, because most cloud software is developed
+[08:47.840 --> 08:54.360]  for Linux. People are used to their software, so we don't feel confident to ask them to
+[08:54.360 --> 09:01.760]  use something new or rewrite stuff from scratch. And if you provide something like Linux compatibility,
+[09:01.760 --> 09:06.600]  you remove also obstacles that people start using Unicraft, because they can run their
+[09:06.600 --> 09:15.560]  application with Unicraft. And our vision behind the project is to give seamless application
+[09:15.560 --> 09:25.200]  support. So the users that say, they tell you, I use that in that web server, and it
+[09:25.200 --> 09:31.560]  should be like with a push of a button, so including with some tooling that we provide,
+[09:31.560 --> 09:36.520]  that we can run that on Unicraft as they run it before on Linux, and they benefit from
+[09:36.520 --> 09:42.000]  all these nice unicolonial properties, which are lower boot times, less memory consumption,
+[09:42.000 --> 09:55.400]  and also improved performance. Okay. So now, speaking about which possibilities you have
+[09:55.400 --> 10:06.520]  for supporting Linux compatibility, we divide actually compatibility into two main tracks.
+[10:06.520 --> 10:13.040]  One track is so-called native, which means that we have the application sources, and
+[10:13.040 --> 10:18.160]  we compile that together and link that together with the Unicraft build system. And then we
+[10:18.160 --> 10:25.040]  have on the other side, the binary compatibility mode, where the story is that the application
+[10:25.040 --> 10:33.800]  is built externally, and we just get binary artifacts, or the final image event. And then
+[10:33.800 --> 10:41.920]  actually you can subdivide these two tracks on the native side. We have, which we did
+[10:41.920 --> 10:47.680]  actually quite a lot until recently, this Unicraft-driven compilation, which basically
+[10:47.680 --> 10:56.320]  meant that when you have your application, you have to port or mimic the application's
+[10:56.320 --> 11:00.240]  original build system with the Unicraft build system, and then you compile all the sources
+[11:00.240 --> 11:06.560]  with Unicraft. It has the benefit that you're then staying in one universe and don't have
+[11:06.560 --> 11:14.920]  potential conflicts with compiler flags or things that, I mean, influence your calling
+[11:14.920 --> 11:20.680]  conventions between objects. And then there is this way that you probably have also seen,
+[11:20.680 --> 11:26.040]  for instance, with RUM kernels. They did it a lot using an instrumented way, where you
+[11:26.040 --> 11:34.240]  actually utilize the build system of an application with the cross-compile feature, and then,
+[11:34.240 --> 11:40.400]  you know, you hook in, and that's your entry point into replacing the compile calls and
+[11:40.400 --> 11:49.480]  make it fit for your Unicom. And then on the binary compatibility side, we have, so let's
+[11:49.480 --> 11:57.880]  start here, because that's easier. So, of course, so externally built, and this means
+[11:57.880 --> 12:04.720]  basically you have ELF files, so like a shared library or an ELF application. What you need
+[12:04.720 --> 12:10.280]  here is basically just to support loading that and get that into your address space,
+[12:10.280 --> 12:16.840]  and then run it. And then there's also this flavor of, let's say, build time linking,
+[12:16.840 --> 12:24.720]  which means that you take some build artifacts from the original application build system,
+[12:24.720 --> 12:30.760]  like the intermediate object files, before it does a final link to the application image,
+[12:30.760 --> 12:39.080]  and you link those together with the Unicraft system. And they call it here binary compatible,
+[12:39.080 --> 12:46.320]  because, you know, you interface it on an API, right, and not on the API level, like
+[12:46.320 --> 12:57.680]  in the native cases. So, and here, this is just a little mark that in the Unicraft project,
+[12:57.680 --> 13:04.360]  you will mostly find these three modes in the project that people are working on. So,
+[13:04.360 --> 13:09.320]  here we, that we never tried with Unicraft, in fact. But I mean, there's some tooling
+[13:09.320 --> 13:18.200]  and this should work, too, actually. So, as you may have noticed, native is about
+[13:18.200 --> 13:24.920]  API compatibility, so really on the programming interface, and binary compatibility is about
+[13:24.920 --> 13:31.080]  the application binary interface. So, really, the compiled, sorry, the compiled artifacts
+[13:31.080 --> 13:37.080]  and how you have calling conventions here, et cetera, where your arguments in which register
+[13:37.080 --> 13:43.280]  or how's your stack layout, et cetera, right? And this is, this is here on a programming
+[13:43.280 --> 13:52.720]  language level, right? So, the requirements for providing you, let's say, a native experience
+[13:52.720 --> 14:01.960]  is POSIX, POSIX and POSIX, right? Most applications are written for POSIX, so we have to do POSIX,
+[14:01.960 --> 14:14.200]  no excuse, right? So, libcs will mostly cover that. But, yeah, it's all about POSIX. And
+[14:14.200 --> 14:21.960]  the second point is that you also need to port the libraries that your application additionally
+[14:21.960 --> 14:29.240]  uses. Let's say, yeah, let's take engine access and web. So, right, you have then tons of
+[14:29.240 --> 14:35.560]  library dependencies, for instance, for cryptographic things, like setting up HTTPS tunnels or doing
+[14:35.560 --> 14:41.560]  some other things. So, those libraries, you need also, you know, port here and add them
+[14:41.560 --> 14:50.800]  so that you have the, you know, the application sources available during the build, right?
+[14:50.800 --> 14:57.320]  On the binary compatibility side, the requirements are, you need to understand the L format, share
+[14:57.320 --> 15:04.680]  libraries or binaries, depending on which level you're driving it. And then, since this
+[15:04.680 --> 15:13.160]  stuff got built for Linux, you must be aware that it can happen that that binary will do
+[15:13.160 --> 15:17.720]  directly system calls. So, it's instrumented because it got built together with a libc
+[15:17.720 --> 15:24.960]  or something like that to do an syscall assembly instruction, which means on our side, we need
+[15:24.960 --> 15:30.840]  to be able to handle those system calls as well. And if we, you know, speak about shared
+[15:30.840 --> 15:37.400]  library support, we need to support all this library function or library symbol linking,
+[15:37.400 --> 15:43.680]  actually, right? And additionally, of course, each data that is exchanged, right, needs
+[15:43.680 --> 15:49.560]  to be in the same representation. This means, because this is ABI, right? Now imagine you
+[15:49.560 --> 15:55.600]  have a C struct. And here, it's fine to move some fields around, because if you use the
+[15:55.600 --> 15:59.960]  same definition for your compilation, it's all fine. You can sort the fields in the struct,
+[15:59.960 --> 16:07.080]  it will all work. Here, you can't because your application that got built externally,
+[16:07.080 --> 16:12.680]  that layout of that struct, that binary layout, that must fit. Otherwise, you will read different
+[16:12.680 --> 16:19.520]  fields, right, obviously. And then for both modes, which is important for us as an operating
+[16:19.520 --> 16:23.520]  system, we have, of course, also some things that we need to provide to the application,
+[16:23.520 --> 16:29.600]  which are things that the application just requires, because it is that way on Linux,
+[16:29.600 --> 16:37.160]  meaning providing a procfs or sysfs entries or files in slash etc. or something like that,
+[16:37.160 --> 16:42.960]  because, you know, they do sometimes silly things just to figure out in which time soon
+[16:42.960 --> 16:48.760]  they are, so they go to slash etc. and figure out what is configured and also the locales
+[16:48.760 --> 16:56.880]  and etc. So, I'm closing that, let's say, this high level view up, so that we have the
+[16:56.880 --> 17:03.920]  full understanding. Let's speak a bit about the pros and cons between these two modes.
+[17:03.920 --> 17:10.360]  The native side, what is really nice here, which is a really interesting pro, so if you
+[17:10.360 --> 17:19.400]  got everything put together, you have quite of a natural way to change code in the application,
+[17:19.400 --> 17:27.960]  to change code in the kernel, to make maybe shortcuts between the application kernel interaction
+[17:27.960 --> 17:35.240]  and can use that for driving your specialization even further and performance tune your unique
+[17:35.240 --> 17:42.400]  kernel for the application. The disadvantages, you always need the source codes, because
+[17:42.400 --> 17:48.560]  we are compiling everything here together, and which is also, let's say, for newcomers
+[17:48.560 --> 17:57.640]  a bit difficult, is if you require them that the application they have, and they say, okay,
+[17:57.640 --> 18:01.560]  I have the source codes, and I just run make and then it compiles, but I have the source
+[18:01.560 --> 18:06.200]  code, you need to instrument either the build system of the application, as we just saw
+[18:06.200 --> 18:14.680]  with the instrumented build that also ramped it, or you actually, we must say, okay, sorry,
+[18:14.680 --> 18:21.160]  you can't use that build system, now you need to mimic and write and Unicraft make file
+[18:21.160 --> 18:30.840]  equivalent to build your application. So, this is why binary compatibility is actually
+[18:30.840 --> 18:35.440]  interesting, really interesting for, let's say, newcomers, because you don't need the
+[18:35.440 --> 18:40.520]  source code, they can compile the application that they're interested in, so if they need
+[18:40.520 --> 18:46.000]  to compile it, let's say, right, the way as they usually do, they don't need to care about
+[18:46.000 --> 18:52.040]  Unicraft at all, and normally, also no modifications to the application is needed. Obviously, you
+[18:52.040 --> 18:58.720]  can still do things here, but it's not a requirement.
+[18:58.720 --> 19:04.200]  The risk that we saw by doing the work is, at least for the, let's say, on the unicolonial
+[19:04.200 --> 19:11.040]  side, is that you get into a risk that you need to implement things the way how Linux
+[19:11.040 --> 19:18.480]  does it, and one really stupid example, I get a bit nuts on that, is providing an implementation
+[19:18.480 --> 19:25.320]  for netlink sockets, because if you have, like, a web application, or, you know, any
+[19:25.320 --> 19:30.520]  application that does some networking, and that application wants to figure out which
+[19:30.520 --> 19:34.400]  network interfaces are configured, and what are the IP addresses there, so it will likely
+[19:34.400 --> 19:40.920]  lose the libc function get if address, and that is implemented with a netlink socket,
+[19:40.920 --> 19:46.520]  so this goes back here, right, here I can just provide a get if address, which is highly
+[19:46.520 --> 19:51.720]  optimized in that sense, right, which just returns in that struct all the interfaces,
+[19:51.720 --> 19:58.440]  but if I go binary compatible, and if I do it really on an extreme, means, because that
+[19:58.440 --> 20:05.520]  libc, which is part of your binary here, maybe, opens a socket, which is address family netlink,
+[20:05.520 --> 20:11.800]  and starts communicating about a socket with the kernel to figure out the interface addresses,
+[20:11.800 --> 20:16.160]  which can be really silly, right, for a unicolon, right, to do.
+[20:16.160 --> 20:21.480]  And then also, it's, maybe it's less opportunities, but also a bit harder to specialize and tune
+[20:21.480 --> 20:26.960]  the kernel application interaction, right, because assuming you don't have access to
+[20:26.960 --> 20:33.760]  the source code of the application, there's nothing you can do on the application side.
+[20:33.760 --> 20:40.400]  So to give you a rough idea, what that means in performance, because at Unicraft, let's
+[20:40.400 --> 20:49.040]  say, the second important thing for us is always performance, performance, performance.
+[20:49.040 --> 20:57.360]  Here we just show you engine x here compiled as a native version, so meaning it uses the
+[20:57.360 --> 21:04.240]  Unicraft build system to build the engine x sources versus we run engine x on, we call
+[21:04.240 --> 21:12.280]  it elf loader, so this is actually our Unicraft application to load elf binaries.
+[21:12.280 --> 21:18.240]  And then a comparison here with a standard Linux, and here this is the same binary.
+[21:18.240 --> 21:25.080]  What that means in performance, so this quick test, we have just the index page, the standard
+[21:25.080 --> 21:32.240]  default of any engine x installation served, and these are like the performance numbers.
+[21:32.240 --> 21:39.800]  The takeaway here is, if you just, you know, don't go into any special performance tuning
+[21:39.800 --> 21:44.840]  yet, and start just, you know, getting the thing compiled and run, you will end up in
+[21:44.840 --> 21:53.960]  a similar performance as if you just take the, you know, the elf loader to run that
+[21:53.960 --> 21:56.600]  application in binary compatibility mode.
+[21:56.600 --> 22:03.360]  That is interesting because you don't need to see necessarily huge performance drops.
+[22:03.360 --> 22:08.800]  The only thing that you lose is the potential to further optimize in this mode if you go
+[22:08.800 --> 22:10.400]  for this one.
+[22:10.400 --> 22:20.000]  But the nice thing is you can still see benefits, right, running your application on Unicraft.
+[22:20.000 --> 22:26.720]  And to just give you an impression, so this is here a Go HTTP application, where we go
+[22:26.720 --> 22:32.360]  a bit crazy about optimizing and specializing the interaction between the Go application
+[22:32.360 --> 22:36.600]  and Unicraft, yeah, we can get more out of this.
+[22:36.600 --> 22:42.320]  We can really performance tune and squeeze stuff out of it.
+[22:42.320 --> 22:52.720]  Okay, so now in the next slides, I go over how we implement these modes with Unicraft,
+[22:52.720 --> 22:57.480]  because as I said, we don't want to target just one mode, we want to target multiple
+[22:57.480 --> 22:59.480]  modes.
+[22:59.480 --> 23:06.400]  And it has also some implementation challenges, because as an engineer, you also want to
+[23:06.400 --> 23:10.000]  reuse code as much as possible.
+[23:10.000 --> 23:14.760]  So we'll talk about the structure here.
+[23:14.760 --> 23:22.840]  Okay, so to give you an overview, so this doesn't mean now that these applications run at the
+[23:22.840 --> 23:28.520]  same time, it could also be possible, but it's just to show you how the components get involved
+[23:28.520 --> 23:30.960]  in our ecosystem.
+[23:30.960 --> 23:41.480]  So if you take just the left part, the native port of application, we settle now on muscle
+[23:41.480 --> 23:45.800]  to provide all the libc functionality that the application needs.
+[23:45.800 --> 23:52.960]  And we have a library called syscall shim, which is actually the heart of our application
+[23:52.960 --> 23:55.320]  compatibility.
+[23:55.320 --> 24:03.280]  And this is actually, you can imagine, this is a bit of a registry where it knows where
+[24:03.280 --> 24:07.680]  in which sub-library a system called handler is implemented.
+[24:07.680 --> 24:11.400]  And it can forward then the muscle calls to those places.
+[24:11.400 --> 24:15.680]  On the binary compatibility side, you have a library called this elf loader, which is
+[24:15.680 --> 24:20.000]  the library that loads an elf binary into memory.
+[24:20.000 --> 24:28.000]  And then here's the syscall shim, taking care of handling binary system calls.
+[24:28.000 --> 24:33.600]  Now I will go into the individual items to show you a bit more zoomed in view what's
+[24:33.600 --> 24:34.600]  happening there.
+[24:34.600 --> 24:41.840]  And we, of course, will start with the heart, with the core, the syscall shim.
+[24:41.840 --> 24:51.200]  So here we have macros, so when you develop VFS queries, our VFS library actually ported
+[24:51.200 --> 24:58.640]  from OSV, or POSIX process, where you do some process functionality, like get PID or
+[24:58.640 --> 24:59.760]  something like that.
+[24:59.760 --> 25:05.920]  We have some macros that help you to define a system call handler.
+[25:05.920 --> 25:09.720]  And it's really a system call handler, it's just a function that is defined at that point.
+[25:09.720 --> 25:15.920]  And you will register this to the syscall shim.
+[25:15.920 --> 25:23.520]  Then the shim provides you two options, how that system call handler can be reached.
+[25:23.520 --> 25:25.080]  One is at compile time.
+[25:25.080 --> 25:33.640]  This is like macros, macros, and preprocessor, which allows you, when you have a native application
+[25:33.640 --> 25:40.120]  that does, or actually it's on the muscle side, to call a system call, it will replace
+[25:40.120 --> 25:46.760]  those calls or will return at compile time the function of that library that implements
+[25:46.760 --> 25:49.600]  that system call.
+[25:49.600 --> 25:58.280]  Then it also has a runtime handler, which is provided here, which does the typical syscall
+[25:58.280 --> 26:06.760]  chop and running that function behind the scenes.
+[26:06.760 --> 26:12.000]  Our aim, as I mentioned, we want to reuse code as much as possible.
+[26:12.000 --> 26:18.080]  The idea is that we implement that function for that system call just once, and the syscall
+[26:18.080 --> 26:25.800]  shim is helping us, depending on the mode, doing a link, or providing it as binary compileable.
+[26:25.800 --> 26:31.920]  So let's go back to the overview, and then you will see it a bit more concrete with muscle,
+[26:31.920 --> 26:36.480]  but probably I said everything already.
+[26:36.480 --> 26:41.400]  So we have muscle natively compiled with a Unicraft build system.
+[26:41.400 --> 26:45.240]  Now imagine you have the application, you have a write, goes to muscle, and muscle does
+[26:45.240 --> 26:49.640]  then a UK syscall R write, which is then actually the symbol that is provided by the
+[26:49.640 --> 26:54.120]  actual library that's implementing it.
+[26:54.120 --> 27:01.680]  And the rewriting happens, as I said, with the macros at compile time in lib muscle.
+[27:01.680 --> 27:08.280]  So what we did for that is to replace that syscall muscle internal function with our
+[27:08.280 --> 27:17.720]  syscall macro, which then kicks in the whole machinery to map a system call request to
+[27:17.720 --> 27:19.360]  the direct function call.
+[27:19.360 --> 27:26.160]  The thing is that in muscle, not all, but most of the system call requests have a static
+[27:26.160 --> 27:29.360]  argument with the system call number first.
+[27:29.360 --> 27:35.320]  So this, let's say, write is a libc wrapper, and internally there, they're setting, preparing
+[27:35.320 --> 27:40.200]  the arguments, maybe some checks before they go to the kernel, and then they have this
+[27:40.200 --> 27:46.480]  syscall function with the number of the system call, and then the arguments hand it over.
+[27:46.480 --> 27:53.520]  And as soon that number is a const static, just written down in your code literally,
+[27:53.520 --> 27:59.040]  we can do a direct mapping so that that write will directly do a function call with UK syscall
+[27:59.040 --> 28:01.560]  R write.
+[28:01.560 --> 28:07.800]  If it's not static, which is really happening only on two, three places, if I remember correctly,
+[28:07.800 --> 28:12.640]  then of course we can provide an intermediate function that then does a switch case and
+[28:12.640 --> 28:16.960]  jumps then to the actual system call handler.
+[28:16.960 --> 28:23.360]  And the thing is, since everything is configurable, means I can have a build where VVScore is
+[28:23.360 --> 28:27.240]  not part of the build or POSIX process is not part of the build.
+[28:27.240 --> 28:33.080]  Then the syscall scene will automatically, also with all this macro magic that we do,
+[28:33.080 --> 28:39.440]  replace calls to non-existing system call handers with an inosys stop, so that for the
+[28:39.440 --> 28:46.640]  applications look like a function not implemented.
+[28:46.640 --> 28:51.320]  And exactly, so at runtime the syscall shim is for that port out of the game, so everything
+[28:51.320 --> 28:57.000]  happens at compile time.
+[28:57.000 --> 29:02.040]  So for the binary compatibility side, that's unfortunately a runtime thing, and we have
+[29:02.040 --> 29:04.640]  actually two components here.
+[29:04.640 --> 29:10.840]  As I was mentioning, the ELF loader itself, which loads the ELF application.
+[29:10.840 --> 29:17.120]  What we support today is static pies, so if you have a static position independent executable
+[29:17.120 --> 29:20.000]  compiled, you can run that.
+[29:20.000 --> 29:28.360]  And what also works is using your, let's say, with your libc together provided dynamic linker,
+[29:28.360 --> 29:34.720]  meaning if you use glibc with the application, you can use that dynamic linker, so ld.so,
+[29:34.720 --> 29:40.360]  and also run dynamically linked applications with that.
+[29:40.360 --> 29:45.720]  What it needs is POSIX M-app as a library, which implements all these M-app, M-unm-app,
+[29:45.720 --> 29:51.840]  M-protect functions on the system call there.
+[29:51.840 --> 30:00.240]  Then system calls are trapped here in the syscall shim, and yeah, I think as I said that, when
+[30:00.240 --> 30:05.280]  the library is not selected, it's replaced with enosys, so the syscall shim knows which
+[30:05.280 --> 30:09.080]  system calls are available, which are not.
+[30:09.080 --> 30:18.120]  Then there's a bit of a specialty for handling a system call, so the system call trap handler.
+[30:18.120 --> 30:25.840]  So we provide it with a system call shim, and we don't need to do a domain switch, so
+[30:25.840 --> 30:35.400]  we have still a single address space, a single, what's called, I forgot the word, so it's
+[30:35.400 --> 30:41.560]  all kernel privilege, yeah, so we have, it's the same privilege domain, exactly, so we don't
+[30:41.560 --> 30:47.640]  have a privilege domain switch as well, right, now we have it, good, good, good, if you learn
+[30:47.640 --> 30:50.840]  it.
+[30:50.840 --> 30:56.400]  But we are slightly in a different environment, I will show you later in the slide exactly
+[30:56.400 --> 30:58.480]  what this means.
+[30:58.480 --> 31:05.560]  We have some different assumptions that you have on the Linux system call API, which requires
+[31:05.560 --> 31:09.360]  us to do some extra steps, unfortunately.
+[31:09.360 --> 31:15.040]  So the first thing is Linux does not use extended register, or if they use it, they
+[31:15.040 --> 31:23.800]  guard it, meaning extended registers are floating point units, vector units, MMX, SSE, you know.
+[31:23.800 --> 31:28.560]  We do, unfortunately, so we need to save that state, because that's unexpected for an application
+[31:28.560 --> 31:34.640]  that was compiled for Linux before, that these units could screw up when coming back from
+[31:34.640 --> 31:37.560]  a system call.
+[31:37.560 --> 31:45.040]  And the second thing is we don't have a TLS, you know, in the Linux kernel, but unfortunately
+[31:45.040 --> 31:51.760]  on Unicraft we have, so we use the same, even unfortunately the same TLS register, so we
+[31:51.760 --> 31:57.080]  also need to save and restore that so that the application keeps its TLS, and all the
+[31:57.080 --> 32:04.560]  Unicraft functions operate on the Unicraft TLS, good.
+[32:04.560 --> 32:10.880]  So I'll continue and give you some, let's say, lessons learned while implementing all
+[32:10.880 --> 32:11.880]  these things.
+[32:11.880 --> 32:13.960]  I would like to give you a short demo.
+[32:13.960 --> 32:22.160]  And then we speak a bit about what was tricky during the implementation and what are our
+[32:22.160 --> 32:27.120]  special considerations that we had to do.
+[32:27.120 --> 32:31.200]  So then let's hope that this works.
+[32:31.200 --> 32:37.840]  So this is a super fresh demo, don't touch it, you will burn your fingers.
+[32:37.840 --> 32:42.800]  My colleagues, so thank you, Mark, for getting that work, just, you know, half an hour before
+[32:42.800 --> 32:43.800]  the talk.
+[32:43.800 --> 32:47.240]  Well, it's the person that no one sees, but that's all the work.
+[32:47.240 --> 32:49.040]  Yeah, he's amazing, yeah.
+[32:49.040 --> 32:55.440]  Okay, so in this demo I have actually NGINX, it's a web server with a standard file system,
+[32:55.440 --> 32:57.920]  I'll show you a bit of the files around.
+[32:57.920 --> 33:02.840]  I have it once compiled natively, and once compiled as a Linux application, we'll run
+[33:02.840 --> 33:07.840]  it with the Elf loader, and you will see that the result is the same.
+[33:07.840 --> 33:12.720]  So let's start with the native one.
+[33:12.720 --> 33:16.640]  So I'm actually already, so probably I need to increase a bit the size, right, that you
+[33:16.640 --> 33:18.800]  can read it in the background.
+[33:18.800 --> 33:19.800]  Is that good?
+[33:19.800 --> 33:20.800]  Yeah.
+[33:20.800 --> 33:21.800]  Yeah.
+[33:21.800 --> 33:25.840]  Let's do it here too.
+[33:25.840 --> 33:30.840]  So I hope you can, also in the last row you can read, perfect.
+[33:30.840 --> 33:40.000]  So yeah, you have here the NGINX app checked out.
+[33:40.000 --> 33:48.480]  So we have menu config, so you can, oh, this window is somehow wider, no, just one second.
+[33:48.480 --> 33:54.040]  No, it's better, okay.
+[33:54.040 --> 34:03.920]  So you see, the application is here as a library here, lib NGINX, and then you have here the
+[34:03.920 --> 34:13.280]  configuration of all these HTTP modules that NGINX provides, and you can select and choose,
+[34:13.280 --> 34:18.720]  like this is really the Unicraft way to do things.
+[34:18.720 --> 34:28.600]  Because it builds a while, and for that my left side is not the fastest, I built it already.
+[34:28.600 --> 34:36.880]  So you see here the result of the build directory, you see each individual library that, because
+[34:36.880 --> 34:40.760]  of dependencies, where we're coming in and we're compiled, so like for instance POSIX
+[34:40.760 --> 34:51.520]  few tags, POSIX socket, RAMFS, which is an in-memory file system, and the, where is it
+[34:51.520 --> 35:07.000]  now, the application, here, that's the application image uncompressed, so what I can do.
+[35:07.000 --> 35:14.680]  So let's see how big it is.
+[35:14.680 --> 35:22.240]  So it's here 1.1 megabyte, so this is like a full image of NGINX, including muscle, including
+[35:22.240 --> 35:28.960]  all the kernel code and driver to run on a KEMU KVM X-rated machine.
+[35:28.960 --> 35:41.840]  Yeah, then let's run it, to see what happens, so exactly it's already up and running, to
+[35:41.840 --> 35:48.640]  show you, these were roughly the arguments, so we have them in the meantime, because I
+[35:48.640 --> 35:55.400]  found KEMU systems sometimes a bit brutal with command line arguments, a wrapper script
+[35:55.400 --> 36:02.480]  that shortens a few things, but in the end, I mean, this is running a KEMU system, and
+[36:02.480 --> 36:09.640]  then, you know, it's attaching to this virtual bridge, take that kernel image, load that
+[36:09.640 --> 36:17.560]  in ID file system, because we reserve a file from that RAMFS, and here's also some parameters
+[36:17.560 --> 36:26.520]  to set the IP address and that mask for that guest, and here and down there, so we can
+[36:26.520 --> 36:35.720]  check actually, you see here set IPv4, that's the address where the unicorn is up, and yeah,
+[36:35.720 --> 36:44.120]  you see here, with this W get line that, yeah, I get the page surfed, and to prove that this
+[36:44.120 --> 36:55.320]  is real, let us kill this, now the guest is gone, and this is dead, so no response anymore,
+[36:55.320 --> 37:03.240]  good, so now, let's go to the ELF loader, which is also treated as an application that
+[37:03.240 --> 37:15.640]  can run other applications, also here in the build directly, let's do the same thing, so
+[37:15.640 --> 37:20.600]  it has also like similar dependencies, of course, it's prepared to run NGINX, so POSIX
+[37:20.600 --> 37:29.240]  socket is there, et cetera, et cetera, where's the, here, so here's the image, it's a bit
+[37:29.240 --> 37:35.080]  smaller, it's now 526 kilobytes, which provides your environment to run, and Linux ELF, of
+[37:35.080 --> 37:40.760]  course the NGINX image is not included here anymore, right, so that is part of the root
+[37:40.760 --> 37:50.040]  file system, and if I run this now, so on purpose I enable now some debug output so that you
+[37:50.040 --> 37:55.080]  see the proof that it does system calls, but if you scroll up, so the initialization phase
+[37:55.080 --> 38:03.240]  looks a bit different, also sets the IP address, here it's extracting the INIDAR-D, and here
+[38:03.240 --> 38:11.280]  it's starting to load the NGINX binary, the Linux binary from the INIDAR-D, and then from
+[38:11.280 --> 38:17.000]  that point on, the ELF loader was jumping into the application, and you see every system
+[38:17.000 --> 38:25.240]  call that the application was doing, and you can even see that, you know, some stuff, probably
+[38:25.240 --> 38:32.040]  this is a first GWC initialization, here for instance an ETC local time, it's trying to
+[38:32.040 --> 38:37.120]  open and find some configuration, of course we don't have it, we could provide one, but
+[38:37.120 --> 38:42.720]  it's still fine, it's continuous booting, affinity, we don't have, but whatever, it
+[38:42.720 --> 38:43.720]  continues booting.
+[38:43.720 --> 38:48.480]  It's quite optimistic actually, but it works, a lot of files, if you look into proxies,
+[38:48.480 --> 38:51.800]  get PWName, all those items, it works, it works.
+[38:51.800 --> 38:58.320]  Yeah, yeah, exactly, and there's tons of Mabs, and you know, EDC password, etc, so those
+[38:58.320 --> 39:04.680]  files we had provide, so you get a file script returned back, otherwise it would have stopped,
+[39:04.680 --> 39:10.680]  etc, and then, you know, configuration, and so forth, and now you should see that some
+[39:10.680 --> 39:18.920]  system call happened when I accessed the page, and you saw it happened, index was opened,
+[39:18.920 --> 39:25.120]  file script is 7, and here is, there should be a write to the socket, you know, over here
+[39:25.120 --> 39:31.680]  this is probably the socket number 4, yeah, I mean, you get the impression what's going,
+[39:31.680 --> 39:39.080]  what's going on, right, so it's working the same way, okay, how much time do I have left?
+[39:39.080 --> 39:41.080]  Five minutes?
+[39:41.080 --> 39:42.760]  Five minutes, okay, then?
+[39:42.760 --> 39:45.080]  Actually three minutes, just to leave some room for questions.
+[39:45.080 --> 39:53.200]  Yeah, yeah, exactly, okay, so let's get quickly back.
+[39:53.200 --> 40:02.200]  So we had some learned lessons, learned lessons, for the native mode, I mean, the thing is
+[40:02.200 --> 40:08.200]  we have also this model, like you heard on OSV, we want to use just one libc in our build,
+[40:08.200 --> 40:13.160]  right, so meaning all the kernel implementation, and everything that the application needs
+[40:13.160 --> 40:19.840]  is one libc, we provide multiple implementations of libcs, because muscle might be for some
+[40:19.840 --> 40:25.440]  use cases too thick, still, or too big, so we have an alternative like no libc, and originally
+[40:25.440 --> 40:32.640]  we had new lib, and we need, so what we want as well in our project is to keep the libc
+[40:32.640 --> 40:36.960]  as vanilla as possible, like upstream as possible, because we want to keep the maintenance
+[40:36.960 --> 40:41.000]  effort for updating the libc versions low.
+[40:41.000 --> 40:47.960]  But these courses then, I mean, just list them, I speak just about one of these items,
+[40:47.960 --> 40:55.440]  some things that you stumble on, and one was quite interesting, was this get dense 64 issue
+[40:55.440 --> 41:01.160]  that cost us some headache, it was mainly a rust wound fixing it, which caused, or required
+[41:01.160 --> 41:02.160]  actually a patch.
+[41:02.160 --> 41:03.160]  I'm only fixing it.
+[41:03.160 --> 41:05.680]  Yeah, yeah, required a patch to muscle.
+[41:05.680 --> 41:12.960]  The thing what happened here is that in this drn.h, muscle is providing an alias, right,
+[41:12.960 --> 41:21.000]  to use the non-64 version for get dense, and if it finds code with using get dense 64 because
+[41:21.000 --> 41:27.400]  of this large file system support thing that was happening, it maps it to get dense, right.
+[41:27.400 --> 41:32.680]  On the other side, on the VFS core side, so this is the VFS implementation where we provide
+[41:32.680 --> 41:39.640]  the system call, we need to provide both, obviously, we need to provide the non-64 version
+[41:39.640 --> 41:47.320]  and the 64 version, and guess what, we include drn because we need a struct definition here.
+[41:47.320 --> 41:52.880]  And then you can imagine, so if you're familiar with CMP processor, there's a little hint
+[41:52.880 --> 41:58.760]  with this thunder, of course, I mean, this gets replaced, and then you have two times
+[41:58.760 --> 42:06.480]  the same symbol, and you're like, what the hell is going on here, all right.
+[42:06.480 --> 42:12.920]  So let's skip this because of time.
+[42:12.920 --> 42:17.840]  Upcoming features, Ruslan was telling a bit already, especially for this topic for application
+[42:17.840 --> 42:22.880]  compatibility, we will further improve it, so this will be now our first release to officially
+[42:22.880 --> 42:29.360]  release alpha loader and an updated muscle version.
+[42:29.360 --> 42:33.560]  We want to make that more seamless, which requires a bit more under the hood libraries
+[42:33.560 --> 42:35.680]  for that support.
+[42:35.680 --> 42:41.360]  You should also watch out for features that are coming up for a seamless integration of
+[42:41.360 --> 42:44.240]  Unicraft into your Kubernetes deployment.
+[42:44.240 --> 42:45.760]  No question, Alex.
+[42:45.760 --> 42:54.760]  Brandy Unicraft on your infrastructure provider, for instance, AWS, Google Cloud, et cetera,
+[42:54.760 --> 43:00.160]  and automatically packaging of your applications, right, and it would love, or actually all
+[43:00.160 --> 43:05.040]  of us, everyone within Unicraft will love to hear also your feedback and what you think
+[43:05.040 --> 43:11.120]  about, you know, turning the cloud with Unicrons to the next level.
+[43:11.120 --> 43:14.480]  Yeah, any feedback to me, please send to Simon.
+[43:14.480 --> 43:20.240]  Right, and these are, again, the project resources, if you're interested, you can just scan the
+[43:20.240 --> 43:21.240]  QR code.
+[43:21.240 --> 43:22.240]  I think that's it.
+[43:22.240 --> 43:23.240]  Okay.
+[43:23.240 --> 43:24.240]  Thank you, Simon.
+[43:24.240 --> 43:25.240]  Right.
+[43:25.240 --> 43:33.720]  So we can take a couple of questions, you can also address me to address them to me.
+[43:33.720 --> 43:40.400]  I mean, that's a joint talk, so any, yeah, please, first here and then on the back.
+[43:40.400 --> 43:45.320]  Yeah, thanks a lot, both of you, for your talks.
+[43:45.320 --> 43:51.600]  I have a question regarding dynamically linked applications in Linux.
+[43:51.600 --> 43:55.920]  As far as I can see, you only use muscle, and how does this work out if my application
+[43:55.920 --> 44:01.840]  is linked against GDFC, and I want to run it with my loader, what do I have to do?
+[44:01.840 --> 44:07.280]  Because in Linux world, when I link against GDFC and I only have muscle, nothing works.
+[44:07.280 --> 44:08.280]  Right.
+[44:08.280 --> 44:13.160]  So I'm assuming you're speaking about the binary compilability mode.
+[44:13.160 --> 44:17.800]  In the end, what you just need to do is providing the muscle loader, if you have compiled with
+[44:17.800 --> 44:24.680]  your application with muscle, or the GDFC loader, and then both works.
+[44:24.680 --> 44:29.200]  The things in that setup in memory, there is actually two libcs, there's the libc on
+[44:29.200 --> 44:32.520]  the Unicraft side, and there's the libc with your application.
+[44:32.520 --> 44:35.600]  So that's why it works seamless, actually.
+[44:35.600 --> 44:36.600]  Okay, thank you.
+[44:36.600 --> 44:45.720]  Just to add to that, when you build your Unicernal for binary compatibility, you don't use muscle.
+[44:45.720 --> 44:46.720]  You can if you want.
+[44:46.720 --> 44:51.920]  But the app loader doesn't use muscle because the entire libc is provided by the application,
+[44:51.920 --> 44:56.760]  either by the application of static binary, or the application plus its libc inside the
+[44:56.760 --> 45:03.160]  root file system, and it's loaded from there, there's no need to have anything like that.
+[45:03.160 --> 45:04.160]  Yeah, please.
+[45:04.160 --> 45:05.160]  Yeah.
+[45:05.160 --> 45:07.760]  So the question is about the API.
+[45:07.760 --> 45:12.120]  You spoke about the POSIX API.
+[45:12.120 --> 45:20.040]  You also add a diagram showing a direct link to Unicernal.
+[45:20.040 --> 45:26.920]  So the question is, is there some variable next diagram, perhaps?
+[45:26.920 --> 45:28.960]  One of the next diagram.
+[45:28.960 --> 45:29.960]  Okay.
+[45:29.960 --> 45:33.120]  Is it a variable use case?
+[45:33.120 --> 45:34.120]  Yes.
+[45:34.120 --> 45:39.400]  There is a link directly from the native application to the Unicernal.
+[45:39.400 --> 45:40.400]  Yeah.
+[45:40.400 --> 45:41.400]  Yeah.
+[45:41.400 --> 45:43.880]  This is what it shows you is how the calls are going.
+[45:43.880 --> 45:49.360]  It can happen because some system calls don't have a provided libc wrapper.
+[45:49.360 --> 45:50.360]  Yeah.
+[45:50.360 --> 45:52.640]  It's like for that completeness, this error is here.
+[45:52.640 --> 45:57.480]  For instance, the futex call, if you use futex directly from your application, there
+[45:57.480 --> 46:00.120]  is no wrapper function in libc.
+[46:00.120 --> 46:06.680]  You need to do a system call directly, and you can do that by also using the syscall,
+[46:06.680 --> 46:12.760]  macro then, or actually, I mean, the syscall shim will replace that with a direct function
+[46:12.760 --> 46:14.720]  call then to actually POSIX futex.
+[46:14.720 --> 46:24.400]  So is it valuable to have a kind of application that you develop specially for Unicernal and
+[46:24.400 --> 46:26.280]  the native API?
+[46:26.280 --> 46:27.280]  Yes.
+[46:27.280 --> 46:28.280]  Yes.
+[46:28.280 --> 46:29.280]  That for sure.
+[46:29.280 --> 46:34.240]  In this talk, it's just about how we get application compatibility, even in case you
+[46:34.240 --> 46:36.240]  have your application already.
+[46:36.240 --> 46:41.040]  But if you write it anyway from scratch, I recommend forget everything about POSIX and
+[46:41.040 --> 46:42.360]  speak the native APIs.
+[46:42.360 --> 46:48.960]  You get much more performance and more directly connected to your driver layers and APIs that,
+[46:48.960 --> 46:50.920]  you know, POSIX has some implications, right?
+[46:50.920 --> 46:56.320]  There's a lot of things like read, write, imply there's a mem copy happening.
+[46:56.320 --> 47:02.480]  And with these lower level APIs, you can do way quicker transfers, just because you can
+[47:02.480 --> 47:03.480]  do a zero copy.
+[47:03.480 --> 47:04.480]  For instance.
+[47:04.480 --> 47:09.200]  Maybe even POSIX can be improved using POSIX.
+[47:09.200 --> 47:10.200]  Yeah, sure.
+[47:10.200 --> 47:11.200]  Of course.
+[47:11.200 --> 47:12.200]  Of course.
+[47:12.200 --> 47:13.200]  Yeah.
+[47:13.200 --> 47:18.800]  Have you looked into patching the binary to remove the syscall overhead?
+[47:18.800 --> 47:20.960]  Patching the binary to remove?
+[47:20.960 --> 47:23.640]  For example, now with the syscalls, do you have to emulate the syscalls?
+[47:23.640 --> 47:25.800]  Have you looked into patching the binary itself?
+[47:25.800 --> 47:26.800]  Yeah.
+[47:26.800 --> 47:30.680]  Instead of doing it at runtime, handling the syscalls at runtime?
+[47:30.680 --> 47:31.680]  Yeah.
+[47:31.680 --> 47:35.480]  Let's say at least we thought about that, but we didn't do it.
+[47:35.480 --> 47:39.560]  I mean, the hardware talks, that is the other, exactly.
+[47:39.560 --> 47:40.560]  He's sitting in front of it.
+[47:40.560 --> 47:45.240]  They were doing some experiments with that, that works too, so you can patch it.
+[47:45.240 --> 47:50.480]  But yeah, I mean, just we didn't do it.
+[47:50.480 --> 47:51.800]  Okay.
+[47:51.800 --> 48:03.760]  In regards to memory usage, obviously Unicernel lowers it, but what if I ran multiple Unicernels
+[48:03.760 --> 48:11.160]  and multiple VMs, how do you support membalooning or something like that, or is it like just
+[48:11.160 --> 48:12.160]  over provision?
+[48:12.160 --> 48:13.160]  Yeah.
+[48:13.160 --> 48:18.080]  I mean, the idea is to have membalooning, but it's not upstream yet.
+[48:18.080 --> 48:19.080]  Of course.
+[48:19.080 --> 48:22.440]  There's also a really interesting research project, maybe I should mention, that works
+[48:22.440 --> 48:26.360]  on memory duplication.
+[48:26.360 --> 48:32.080]  So if you run the same Unicernel, the same like 100 times, you can share VM memory pages
+[48:32.080 --> 48:35.680]  on the hypervisor side, but you need hypervisor support for that.
+[48:35.680 --> 48:36.680]  Okay.
+[48:36.680 --> 48:37.680]  Thank you so much, Simon.
+[48:37.680 --> 48:38.680]  Let's end it here.
+[48:38.680 --> 48:39.680]  Yeah.
+[48:39.680 --> 48:40.680]  We're going to ask.
+[48:40.680 --> 48:41.680]  Yeah.
+[48:41.680 --> 48:42.680]  Yeah.
+[48:42.680 --> 48:43.680]  And get some speakers.
+[48:43.680 --> 48:48.480]  Anastasis and Babis for the next talk on VXL, so please.
+[48:48.480 --> 48:49.480]  So please get some stickers.
+[48:49.480 --> 48:50.480]  Yeah.
+[48:50.480 --> 48:51.480]  Stickers.
+[48:51.480 --> 48:52.480]  They are free.
+[48:52.480 --> 48:54.480]  Don't have to pay for it.
+[48:54.480 --> 48:55.480]  For now.
+[48:55.480 --> 49:19.480]  VXL 100 Euro each.

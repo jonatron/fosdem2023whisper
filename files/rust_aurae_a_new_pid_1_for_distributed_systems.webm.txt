@@ -1,0 +1,604 @@
+[00:00.000 --> 00:07.000]  Check, one, two, hello.
+[00:07.000 --> 00:08.000]  Hello.
+[00:08.000 --> 00:09.000]  Hello.
+[00:09.000 --> 00:10.000]  Hi.
+[00:10.000 --> 00:11.000]  Where's Malte?
+[00:11.000 --> 00:12.000]  Hi.
+[00:12.000 --> 00:13.000]  Hi.
+[00:13.000 --> 00:14.000]  Nice to meet you.
+[00:14.000 --> 00:15.000]  Okay.
+[00:15.000 --> 00:16.000]  Sorry.
+[00:16.000 --> 00:18.000]  Just like one of my hacker friends that has been working with me on the project.
+[00:18.000 --> 00:22.000]  I've actually never met him in person, so nice to meet you.
+[00:22.000 --> 00:26.680]  Anyway, today we're going to be talking about Aura or Aode, however you want to pronounce
+[00:26.680 --> 00:31.680]  it, is fine, which we're temporarily calling a distributed systems runtime, and that's
+[00:31.680 --> 00:36.680]  the name that has caused the least amount of friction over the past few months.
+[00:36.680 --> 00:37.680]  Okay.
+[00:37.680 --> 00:45.240]  So, my least favorite slide, my slide about me, so I'm an engineer, I work at GitHub,
+[00:45.240 --> 00:50.680]  I helpkeepgithub.com online, sorry about the Shaw thing last week.
+[00:50.680 --> 00:51.680]  Yeah.
+[00:51.680 --> 00:58.000]  So, I keep a lot of systems online, some of you may or may not use them, all of you hopefully
+[00:58.000 --> 01:01.640]  have good opinions of them, and then if you want to follow me on the Fediverse, there's
+[01:01.640 --> 01:04.480]  where you can follow me.
+[01:04.480 --> 01:12.120]  So I'll do overview and context, so if you want to go to the GitHub repo, you can grab
+[01:12.120 --> 01:16.040]  a photo of this or just remember it, the link to the slides are there right now, I just
+[01:16.040 --> 01:22.280]  forced push to main like two seconds ago, so you can go and you can see the slides and
+[01:22.280 --> 01:24.680]  there's like links to everything there that I'll be going over today.
+[01:24.680 --> 01:27.040]  So if you want to grab that, go ahead and grab that.
+[01:27.040 --> 01:28.040]  Okay.
+[01:28.040 --> 01:31.400]  So, we're going to start off, I'll do a little bit of context, I'll answer the question,
+[01:31.400 --> 01:37.720]  what is Aura, what does it do, and then we'll spend the last two thirds of the presentation
+[01:37.720 --> 01:44.120]  talking about Rust and why we decided to use Rust for the project and some reports about
+[01:44.120 --> 01:47.560]  how it's going so far and some of my experience as well.
+[01:47.560 --> 01:48.560]  Okay.
+[01:48.560 --> 01:51.760]  So, just show of hands, who here has heard of Aura before?
+[01:51.760 --> 01:52.760]  Oh, God.
+[01:52.760 --> 01:53.760]  Okay.
+[01:53.760 --> 02:02.160]  Well, thank you for following my project, that makes me very happy but also a little
+[02:02.160 --> 02:04.160]  terrified.
+[02:04.160 --> 02:08.480]  So anyway, Aura, it's an open source Rust project and it's aimed at simplifying node
+[02:08.480 --> 02:11.000]  management at scale.
+[02:11.000 --> 02:14.760]  And so, when I talk about it, I usually say it's basically a generic execution engine
+[02:14.760 --> 02:18.680]  for containers, VMs, and processes.
+[02:18.680 --> 02:24.640]  The really quick pitch that I'll give on Aura is all of these things, containers, VMs,
+[02:24.640 --> 02:30.080]  hypervisors, and basic process management is all that I do at GitHub and all that I
+[02:30.080 --> 02:32.120]  have done in my career for the past 10 years.
+[02:32.120 --> 02:37.280]  And I have used a plethora of tools to do this and I was tired of learning and managing
+[02:37.280 --> 02:40.800]  all these different tools and so I hope that this will be the last tool I ever have to
+[02:40.800 --> 02:45.400]  work on in my career.
+[02:45.400 --> 02:51.200]  So I wrote a thesis about the project and I'm trying hard to continually reevaluate this
+[02:51.200 --> 02:57.000]  thesis and basically it says that by bringing some deliberate runtime controls to a node,
+[02:57.000 --> 03:00.640]  we can unlock a new generation of higher order distributed systems.
+[03:00.640 --> 03:05.480]  And what I mean by that is, in my experience, a lot of the things we do on a node are organic
+[03:05.480 --> 03:08.840]  and grew over the past 30 years or so.
+[03:08.840 --> 03:13.280]  And this is more of a deliberate set of what do we need in the enterprise and what do we
+[03:13.280 --> 03:15.080]  need at a bare minimum on the node.
+[03:15.080 --> 03:18.080]  And I think that if we get that right, we're actually going to have a much more interesting
+[03:18.080 --> 03:21.120]  conversations in the coming decades.
+[03:21.120 --> 03:26.840]  So I also believe that simplifying the execution stack will foster and secure observable systems
+[03:26.840 --> 03:29.720]  while reducing complexity and risk.
+[03:29.720 --> 03:34.680]  And complexity, if you have ever ran Kubernetes, is the name of the game.
+[03:34.680 --> 03:35.680]  Cool.
+[03:35.680 --> 03:38.920]  So I'll be talking about these things called nodes today.
+[03:38.920 --> 03:40.880]  So node is a keyword.
+[03:40.880 --> 03:46.200]  And when I say node, pretty much always in life, but very specifically in this talk,
+[03:46.200 --> 03:50.240]  what I mean is a single compute unit in a set.
+[03:50.240 --> 03:55.200]  So this would be one or more computers that we're trying to group together and manage
+[03:55.200 --> 03:56.360]  as a set of computers.
+[03:56.360 --> 04:01.080]  So when we do one thing to a node, the sort of assumption here is you want to go and
+[04:01.080 --> 04:07.280]  do this twice or three times or 10,000 times sometimes or so on.
+[04:07.280 --> 04:12.520]  So when we say node, I want you to think of a set of computers or an array of computers.
+[04:12.520 --> 04:13.720]  OK.
+[04:13.720 --> 04:17.680]  So what does Aura do?
+[04:17.680 --> 04:21.760]  So the thesis here is this is going to be a central control for every runtime process
+[04:21.760 --> 04:22.760]  on a node.
+[04:22.760 --> 04:28.640]  So whether you're running PID 1 or a container or a virtual machine, the hope is that all
+[04:28.640 --> 04:34.200]  of this can be funneled through the Aura binary at runtime, and Aura will have the ability
+[04:34.200 --> 04:39.680]  to not only manage it, but also observe it and control it and start it and stop it.
+[04:39.680 --> 04:40.680]  And who knows?
+[04:40.680 --> 04:44.440]  Maybe even one day debug it if I'm very lucky.
+[04:44.440 --> 04:46.520]  It runs as a minimal in its system.
+[04:46.520 --> 04:48.080]  So this is important.
+[04:48.080 --> 04:52.120]  A lot of folks want to compare Aura to system D. And the more I think about it, the more
+[04:52.120 --> 04:56.920]  I think that I really believe Aura and system D have different goals.
+[04:56.920 --> 04:59.360]  Aura doesn't really want to become a desktop manager.
+[04:59.360 --> 05:01.840]  In fact, it kind of wants to be the opposite of that.
+[05:01.840 --> 05:05.560]  It wants to be as lightweight and as minimal as possible.
+[05:05.560 --> 05:10.440]  In a perfect world, there would be no user space on an Aura system because we wouldn't
+[05:10.440 --> 05:13.440]  actually want users touching a single computer.
+[05:13.440 --> 05:16.680]  Remember, we're managing sets of computers.
+[05:16.680 --> 05:21.520]  And so the hope here is that we can make this as lightweight as possible.
+[05:21.520 --> 05:25.200]  Additionally, we want this thing to have a remote API.
+[05:25.200 --> 05:30.760]  So the idea of a single person sitting at a desk and operating on a single node is kind
+[05:30.760 --> 05:31.880]  of irrelevant here.
+[05:31.880 --> 05:36.560]  So everything that we do on the node, whether it's scheduling another process like a bash
+[05:36.560 --> 05:41.800]  shell or it's scheduling a container, should all come through this remote API.
+[05:41.800 --> 05:48.080]  And we're going to learn more about this API in Rust specifically later on in the talk.
+[05:48.080 --> 05:49.600]  Also it runs on Linux.
+[05:49.600 --> 05:55.480]  Right now it's tightly coupled to the Linux kernel.
+[05:55.480 --> 05:57.680]  So what doesn't it do?
+[05:57.680 --> 05:59.760]  So it doesn't do generic desktop support.
+[05:59.760 --> 06:01.080]  So that's just completely out of scope.
+[06:01.080 --> 06:03.680]  I don't want to deal with your Bluetooth drivers.
+[06:03.680 --> 06:05.760]  I don't want to deal with your sound drivers.
+[06:05.760 --> 06:08.520]  I don't want to manage your desktop interface.
+[06:08.520 --> 06:10.080]  I don't care.
+[06:10.080 --> 06:13.880]  In a perfect world, this hooks up to network and that's about the most advanced user interface
+[06:13.880 --> 06:17.360]  we're going to have to one of these nodes in a set.
+[06:17.360 --> 06:20.760]  Additionally, higher order scheduling is out of scope.
+[06:20.760 --> 06:25.680]  So when we talk about enterprise management, whether it's some sort of orchestration system
+[06:25.680 --> 06:31.440]  like Kubernetes or not, a lot of those discussions very quickly go into the scheduling discussion.
+[06:31.440 --> 06:35.280]  There was a really good article, I think it was yesterday or the day before on Hacker
+[06:35.280 --> 06:39.880]  News that came out of fly.io about their orchestrator experience with Nomad.
+[06:39.880 --> 06:41.160]  I see somebody shaking their head.
+[06:41.160 --> 06:42.960]  Yeah, you read the article.
+[06:42.960 --> 06:44.560]  It was a great article.
+[06:44.560 --> 06:49.440]  And maybe we can find a link to it and put it in the video or something for folks.
+[06:49.440 --> 06:53.960]  But that conversation was very much about how do we make scheduling decisions with available
+[06:53.960 --> 06:55.680]  resources today.
+[06:55.680 --> 07:00.360]  And that is pretty much all I do at my day job at GitHub and that's all I've been doing
+[07:00.360 --> 07:03.880]  managing Kubernetes for the past five or six years.
+[07:03.880 --> 07:09.480]  And so while I'm very interested in having that conversation, my hope is that by simplifying
+[07:09.480 --> 07:14.240]  the node, we can make those scheduling conversations easier in the future.
+[07:14.240 --> 07:18.720]  And what I mean by that is that we will have less to say about what we actually do on a
+[07:18.720 --> 07:22.760]  node and we can effectively make nodes boring.
+[07:22.760 --> 07:25.640]  So it doesn't run on Darwin and it doesn't run on Windows.
+[07:25.640 --> 07:28.960]  Like I said, we're tightly coupled to the Linux kernel, which if you haven't pieced
+[07:28.960 --> 07:34.880]  it together yet, is why Rust is very exciting for the project.
+[07:34.880 --> 07:38.880]  Okay, so again in summary, where did Aura come from?
+[07:38.880 --> 07:43.280]  It came with challenges with complexity at scale, so we just want the node to be boring.
+[07:43.280 --> 07:49.280]  And it became, there was this desire to simplify and secure the stack.
+[07:49.280 --> 07:54.080]  So I do deeply believe that with simple systems come secure systems.
+[07:54.080 --> 07:58.920]  Every hack that I've been a part of in the industry has usually started with some sort
+[07:58.920 --> 08:04.320]  of disparate and unknown fragmented attack surface that somebody's been able to exploit
+[08:04.320 --> 08:08.120]  and do some sort of lateral movement once they're into the system.
+[08:08.120 --> 08:12.640]  So if we can simplify that and we can just make the conversation involve less moving
+[08:12.640 --> 08:16.840]  pieces, my hope is that we can actually secure the stack.
+[08:16.840 --> 08:19.160]  I also want there to be a stronger node API.
+[08:19.160 --> 08:24.680]  So who here has ever debugged the KubeLit API before?
+[08:24.680 --> 08:26.160]  Who here even knows what this is?
+[08:26.160 --> 08:28.760]  Okay, so we have a handful of people.
+[08:28.760 --> 08:34.320]  So the KubeLit is a Kubernetes version of we're going to go run an agent on a node.
+[08:34.320 --> 08:39.200]  It does have an API, last I checked it was undocumented and it was tightly coupled with
+[08:39.200 --> 08:41.280]  the Kubernetes control plane.
+[08:41.280 --> 08:42.280]  We hope to break that.
+[08:42.280 --> 08:47.160]  We hope to just have a generic API that you could use to run a single process remotely
+[08:47.160 --> 08:51.520]  or you could schedule millions of processes remotely and we want that to be a very strong
+[08:51.520 --> 08:57.240]  and thoughtful API.
+[08:57.240 --> 09:03.120]  One of the big lessons of running large distributed systems at scale is that the bigger you get,
+[09:03.120 --> 09:07.000]  the less trust that you can have in the people working on your systems.
+[09:07.000 --> 09:12.040]  So as I've grown either like my small mastodon server that's grown into a medium sized mastodon
+[09:12.040 --> 09:16.040]  server or even dealing with thousands of nodes at scale.
+[09:16.040 --> 09:22.200]  One of the lessons that I've noticed is that all workloads tend to this untrusted banality.
+[09:22.200 --> 09:26.560]  So the bigger you get, the less you can trust a single workload.
+[09:26.560 --> 09:29.840]  And even if these workloads are on the same team as you, you really want to start looking
+[09:29.840 --> 09:36.280]  at them as an isolation zone that you don't want to trust too much from the centralized
+[09:36.280 --> 09:40.920]  control plane perspective.
+[09:40.920 --> 09:43.680]  So we started off ORA with a few guiding principles.
+[09:43.680 --> 09:45.680]  Number one, I want it to be boring.
+[09:45.680 --> 09:47.760]  So we're targeting a single binary.
+[09:47.760 --> 09:50.400]  We want this binary to be polymorphic in nature.
+[09:50.400 --> 09:53.440]  Who here is familiar with Busybox?
+[09:53.440 --> 09:54.440]  Great.
+[09:54.440 --> 09:55.440]  Yeah, Busybox.
+[09:55.440 --> 09:57.000]  It's a good binary in my opinion.
+[09:57.000 --> 09:58.000]  I really like what it does.
+[09:58.000 --> 10:02.200]  There's a switch on R0 and it basically behaves like however you call it.
+[10:02.200 --> 10:07.920]  So we're trying to get some similar functionality into the ORA binary as well.
+[10:07.920 --> 10:11.760]  And we also want this thing to be lightweight and have a very strong scope and be as low
+[10:11.760 --> 10:13.440]  risk as possible.
+[10:13.440 --> 10:16.200]  Additionally, we wanted this thing to be attainable.
+[10:16.200 --> 10:17.640]  We wanted to play nice with others.
+[10:17.640 --> 10:20.800]  So I knew that I wanted this to fit in neatly with Kubernetes.
+[10:20.800 --> 10:23.080]  I knew I wanted this to fit in neatly with Linux.
+[10:23.080 --> 10:27.480]  And I knew I wanted pretty much everyone in this room to feel realistically like they
+[10:27.480 --> 10:32.280]  could be running this thing on their laptops one day as the project grows.
+[10:32.280 --> 10:36.240]  And so in order to do that, the API was going to be the majority of what we were talking
+[10:36.240 --> 10:39.720]  about as we began developing the project.
+[10:39.720 --> 10:41.320]  And ultimately, I wanted it to be functional.
+[10:41.320 --> 10:44.280]  I don't want it to subserve the needs of a corporation.
+[10:44.280 --> 10:47.160]  I don't want it to serve the needs of a higher order control plane.
+[10:47.160 --> 10:52.800]  I literally just want a standard library for executing processes in containers and VMs
+[10:52.800 --> 10:53.800]  at scale.
+[10:53.800 --> 10:55.240]  What we do with that is out of scope.
+[10:55.240 --> 10:58.920]  I just want it to work first and foremost.
+[10:58.920 --> 11:00.960]  So ultimately, I want boring systems.
+[11:00.960 --> 11:05.840]  And if you see in the background here, there's all of these like subtle distributed system
+[11:05.840 --> 11:13.640]  propaganda notes that you can go look at if you want to look at the slides later.
+[11:13.640 --> 11:16.200]  So ultimately, I wanted the thing to be safe.
+[11:16.200 --> 11:20.600]  So when we're looking at tenant security, one of the questions I ask is, how do we make
+[11:20.600 --> 11:22.320]  it easy to do the right thing?
+[11:22.320 --> 11:25.360]  And I think that comes from the underlying infrastructure.
+[11:25.360 --> 11:28.840]  And in our case, Aura is the underlying infrastructure.
+[11:28.840 --> 11:35.600]  And we intended to build a very strong project here that would unlock this sort of safe paradigm
+[11:35.600 --> 11:39.800]  that we could give a team a binary, and they would be able to run their applications on
+[11:39.800 --> 11:40.800]  top of it.
+[11:40.800 --> 11:44.600]  And we wouldn't really have to worry about anybody sneaking out of their container or
+[11:44.600 --> 11:46.640]  accessing any parts of the systems.
+[11:46.640 --> 11:48.640]  We didn't want them to access.
+[11:48.640 --> 11:55.160]  So tenant security is a strong motivator for this as well.
+[11:55.160 --> 11:56.160]  OK.
+[11:56.160 --> 12:01.480]  So about six months ago on Twitch, which I do a Twitch stream.
+[12:01.480 --> 12:04.680]  You should maybe follow me if you want to learn more about the project.
+[12:04.680 --> 12:06.200]  But I started to write this paper.
+[12:06.200 --> 12:10.720]  And it was mostly as some bro in chat was like, yo, why don't you just go rebuild system
+[12:10.720 --> 12:11.720]  D?
+[12:11.720 --> 12:13.120]  And I was just like, maybe I will.
+[12:13.120 --> 12:15.360]  And so anyway, I ended up writing this paper.
+[12:15.360 --> 12:16.960]  And so, well, here we are.
+[12:16.960 --> 12:19.200]  And so the paper really grew.
+[12:19.200 --> 12:22.520]  And it started to answer a bunch of questions about, why should we go write it and go?
+[12:22.520 --> 12:23.520]  No, no, no.
+[12:23.520 --> 12:28.000]  We should go write it in C, because C is going to be the most common language that will interface
+[12:28.000 --> 12:30.800]  neatly with the kernel, and we can do EVPF probes and so on.
+[12:30.800 --> 12:31.800]  No, no, no, no.
+[12:31.800 --> 12:32.800]  We should go write it in Rust.
+[12:32.800 --> 12:35.840]  You can go look, there's a Google doc, and it's just got all these comments of people
+[12:35.840 --> 12:40.000]  from all over the internet, all over the industry, arguing about what we should do.
+[12:40.000 --> 12:46.440]  And eventually, we settled on, we want a lightweight node, Damon, and thus became the Aura runtime
+[12:46.440 --> 12:48.440]  project.
+[12:48.440 --> 12:49.880]  OK.
+[12:49.880 --> 12:53.920]  So this is where we shift from the conceptual, what is Aura?
+[12:53.920 --> 12:54.920]  How did we get here?
+[12:54.920 --> 12:56.320]  What problems does it solve?
+[12:56.320 --> 13:00.320]  And we start to get a little deeper into the code.
+[13:00.320 --> 13:04.880]  So when we originally started the project, we started writing it in Go, the Go programming
+[13:04.880 --> 13:05.880]  language.
+[13:05.880 --> 13:11.120]  And there's two kind of predecessor projects that later turned into Aura, which is written
+[13:11.120 --> 13:12.600]  in Rust.
+[13:12.600 --> 13:18.040]  This first one that we call Aura Legacy, which up until about five, well, I guess 15 minutes
+[13:18.040 --> 13:23.360]  ago now, but right before I walked into the room, this was a private GitHub repo, and
+[13:23.360 --> 13:25.480]  I've gone ahead and actually opened it up.
+[13:25.480 --> 13:30.280]  So if you want to go see the original code in Go, there's some really interesting things
+[13:30.280 --> 13:31.280]  in there.
+[13:31.280 --> 13:37.280]  We did some libp2p bit torrent style routing between nodes, where you can build a nest of
+[13:37.280 --> 13:38.280]  nodes and things.
+[13:38.280 --> 13:43.280]  But you can really see where this runtime, Damon, started and some of the original concepts
+[13:43.280 --> 13:47.280]  that we were tinkering around with.
+[13:47.280 --> 13:51.400]  Ultimately, though, we ran into a lot of the same problems that I ran into in Kubernetes,
+[13:51.400 --> 13:56.960]  which was I needed to start recreating these objects, and I needed to start reading some
+[13:56.960 --> 14:02.280]  config, whether that be YAML, JSON, or something similar, and then marshal that onto a struct
+[14:02.280 --> 14:08.360]  in memory, and then go and do arbitrary things with that, in our case, schedule a pod.
+[14:08.360 --> 14:11.880]  And one of the things that was kind of outstanding in the back of my mind was, what about access
+[14:11.880 --> 14:12.880]  to libc?
+[14:12.880 --> 14:16.920]  I knew as soon as we started scheduling containers and DMs, we absolutely were going to need
+[14:16.920 --> 14:18.960]  native access to libc.
+[14:18.960 --> 14:23.600]  Additionally, there's this project called NAML, which is basically Turing Complete Kubernetes
+[14:23.600 --> 14:30.320]  Config, it's written in Go, and it just uses the Go SDK, and that was yet another way of
+[14:30.320 --> 14:35.040]  sort of validating this idea of we need to start making our system stronger and building
+[14:35.040 --> 14:39.680]  stronger interfaces for teams to manage different parts of the stack.
+[14:39.680 --> 14:50.000]  So those are the two sort of precursors to the Aura runtime as it exists today.
+[14:50.000 --> 14:54.280]  That of course, writing it in Go came with some challenges.
+[14:54.280 --> 14:58.560]  The big one here is obviously native access to libc.
+[14:58.560 --> 15:02.280]  We were going to be creating C groups against the Linux kernel.
+[15:02.280 --> 15:07.520]  We definitely wanted to use the clone3 system call, and the container runtimes of today
+[15:07.520 --> 15:12.400]  had some assumptions about how we were going to be executing the clone3 system call that,
+[15:12.400 --> 15:16.520]  of course, I had to disagree with because, hi, have you met me?
+[15:16.520 --> 15:19.280]  I have to disagree with everything.
+[15:19.280 --> 15:23.200]  And we also wanted to implement some ptrace functionality as well.
+[15:23.200 --> 15:29.200]  So obviously, Go was going to give us some challenges here when it came to using CGo,
+[15:29.200 --> 15:35.600]  so Rust became very exciting and definitely got a lot of attention very quickly as we
+[15:35.600 --> 15:38.960]  were writing the Go side of things.
+[15:38.960 --> 15:41.160]  We also wanted ebpf for networking.
+[15:41.160 --> 15:46.920]  I personally want it for security and maybe for some other interesting service mesh ideas,
+[15:46.920 --> 15:51.920]  but I do think that having ebpf for networking as a non-negotiable, we're definitely going
+[15:51.920 --> 15:58.520]  to want to simplify what Kubernetes refers to as kubeproxy that we can now invent our
+[15:58.520 --> 16:02.320]  own name and hopefully simplify that layer, but I digress.
+[16:02.320 --> 16:06.880]  We also wanted some access to native virtualization library, so all the KBM stuff is written in
+[16:06.880 --> 16:11.800]  C. And if you go look at the Firecracker code base, that is also written in Rust that vendors
+[16:11.800 --> 16:13.520]  the KBM bindings.
+[16:13.520 --> 16:17.600]  And so we knew we would want to access these three components, and all three of these are
+[16:17.600 --> 16:21.720]  going to be problematic with Go.
+[16:21.720 --> 16:28.720]  Update as of about an hour ago, I went to the state of the Go room across the hall here.
+[16:28.720 --> 16:31.440]  Did anybody else go to the Go talk this morning?
+[16:31.440 --> 16:35.560]  Yeah, we got three or four hands up here, so this kind of pissed me off.
+[16:35.560 --> 16:43.480]  Go has unwrapped now as of 1.2.0, and they also freaking have.clone.
+[16:43.480 --> 16:50.120]  And I was just like, bro, get off our keywords, this is totally like, this is our thing.
+[16:50.120 --> 16:55.920]  So anyway, it's really exciting to see Go taking these concepts a little more seriously,
+[16:55.920 --> 17:01.320]  and if you've ever written Rust before, who here has written unwrap in Rust?
+[17:01.320 --> 17:05.520]  Put your hands down, we're not supposed to do that, I don't know what we're supposed
+[17:05.520 --> 17:09.920]  to use now, I just get so much shit on my Twitch stream every time I write unwrap, but
+[17:09.920 --> 17:17.560]  yes, we do have unwrap and clone in Go now, which is just a strong indicator that we're
+[17:17.560 --> 17:19.920]  likely doing something right with Rust.
+[17:19.920 --> 17:23.880]  So anyway, I made the decision to move to Rust, and I didn't know very much about Rust
+[17:23.880 --> 17:27.640]  when I made the decision, and I literally just started out the main function and said,
+[17:27.640 --> 17:32.680]  we'll figure it out as we go, and I ordered the Rust book and just jumped in and started
+[17:32.680 --> 17:39.680]  to write code with the hope of accessing kernel constructs and C groups and EBPF probes.
+[17:39.680 --> 17:42.760]  So what could possibly go wrong here?
+[17:42.760 --> 17:49.520]  Okay, so how are we doing on time, by the way, we're 15 minutes in, okay, cool.
+[17:49.520 --> 17:56.240]  So Rust to help us solve the YAML problem, I suspect we're all familiar with feeding
+[17:56.240 --> 18:01.640]  YAML to machines, we've all done this before at some point in our lifetime, okay.
+[18:01.640 --> 18:05.240]  So this is a thing I do a lot working in large distributed systems, and I work with people
+[18:05.240 --> 18:11.000]  who do this a lot, and if we do it so much, we've tried to get really good at doing it,
+[18:11.000 --> 18:13.920]  and that I think, that's an interesting discussion.
+[18:13.920 --> 18:21.080]  So in my opinion, so warning, Chris Nova opinions here, in my opinion, all config ultimately
+[18:21.080 --> 18:24.520]  is going to drift towards Turing completion.
+[18:24.520 --> 18:33.200]  So I see this C++ templates, anybody, anybody C++ templates, okay, Helm charts, customizing
+[18:33.200 --> 18:39.200]  Kubernetes, any of the templating rendering languages that you see in web dev and front
+[18:39.200 --> 18:44.320]  end work, there's all kinds of interesting Python libraries that will allow you to interpolate
+[18:44.320 --> 18:46.640]  your config and so on.
+[18:46.640 --> 18:51.960]  In my opinion, a good balance is kind of something like bash that is Turing complete, but it
+[18:51.960 --> 18:54.200]  just comes with some strong guarantees.
+[18:54.200 --> 18:58.120]  And so I knew very quickly that I didn't want to be feeding YAML to Aura.
+[18:58.120 --> 19:02.680]  I definitely didn't want to recreate this idea of we're going to have to manage a thousand
+[19:02.680 --> 19:06.480]  pieces of YAML because we have a thousand different nodes.
+[19:06.480 --> 19:10.720]  So I wanted to explore more about what are some options that we have here, so we're not
+[19:10.720 --> 19:14.080]  just feeding YAML to machines anymore.
+[19:14.080 --> 19:20.040]  So thus became this really interesting project of mine, we'll see if this pans out, which
+[19:20.040 --> 19:22.760]  is this binary called AuraScript.
+[19:22.760 --> 19:28.720]  So AuraScript is a, it's a Rust binary, we have it compiling with Muzzle today, and embeds
+[19:28.720 --> 19:33.440]  all of the connection logic for a single machine.
+[19:33.440 --> 19:37.560]  And so we'll talk more about the semantics of AuraScript in a second.
+[19:37.560 --> 19:42.240]  But ultimately what you need to understand to kind of get the initial motivation here
+[19:42.240 --> 19:49.640]  is that this aims to be an alternative to managing YAML at scale.
+[19:49.640 --> 19:55.280]  So I found this really fascinating type script runtime called Dino.
+[19:55.280 --> 19:57.440]  Have folks heard of Dino before?
+[19:57.440 --> 19:58.440]  Can I swear in here?
+[19:58.440 --> 20:00.960]  I, FN, love Dino.
+[20:00.960 --> 20:05.400]  I'm sorry, I really like this project.
+[20:05.400 --> 20:09.360]  If you want a good example of like, hey, I just want to see a really successful Rust
+[20:09.360 --> 20:14.360]  project that has a really strong community, I would encourage you to just go look at the
+[20:14.360 --> 20:15.360]  Dino project.
+[20:15.360 --> 20:19.240]  I think their code is beautiful, I think what it does is beautiful, I think the way that
+[20:19.240 --> 20:23.120]  they manage the project is beautiful, it's just a really good quality project and it
+[20:23.120 --> 20:25.640]  solves a problem for us with Aura.
+[20:25.640 --> 20:30.800]  And so Dino is basically, it's a runtime for type script and it's written in Rust.
+[20:30.800 --> 20:35.880]  And the way the project is set up, that you can go and you can add your own custom interpreted
+[20:35.880 --> 20:40.000]  logic and you can build fancy things into the binary and you can do things with the
+[20:40.000 --> 20:47.840]  type script interpretation at runtime, which is precisely what we needed to do with Aura.
+[20:47.840 --> 20:49.800]  So here is the model now.
+[20:49.800 --> 20:55.960]  So instead of feeding YAML to a single node, we now have this higher order set of libraries
+[20:55.960 --> 21:02.320]  that we can statically compile into a binary and we can interpret it directly on a machine.
+[21:02.320 --> 21:08.080]  So in order for you to interface with an Aura node or a set of nodes, all you need is one
+[21:08.080 --> 21:13.240]  binary, mtls config and then whatever type script you want to write.
+[21:13.240 --> 21:17.640]  And this is an alternative to like any of the Nomad command line tools or the Mesos
+[21:17.640 --> 21:22.160]  command line tools or the Kubernetes, kubectl, kubectl command line tool.
+[21:22.160 --> 21:26.440]  And now you can just write it all directly in type script.
+[21:26.440 --> 21:33.240]  So this is actually a concrete example of what would be, what system D would call a
+[21:33.240 --> 21:39.880]  unit file, what Kubernetes would call a manifest and what Aura just calls a freaking type script
+[21:39.880 --> 21:44.040]  file because we don't have fancy names for our stuff yet.
+[21:44.040 --> 21:49.320]  So you can see here at the top, we basically contact the Aura standard library.
+[21:49.320 --> 21:54.880]  We get a new client and then we can allocate this thing called a cell.
+[21:54.880 --> 21:58.180]  A cell is basically an abstraction for a C group.
+[21:58.180 --> 22:02.280]  We cordon off a section of the system and we say like we want to use a certain percentage
+[22:02.280 --> 22:07.880]  of the available CPUs on a node and I want it to only let processes run.
+[22:07.880 --> 22:11.760]  In this case for 0.4 seconds and then we'll use the kernel to just kill the process if
+[22:11.760 --> 22:13.920]  it runs longer than that.
+[22:13.920 --> 22:18.200]  And so the first thing we would do is we would allocate that which is an improvement over
+[22:18.200 --> 22:22.920]  Kubernetes as it exists today because we can allocate resources before we actually start
+[22:22.920 --> 22:28.480]  anything in that area and then we can go ahead and actually start whatever we want.
+[22:28.480 --> 22:33.240]  And so you can see I simplified the example just for today but it's just, it's remote
+[22:33.240 --> 22:34.880]  command injection as a service.
+[22:34.880 --> 22:42.320]  So this whole talk was just basically like how to go and run a bash command in on a server.
+[22:42.320 --> 22:46.800]  And so now you can express your commands and similar primitives that you would see in other
+[22:46.800 --> 22:51.040]  run times directly in TypeScript.
+[22:51.040 --> 22:57.800]  The interesting thing here is TypeScript is just natively more expressive than a lot of
+[22:57.800 --> 22:59.880]  the Amble things that we see today.
+[22:59.880 --> 23:04.360]  In this case we can actually do math but I'm sure you can imagine you can do other things
+[23:04.360 --> 23:05.360]  as well.
+[23:05.360 --> 23:10.400]  You can access logic, loops, if statements, there's if branching and so on.
+[23:10.400 --> 23:14.960]  And so we were able to actually solve some of these like templatey rendering style problems
+[23:14.960 --> 23:22.160]  by just doing things natively in a well known and easy to understand language such as TypeScript.
+[23:22.160 --> 23:24.320]  So patterns started to emerge.
+[23:24.320 --> 23:30.600]  So Rust gave us the ability to generate the TypeScript binary with all of the magic behind
+[23:30.600 --> 23:33.800]  the scenes MTLS security config that we wanted.
+[23:33.800 --> 23:38.400]  And so now the conversation was a little more like this which is how do I manage a small
+[23:38.400 --> 23:44.160]  set of TypeScript and it's much more flexible and you can start to actually express things
+[23:44.160 --> 23:48.240]  the way that we used to and just express things statically and then you can have all of your
+[23:48.240 --> 23:56.920]  Turing complete logical components below and you can mix and match these however you want.
+[23:56.920 --> 24:06.240]  So in addition to addressing the YAML problem with Dino and TypeScript, Rust also helped
+[24:06.240 --> 24:12.320]  us to solve the sidecar problem and by us, I mean this is our hope as we operate our
+[24:12.320 --> 24:18.120]  mastodon servers and our various other ridiculous side projects that we operate both in my basement
+[24:18.120 --> 24:20.600]  and in a colo in Germany.
+[24:20.600 --> 24:26.120]  So talking about sidecars, who here knows what a sidecar is, show of hands, okay most
+[24:26.120 --> 24:27.120]  folks do.
+[24:27.120 --> 24:32.200]  Okay, so a sidecar that is always available with the same features as a host.
+[24:32.200 --> 24:35.840]  So this is going to sound a little bit weird and the slide is going to look a little bit
+[24:35.840 --> 24:41.240]  weird but just bear with me as we kind of like unpack what's actually going on here.
+[24:41.240 --> 24:45.840]  What we want that I don't think we're talking about is that sentence.
+[24:45.840 --> 24:51.160]  I actually think what we want is we want a sidecar to sit along our applications that
+[24:51.160 --> 24:57.280]  does literally the exact same things we have to do on a given host whenever we're managing
+[24:57.280 --> 25:00.360]  these workloads at scale.
+[25:00.360 --> 25:05.520]  As I began looking into writing sidecars at the host level, I began drilling deeper and
+[25:05.520 --> 25:09.920]  deeper into the C programming language as I was writing this in Rust and just made the
+[25:09.920 --> 25:14.520]  connection that memory safety was going to be key because we're going to be running these
+[25:14.520 --> 25:18.760]  demons right alongside of your workload.
+[25:18.760 --> 25:25.120]  And so unpacking the need to do this really helps you understand why we shifted over to
+[25:25.120 --> 25:26.320]  Rust.
+[25:26.320 --> 25:33.040]  So again, another Chris Nova opinion, any sufficiently mature infrastructure service
+[25:33.040 --> 25:35.240]  will evolve into a sidecar.
+[25:35.240 --> 25:39.680]  So if you have done any sort of structured logging, in my opinion, if you will continue
+[25:39.680 --> 25:44.680]  to build structured logging and you'll continue to ship logs, that will eventually turn into
+[25:44.680 --> 25:48.160]  a sidecar that you're going to want to go run beside your app so you have this transparent
+[25:48.160 --> 25:49.600]  logging experience.
+[25:49.600 --> 25:53.720]  You can rinse and repeat that paradigm for pretty much anything, secrets, authentication
+[25:53.720 --> 25:55.480]  data, and so on.
+[25:55.480 --> 25:59.640]  And so I started to see these patterns kind of surface.
+[25:59.640 --> 26:04.720]  And very specifically, I started to look at how would I solve these with Rust?
+[26:04.720 --> 26:10.320]  And as it turns out, the Rust ecosystem had a plethora of pleasant surprises for me as
+[26:10.320 --> 26:16.920]  I started to explore what putting some of these features into a binary would look like.
+[26:16.920 --> 26:21.920]  Logging was boring because we could just use Tokyo Streams, Auth N and Auth Z was boring
+[26:21.920 --> 26:27.800]  because all I had to do was just use the Rust-derived primitives to just start applying Auth Z to
+[26:27.800 --> 26:30.480]  each of our units in the source code.
+[26:30.480 --> 26:33.560]  Identity was boring because I didn't even get to fight with open SSL anymore.
+[26:33.560 --> 26:36.680]  We just had to use Rust TLS and that was easy.
+[26:36.680 --> 26:41.120]  And so the network was also easy because we had native access to Linux and Lib C so we
+[26:41.120 --> 26:46.760]  could just very boringly schedule a Linux device and we got a Linux device and it was
+[26:46.760 --> 26:49.040]  pretty straightforward.
+[26:49.040 --> 26:56.440]  So we were able to create this at the node and now my question was how do we bring this
+[26:56.440 --> 26:59.400]  into the workload level at scale?
+[26:59.400 --> 27:04.960]  And I think this is where most of the conversations you start talking about things like Istio and
+[27:04.960 --> 27:08.800]  service meshes and structured logging and so forth.
+[27:08.800 --> 27:13.280]  And I actually think that we can simplify that conversation too.
+[27:13.280 --> 27:19.000]  And so what we were able to do with Aura is we just spawned the root daemon and use that
+[27:19.000 --> 27:23.040]  as the new PID one in any of our nested isolation zones.
+[27:23.040 --> 27:27.520]  And when I say spawn, I very directly mean like we literally read the byte code from
+[27:27.520 --> 27:32.800]  the kernel and we build an image at runtime with the byte for byte, the same byte code
+[27:32.800 --> 27:37.960]  that's running on the host and then we can just go and execute whatever we want against
+[27:37.960 --> 27:43.080]  the same API as the original host runs and all of this is memory safe.
+[27:43.080 --> 27:48.320]  So I can put this right next to your application in the same namespaces running in a container
+[27:48.320 --> 27:53.240]  or running in a virtual machine and there's a relatively low risk of any sort of binary
+[27:53.240 --> 27:57.280]  exploitation at scale.
+[27:57.280 --> 27:59.720]  So here's a model of what that looks like.
+[27:59.720 --> 28:05.880]  So on the left big side here we have the Aura host daemon and on the right we have the three
+[28:05.880 --> 28:08.720]  types of isolation zones that you can run with the daemon.
+[28:08.720 --> 28:14.160]  You have a cell sandbox which is effectively a C group, a pod sandbox which is a group of
+[28:14.160 --> 28:20.560]  containers running in unique Linux namespaces and a virtual machine which is effectively
+[28:20.560 --> 28:24.560]  a container with a kernel and some virtualization technology.
+[28:24.560 --> 28:30.440]  All of this is possible with Rust natively and all of this was made possible by spawning
+[28:30.440 --> 28:37.160]  the binary and creating these nested isolation zones at runtime.
+[28:37.160 --> 28:40.680]  Additionally Rust was able to help solve the untrusted workload problem because of the
+[28:40.680 --> 28:47.560]  memory safety and that Rust offers and because of this really interesting model that we have
+[28:47.560 --> 28:49.200]  right here.
+[28:49.200 --> 28:53.480]  So this is a zoomed in model that might look familiar if you've ever done any container
+[28:53.480 --> 28:59.480]  escapes before and in this model basically what we're saying is we're replacing any sort
+[28:59.480 --> 29:04.840]  of like pause or initialization sequence in an isolation zone with the same daemon we
+[29:04.840 --> 29:06.720]  run on the host.
+[29:06.720 --> 29:10.960]  So I think the Rust binary for Aura right now is about 40 megabytes and we can just
+[29:10.960 --> 29:14.440]  copy that into a container and run that alongside your application.
+[29:14.440 --> 29:22.680]  So it's a relatively small application, runtime that will sit right alongside of your app
+[29:22.680 --> 29:27.840]  so managing memory from MTLS and RID.
+[29:27.840 --> 29:33.040]  So as I'm writing Rust one of the things I notice is I start paying attention to memory
+[29:33.040 --> 29:37.760]  management more every time I try to clone something or the freaking borrow checker yells
+[29:37.760 --> 29:43.600]  at me that kind of like is a small like grim reminder of my roots as a C developer.
+[29:43.600 --> 29:48.600]  This is an interesting takeaway the only memory that we need to share that multiple parts
+[29:48.600 --> 29:52.640]  of the system have access to in this entire model whether we're creating containers or
+[29:52.640 --> 29:56.080]  VMs is the shared MTLS config.
+[29:56.080 --> 30:01.640]  So this is the only bit of shared memory that we really have to manage and Rust very clearly
+[30:01.640 --> 30:05.880]  called that out and to be a candidate I don't think I would be able to as be as comfortable
+[30:05.880 --> 30:10.480]  with this model if I was doing this in something like go.
+[30:10.480 --> 30:17.720]  So Rust was able to help us solve the maintainability problem so somebody say Rust macros.
+[30:17.720 --> 30:24.640]  So we have a really brilliant guy future highway who helps us work on the project and future
+[30:24.640 --> 30:26.680]  highway is our resident macro guy.
+[30:26.680 --> 30:30.200]  Does everybody here have a macro guy in your team?
+[30:30.200 --> 30:31.840]  Because you should.
+[30:31.840 --> 30:34.800]  He has made things a lot simpler for us.
+[30:34.800 --> 30:38.720]  So one of the things we struggled with go in Kubernetes specifically was like how do
+[30:38.720 --> 30:42.200]  we generate objects with unique logic.
+[30:42.200 --> 30:44.320]  Rust macros were a solution to this for us.
+[30:44.320 --> 30:47.360]  So if you've ever looked at the Kubernetes code base you can see we've created these
+[30:47.360 --> 30:52.160]  things called CRDs that started out as third party resources and we've built this entire
+[30:52.160 --> 30:58.360]  bespoke API machinery system that basically is a glorified macro system that allows us
+[30:58.360 --> 31:01.760]  to generate go in the project.
+[31:01.760 --> 31:06.680]  So we're allowed to use Rust macros now and it's a very simple model in the code base.
+[31:06.680 --> 31:10.760]  We basically have a combinatorics problem where we're able to map the different primitives
+[31:10.760 --> 31:15.760]  to the different logical systems that are unique to us and we can generate our source
+[31:15.760 --> 31:19.720]  code as needed.
+[31:19.720 --> 31:25.760]  And so our source code ends up looking like this which I think we've successfully achieved
+[31:25.760 --> 31:28.660]  boring for a low level run time.
+[31:28.660 --> 31:32.880]  This is a fairly straightforward call and then we can be confident that the code it
+[31:32.880 --> 31:39.560]  generates is unique to the project and encapsulates all of our concerns as maintainers.
+[31:39.560 --> 31:44.120]  So really the whole conversation now is just the proto conversation.
+[31:44.120 --> 31:45.720]  Everything can be generated by Rust macros.
+[31:45.720 --> 31:49.840]  The whole project really is pretty much on autogen at this point.
+[31:49.840 --> 31:54.360]  You can just go introduce a new field in the API and then you can spit out a new client,
+[31:54.360 --> 31:58.160]  it'll plumb itself into the run time, it'll plumb itself into the AuraScript library and
+[31:58.160 --> 32:03.800]  everything is given to us for free just because of macros in Rust.
+[32:03.800 --> 32:08.840]  And so this is our code path and the way that we're able to take advantage of macros.
+[32:08.840 --> 32:12.840]  We do a lot of manual work, we fight with the borough checker, we make some improvements
+[32:12.840 --> 32:17.000]  and then we get done and we encapsulate it into a macro and we can simplify our code
+[32:17.000 --> 32:21.600]  path by just replacing all of that with a macro after we've been done.
+[32:21.600 --> 32:27.160]  And so this is the Aura project as it exists today, which again I'm very stoked to say
+[32:27.160 --> 32:31.320]  that this is a very boring exercise.
+[32:31.320 --> 32:35.200]  So a quick update and then I'll be done with my talk here.
+[32:35.200 --> 32:39.760]  There's a few components, all of which are written in Rust here.
+[32:39.760 --> 32:43.520]  Number one, the AuraD daemon is the main static binary that's written in Rust and compiled
+[32:43.520 --> 32:44.760]  with Muzzle.
+[32:44.760 --> 32:48.920]  So we can ship that without any of the shared objects on the host directly into an isolation
+[32:48.920 --> 32:49.920]  zone.
+[32:49.920 --> 32:53.720]  AER is a completely generated from Proto Client.
+[32:53.720 --> 32:59.040]  So this is exciting, we can actually call a GRPC API directly from the client, we don't
+[32:59.040 --> 33:01.880]  have to do any of the run time plumbing.
+[33:01.880 --> 33:07.720]  So if we add a bool to the Proto file, we get dash dash bool directly in the client
+[33:07.720 --> 33:11.080]  compiled for free without typing a single line of code.
+[33:11.080 --> 33:15.480]  So this is a very exciting primitive for us, so we can just begin to have API conversations
+[33:15.480 --> 33:19.720]  and not necessarily care about the internals of the program anymore.
+[33:19.720 --> 33:24.480]  AuraScript is completely generated and we have this exciting project down here, which
+[33:24.480 --> 33:30.720]  is AE, which is an alternative command line client written in Go.
+[33:30.720 --> 33:35.480]  So ultimately the lesson here is Rust was able to help us solve the boring problem.
+[33:35.480 --> 33:39.840]  We have a very complicated, very obscure piece of technology that is you don't really have
+[33:39.840 --> 33:42.840]  to do much to work on it anymore.
+[33:42.840 --> 33:47.400]  Most of it's on autopilot at this point and most of the conversations are very philosophical
+[33:47.400 --> 33:52.840]  in nature and not necessarily about how to implement things in the software.
+[33:52.840 --> 33:57.960]  So takeaways about the project, Aura is completely stateless, so you can restart a node and it's
+[33:57.960 --> 34:02.320]  basically empty until you push config to it, which means all of our systems are declarative
+[34:02.320 --> 34:07.720]  like NixOS now and you can just pass things like TypeScript or JSON to them and it makes
+[34:07.720 --> 34:12.000]  it easy to manage things like containers.
+[34:12.000 --> 34:16.360]  Next we have some to-dos for the project and I would encourage you all to get involved
+[34:16.360 --> 34:21.840]  and if you want to see a demo of all this, I'll be out here in the hallway after the
+[34:21.840 --> 34:27.760]  talk and you can come and you can track me down and I'm happy to give you a demo.
+[34:27.760 --> 34:31.800]  So anyway, I think we have a few minutes for questions and five minutes for questions,
+[34:31.800 --> 34:37.560]  so I'll take questions and if you want to get involved, here's how to get involved and
+[34:37.560 --> 34:49.760]  I'm Chris Nova, please clap.
+[34:49.760 --> 34:54.000]  You mentioned the size of the binary being, does it work?
+[34:54.000 --> 34:58.240]  You mentioned the size of the binary being 40 megabytes, is that with size optimization
+[34:58.240 --> 34:59.240]  or no?
+[34:59.240 --> 35:00.680]  Sorry, say that again?
+[35:00.680 --> 35:04.920]  Is the size of the binary at 40 megabytes with size optimization applied already or
+[35:04.920 --> 35:05.920]  no?
+[35:05.920 --> 35:09.520]  No, that's completely unoptimized, that is like just straight out of the compiler without
+[35:09.520 --> 35:15.320]  any aftermarket tuning.
+[35:15.320 --> 35:17.240]  Amazing talk, quick question.
+[35:17.240 --> 35:21.400]  So if I want to have just enough Linux to like pixie boot into this thing, like do
+[35:21.400 --> 35:25.080]  you guys have any templates because it feels like a shame to run it on something like
+[35:25.080 --> 35:30.800]  RHEL, like I just need like enough of Linux to just pixie boot into that?
+[35:30.800 --> 35:35.480]  Yeah, so the question is basically can we pixie boot this and then you mentioned RHEL.
+[35:35.480 --> 35:41.800]  Where we're going, we don't need Red Hat, so I guess what I would say is in theory all
+[35:41.800 --> 35:47.160]  you need to run is static Linux kernel and Aura and a network connection and some MTLS
+[35:47.160 --> 35:51.760]  config, and so everything else at that point, all of your packages, your services, your
+[35:51.760 --> 35:57.800]  daemons are passed to it via the API.
+[35:57.800 --> 36:06.920]  Hi, you mentioned that you use a lot of macros.
+[36:06.920 --> 36:12.160]  I've also run into problems where, you know, you have a combinatorial explosion of templates
+[36:12.160 --> 36:17.000]  in C++ speak or something like that.
+[36:17.000 --> 36:20.960]  What are your thoughts on generics for generating some of this rather than macros in order to
+[36:20.960 --> 36:23.880]  be a bit more type safe, I suppose?
+[36:23.880 --> 36:29.040]  Personally, I got a little drunk with generics, I'm not going to lie.
+[36:29.040 --> 36:33.600]  When I first moved over from Go, because I was just so excited about it, the reason
+[36:33.600 --> 36:36.360]  I like macros is because we can add logic to them.
+[36:36.360 --> 36:40.240]  So we have, like to give you an example, we have containers and we have VMs.
+[36:40.240 --> 36:45.240]  So we'll have a section of the macro dedicated just to VMs that manages the kernel.
+[36:45.240 --> 36:49.560]  And that's irrelevant to the container systems in the project because containers run on the
+[36:49.560 --> 36:50.880]  host kernel.
+[36:50.880 --> 36:56.000]  And so we can embed those small branches directly into the macro code so that macros generate
+[36:56.000 --> 37:00.480]  slightly different outputs based off of the inputs that are given to them.
+[37:00.480 --> 37:05.920]  So for Aura, when you're dealing with similar systems of code that have small nuances like
+[37:05.920 --> 37:10.360]  we are, macros really, in my opinion, are the way to go.
+[37:10.360 --> 37:12.520]  Did I answer your question?
+[37:12.520 --> 37:17.120]  Looks like.
+[37:17.120 --> 37:23.560]  A simple question, so can I actually give the configuration instead of like Aura script
+[37:23.560 --> 37:26.120]  or TypeScript just in Rust?
+[37:26.120 --> 37:28.040]  Yeah, of course.
+[37:28.040 --> 37:34.080]  So we have this Rust client here, it's basically a Rust SDK.
+[37:34.080 --> 37:39.080]  And then we have a tool called AER, which takes it a step further and it's automatically
+[37:39.080 --> 37:40.600]  generated with macros.
+[37:40.600 --> 37:44.800]  And it's a compiled binary that you can just use from the command line.
+[37:44.800 --> 37:50.520]  So you can just type commands directly into it and it will run against the server on the
+[37:50.520 --> 37:51.520]  back end.
+[37:51.520 --> 37:52.520]  Do you think code is Rust?
+[37:52.520 --> 37:53.520]  Yeah, there's also an SDK.
+[37:53.520 --> 37:55.560]  So you could write your own Rust code and it's GRPC.
+[37:55.560 --> 38:00.520]  So you could generate, you could write it in Go or in WeDo and you could write it in Python
+[38:00.520 --> 38:04.280]  or Ruby or realistically anything, any client you want.
+[38:04.280 --> 38:05.280]  Hi.
+[38:05.280 --> 38:10.600]  I was wondering when you talk about the remote API, have you considered a future direction
+[38:10.600 --> 38:12.600]  to make this a unicolonel?
+[38:12.600 --> 38:13.600]  A unicolonel.
+[38:13.600 --> 38:14.600]  Yeah.
+[38:14.600 --> 38:15.600]  Yeah.
+[38:15.600 --> 38:16.600]  I have a slide for this.
+[38:16.600 --> 38:20.240]  So I added like a bunch of like FAQ slides to the end because I knew that we were going
+[38:20.240 --> 38:22.680]  to get all these good questions.
+[38:22.680 --> 38:26.600]  The answer is it depends, hold on, let's see if I can't find it.
+[38:26.600 --> 38:27.600]  You guys get to see.
+[38:27.600 --> 38:30.280]  There it is.
+[38:30.280 --> 38:31.280]  It depends.
+[38:31.280 --> 38:32.440]  What does unicolonel mean to you?
+[38:32.440 --> 38:36.240]  I think the most minimal system we could do would be a Linux kernel as it exists today,
+[38:36.240 --> 38:40.360]  like good old fashioned stock Linux giant make file to hold nine yards.
+[38:40.360 --> 38:43.800]  And then the ORID daemon and that would be the minimal system.
+[38:43.800 --> 38:46.400]  Anything else you would need to pass to it at runtime?
+[38:46.400 --> 38:55.240]  I think we have time for about one more question.
+[38:55.240 --> 38:57.400]  So you said it doesn't do any higher order scheduling.
+[38:57.400 --> 39:01.760]  I guess I'm kind of curious what, if you want to do things like resilience or steering
+[39:01.760 --> 39:07.000]  or if the job dies, bring something back up, what are people typically using with Aura?
+[39:07.000 --> 39:09.040]  So Aura is still very new.
+[39:09.040 --> 39:13.000]  I think that my hope for the project is kind of like the same hope I had with my book,
+[39:13.000 --> 39:18.800]  solve the lower layer first and then that is going to open the door for higher order
+[39:18.800 --> 39:20.480]  conversations in the future.
+[39:20.480 --> 39:23.840]  My hope is that there's a whole ecosystem of schedulers.
+[39:23.840 --> 39:29.640]  You change your scheduler, you change your socks, well maybe not that often, but the
+[39:29.640 --> 39:33.840]  point would be that that's very specific to the needs of the current organization that's
+[39:33.840 --> 39:35.040]  working on it.
+[39:35.040 --> 39:39.480]  And I would hope that we can still use the Kubernetes scheduler or the Nomad scheduler
+[39:39.480 --> 39:42.960]  to schedule jobs on Aura.
+[39:42.960 --> 39:47.520]  I know there's also some machine learning folks who have some data resiliency problems
+[39:47.520 --> 39:54.760]  that are interested in Aura right now and plan on using some weird global mesh that will
+[39:54.760 --> 39:59.320]  do a peer-to-peer network around the world, kind of like BitTorrent, and then they intend
+[39:59.320 --> 40:00.320]  to use Aura for that.
+[40:00.320 --> 40:02.640]  So I think there's some opportunities there.
+[40:02.640 --> 40:06.600]  The project itself won't ever have an opinion on a scheduler.
+[40:06.600 --> 40:10.200]  Maybe I personally will start another project to do that in the future or something, but
+[40:10.200 --> 40:12.200]  this is the scope for now.
+[40:12.200 --> 40:14.600]  So that's all the time we have.
+[40:14.600 --> 40:15.600]  Okay.
+[40:15.600 --> 40:39.600]  Can we hear it again?

@@ -1,0 +1,271 @@
+[00:00.000 --> 00:14.340]  Okay. I guess I can start. Thank you very much for being here. Thanks also to the folks
+[00:14.340 --> 00:21.620]  organizing the Dev Room and the event. My name is Joakim. I work for Microsoft and I'm
+[00:21.620 --> 00:27.620]  here to talk to you about some stuff that we found while building a UI project, a JavaScript
+[00:27.620 --> 00:36.800]  UI project. And maybe, yeah, maybe it's helpful for you too. All right. So this is kind of
+[00:36.800 --> 00:43.520]  a high-level presentation. And I'm not here to tell you how to do stuff. Certainly, certain
+[00:43.520 --> 00:51.080]  things will be very basic or so. Others, hopefully, will also disagree. But the idea is to tell
+[00:51.080 --> 00:55.040]  you about the patterns that we found, which hopefully, if you want to do something like
+[00:55.040 --> 01:03.640]  this, you will already be, you know, aware of these things. So just to set up the context
+[01:03.640 --> 01:10.000]  of what I'm talking about, and I should have started the timer. Yeah, you know, when we
+[01:10.000 --> 01:16.040]  say like, plug-in system, we're talking about applications like, for example, ones you know
+[01:16.040 --> 01:22.280]  probably matter most or VS code. They have extensions or plug-ins, if you will. I usually
+[01:22.280 --> 01:26.960]  may just say plug-ins, but essentially the same thing. And the talk is not about the
+[01:26.960 --> 01:33.000]  product that we do, but just to give you an idea of, you know, the context. This is a
+[01:33.000 --> 01:38.560]  Kubernetes UI. It's built with React. And there's a server, you know, or backend and
+[01:38.560 --> 01:43.920]  a front-end. So it's very traditional in that sense. And you can run it as a web app or as
+[01:43.920 --> 01:52.800]  a desktop app. So, yeah, and when I talk about plug-ins, still in the context thing, what
+[01:52.800 --> 02:00.680]  this means is that, of course, it's code that should be loaded dynamically. It has an API
+[02:00.680 --> 02:06.760]  from a library, of course, for you to change stuff. And in our case, this is used basically
+[02:06.760 --> 02:13.360]  for changing, you know, the UI, most of it. But you can also change certain core things
+[02:13.360 --> 02:18.320]  like adding routes, deleting routes, I don't know, changing the token when you need to
+[02:18.320 --> 02:23.000]  get a token, stuff like that, right? But this is essentially the context of what I'm talking
+[02:23.000 --> 02:29.080]  about when I say plug-ins and functionality. Okay, so let's start by looking at what the
+[02:29.080 --> 02:35.480]  plug-in should look like. This is usually, we're talking about this bundled single JS
+[02:35.480 --> 02:41.000]  file, right? Let's not talk about, like, several JS files, you know, the drill, hopefully.
+[02:41.000 --> 02:48.880]  But so you have the plug-in code, maybe that's enough for us. It's been enough for a while.
+[02:48.880 --> 02:53.640]  But likely you will need some information together with the code, right? That's often
+[02:53.640 --> 03:00.480]  called a manifest. Certain plug-in systems that I worked before, it was kind of programmatic.
+[03:00.480 --> 03:05.600]  So the plug-in itself declares, here's my name, here's my, I don't know, dependencies
+[03:05.600 --> 03:12.320]  for other plug-ins or whatnot. We recommend not doing that. We recommend using a text
+[03:12.320 --> 03:16.560]  file, or where you declare like a manifest file, where you have all that information
+[03:16.560 --> 03:23.360]  about the plug-in. Turns out that, you know, package JSON is pretty good for that already.
+[03:23.360 --> 03:29.080]  So the advantages of not having this in the file, hopefully they're obvious, but the thing
+[03:29.080 --> 03:33.640]  is that you don't have to load the code before you know if you should load the code, right?
+[03:33.640 --> 03:39.000]  So if you have metadata that you need to use to decide whether to use the code, for example,
+[03:39.000 --> 03:42.800]  you want to tell the user, okay, here's the name of the plug-in. Do you want to enable
+[03:42.800 --> 03:49.040]  this plug-in? So it's better that the code is not already running.
+[03:49.040 --> 03:54.840]  Loading and loading plug-ins. So, you know, this is coming into what the plug-in should
+[03:54.840 --> 04:01.000]  be structured like. But of course, you have to load the plug-ins dynamically. And usually
+[04:01.000 --> 04:06.920]  there is this pattern of an activate method. This activate, of course, is about telling
+[04:06.920 --> 04:15.400]  the plug-in developer more or less when the code should be, you know, loaded. So that's
+[04:15.400 --> 04:19.680]  the sole purpose of this, right? This is not so much for anything like, okay, if you don't
+[04:19.680 --> 04:26.560]  put code inside the activate, that means you're not one. Don't trust that, right? But it also
+[04:26.560 --> 04:31.280]  can be used to tell the system that when you try to activate the plug-in, then you can
+[04:31.280 --> 04:35.880]  have, like, a return, for example, from that activate method. And the plug-in can tell
+[04:35.880 --> 04:40.960]  the system, I could not activate, right? We'll see a couple of examples.
+[04:40.960 --> 04:47.800]  Without the activate, and our plug-ins, for a while, also didn't have the, like, well,
+[04:47.800 --> 04:51.040]  you can use them without the activate, but that's because you should assume that the
+[04:51.040 --> 04:57.560]  whole loading is deactivate, right? So both methods are fine. Like I said, this is, in
+[04:57.560 --> 05:03.600]  many cases, a matter of taste, but this is, like, a pattern. So if you have an activate,
+[05:03.600 --> 05:07.760]  of course, should you have a deactivate? This is when you tell the plug-in, okay, you're
+[05:07.760 --> 05:12.760]  going away. Maybe there's certain things that the plug-in needs to do before it goes away,
+[05:12.760 --> 05:18.040]  like cleaning up. This is unlikely to be used by most plug-ins, but the thing is that, like,
+[05:18.040 --> 05:24.800]  you shouldn't rely on deactivate for just when the, like, you shouldn't trust that the
+[05:24.800 --> 05:29.000]  plug-in will only run the code inside the activate. You should also not trust the plug-in
+[05:29.000 --> 05:34.320]  to deactivate itself, right? So this is mostly about telling the plug-in developers, here's
+[05:34.320 --> 05:40.520]  a way that you know when the code is going to be activated and deactivated. Yeah, for
+[05:40.520 --> 05:47.160]  unloading, of course, you should just reload the system without the plug-in, mostly. And
+[05:47.160 --> 05:55.040]  that's pretty much the conclusion of the section, right? Don't trust plug-ins code, I guess.
+[05:55.040 --> 06:02.400]  Now going into the structure, and hopefully this is a bit more interesting now. Yeah,
+[06:02.400 --> 06:07.080]  so you have to decide how can people write plug-ins, right? And since we are extending
+[06:07.080 --> 06:13.800]  functionality and, you know, extending something that you already know how it will work, maybe
+[06:13.800 --> 06:18.960]  a plug-in class sounds good, like an object oriented where you extend stuff, sounds good.
+[06:18.960 --> 06:25.120]  But of course, right now we have a lot of functional code going on, so ultimately this
+[06:25.120 --> 06:31.000]  is a matter of taste, right? We can argue, like, what's fastest, what's quicker to do,
+[06:31.000 --> 06:38.960]  but in such applications, it's fine if you're not squeezing that extra 200 mil. So, yeah,
+[06:38.960 --> 06:43.360]  so these plug-ins do exactly the same. For example, in this case, the plug-ins would
+[06:43.360 --> 06:48.960]  say, okay, we only work on Mondays, so if the, you know, if the day is not on Monday,
+[06:48.960 --> 06:55.880]  then you just tell the system, I'm not activating, but these are different flavors. However,
+[06:55.880 --> 07:01.800]  maybe an interesting plot twist would be that, of course, plug-ins have a life cycle, right?
+[07:01.800 --> 07:06.680]  They activate, they deactivate, so that's what React kind of gives you for a component.
+[07:06.680 --> 07:15.120]  So why not making a plug-in be a React component, right? You already have, you know, certain
+[07:15.120 --> 07:22.080]  life cycle things, like use effect, for example. Another advantage is that you could also use
+[07:22.080 --> 07:28.040]  hooks inside it. So we, for example, in our system, have some hooks, and if you just use
+[07:28.040 --> 07:34.640]  the, this method, it's going to be a bit complicated to do, right? But if you use this, then probably
+[07:34.640 --> 07:40.640]  it's a good idea. And if you, of course, this only works if you have a React-based system,
+[07:40.640 --> 07:45.520]  the other systems, I don't know, but yeah.
+[07:45.520 --> 07:51.880]  But then the other thing about the functionality is, okay, how about implementing actual stuff
+[07:51.880 --> 07:56.840]  to change the system, right? And in here, I think there are mainly two options, so you
+[07:56.840 --> 08:02.120]  can make it so that it's very textual and declarative. So let's say that you have a
+[08:02.120 --> 08:06.880]  top bar, we do have a top bar, and you want actions. Actions would be like a button or
+[08:06.880 --> 08:12.040]  a string or something else that you want to put there, right? So if you make it declarative,
+[08:12.040 --> 08:17.560]  like the left example there, of course, the system is responsible for interpreting whatever
+[08:17.560 --> 08:24.080]  you put there, so as long as you don't implement stuff, you won't give any power to that plug-in
+[08:24.080 --> 08:30.680]  implementation. On the other hand, this is kind of a bit limiting, right? So because
+[08:30.680 --> 08:36.800]  you always have to develop more and more functionality to support it. If you want to
+[08:36.800 --> 08:44.000]  be a bit more flexible, although not as, I guess, friendly to new developers, you can
+[08:44.000 --> 08:48.400]  just say, okay, just put a component here and that's it, right? And it can be a string
+[08:48.400 --> 08:55.120]  or something else. So that's the right side. And of course, maybe people will do stuff
+[08:55.120 --> 09:00.320]  that you're not expecting with that, but also you basically support anything. So it depends
+[09:00.320 --> 09:09.920]  on the level of what you really want to give. Now, the functionality itself, like I won't
+[09:09.920 --> 09:14.560]  bother you with the functionality that we have, but of course, you will usually say,
+[09:14.560 --> 09:19.680]  okay, I want people to add, again, top bar actions or, I don't know, like a new route
+[09:19.680 --> 09:24.680]  and all that, and it will be likely that you also have to have a way to remove those, right?
+[09:24.680 --> 09:28.360]  So you can add an action. Somebody will say, okay, now I need to remove it if it's not
+[09:28.360 --> 09:35.480]  Monday or something, right? So it's some sort of crude or crud or whatever you call it.
+[09:35.480 --> 09:41.200]  So let's look at what it could look like. So in our case, now I talk about header actions
+[09:41.200 --> 09:44.920]  and I actually put this screenshot here just to illustrate, but this is a header action,
+[09:44.920 --> 09:51.800]  it's just a header with an action. And yeah, so if we want to support something like this,
+[09:51.800 --> 09:57.360]  should you have one function per operation, like register header action like we have here?
+[09:57.360 --> 10:02.000]  So you declare the button and you do it or maybe, okay, if you add one button, maybe
+[10:02.000 --> 10:09.600]  you can add a list of buttons, just keeps getting appended there. Sounds great. And
+[10:09.600 --> 10:14.760]  then you have a counterpart for the operation that's removing header actions. And in this
+[10:14.760 --> 10:21.040]  case, you can just call it deregister or just to be the opposite or remove, to be a bit
+[10:21.040 --> 10:29.240]  more direct. However, how can you actually identify what you added there, right? So if
+[10:29.240 --> 10:35.440]  you declare the component or the function in this case on the left, then you have access
+[10:35.440 --> 10:40.240]  to it. So you just call it again, hopefully it will equal to the same thing internally
+[10:40.240 --> 10:45.560]  and the system can understand, okay, this is something that we have here. So let me remove
+[10:45.560 --> 10:55.440]  that. But let's say that we already have default actions. So how can the user refer to the
+[10:55.440 --> 10:59.880]  default actions, right? Will they import them? That sounds like they cannot really refer
+[10:59.880 --> 11:04.680]  to the actions by the function name because it gets minimized and then things don't work.
+[11:04.680 --> 11:09.100]  So of course, one solution is to add IDs. So it's probably a good idea that whenever
+[11:09.100 --> 11:15.600]  you have a function where you're just passing a component or something else, probably you
+[11:15.600 --> 11:22.400]  should identify it, right? If you are to refer to it later. But then you're very happy it
+[11:22.400 --> 11:26.800]  works and somebody will go and say, hey, that's cool, but you keep appending the actions.
+[11:26.800 --> 11:35.240]  I want to actually have my actions prepended. And then your world goes upside down, right?
+[11:35.240 --> 11:41.800]  So either you can add, of course, like, I don't know, like an index to the function
+[11:41.800 --> 11:47.680]  when you call it. So now you have ID, index and the actual action. Or you can scrape
+[11:47.680 --> 11:52.320]  all that and, for example, just use a list processor. So instead of registering, okay,
+[11:52.320 --> 11:56.400]  add function, remove function and all that, you can say, here's my list processor for
+[11:56.400 --> 12:00.960]  other actions, right? It's going to be fed whatever is the default actions and you can
+[12:00.960 --> 12:07.520]  add them, you can remove them, you can shuffle them, whatever. So it, of course, you have
+[12:07.520 --> 12:13.000]  to identify them as well. So the ID keeps going there. But this is, I think, a more
+[12:13.000 --> 12:21.640]  flexible way and less work to maintain. Now, yeah, developer experience. So it's supposedly
+[12:21.640 --> 12:29.360]  important that users can start plugins and develop plugins easily for your system. So
+[12:29.360 --> 12:33.880]  just like other programs that you probably used before, there should be, like, this boot
+[12:33.880 --> 12:40.000]  strap way of creating a plugin, right? Either that or, of course, you have a folder of examples
+[12:40.000 --> 12:45.840]  that you say, okay, just use this and modify it. We do have something like a bootstrap
+[12:45.840 --> 12:56.720]  script, like the headland plugin, it's called, because we're original. And, yeah, and that's
+[12:56.720 --> 13:02.080]  interesting because you can just generate the base plugin. But also, you should take
+[13:02.080 --> 13:07.720]  into account that you should require the developers to configure as less stuff as possible, right?
+[13:07.720 --> 13:13.440]  So one way would be to say, okay, here's the package JSON that we generated, of course.
+[13:13.440 --> 13:18.280]  Here's the TS config that we generated. Here's the web pack configuration that we have and
+[13:18.280 --> 13:23.360]  all that. However, of course, the next time that you need to upgrade the plugins, then
+[13:23.360 --> 13:32.080]  you have to upgrade all that stuff. So a probably better idea is to try to add as least stuff
+[13:32.080 --> 13:37.400]  as possible, right? So if, for example, in the case of TS config, instead of just shipping
+[13:37.400 --> 13:43.160]  the whole TS config and then you have to figure out how to upgrade that if you need, we are
+[13:43.160 --> 13:48.360]  already, as a module, we are already inside the application at the development stage.
+[13:48.360 --> 13:53.400]  So we just point to it, right? We ship the TS config that we want and we point to it.
+[13:53.400 --> 13:58.240]  So if the developer touches it, then it's fine. We're never touching that again. We're
+[13:58.240 --> 14:03.040]  just touching the file that we ship, right? So it's going to be updated automatically
+[14:03.040 --> 14:10.440]  as long as you update the module. So actually, we try to keep the dependencies as simple
+[14:10.440 --> 14:16.400]  as possible. In this case, it would be just to have one, right? Our headland plugin package
+[14:16.400 --> 14:28.360]  in this case. All right. Next is about bundling. So now you have your API with the processing,
+[14:28.360 --> 14:37.920]  this processing and stuff. Yeah. And Webpack is very easy to use. Yeah. So you get your
+[14:37.920 --> 14:46.760]  bundle, right? And you get your bundle to be, you know, you get your single JavaScript file
+[14:46.760 --> 14:50.400]  to be run, ready to be run. But of course, that's going to, if you just have like React,
+[14:50.400 --> 14:55.880]  for example, that this plugin will import, then you get React bundle there. If you have
+[14:55.880 --> 15:02.160]  your, in our case, headland plugin, then you're going to have that library, you know, just
+[15:02.160 --> 15:06.520]  bundled in. And you should try to avoid that, right? Because it's going to be running inside
+[15:06.520 --> 15:10.240]  a system that already has this, it should run with the same versions, and it should
+[15:10.240 --> 15:17.280]  not, you know, just even if it's for size matters, not pack the same thing. So Webpack
+[15:17.280 --> 15:21.200]  has this thing called external modules, and you can just say, okay, whenever you find
+[15:21.200 --> 15:28.040]  this import, actually, we mean this variable. So when it finds the React router, it says
+[15:28.040 --> 15:31.880]  don't care about the React router, just use whatever you put there. In our case, it's
+[15:31.880 --> 15:38.240]  like plug-in lib, React router, and it's going to use the same code. So we were like, okay,
+[15:38.240 --> 15:42.120]  this is great. We can avoid shipping all this stuff. We were going to keep our headland
+[15:42.120 --> 15:48.000]  plugin package really lean. It's going to be great. So we even thought, okay, we're not
+[15:48.000 --> 15:52.400]  even shipping our own library. We're just shipping the type declarations. That's going
+[15:52.400 --> 15:59.000]  to be fine. So we spent many hours wiring, you know, TS config and Webpack and whatnot
+[15:59.000 --> 16:05.120]  to make sure that it was happy when users are developing. They can see that the imports
+[16:05.120 --> 16:11.800]  seem to work, even though they don't exist inside the library. And then somebody wanted
+[16:11.800 --> 16:15.840]  to test the plug-in. And they're like, oh, okay, so now you cannot test the plug-in because
+[16:15.840 --> 16:21.440]  you don't have the libraries around. So maybe you have to use the program itself to test
+[16:21.440 --> 16:26.520]  the plug-in, but that's probably not a great idea. So we were like, okay, we have to ship
+[16:26.520 --> 16:33.920]  the actual library. Yeah. And so, yeah, so it still works as an external module. So we're
+[16:33.920 --> 16:38.880]  not bundling it, but we're shipping it. And it's fine because, I mean, yes, the headland
+[16:38.880 --> 16:46.400]  plugin package is slightly larger, but that's okay because it's just one time. So take that
+[16:46.400 --> 16:52.040]  into account and don't get too extreme with not shipping stuff. Yeah, we're getting to
+[16:52.040 --> 16:59.160]  the end. So running the plug-ins, right? So now you got your bundle. It's not bundling
+[16:59.160 --> 17:05.960]  React because we got it. It's not bundling your library because you got it. And you're
+[17:05.960 --> 17:12.720]  going to run it. However, of course, at some point you will break API. And if you do break
+[17:12.720 --> 17:16.880]  API, it would be nice that you don't load a plug-in that will be broken because it's
+[17:16.880 --> 17:24.800]  expanded. You'll break the system for your users. So package.json has this already. It's
+[17:24.800 --> 17:30.160]  part of its known keywords, I guess, called engines. So you can just put something there
+[17:30.160 --> 17:34.960]  for your system. And then, of course, when you run it, you should just check for that
+[17:34.960 --> 17:43.880]  before running it. Now, how to run the actual system? So now you have everything in place
+[17:43.880 --> 17:49.280]  and you can check for it before you load it. But how do you actually load it? Do you load
+[17:49.280 --> 17:52.760]  it? Of course, it's going to be loaded in the front and that's what we're talking about
+[17:52.760 --> 17:58.040]  with JavaScript. And this is highly special to each project, right? So maybe you have
+[17:58.040 --> 18:03.800]  something there where the users can just load the files directly and it just refreshes and
+[18:03.800 --> 18:10.880]  loads. In our case, we didn't want to do that. We wanted it to be very transparent to the
+[18:10.880 --> 18:16.200]  user. So if the user, of course, downloads a plug-in, next time they start the application,
+[18:16.200 --> 18:22.640]  they should see that things changed. But also, in the case of our application, it works also
+[18:22.640 --> 18:28.880]  if you deploy it as a web service like that. So in that case, we don't want really the
+[18:28.880 --> 18:33.960]  users to keep using different plug-ins. In this case, it's more like, okay, whoever deployed
+[18:33.960 --> 18:41.920]  it is giving you an user experience with the base code plus a bunch of plug-ins that the
+[18:41.920 --> 18:45.760]  users shouldn't really know about. And for security reasons, of course, we don't want
+[18:45.760 --> 18:52.520]  the users to keep loading plug-ins on something that is now, even though it runs locally,
+[18:52.520 --> 18:59.000]  it's going to, you have it just deployed for this user and other users. So they would
+[18:59.000 --> 19:05.560]  have different user experiences if they keep adding their own plug-ins. So what we do in
+[19:05.560 --> 19:11.800]  our case is that we have the backend or the server. It's a server, but depending on if
+[19:11.800 --> 19:18.720]  it's running locally or actually in a server. And then that's the thing that has to have
+[19:18.720 --> 19:26.840]  access to the plug-ins themselves. So it reads the plug-ins and then it has an endpoint
+[19:26.840 --> 19:30.400]  and the front end, when it loads, before it loads everything, it says, okay, what are
+[19:30.400 --> 19:34.960]  the plug-ins that you have? It says, I got this 10 plug-ins. It says, okay, give me the
+[19:34.960 --> 19:39.920]  plug-ins now or give me this one plug-in now, for example. Then you get the actual bundle
+[19:39.920 --> 19:47.200]  JS code from the backend, and then it loads it dynamically, and then you get a shiny thing.
+[19:47.200 --> 19:52.000]  So this way, of course, if you're running it locally and you have the plug-ins in the
+[19:52.000 --> 19:57.960]  plug-in folder that it expects, the backend has access, it actually keeps watching the
+[19:57.960 --> 20:06.160]  folder in our case. It gets refreshed whenever you change stuff there, and that's how we
+[20:06.160 --> 20:11.440]  do it locally. If you're running on the server, then, of course, we don't check if the plug-ins
+[20:11.440 --> 20:16.920]  change or not. That's not supposed to happen, but you still get essentially the same experience.
+[20:16.920 --> 20:24.520]  But like I said, this is mostly, this is very tied to each project. And that's all I got.
+[20:24.520 --> 20:40.560]  So thank you. Thank you very much. We do have time for questions, so raise your hand high
+[20:40.560 --> 20:53.320]  and we'll start with the first question. You said putting some dependencies in the plug-in,
+[20:53.320 --> 21:00.480]  so having a module that they import so they can use some things like hooks. Do you have
+[21:00.480 --> 21:07.960]  to, or do you do anything against a plug-in modifying those things that would then mess
+[21:07.960 --> 21:12.280]  with other plug-ins, like changing the objects you've passed in? I cannot understand what
+[21:12.280 --> 21:20.080]  you're saying. So if the plug-ins are depending on a module that you've made, and they're
+[21:20.080 --> 21:26.280]  the same ones being passed into different plug-ins, could they modify the things you're
+[21:26.280 --> 21:36.080]  passing into, then mess with the other plug-ins? Yes, but what was the actual question? Is
+[21:36.080 --> 21:47.640]  there a way to mitigate against them changing how the plug-in system behaves for the other
+[21:47.640 --> 21:56.160]  plug-ins? But you mean for example in the example of the actions, whatever goes there?
+[21:56.160 --> 22:04.840]  So you had a button, I say you have a button class you're passing in, they can extend.
+[22:04.840 --> 22:11.120]  What if they changed the behavior of that button class to then other plug-ins have a
+[22:11.120 --> 22:18.920]  modified version when running? Yeah, but that's actually something by design, right? So you're
+[22:18.920 --> 22:23.280]  supposed to, let's say that you changed the delete button and now you still have the delete
+[22:23.280 --> 22:27.760]  button, but the delete button will no longer delete. It will just say, actually it wasn't
+[22:27.760 --> 22:35.840]  on the example, but it will just say not today, right? So the delete button on the left just
+[22:35.840 --> 22:40.520]  says not today, right? It actually replaces the delete button in this case, but that's
+[22:40.520 --> 22:49.280]  fine, right? Because that's what the plug-ins are supposed to do, right? So the plug-ins
+[22:49.280 --> 22:54.000]  are supposed to do, and maybe you have even plug-ins that, okay, they expect you already
+[22:54.000 --> 22:59.280]  to have other things in there, so if you have a combination of both plug-ins they can see
+[22:59.280 --> 23:04.720]  that you added stuff, and yeah, so that's by design. Of course if you install plug-ins
+[23:04.720 --> 23:10.120]  that will make your system not do anything, well that's also, you should be careful about
+[23:10.120 --> 23:15.400]  what you install. You talk about security in the front-end, but
+[23:15.400 --> 23:20.360]  isn't that something that the back-end should handle more and just keep the JavaScript as
+[23:20.360 --> 23:25.640]  light as possible instead? About the security, what?
+[23:25.640 --> 23:34.120]  You talk about security in the front-end, so that users can't add their own plug-ins,
+[23:34.120 --> 23:39.360]  but isn't that something that the user would be responsible for anyway?
+[23:39.360 --> 23:44.080]  No, no, yeah, maybe, I mean I was rushing maybe I didn't explain that correctly. No,
+[23:44.080 --> 23:49.120]  the thing about the security is not so much about the security, it's about the user experience.
+[23:49.120 --> 23:56.600]  So you suppose as a user to add your own plug-ins of course, but that's if you use in our case
+[23:56.600 --> 24:00.880]  our application as a desktop application, because then it's you who is responsible for
+[24:00.880 --> 24:04.920]  that application. When you go and you use it because you access some service that gives
+[24:04.920 --> 24:10.920]  you in the browser, then it's the person that deployed that or the company or whatever that
+[24:10.920 --> 24:14.880]  is supposed to give you the plug-ins that you are supposed to see, so you shouldn't
+[24:14.880 --> 24:19.520]  change the way that the application works, but that's of course our decision, right?
+[24:19.520 --> 24:23.320]  In other cases like a guest lag or something like that, you can add actually different
+[24:23.320 --> 24:29.560]  plug-ins for yourself, and that's cool too, but this is like I said, this was a highly
+[24:29.560 --> 24:38.880]  intimate decision for our own project. So a couple of months back when we were
+[24:38.880 --> 24:44.200]  checking for the plug-ins, so usually a few applications run the plug-ins in an isolated
+[24:44.200 --> 24:50.320]  environment, like they ship their micro runtimes and run in them and then try to communicate.
+[24:50.320 --> 24:55.680]  So in your use case, are you running them in the parent application context? Because
+[24:55.680 --> 25:00.120]  in that case, we can't always trust what users are writing in their plug-ins, right?
+[25:00.120 --> 25:06.960]  So they can steal stuff from Windows, things like that. So do you have any check to see
+[25:06.960 --> 25:11.400]  all the plug-ins and do that due diligence before I load them to the store or something
+[25:11.400 --> 25:17.160]  like that? Yeah, security would be a whole talk about it.
+[25:17.160 --> 25:23.160]  Which we don't have time for? We're just running the plug-ins as is because
+[25:23.160 --> 25:30.520]  as of now, you know, we don't have, for example, you cannot just download plug-ins from NPM
+[25:30.520 --> 25:34.000]  right now, right? We're going to have that. When we have that, we're going to have a different
+[25:34.000 --> 25:39.400]  way to run them, hopefully. I know that depending on the system, you're going to find that some
+[25:39.400 --> 25:45.960]  people do have a way to isolate them. There's a good blog article by Figma doing that.
+[25:45.960 --> 25:50.240]  And that's kind of cool that you say what approaches they took and what conclusion they
+[25:50.240 --> 25:57.120]  got to. Other, you know, other programs, they just say, okay, you're supposed to install
+[25:57.120 --> 26:02.160]  stuff that you trust and they go through some, you know, just like when you install an NPM
+[26:02.160 --> 26:07.440]  package, it can be harmful, right? But there are mechanisms to kind of mitigate that.
+[26:07.440 --> 26:14.200]  So I want to make it as secure as possible, but that's not, you know, it was not security
+[26:14.200 --> 26:19.200]  from the start before we actually have the system.
+[26:19.200 --> 26:33.360]  Do you have any ways of handling code splitting and other stuff like that? Maybe a plug-in
+[26:33.360 --> 26:42.440]  wants to load some components later on. Is there a way you can handle it using your method
+[26:42.440 --> 26:46.000]  of doing that? If a plug-in wants to add components?
+[26:46.000 --> 26:56.960]  If a plug-in developer wants to use code splitting and loading stuff later on, is it fine?
+[26:56.960 --> 27:03.720]  I mean, if you have an active method, I mean, if I understand your question, you have the
+[27:03.720 --> 27:07.040]  moment where the plug-ins are loaded, right? So you can just say, okay, I'm not supposed
+[27:07.040 --> 27:12.320]  to be, I'm not supposed to be running the buttons, nouns, or changing the functionality
+[27:12.320 --> 27:16.880]  now. I'm supposed to be changing the functionality whenever. Of course, that's a responsibility
+[27:16.880 --> 27:21.080]  for the plug-ins, right? We just say, okay, we're loading you. Now you should make sure
+[27:21.080 --> 27:25.800]  that you do whatever you want. But it should be like, you can, of course, this is just
+[27:25.800 --> 27:30.280]  code. You can change when it wants, right?
+[27:30.280 --> 27:56.320]  Thank you again.

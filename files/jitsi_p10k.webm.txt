@@ -1,0 +1,102 @@
+[00:00.000 --> 00:14.640]  Well, all right. I'll get going since we're here. My name is Saul and today I'd like to
+[00:14.640 --> 00:19.120]  talk to you about our little project P10K or how to get 10,000 participants into a
+[00:19.120 --> 00:21.120]  GC meeting.
+[00:21.120 --> 00:28.400]  No, it doesn't go on the loudspeakers, it's just for the recording. It is what it is.
+[00:28.400 --> 00:35.320]  Sorry, I lost my voice. I'll try. I suppose most of you know what it is, but for those
+[00:35.320 --> 00:41.520]  who don't, it's a way about to see compatible video conferencing application. I like to
+[00:41.520 --> 00:46.520]  say that I can think of it in three ways. A set of open source projects that allow you
+[00:46.520 --> 00:51.640]  to either deploy it or, you know, piecemeal it and build something with it. It's also
+[00:51.640 --> 00:57.900]  a set of APIs and mobile SDK so you can embed it into your existing application and fully
+[00:57.900 --> 01:03.080]  open source Apache to license and we have a pretty vibrant community that helps us build
+[01:03.080 --> 01:04.600]  some stuff.
+[01:04.600 --> 01:11.840]  So I've talked about scaling GC meets a couple of years ago here at FOSDOM with what we did
+[01:11.840 --> 01:18.960]  during the pandemic. Also at Comcom about how we reached 500 participants. Then of course
+[01:18.960 --> 01:26.360]  somebody will ask, yeah, how do you do more, right? So that's what I'm about to go on today.
+[01:26.360 --> 01:33.120]  A quick TLDR on what the trick is to scale up is mostly to cheat because it turns out
+[01:33.120 --> 01:39.720]  that you never see 10,000 participants at the same time. So you need to paginate and
+[01:39.720 --> 01:44.160]  not show all of them at the same time, not load them at the same time. Also on the back
+[01:44.160 --> 01:50.280]  end, you don't want to be, you know, taking care of 10,000 things at once. You want to
+[01:50.280 --> 01:55.000]  be really careful avoiding re-renders on the react side of things. So on your front end,
+[01:55.000 --> 02:01.880]  you definitely don't want to have 10,000 things. And very importantly, reducing signaling.
+[02:01.880 --> 02:08.160]  And this is kind of the crux of the thing. So with all of those things, we ended up getting
+[02:08.160 --> 02:14.000]  500 participants in a single meeting. All of them are fully functional, bidirectional audio
+[02:14.000 --> 02:19.680]  video participants. They will never all have video on. So that's sort of fine. I'm going
+[02:19.680 --> 02:25.200]  to go a quick run through our architecture. So when we dive into XMPP, we know what we're
+[02:25.200 --> 02:31.240]  talking about. XMPP is our course signal protocol. You heard it from Matt for chat. So all the
+[02:31.240 --> 02:36.720]  participants join an XMPP mock, so a group chat. And then our focus, you call for negotiates
+[02:36.720 --> 02:42.840]  a session with each participant. And then they all end up mixed in the JVB, which is
+[02:42.840 --> 02:49.440]  where we allocate the media. So this is like a back of an app design level, but it's pretty
+[02:49.440 --> 02:57.600]  accurate. Prosody is our XMPP server of choice. And you call for is the one that will allocate
+[02:57.600 --> 03:03.120]  sessions here and then establish sessions with the users. So they all end up, you know,
+[03:03.120 --> 03:09.720]  having this connection. Now, how do you go about solving 10,000 participants? Well, first
+[03:09.720 --> 03:16.280]  of all, we do some research. And what we knew is that presence is stanza. So XMPP presence
+[03:16.280 --> 03:23.880]  was our Achilles heel. So we needed to sort that out. And intuitively, when you need to
+[03:23.880 --> 03:28.480]  support many of something, you think of, well, I'll partition it in smaller chunks. And maybe
+[03:28.480 --> 03:32.960]  that's how I do it. So there is federated mark for that. So we thought maybe that's where
+[03:32.960 --> 03:38.040]  it goes. And turns out the military had sort of researched this problem as well. And there
+[03:38.040 --> 03:44.200]  is this cool white paper called federated multi-user chat for military deployments.
+[03:44.200 --> 03:50.640]  And one of the things they got there is how to avoid these presence flooding. And they
+[03:50.640 --> 03:55.720]  do that with the visitor role. And that's where we got the idea from. So the idea is
+[03:55.720 --> 04:01.960]  that we're going to have two types of users, the active users and like passive users. So
+[04:01.960 --> 04:06.760]  we don't need to know about all these passive users, like all these audience, we just need
+[04:06.760 --> 04:12.040]  to know the number. We don't need to draw a tile for them. They don't need to be as
+[04:12.040 --> 04:15.880]  apparently they're participating in the meeting. They're just viewers, right? And this is what
+[04:15.880 --> 04:21.960]  the visitor role in XMPP Mach-Lingo means. So a passive participant can then become an
+[04:21.960 --> 04:26.880]  active participant by switching the role. Because we're not building live streaming.
+[04:26.880 --> 04:31.200]  So what we want to build is a way to actually actively be able to participate. Anybody of
+[04:31.200 --> 04:38.640]  those 10,000 participants should be able to take the mic anytime. Scenarios for this,
+[04:38.640 --> 04:45.840]  earnings calls on public to traded companies. Just because we can, you name it.
+[04:45.840 --> 04:51.120]  So step two, how do we test it? Because if we build it, we need to be able to know we
+[04:51.120 --> 04:55.520]  have a complete store goal. And in order to test 10,000 participants, you need, well,
+[04:55.520 --> 05:02.880]  10,000 participants. So we use a big ass linear grid and we created some lightweight clients
+[05:02.880 --> 05:08.120]  so that we could have a lot of chunks that join the call. They've got no UI. We spawn
+[05:08.120 --> 05:13.920]  multiple browser windows with multiple tabs, with multiple of these clients. And a recent
+[05:13.920 --> 05:19.080]  trick is we use insertable streams to drop all media. One thing you can do is modify.
+[05:19.080 --> 05:23.600]  Another thing you can do is drop it. So it's nothing. And then there are a lot more lightweight
+[05:23.600 --> 05:27.240]  in our Selenium grid. Otherwise, it would take millions just to test what you're doing
+[05:27.240 --> 05:34.160]  is right. There's a PR by Philip Hankey actually to do something like Chrome would said, Black
+[05:34.160 --> 05:41.200]  Franks, very tiny ones. So maybe that's where we go in the future as well. And we also delay
+[05:41.200 --> 05:46.040]  track creation so that we don't create tracks. If you join muted, we don't need to do the
+[05:46.040 --> 05:51.080]  whole create a video track that is useless and things like this.
+[05:51.080 --> 05:56.480]  The next thing is we scale the signaling. And the way we do it is we ended up having
+[05:56.480 --> 06:02.000]  multiple processes servers. This is one node, but it could be spread to multiple nodes.
+[06:02.000 --> 06:07.680]  So we have a main process server, which is where the active participants join the meeting.
+[06:07.680 --> 06:14.720]  And then we have up to five extra nodes, which we call visitor nodes, where people join in
+[06:14.720 --> 06:20.280]  this visitor role. So the presence is not broadcasted. Jigofa will decide which one
+[06:20.280 --> 06:25.720]  you join, usually depending on the capacity. And the trick to actually become an active
+[06:25.720 --> 06:31.520]  participant is to just join this one, join the main one afterwards. And we can do that
+[06:31.520 --> 06:37.440]  very fast because you don't need to recreate the XMPP connection.
+[06:37.440 --> 06:44.520]  So now, in order to establish this sort of mesh, we ended up using Federation, even though
+[06:44.520 --> 06:48.840]  it's like within a single server, but still. So there's server to server bidirectional
+[06:48.840 --> 06:54.800]  connections to avoid having duplicated connections. So custom modules that's where process shines
+[06:54.800 --> 06:59.680]  because it allows us to do all these customizations to mirror like chat messages that have been
+[06:59.680 --> 07:05.920]  typed in a visitor node to the main node and back. So to kind of fake it that they are
+[07:05.920 --> 07:12.080]  in separate instances, actually. And as I said, becoming active is fast because you
+[07:12.080 --> 07:16.840]  don't need to recreate the XMPP connection. You just need to join a different mock.
+[07:16.840 --> 07:23.000]  Our step number four is to have an improved topology for media routing. Currently, we have
+[07:23.000 --> 07:28.120]  Octo, which allows us to spread the load across multiple bridges. But this doesn't work very
+[07:28.120 --> 07:33.720]  well for such a large load. You need a tree-style topology where some people are just receiving
+[07:33.720 --> 07:41.200]  and a full mesh for those who are actively participating. So both loads can be spread.
+[07:41.200 --> 07:47.920]  And last, we need to fix up the UI, let's say. So we don't need to render the visitors.
+[07:47.920 --> 07:55.000]  We just need to know that there is 100 people and then 9,000 visitors. And that's it. So
+[07:55.000 --> 07:59.920]  we want to refine the UI a little bit. We're thinking of using the raised-hand functionality
+[07:59.920 --> 08:03.760]  to become an active participant. So you raise your hand, you are approved and then you become
+[08:03.760 --> 08:10.560]  active. That's how we're thinking about it. Now, some of it is in the present, some of
+[08:10.560 --> 08:18.600]  it is in the future. So how is it going? We got there with 51 bridges. We got 10,009
+[08:18.600 --> 08:27.640]  participants. So it worked out. There's still some work to do. So the UI is not yet final.
+[08:27.640 --> 08:33.520]  We're polishing up a little bit. And we're still going to add some more modules to mirror
+[08:33.520 --> 08:38.400]  all the data we want, like the polls and other stuff. And we're thinking that maybe we don't
+[08:38.400 --> 08:44.400]  really need to support 500 active participants because that's a weird conference, really.
+[08:44.400 --> 08:48.960]  So that number could actually be lower or pretty much configurable. So you can say,
+[08:48.960 --> 08:53.800]  I want these very many active participants and the rest, it will be visitors. And that's
+[08:53.800 --> 08:57.880]  that. And of course, we need to make it easy to deploy for everyone. Right now, this is
+[08:57.880 --> 09:03.200]  a bit held together with that tip. Before I go, I'd like to give a shout out to the
+[09:03.200 --> 09:09.600]  heroes that worked on the guts of this. You may know their names from our community, Boy
+[09:09.600 --> 09:15.920]  is Domenico and Jonathan, incredible characters. And I'm relaying the message. I know they
+[09:15.920 --> 09:23.200]  knew words, but they did the work. And I like to share the love we have for Prosody. We
+[09:23.200 --> 09:28.920]  wouldn't have been able to do it, I think, without such a flexible piece of software.
+[09:28.920 --> 09:32.960]  They help us. We help them. It's a very nice relationship we have with the project. We
+[09:32.960 --> 09:40.600]  love Matt and team. So shout out to them. And since that's all I got, you can follow
+[09:40.600 --> 09:45.480]  the progress there. We have documentation actually how to deploy the existing way of
+[09:45.480 --> 09:51.760]  doing things. Again, early stages, but it's there. And if you have any questions, well,
+[09:51.760 --> 10:02.400]  I'm around here. Or find me online. Thank you very much.

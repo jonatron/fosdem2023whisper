@@ -1,0 +1,193 @@
+[00:00.000 --> 00:11.360]  So, my name is Robin Geuze. I used to work for TransIP at first and Team Blue after they
+[00:11.360 --> 00:17.800]  merged with a bunch of other companies for about a decade until a month ago. During that
+[00:17.800 --> 00:24.920]  time period we transitioned from running our own closed source DNS server software to running
+[00:24.920 --> 00:30.400]  open source DNS server software and just like the talk we just had, that happens to be power
+[00:30.400 --> 00:38.040]  DNS. So, I'll take you through the issues we had going from closed source to open source,
+[00:38.040 --> 00:46.960]  which roughly took the entire time I was there, about nine years. So, yeah, let's start. So,
+[00:46.960 --> 00:53.120]  how it started for me. TransDNS, which they called the home root DNS software, was written originally
+[00:53.120 --> 01:02.640]  in about 2003, 2004 and it had the DNS support added in 2012. When I started working at TransIP in
+[01:02.640 --> 01:13.480]  2013 as a PHP coder, I was asked to help them debug a crasher in the TransDNS code. It basically
+[01:13.480 --> 01:19.760]  came down to a buffer overflow because somebody had, one of our customers had managed to put more
+[01:19.760 --> 01:27.320]  than 16 kilobytes of text record data on one single label. The really quickly quick fix was to
+[01:27.320 --> 01:35.080]  increase the buffer to 32 kilobytes. And one small disclaimer, I was involved in almost all the work
+[01:35.080 --> 01:40.080]  that I mentioned here, but there are some things that I didn't do myself or just consulted on,
+[01:40.080 --> 01:46.720]  stuff like that. I'll try to make a distinction about it, but I might miss some stuff. Yeah,
+[01:46.720 --> 01:50.280]  so back then it was a really basic setup. We basically had three servers. They were all running
+[01:50.280 --> 01:57.440]  TransDNS. There was no load balancing. The signing stack was built using DNS stack tools for those
+[01:57.440 --> 02:02.760]  few people who still know what it is. And there was a lot of automation on top of DNS stack tools
+[02:02.760 --> 02:07.520]  in PHP to make all of that work and ultimately upload stuff to the registry because we were one
+[02:07.520 --> 02:13.760]  of the, we were a registrar, so a lot of the stuff was automated. All of this DNS propagation was
+[02:13.760 --> 02:20.200]  done to cron jobs, which means it was very slow. It took roughly five minutes to propagate a DNS
+[02:20.200 --> 02:26.440]  change, which back then wasn't really a big problem. But as we went on, it became more and more an
+[02:26.440 --> 02:31.120]  issue, especially when we got let's encrypts and you needed to quickly update your DNS to get your
+[02:31.120 --> 02:38.480]  certificate signed. We had at the high, I think we still have roughly one million zones in the
+[02:38.480 --> 02:46.400]  setup, most of which so about 80, 90% are DNS signed. There were very few people back then that
+[02:46.400 --> 02:52.440]  actually knew stuff about it and dared to work on it. I think maybe three or four people, one of
+[02:52.440 --> 03:00.280]  which was I. It had very bad RSC compatibility, which I will get into a little bit later. Adding
+[03:00.280 --> 03:05.440]  new record types, which Kevin mentioned like SSHFP was a lot of work because there was a
+[03:05.440 --> 03:11.560]  interpreter in TransDNS itself, which had to be written in C and writing interpreters in C for
+[03:11.560 --> 03:18.440]  stack strings is not fun. And well, I fixed that initial buffer overflow block, but the main
+[03:18.440 --> 03:24.680]  problem was there just not a lot of bound checking in the code. So yeah, there were a lot of hidden
+[03:24.680 --> 03:32.560]  bugs that probably should be fixed as well. So we took a few initial steps because initially,
+[03:32.560 --> 03:37.720]  because we had the three servers, there was no loan financing, we meant that if we restarted
+[03:37.720 --> 03:43.040]  TransDNS, one of the servers would stop responding until the restart was done. And the restart took
+[03:43.040 --> 03:49.400]  roughly 15 minutes because every single record would get loaded into memory. And since we had a
+[03:49.400 --> 03:55.400]  million zones, I think it was like 25 million records or something back then, it just took a
+[03:55.400 --> 04:02.400]  lot of time and might have used the quick DNS zone parser stuff. So the first thing we did was
+[04:02.400 --> 04:08.440]  implement load balancing. This was before DNS. This was a thing. So what we tried initially was
+[04:08.440 --> 04:15.960]  relay day, which some of the BSD folks might know. It did work, but we had a lot of weird issues.
+[04:15.960 --> 04:24.840]  It was really hard to debug. And so eventually we switched to using HAProxy for TCP, which works,
+[04:24.840 --> 04:32.800]  nothing more to say about it. And I wrote something rather quickly in C roughly based on the
+[04:32.800 --> 04:39.080]  TransDNS code to forward the UDP stuff. That worked quite well and actually enabled us to
+[04:39.080 --> 04:43.920]  actually iterate on the TransDNS code because we could do save restarts without having to worry
+[04:43.920 --> 04:50.120]  about queries being dropped. And that allowed me to fix the glaring issues like there not being
+[04:50.120 --> 04:56.360]  any bounce checking in the code. So we had less risk of buffer overflows. And I fixed a lot of
+[04:56.360 --> 05:03.480]  the EDS issues that were becoming a problem at that point. Eventually when DNS was a little bit
+[05:03.480 --> 05:08.240]  more mature, we switched to that because otherwise I had to maintain another piece of software and
+[05:08.240 --> 05:15.880]  I really didn't feel like that. In the meantime, it did improve the TCP stack a lot in TransDNS
+[05:15.880 --> 05:24.560]  because we noticed that especially SIDN, the.nlRegistrar registry, did a lot of TCP queries
+[05:24.560 --> 05:32.520]  and the original implementation was basically just spawn a new thread for every TCP connection,
+[05:32.520 --> 05:38.960]  but once you get to about a thousand threads, that's not a great solution. So I changed to a
+[05:38.960 --> 05:45.040]  polling-based model, worked great, got pretty high performance, and we never had a problem with it
+[05:45.040 --> 05:49.680]  after that. The only thing I changed later is when we moved to Linux, I changed to ePool.
+[05:49.680 --> 05:59.160]  Yeah, so SIDN had validation monitoring and we kept getting reminded about the fact that we were
+[05:59.160 --> 06:08.880]  doing a lot of stuff wrong. So yeah, we actually had one specific case that basically covered most
+[06:08.880 --> 06:16.920]  of the, I think it was about 80% of those errors, and that's, it's 62 issues, but they have the
+[06:16.920 --> 06:22.320]  same cause. So the first issue was the incorrect handling of wildcards. So if you have a wildcard
+[06:22.320 --> 06:33.920]  that, for example, star.nl, then you have a record c.nl, and then you try to resolve a.c.nl,
+[06:33.920 --> 06:40.160]  it should not hit the wildcard, because c.nl exists, which means you should return a no-data,
+[06:40.160 --> 06:48.080]  or an extra main in this case, but transdns didn't really care, so it would just return the data
+[06:48.080 --> 06:53.560]  from the wildcard. Very useful, makes it a lot easier to configure DNS, but it causes some issues,
+[06:53.560 --> 06:58.880]  especially with DNS validation. The second issue was basically the same only in the
+[06:58.880 --> 07:07.480]  empty non-terminals. If a.b.c exists, and you try to resolve b.c, even though there's nothing
+[07:07.480 --> 07:12.080]  specific on b.c, you should say there's no data, rather than it's a non-existent domain,
+[07:12.080 --> 07:20.160]  also causes the DNS validation errors. Same basic cause. The solution was to switch from,
+[07:20.160 --> 07:28.600]  in transdns, to switch from an ordered map that used the type and the domain name as the key,
+[07:28.600 --> 07:34.440]  to a map that only used the domain name as the key, and have an array in there with the type,
+[07:34.440 --> 07:40.840]  which could also be empty, so we would immediately notice if there was a label in our way. That
+[07:40.840 --> 07:48.120]  worked well. I actually did it this next slide, so the only problem is we couldn't just deploy
+[07:48.120 --> 07:53.920]  that, because we might break stuff for our customers, and customers get a little bit difficult
+[07:53.920 --> 07:59.320]  if you break stuff for them. So what I decided was, okay, for the NSIC it's broken anyways,
+[07:59.320 --> 08:05.680]  because the NSIC enables for the resolvers would just return errors when you have one of these
+[08:05.680 --> 08:12.200]  labels. So what I did is fixing the two steps. I initially enabled it only for the NSIC queries,
+[08:12.200 --> 08:19.120]  so the correct behavior, and kept the wrong behavior for non-DNSIC queries, and in between we
+[08:19.120 --> 08:24.680]  just covered a large amount of queries. I think I did two days of DCP dumping, and milling it down
+[08:24.680 --> 08:31.320]  to the actual unique queries, and compared what our name servers would respond for DNSIC versus
+[08:31.320 --> 08:36.600]  non-DNSIC. For everything that had a difference, we contacted the customers, and told them, hey,
+[08:36.600 --> 08:42.120]  you need to fix this. I think it was only about 20 to 30 customers. It was actually not that many,
+[08:42.120 --> 08:49.520]  so that made it a lot easier. And then we just, at some point I decided I'll flip the switch.
+[08:49.520 --> 08:53.800]  There were a few customers that didn't respond, but at some point you just have to decide to.
+[08:53.800 --> 09:02.560]  Don't give a fuck. One other small issue we have with RFC implementation was the NSIC
+[09:02.560 --> 09:07.840]  implementation, because almost all of our zones use NSIC tree. The NSIC implementation was not
+[09:07.840 --> 09:15.720]  as well tested as the NSIC tree implementation, so it was wrong, like really wrong. I just rewrote
+[09:15.720 --> 09:25.720]  it from scratch, and then it worked, but yeah. So we started to think about moving to PowerDNS,
+[09:25.720 --> 09:32.160]  and the main reason we did was because SIDN announced that we would no longer get a DNSIC
+[09:32.160 --> 09:39.480]  incentive for domains using the NSIC algorithm 7. So that's the RSA plus NSIC tree algorithm.
+[09:39.480 --> 09:45.480]  That would cost us a bunch of money, and that's a very good way to stimulate people to do stuff.
+[09:45.480 --> 09:50.760]  So at this point we decided to buy the bullet and just start over from scratch,
+[09:50.760 --> 09:56.600]  and build a really new, more modern setup. We picked PowerDNS, basically,
+[09:56.600 --> 10:02.600]  partially because we already had some experience with it, and we didn't really want to deal with
+[10:02.600 --> 10:07.280]  zone files, because we had a million zones, and putting them all on a file system makes things
+[10:07.280 --> 10:17.440]  annoying. So PowerDNS was the only one where we thought, oh, this allows us to do changes via
+[10:17.440 --> 10:23.360]  the API. We don't need to worry about having separate zone files for every single zone.
+[10:23.360 --> 10:28.480]  So we needed to pick a PowerDNS backend to use, because PowerDNS is one thing,
+[10:28.480 --> 10:33.640]  but you still need something to put stuff in. And there we sort of had to hit a problem,
+[10:33.640 --> 10:38.240]  because PowerDNS is really fast, because it's literally just a hash map in memory,
+[10:38.240 --> 10:46.120]  so it can basically do instant answers. And while the PowerDNS, as you go back in,
+[10:46.120 --> 10:51.920]  is very nice and flexible, but it's not really fast, especially because we had a lot of zones
+[10:51.920 --> 10:59.680]  that would not get very frequent queries. So they'd have a lot of non-active data,
+[10:59.680 --> 11:04.040]  which means the query cache wouldn't really help a lot, which means that we would have
+[11:04.040 --> 11:08.240]  a lot of SQL queries continuously, because they would get queries sometimes. It's not a lot.
+[11:08.240 --> 11:13.920]  The bind backend had the same problem as all the other name servers. We didn't have API support,
+[11:13.920 --> 11:17.680]  and it would mean we needed to use a lot of zone files, which we didn't want to.
+[11:17.680 --> 11:25.080]  So introducing the LMDB backend. This already exists at the point that we started looking at it,
+[11:25.080 --> 11:31.120]  because Hubert had written it. It's very fast, and it has support for the API, which is really nice.
+[11:31.120 --> 11:39.400]  It only had one major issue. Because of the way Hubert had implemented it,
+[11:39.400 --> 11:44.800]  it didn't really allow records bigger than 512 bytes. We have quite a lot of zones.
+[11:44.800 --> 11:53.240]  So I decided to fix that in the end. I wrote a pull request for the Power Genius team,
+[11:53.240 --> 11:58.680]  and I think that was pretty quickly accepted into there. It also included some migration code,
+[11:58.680 --> 12:05.680]  so the older the LMDB database would automatically be migrated to the new LMDB database format.
+[12:05.680 --> 12:11.880]  It also improved performance in some corner cases, but that was not really the goal of this patch.
+[12:11.880 --> 12:19.560]  So then we started moving over. We built a setup. It was really cool. There's a lot of automation
+[12:19.560 --> 12:25.080]  around it. It does actually do all the zone transfers via XFR, even though Kevin just said
+[12:25.080 --> 12:29.840]  it's a bad idea if you have a lot of zones. But in practice, it works quite well, except for one
+[12:29.840 --> 12:39.000]  issue. Every first day, our updates would take ages to go through. Basically, we traced it down to an
+[12:39.000 --> 12:47.840]  enormous bump in the XFR queues. We would literally have 400,000 XFR queued up. So that was a bit
+[12:47.840 --> 12:52.960]  of a problem. So the reason this happens is because Power Genius renews its signatures every
+[12:52.960 --> 12:59.240]  first day of the week. Very nice. We don't have to think about it. Problem is, if you have a million
+[12:59.240 --> 13:04.680]  zones, that takes quite a while, especially because we were running our hidden primary on a VM,
+[13:04.680 --> 13:09.640]  so it was also not that quick to answer queries. So we could have just shown more hardware in it,
+[13:09.640 --> 13:14.560]  but we decided to look a little bit more at a more sustainable solution, because, well,
+[13:14.560 --> 13:19.800]  if it works with one million zones on the Phosomers scene, it will still work if you have 10
+[13:19.800 --> 13:25.880]  million zones. So I discussed it with the Power Genius guys, and I came up with a solution which
+[13:25.880 --> 13:31.480]  is XFR priority levels. So rather than treating all XFRs that need to be done at the same level,
+[13:31.480 --> 13:37.480]  we gave more priority to things that are user-initiated. So if you initiate an XFR
+[13:37.480 --> 13:42.880]  via Power Genius control, it will be first in the queue. Whatever else is in the queue,
+[13:42.880 --> 13:48.680]  that one was treated first. After that, there's the API, notifies, solar refresh, and signature
+[13:48.680 --> 13:54.640]  refresh is the lowest priority. That meant that, yes, we would still have a quite a large queue,
+[13:54.640 --> 14:01.520]  but we could still process our updates very quickly. That was included into Power Genius,
+[14:01.520 --> 14:07.880]  right with us. Well, in 4.5, it was included. We still saw the use queues, but those own
+[14:07.880 --> 14:12.800]  updates would pretty quickly propagate. So that, for us, was fine. We never had a problem with it
+[14:12.800 --> 14:21.400]  after that. Yeah, and then we had some other issues, most of which were in a minor solved in
+[14:21.400 --> 14:25.600]  the low-banus layer or just fixed in Power Genius updates. The TCP performance is still
+[14:25.600 --> 14:32.160]  something I want to look at in Power Genius just for fun, as a open-source developer. It's on my
+[14:32.160 --> 14:38.920]  list of things I want to improve. We had some various smaller bugs in the NMDB backend because
+[14:38.920 --> 14:47.000]  it was quite new. We were not the first one that ran it at really large scale, but we were one of
+[14:47.000 --> 14:53.200]  the first ones, and we did see some problems that nobody else had had yet. One CVE we discovered
+[14:53.200 --> 14:59.040]  literally within the day of rolling out a new version, so that was very fun for Peter because
+[14:59.040 --> 15:07.680]  he got to roll out a new lose a day after he released the previous one. We had an issue that
+[15:07.680 --> 15:13.400]  there were certain query patterns that we would get that were specifically designed to target
+[15:13.400 --> 15:20.040]  a weakness in Power Genius. That was a transient as we didn't care about them, but Power Genius did
+[15:20.040 --> 15:25.320]  get affected. We eventually resolved this by adding some detection at the low-banus layer that would
+[15:25.320 --> 15:32.680]  just block queries for those affected domains. It would mean that that customer's domain would
+[15:32.680 --> 15:37.840]  have limited functionality, but at least it would still work, and all the other customers would not
+[15:37.840 --> 15:47.800]  be affected, which was for us the most important thing. Yeah, so some closing thoughts. Yeah,
+[15:47.800 --> 15:53.320]  migrating a home root setup is really not for the faint of heart. However, running one is also
+[15:53.320 --> 16:01.040]  not for the faint of heart. Yeah, it is worth it. It just gives you a lot more flexibility because
+[16:01.040 --> 16:06.840]  now adding new record types is just a question of adding them in our front end and making them
+[16:06.840 --> 16:12.360]  work. Whereas before, we had to add the new record type at every single step in the stack,
+[16:12.360 --> 16:23.400]  and it just really took a lot of time. We can even, in theory, add different brands of
+[16:23.400 --> 16:28.440]  secondaries. Currently, there's a few issues that were prevented, but it's relatively easy to solve,
+[16:28.440 --> 16:36.560]  so we could just run not as a secondary or NSD or even bind if he would want to do that for
+[16:36.560 --> 16:45.640]  some reason. What I did really, really notice is don't try to do this in one go, because it's a lot
+[16:45.640 --> 16:51.160]  of work, and you'll make mistakes. If you do it in smaller steps, the mistakes will be smaller,
+[16:51.160 --> 16:58.640]  easier to fix, and it also just feels a lot better if you can accomplish some things in
+[16:58.640 --> 17:03.960]  between rather than trying to do it all at once. One thing I wanted to ask, DNSSEC incentives,
+[17:03.960 --> 17:11.400]  they work both when trying to get people to use DNSSEC, but they also work to improve the
+[17:11.400 --> 17:16.200]  quality of the DNSSEC, because we've seen, especially in the.nl zone, because I've also
+[17:16.200 --> 17:21.960]  been involved in that work a little bit, some very bad implementations that got fixed when the
+[17:21.960 --> 17:30.520]  rules were made stricter, including ours initially, but were even the worst ones. Yeah, that is it.
+[17:30.520 --> 17:36.960]  For the people that would like to see, I've open sourced DNS before I left the company,
+[17:36.960 --> 17:45.120]  so I can see it myself as well, so that's fun. It's on GitHub. I've also put the URLs for
+[17:45.120 --> 17:50.200]  the two major pull requests I made. There's a bunch of other ones, but I haven't put all of them
+[17:50.200 --> 18:04.360]  in there, and that's about it. So, questions?
+[18:04.360 --> 18:30.080]  So, that makes it a bit of a more concern in your case, and I used to be a customer. On the upside,
+[18:30.080 --> 18:35.720]  most of these methods probably weren't noticed by the majority, but I think you should take it
+[18:35.720 --> 18:40.640]  more seriously if you were a company that actually makes money out of posting here.
+[18:40.640 --> 18:48.200]  So, the comment is that we both made mistakes. It was a bit related to the talk Kevin did,
+[18:48.200 --> 18:56.480]  so a lot of the things that we said are related, and the comment is Kevin was only doing it for
+[18:56.480 --> 19:03.880]  himself, and we were doing it for paying customers. Yeah, I agree. When I started, there were a lot
+[19:03.880 --> 19:10.640]  of issues, and I've tried three years to attempt to fix them as much as I could. To be clear,
+[19:10.640 --> 19:16.200]  I wasn't hired to maintain trans-DNS. That just happened to be something that got shoved
+[19:16.200 --> 19:25.280]  into my lab because I knew some C and C++. I became pretty passionate about it.
+[19:25.280 --> 19:31.400]  I came pretty quickly rolled into the PowerDNS community. I also added a lot of contributions
+[19:31.400 --> 19:40.680]  to DNS when that was getting started up. I agree with the initial statement. I've tried to fix it
+[19:40.680 --> 19:56.680]  as much as I could. Sometimes, you set out with certain criteria. You build something that can meet that criteria, and it scales to a certain point.
+[19:56.680 --> 20:12.680]  Eventually, you get to a million customers, a lot of customers. The company would start off with a million customers, and maybe at the time that this was a good system, things would fly to me. But as the business grew and things grow,
+[20:12.680 --> 20:28.680]  you have to do exactly what he did. You evaluate it and say, you know, it's time for something different. He identified that and made the changes accordingly.
+[20:28.680 --> 20:45.680]  A brief resume, he said that sometimes due to scaling, you run into issues that you hadn't foreseen when you were in it, and he set something up. Just taking a step to resolve them in the end can be a good thing.
+[20:45.680 --> 21:07.680]  There was a question there. The question is how did they get them to agree with over sourcing it. At the point that I open sourced it, I was sort of CTO slash head of R&D of the Dutch part of the organization.
+[21:07.680 --> 21:17.680]  Also, I only open sourced it after we totally took it out of production, so it's mainly a historic interest thing.
+[21:17.680 --> 21:24.680]  Did you ever consider open sourcing trans-DNS before switching?
+[21:24.680 --> 21:40.680]  So the question is, did we consider open sourcing before switching? No. And I'll tell you, we weren't very proud of, at least I wasn't proud of the source quality.
+[21:40.680 --> 21:48.680]  I didn't write it myself, all of it. I only contributed to it later. I tried to improve it as much as I could, but it's still not...
+[21:48.680 --> 21:57.680]  It's very focused on just doing one thing, and it's very good at that, but it's not very applicable to use by others.
+[21:57.680 --> 22:03.680]  So I think it's interesting now to see some of the tricks to make things really fast that you can see in the code.
+[22:03.680 --> 22:18.680]  But beyond that, I would never use it in a production environment other than the one it was in, because that one was built specifically to run around that code.
+[22:18.680 --> 22:32.680]  What's actually the motivation for implementing the DNS hosting and trans-DNS? I think even around the time when you started as a company, there was not a software available that could have been used.
+[22:32.680 --> 22:51.680]  So the question is, what was the motivation to implement their own DNS software? So to be clear, trans-DNS was implemented in 2003, so this was roughly when power-DNS started to grow, but the problem was that there were already quite a lot of zones in there,
+[22:51.680 --> 23:02.680]  and it just got a little bit cumbersome using bind, because that was the primary name-server software you'd use back then, and yeah, that was the main motivation.
+[23:02.680 --> 23:16.680]  Bind was getting annoying because you had to have a lot of zone files, and everything was running on 3BSD using UFS, so there was a 32,000 files per directory limit at that point, which also didn't help.
+[23:16.680 --> 23:27.680]  I mean, there's ways to solve that, that's not that complicated, but that was the main motivation as well, as I think there were some performance issues in bind back then that were relatively easily resolved.
+[23:27.680 --> 23:40.680]  The other alternatives would have been GGB DNS, but that had its own things, like the guy that wrote it, not saying you should use it.
+[23:40.680 --> 23:46.680]  Anything else?

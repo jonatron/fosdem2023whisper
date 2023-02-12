@@ -1,0 +1,409 @@
+[00:00.000 --> 00:29.920]  Okay, next talk is Pablo.
+[00:29.920 --> 00:36.920]  Who is going to explain us how to set up slurm client environments more easily.
+[00:59.920 --> 01:06.920]  My name is Pablo and I have been running the HBC Clusters since I was 9 years.
+[01:06.920 --> 01:14.920]  I was running the HBC Clusters at CERN and got involved mostly in slurm, running slurm.
+[01:14.920 --> 01:23.920]  That's when I came up with the idea for this tool since about 8 or 9 months ago I started
+[01:23.920 --> 01:29.920]  the HBC Clusters and I'm also participating in the SKA project, hence the pretty background,
+[01:29.920 --> 01:37.920]  where we do also things related to the HBC infrastructure.
+[01:37.920 --> 01:44.920]  So just a brief introduction to slurm in case anybody is not familiar with it.
+[01:44.920 --> 01:52.920]  Slurm is basically both a resource manager and a job scheduler, meaning slurm will manage
+[01:52.920 --> 02:00.920]  their allocations, it will track which machines are used to which jobs and which users own,
+[02:00.920 --> 02:04.920]  which CPUs and which nodes, etc.
+[02:04.920 --> 02:10.920]  And it's also the job scheduler, meaning it will, when users submit jobs, you have your
+[02:10.920 --> 02:14.920]  happy users over there, or hopefully it will be happy users.
+[02:14.920 --> 02:19.920]  And they can be one-on-one on your cluster, so they make a job submission, usually writing
+[02:19.920 --> 02:25.920]  a script that launches some workloads.
+[02:25.920 --> 02:30.920]  And they will basically interact with slurm and slurm will manage all of these job submissions.
+[02:30.920 --> 02:34.920]  You won't just have one by one, you will have hundreds or even thousands of jobs that are
+[02:34.920 --> 02:40.920]  scheduled to run on your infrastructure and slurm will manage the views and the priorities
+[02:40.920 --> 02:43.920]  and the accounting, etc.
+[02:43.920 --> 02:50.920]  So basically it's a batch manager, but there's both resource managing and the scheduling
+[02:50.920 --> 02:53.920]  of the jobs.
+[02:53.920 --> 02:58.920]  Building a bit deeper into how slurm works, because this is relevant for this talk, there's
+[02:58.920 --> 03:04.920]  basically two main components, two units that are the most relevant, and those are the
+[03:04.920 --> 03:14.920]  controller, which is called the slurm CTLD, and then the deals that run on the worker nodes
+[03:14.920 --> 03:16.920]  at the bottom, which is the slurm VDU.
+[03:16.920 --> 03:20.920]  And then you have other demons like the slurm VD, slurm RST, slurm RST.
+[03:20.920 --> 03:26.920]  Those are not relevant for this talk, I will mostly focus on the part on the left here.
+[03:26.920 --> 03:34.920]  So users and client tools, they basically interact with the controller over a slurm protocol.
+[03:34.920 --> 03:39.920]  There's nowadays a slurm RST, so you can also interact with the rest with some scripts,
+[03:39.920 --> 03:46.920]  but mostly all the user lab tools, and mostly almost everything in the slurm ecosystem just
+[03:46.920 --> 03:52.920]  talks to the slurm CTLD, and this controller handles the source of truth for slurm, so it
+[03:52.920 --> 03:57.920]  knows which resources are allocated where, it knows which jobs exist, and knows who the
+[03:57.920 --> 04:00.920]  users are, etc.
+[04:00.920 --> 04:05.920]  The controller talks to the slurm units, and talking to the nodes and the slurm units are
+[04:05.920 --> 04:09.920]  in charge of launching the jobs, so you do the cleanup, setting up the seed routes for
+[04:09.920 --> 04:12.920]  the jobs, whatever you have.
+[04:12.920 --> 04:17.920]  Now, what's important here is to know that for all of this to work, you need at least
+[04:17.920 --> 04:22.920]  the same thing. You need the slurm conflict files, and they need to be instinct between
+[04:22.920 --> 04:34.920]  the whole cluster, so you may have some difference, but mostly it should be the same.
+[04:34.920 --> 04:38.920]  There was no audio online? Okay.
+[04:38.920 --> 04:44.920]  So as I was saying, the slurm CTLD handles the source of truth.
+[04:44.920 --> 04:50.920]  The slurm units are in charge of launching the jobs, and the two important things are
+[04:50.920 --> 04:54.920]  that you need the slurm configuration files.
+[04:54.920 --> 04:57.920]  It's mostly the slurm.conf file, but there's other files as well.
+[04:57.920 --> 05:03.920]  Those need to be in sync in the whole cluster, and they need to be basically the same.
+[05:03.920 --> 05:05.920]  They should have the same hash, ideally.
+[05:05.920 --> 05:11.920]  And then you should also have a shared secret so that nobody can, a rogue client cannot just
+[05:11.920 --> 05:15.920]  add a worker node to the cluster and start doing malicious things.
+[05:15.920 --> 05:18.920]  So you have usually it's a munch secret.
+[05:18.920 --> 05:24.920]  It's called the demon called munch, and you have a shared secret as well for the whole cluster.
+[05:24.920 --> 05:29.920]  And this fact is important, is very relevant for this talk.
+[05:29.920 --> 05:32.920]  Now, up to containers.
+[05:32.920 --> 05:37.920]  So containers are increasingly becoming a super popular tool to run infrastructure for
+[05:37.920 --> 05:41.920]  reproducibility, for automating deployments.
+[05:41.920 --> 05:48.920]  And just in general, they're becoming super ubiquitous in our industry.
+[05:48.920 --> 05:52.920]  I think for good reasons.
+[05:52.920 --> 05:59.920]  And there are, I think, very good use cases for using containers with slurm.
+[05:59.920 --> 06:06.920]  In this talk, I will focus on the use case where you use containers on the user and client
+[06:06.920 --> 06:07.920]  side of things.
+[06:07.920 --> 06:13.920]  So those tools that will talk to slurm, to the controller mostly, to do things on the cluster.
+[06:13.920 --> 06:17.920]  So this could be some automation that you have run to do whatever.
+[06:17.920 --> 06:21.920]  For instance, you could use it for monitoring purposes.
+[06:21.920 --> 06:27.920]  You could write a tool that does health checks on the cluster for accounting.
+[06:27.920 --> 06:30.920]  I've used it extensively for accounting as well.
+[06:30.920 --> 06:33.920]  But also integration with other services, right?
+[06:33.920 --> 06:39.920]  Or if you want to connect the Jupyter notebook with slurm, you will end up with some tools
+[06:39.920 --> 06:45.920]  that talk to the controller.
+[06:45.920 --> 06:55.920]  Now, there are basically two scenarios in which you can use containers with slurm.
+[06:55.920 --> 06:57.920]  On the left, we have the local use case.
+[06:57.920 --> 07:03.920]  That means imagine you have a frontend mode, you have a machine that's configured where it uses SSH2.
+[07:03.920 --> 07:10.920]  And from there, they can run the slurm commands to launch jobs, to track their job usage, et cetera.
+[07:10.920 --> 07:13.920]  It's conventionally called frontend mode for the cluster.
+[07:13.920 --> 07:19.920]  So if you just add the slurm client container on that node, it's very simple.
+[07:19.920 --> 07:26.920]  Because you can just, as I said, you need a secret with munch, and you need the config files.
+[07:26.920 --> 07:29.920]  And that scenario is very simple because you can just do bind mounts,
+[07:29.920 --> 07:32.920]  and you can access the munch socket to talk to slurm.
+[07:32.920 --> 07:38.920]  And you might bind mount the slurm config directory, and you're done, basically.
+[07:38.920 --> 07:40.920]  So that's sort of easy.
+[07:40.920 --> 07:47.920]  However, what if you have, for the use case on the right, you have the distributed or remote use case.
+[07:47.920 --> 07:55.920]  And in that case, you may run your slurm client container in a different service.
+[07:55.920 --> 08:00.920]  That's a different network, or you may run it on Kubernetes or somewhere else.
+[08:00.920 --> 08:07.920]  In that case, you obviously can't just do the bind mounts because you need to give it all those things.
+[08:07.920 --> 08:13.920]  So you would have to give it all the slurm config files and somehow the munch shared key
+[08:13.920 --> 08:21.920]  so that your external service can talk to your cluster, right, specifically to the slurm controller.
+[08:21.920 --> 08:25.920]  Now, this is an extraction from a Docker file.
+[08:25.920 --> 08:26.920]  This is the naive approach.
+[08:26.920 --> 08:29.920]  This is how I started trying things.
+[08:29.920 --> 08:30.920]  Easy, right?
+[08:30.920 --> 08:36.920]  You just take the slurm config, and you just copy it to the destination, right?
+[08:36.920 --> 08:38.920]  And this will absolutely work.
+[08:38.920 --> 08:45.920]  But I was not happy with this approach because then you end up managing two copies of your slurm config.
+[08:45.920 --> 08:52.920]  And I really like having a single source of truth for when you do configuration management and automation of your infrastructure,
+[08:52.920 --> 08:54.920]  I really like having a single source of truth.
+[08:54.920 --> 09:02.920]  And managing this in this way with containers is very fiddly because it's very easy that you will forget to update it
+[09:02.920 --> 09:04.920]  or something that will fail to update it automatically.
+[09:04.920 --> 09:06.920]  It's just not ideal.
+[09:06.920 --> 09:08.920]  I didn't like this approach, but it will work.
+[09:08.920 --> 09:11.920]  It will work.
+[09:11.920 --> 09:17.920]  And some of you who know slurm may say, oh, but Pablo, why wouldn't you just use slurm's config less feature?
+[09:17.920 --> 09:28.920]  So slurm config less is a new feature since slurm 20 or so that will basically allow a client to just pull the config files from slurm.
+[09:28.920 --> 09:36.920]  So the slurm ddemons that run on the worker nodes, when they start, they will just grab the slurm config files.
+[09:36.920 --> 09:42.920]  So you can just remove the needs to even copy the slurm config, right?
+[09:42.920 --> 09:46.920]  Well, that's a trick question.
+[09:46.920 --> 09:53.920]  Not necessarily because then you need to run a slurm ddemon in your container.
+[09:53.920 --> 09:56.920]  And you also need the munch demon.
+[09:56.920 --> 10:00.920]  And it sounds easy, but it's really not.
+[10:00.920 --> 10:08.920]  You will need to do a lot of hacks. This is an instruction from a container that I was creating.
+[10:08.920 --> 10:11.920]  And you run in lots of awful things.
+[10:11.920 --> 10:21.920]  Like the slurm ddemon expects this release agent file to exist in the C group and the containers, they just don't create it.
+[10:21.920 --> 10:26.920]  I tried it on Docker. I tried it on different Kubernetes versions. It just doesn't exist.
+[10:26.920 --> 10:31.920]  I don't know why. I couldn't find out why. If anybody knows, please tell me.
+[10:31.920 --> 10:36.920]  I googled around a found that could have been related to some privilege escalation issues.
+[10:36.920 --> 10:39.920]  However, if you just remount the C groups, the file appears.
+[10:39.920 --> 10:42.920]  So I'm not sure what's going on there.
+[10:42.920 --> 10:47.920]  Another fun story is that, for instance, if you're using Kubernetes,
+[10:47.920 --> 10:57.920]  Kubernetes likes to give a sim link to your secrets, and munch refuses to take the secret from a sim link for security reasons.
+[10:57.920 --> 10:59.920]  It makes sense. So there's no more.
+[10:59.920 --> 11:01.920]  So you will need to put in hacks.
+[11:01.920 --> 11:05.920]  And it's hacks on top of hacks on top of hacks just to run these two demons.
+[11:05.920 --> 11:10.920]  And yeah, I was not very happy with this approach either.
+[11:10.920 --> 11:15.920]  So basically I was faced with two options.
+[11:15.920 --> 11:17.920]  We arrived at this situation. You're faced with two options.
+[11:17.920 --> 11:23.920]  Either you basically do the first naive approach where you just copy all the stuff into your slurm container.
+[11:23.920 --> 11:26.920]  You manage a copy of your slurm config files.
+[11:26.920 --> 11:33.920]  But as I said, if you want a single source of truth, this might not be ideal.
+[11:33.920 --> 11:37.920]  You also need, of course, in the case of use case, unless you need munch,
+[11:37.920 --> 11:39.920]  and you need to supply the munch key.
+[11:39.920 --> 11:43.920]  Or you can try the configless approach, but then you need to add slurm d to your container
+[11:43.920 --> 11:46.920]  so it can pull via configless your config files.
+[11:46.920 --> 11:48.920]  But then anyway, you also need munch.
+[11:48.920 --> 11:52.920]  And you need to add the munch key to your container somehow and managing secrets.
+[11:52.920 --> 11:56.920]  I mean, if you're running Kubernetes, it might not be a big issue or some other container manager.
+[11:56.920 --> 12:02.920]  But you will still need to maintain all these extra demons with nasty hacks.
+[12:02.920 --> 12:08.920]  And we don't always like all these having lots of hacks in our infrastructure.
+[12:08.920 --> 12:13.920]  There's a third option, by the way, which is trying to go secret less.
+[12:13.920 --> 12:18.920]  It doesn't work in combination with configless, where you try to use JSON web tokens.
+[12:18.920 --> 12:21.920]  But it gives a lot of issues. It doesn't really work. I tried it.
+[12:21.920 --> 12:23.920]  So I didn't include it here.
+[12:23.920 --> 12:28.920]  Just mentioning it in case somebody thought about it.
+[12:28.920 --> 12:31.920]  So Pablo, you talked about the bad and the ugly. What about the good?
+[12:31.920 --> 12:33.920]  Is there any good part to this?
+[12:33.920 --> 12:34.920]  I'm glad you asked.
+[12:34.920 --> 12:39.920]  Yes. What if we had a single shot CLI tool,
+[12:39.920 --> 12:44.920]  that just a very simple tool that just was able to authenticate to the controller,
+[12:44.920 --> 12:48.920]  either using munch or JSON web tokens, which Slurm also supports,
+[12:48.920 --> 12:52.920]  and just fetch the config files, and then it's done.
+[12:52.920 --> 12:55.920]  That's all you really want to do, right?
+[12:55.920 --> 12:59.920]  Because then your tools, the Slurm tools can work,
+[12:59.920 --> 13:04.920]  because they have the Slurm config files, and just by having the JSON web token in your environment,
+[13:04.920 --> 13:08.920]  you can just talk to the Slurm controller.
+[13:08.920 --> 13:11.920]  And yeah, that's the tool that I wrote.
+[13:11.920 --> 13:15.920]  It's a very simple tool. It just does exactly what I described there.
+[13:15.920 --> 13:19.920]  And it's open source. You can find it on GitHub.
+[13:19.920 --> 13:22.920]  I uploaded it in the past month.
+[13:22.920 --> 13:24.920]  Fun story about this.
+[13:24.920 --> 13:27.920]  As I said, I had the idea for this when I was back at CERN.
+[13:27.920 --> 13:31.920]  I worked on this a year ago already.
+[13:31.920 --> 13:34.920]  But then I somehow lost the source.
+[13:34.920 --> 13:36.920]  I don't know what happened.
+[13:36.920 --> 13:39.920]  Just before I left CERN, the source was just lost.
+[13:39.920 --> 13:42.920]  I don't know why. I must have deleted it by accident.
+[13:42.920 --> 13:44.920]  I don't know what happened.
+[13:44.920 --> 13:47.920]  So after I left CERN, I kept in contact with my ex-colleagues,
+[13:47.920 --> 13:51.920]  and they were telling me that they wanted to do this integration between the swan,
+[13:51.920 --> 13:55.920]  which is the who here knows swan? Anybody?
+[13:55.920 --> 13:57.920]  Okay, one, two, three.
+[13:57.920 --> 14:00.920]  Yeah, so it's the Jupyter Notebook Service for CERN,
+[14:00.920 --> 14:03.920]  which also does analytics.
+[14:03.920 --> 14:05.920]  And we wanted to connect it to Slurm,
+[14:05.920 --> 14:09.920]  and we run into all these issues, because this is a service that's exposed to the whole internet.
+[14:09.920 --> 14:14.920]  So we didn't want to have the munchkey for the Slurm cluster in the container, et cetera.
+[14:14.920 --> 14:19.920]  Anyway, so then I left CERN, and then, yeah, my colleagues were telling me,
+[14:19.920 --> 14:22.920]  oh, it would have been so useful to have this at Watapiti.
+[14:22.920 --> 14:29.920]  And then a few months ago, I just didn't like the fact that I had lost the source and all these days.
+[14:29.920 --> 14:34.920]  I spent a couple of days reverse-engineering the Slurm protocol,
+[14:34.920 --> 14:42.920]  and I just didn't like losing it, so I just rewrote it more properly in Python and just made it public.
+[14:42.920 --> 14:47.920]  So if you're interested in making client containers like this,
+[14:47.920 --> 14:51.920]  feel free to give it a try.
+[14:51.920 --> 14:53.920]  It looks a bit like this.
+[14:53.920 --> 14:55.920]  It's very simple.
+[14:55.920 --> 15:01.920]  You can choose between munch or JWT, JSON WebToken's authentication.
+[15:01.920 --> 15:04.920]  If you choose JWT, which is the most simple one,
+[15:04.920 --> 15:08.920]  you just need an environment variable with a token,
+[15:08.920 --> 15:12.920]  and you can tell it where you want to store the config files,
+[15:12.920 --> 15:16.920]  and then you have verbosity as an option.
+[15:16.920 --> 15:18.920]  So it's very simple.
+[15:18.920 --> 15:24.920]  It has very little dependencies.
+[15:24.920 --> 15:31.920]  So the tool talks several Slurm protocol versions,
+[15:31.920 --> 15:37.920]  because with every major release, Slurm changes the protocol versions.
+[15:37.920 --> 15:40.920]  So you can list them with minus L,
+[15:40.920 --> 15:46.920]  and it will show you basically all the versions that it supports.
+[15:46.920 --> 15:50.920]  So imagine you have a Slurm WebToken in this variable.
+[15:50.920 --> 15:55.920]  You can just tell it to do JSON WebToken authentication with the server.
+[15:55.920 --> 16:00.920]  It supports multiple controllers in case you have high availability set up in your Slurm cluster,
+[16:00.920 --> 16:04.920]  so you can specify a list of servers that it will retry until it succeeds,
+[16:04.920 --> 16:07.920]  and then you tell it the protocol version of the Slurm CTLD,
+[16:07.920 --> 16:11.920]  because it needs to know what protocol it should talk.
+[16:11.920 --> 16:15.920]  The protocol version negotiation, I think it doesn't exist in the Slurm protocol,
+[16:15.920 --> 16:18.920]  so you have to tell it which version you want it to talk,
+[16:18.920 --> 16:22.920]  and that's it, and then it will just download the Slurm config files
+[16:22.920 --> 16:27.920]  and happy days for your containers.
+[16:27.920 --> 16:32.920]  Conclusions, I think I'm ahead of time.
+[16:32.920 --> 16:38.920]  So this tool called straw, it can simplify the cost of creating and maintaining
+[16:38.920 --> 16:40.920]  your Slurm client containers.
+[16:40.920 --> 16:42.920]  It can also increase the security,
+[16:42.920 --> 16:45.920]  because you don't need to put the Munch key everywhere,
+[16:45.920 --> 16:48.920]  where you're running your client containers.
+[16:48.920 --> 16:51.920]  JSON WebToken's surface.
+[16:51.920 --> 16:54.920]  Caveats, caveats.
+[16:54.920 --> 16:58.920]  I think this tool should not exist,
+[16:58.920 --> 17:01.920]  because ideally this would be supported upstream.
+[17:01.920 --> 17:07.920]  So, you know, if anybody has any influence on SCADMD Slurm development,
+[17:07.920 --> 17:13.920]  yeah, I think it would be nice if we had this built-in into Slurm.
+[17:13.920 --> 17:18.920]  And then the second caveat is that the JSON WebToken,
+[17:18.920 --> 17:24.920]  the token needs to be associated with a Slurm user, basically.
+[17:24.920 --> 17:30.920]  So ideally, you would be able to just generate a JSON WebToken for a user
+[17:30.920 --> 17:33.920]  that's going to run on the Slurm cluster,
+[17:33.920 --> 17:37.920]  and then if the secret for some reason is exposed, you've only exposed
+[17:37.920 --> 17:40.920]  the JSON WebToken of a single user.
+[17:40.920 --> 17:46.920]  However, this is a limitation built into the Slurm, into Slurm, basically.
+[17:46.920 --> 17:49.920]  You cannot pull over the protocol the Slurm config file
+[17:49.920 --> 17:54.920]  unless the token belongs to the Slurm user, or to root.
+[17:54.920 --> 17:59.920]  Still, I think it's an improvement over having your Munch key available everywhere.
+[17:59.920 --> 18:03.920]  If you're free to try it out, that was it.
+[18:03.920 --> 18:07.920]  I'm happy to answer any questions you might have.
+[18:07.920 --> 18:10.920]  APPLAUSE
+[18:13.920 --> 18:16.920]  Thank you very much, Pablo.
+[18:16.920 --> 18:19.920]  Time for questions.
+[18:19.920 --> 18:23.920]  So what kind of clients do need the config file?
+[18:23.920 --> 18:25.920]  Could you do everything over REST nowadays?
+[18:25.920 --> 18:29.920]  Is it still necessary to use the config file?
+[18:29.920 --> 18:34.920]  Yes, so anything that wants to run srun, sbatch, sq, sinfo.
+[18:34.920 --> 18:37.920]  For instance, if you have the Jupyter Notebook plugins,
+[18:37.920 --> 18:39.920]  they will just run those commands.
+[18:39.920 --> 18:43.920]  Or if you want to run a client that uses PySlurm, for instance,
+[18:43.920 --> 18:47.920]  or any library really, anything that uses lipslurm underneath
+[18:47.920 --> 18:50.920]  will automatically read the config files, right?
+[18:50.920 --> 18:55.920]  So, of course, you can write your own client,
+[18:55.920 --> 19:01.920]  handwritten from scratch, that just interacts with the Slurm REST to do stuff.
+[19:01.920 --> 19:07.920]  Yes, but you cannot leverage all the existing user client tools,
+[19:07.920 --> 19:10.920]  and the lipslurm, PySlurm, etc.
+[19:10.920 --> 19:16.920]  So if you want to create a Python tool, for instance, that leverages PySlurm,
+[19:16.920 --> 19:20.920]  this would be, I think, a good solution.
+[19:20.920 --> 19:25.920]  I think Slurm does have, like, a REST API, but it's considered very insecure.
+[19:25.920 --> 19:29.920]  So even the documentation tells you, like, don't use this.
+[19:29.920 --> 19:33.920]  I just didn't understand, like, for a long time now,
+[19:33.920 --> 19:36.920]  why everyone needs the config file, right?
+[19:36.920 --> 19:38.920]  I mean, why doesn't it need to be in sync?
+[19:38.920 --> 19:41.920]  Like, couldn't they just exchange the information over the protocols now
+[19:41.920 --> 19:43.920]  and just say, like, this is your Slurm server?
+[19:43.920 --> 19:46.920]  Yeah, that's a configless feature. That's a configless feature, essentially.
+[19:46.920 --> 19:48.920]  Yeah, but the configless feature just downloads the config.
+[19:48.920 --> 19:49.920]  Yes.
+[19:49.920 --> 19:50.920]  Next, like, config less OK.
+[19:50.920 --> 19:51.920]  Yes.
+[19:51.920 --> 19:54.920]  I download the config. I don't need the config beforehand.
+[19:54.920 --> 19:57.920]  It's like serverless. There's always a server somewhere.
+[19:57.920 --> 20:00.920]  Yes. Yeah, exactly.
+[20:00.920 --> 20:03.920]  So that's just how Slurm works.
+[20:03.920 --> 20:04.920]  Yeah.
+[20:04.920 --> 20:14.920]  So I'm still a little confused about the Slurm client container.
+[20:14.920 --> 20:17.920]  So the container is an application on the actual Slurm client,
+[20:17.920 --> 20:19.920]  because you have to document in the SlurmConf,
+[20:19.920 --> 20:21.920]  you have to sort of say what your clients are
+[20:21.920 --> 20:26.920]  so that the scheduler can intelligently decide how to schedule jobs, right?
+[20:26.920 --> 20:27.920]  I'm missing something.
+[20:27.920 --> 20:31.920]  No, you don't really need to declare all the clients for Slurm.
+[20:31.920 --> 20:36.920]  You just need to declare the worker nodes that are part of it.
+[20:36.920 --> 20:38.920]  But you can have any...
+[20:38.920 --> 20:40.920]  I mean, it depends on how you've configured it.
+[20:40.920 --> 20:44.920]  You can limit it. You can limit in Slurm which clients are allowed to connect,
+[20:44.920 --> 20:45.920]  but you don't have to.
+[20:45.920 --> 20:47.920]  So you could just...
+[20:47.920 --> 20:49.920]  But even if you do, you will need this,
+[20:49.920 --> 20:51.920]  because you will...
+[20:51.920 --> 20:54.920]  Even if you authorize a host name to connect as a client,
+[20:54.920 --> 20:59.920]  it will need to have the munch key and the SlurmConf files, et cetera.
+[20:59.920 --> 21:01.920]  Does this answer your question?
+[21:01.920 --> 21:03.920]  Well, no, so when you...
+[21:03.920 --> 21:06.920]  In the Slurm.conf, you sort of detail what your positions are,
+[21:06.920 --> 21:09.920]  and you have to kind of tell it what the capabilities are of your clients,
+[21:09.920 --> 21:10.920]  of your Slurm clients, right?
+[21:10.920 --> 21:12.920]  So that Slurm can decide how to schedule jobs.
+[21:12.920 --> 21:14.920]  I'm missing something.
+[21:14.920 --> 21:16.920]  Well, I think you're thinking about the compute nodes.
+[21:16.920 --> 21:17.920]  Yeah, I am.
+[21:17.920 --> 21:20.920]  Yeah, the node names part of the SlurmConf.
+[21:20.920 --> 21:22.920]  So the containers run on the compute nodes?
+[21:22.920 --> 21:24.920]  No, the containers would be...
+[21:24.920 --> 21:27.920]  Let me go back to one of the slides where...
+[21:27.920 --> 21:32.920]  So you're thinking maybe about the compute nodes,
+[21:32.920 --> 21:34.920]  each of which runs a Slurm DDemon,
+[21:34.920 --> 21:36.920]  and those you have to declare.
+[21:36.920 --> 21:38.920]  Yes, I think in 2023, by the way,
+[21:38.920 --> 21:41.920]  you will be able to dynamically spawn compute nodes,
+[21:41.920 --> 21:45.920]  but that's the future.
+[21:45.920 --> 21:48.920]  What I'm talking about is all the users and client tools
+[21:48.920 --> 21:51.920]  that connect to the controller to run SQ as info,
+[21:51.920 --> 21:53.920]  like when you use Slurm and you...
+[21:53.920 --> 21:54.920]  Hello.
+[21:54.920 --> 21:58.920]  So if you had some tooling that you automated
+[21:58.920 --> 22:02.920]  to gather metrics from Slurm or, yeah,
+[22:02.920 --> 22:04.920]  a Jupyter notebook service, for instance,
+[22:04.920 --> 22:07.920]  that connects to your cluster that wants to launch jobs,
+[22:07.920 --> 22:10.920]  that wants to run as batch SQ, whatever,
+[22:10.920 --> 22:12.920]  that's in that domain.
+[22:12.920 --> 22:15.920]  Yeah, I mean, the newest werewolf runs containers
+[22:15.920 --> 22:18.920]  on my back for the stream.
+[22:18.920 --> 22:20.920]  I mean, I think the newest version of werewolf
+[22:20.920 --> 22:23.920]  is set up to run containers on the Slurm clients, right?
+[22:23.920 --> 22:26.920]  It's sort of, you're actually launching containers
+[22:26.920 --> 22:28.920]  as applications, so that was kind of...
+[22:28.920 --> 22:30.920]  That's on the compute nodes.
+[22:30.920 --> 22:31.920]  On the compute nodes, yeah.
+[22:31.920 --> 22:33.920]  Yeah, yeah, that's the compute nodes.
+[22:36.920 --> 22:38.920]  Thank you for your talk.
+[22:38.920 --> 22:40.920]  So I have a question.
+[22:40.920 --> 22:43.920]  You are telling that you can pull the configuration
+[22:43.920 --> 22:47.920]  with your tool, but there are many...
+[22:47.920 --> 22:50.920]  Fine, you can't pull with configless.
+[22:50.920 --> 22:53.920]  For example, all the spank plugins,
+[22:53.920 --> 22:55.920]  or I think topology, you can pull it,
+[22:55.920 --> 22:58.920]  but various, like I said, spank plugins and so on.
+[22:58.920 --> 23:01.920]  So how do you manage this kind of config file
+[23:01.920 --> 23:04.920]  that are not ended by default by Slurm?
+[23:04.920 --> 23:06.920]  Right, that's correct.
+[23:06.920 --> 23:08.920]  So when you use the configless feature,
+[23:08.920 --> 23:10.920]  it will download the, you know, the Slurm Conf,
+[23:10.920 --> 23:12.920]  the C Group Conf, a lot of config files,
+[23:12.920 --> 23:16.920]  but it will not download your plugins, your plugin files.
+[23:16.920 --> 23:18.920]  But I think those are usually not needed
+[23:18.920 --> 23:20.920]  if you're running a client,
+[23:20.920 --> 23:22.920]  because those are usually just needed
+[23:22.920 --> 23:24.920]  for the Slurm D demons, right?
+[23:24.920 --> 23:26.920]  Even for the worker nodes.
+[23:26.920 --> 23:28.920]  Like the epilogue, the prologue,
+[23:28.920 --> 23:30.920]  you mean all of those plugin scripts, right?
+[23:30.920 --> 23:32.920]  The authentication plugins.
+[23:32.920 --> 23:34.920]  Those are usually needed by the Slurm D demon,
+[23:34.920 --> 23:36.920]  but if you're just writing a client,
+[23:36.920 --> 23:38.920]  but say you're automating something
+[23:38.920 --> 23:40.920]  with PySlurm to interact with it,
+[23:40.920 --> 23:42.920]  you don't need those files.
+[23:42.920 --> 23:44.920]  And Slurm will happily...
+[23:44.920 --> 23:46.920]  You can happily run...
+[23:46.920 --> 23:48.920]  all of those commands without those files.
+[23:48.920 --> 23:51.920]  Yeah, okay, so if I just summarize,
+[23:51.920 --> 23:53.920]  the idea is just to create some frontend nodes,
+[23:53.920 --> 23:56.920]  but not really work nodes.
+[23:56.920 --> 23:58.920]  That's right?
+[23:58.920 --> 24:00.920]  So you...
+[24:00.920 --> 24:05.920]  So if you want to use configless to set up a frontend node,
+[24:05.920 --> 24:08.920]  you might need those files from somewhere else.
+[24:08.920 --> 24:11.920]  But if you're just creating a container
+[24:11.920 --> 24:13.920]  to just interact with Slurm and send Slurm commands,
+[24:13.920 --> 24:16.920]  you don't need them, basically.
+[24:16.920 --> 24:19.920]  Because the plugin files are usually the...
+[24:19.920 --> 24:22.920]  Yeah, the epilogue prologue for the Slurm D
+[24:22.920 --> 24:24.920]  or the Slurm CTLD.
+[24:24.920 --> 24:31.920]  And that's not what these Slurm client containers are about.
+[24:31.920 --> 24:34.920]  So short answer, you usually don't need them.
+[24:34.920 --> 24:36.920]  Hello, thank you for the talk.
+[24:36.920 --> 24:39.920]  I'm wondering, in huge institutions,
+[24:39.920 --> 24:41.920]  like in CERN or EPFL,
+[24:41.920 --> 24:54.920]  would you run your own forked or patched Slurm
+[24:54.920 --> 24:59.920]  so you could fix maybe the authentication privileges?
+[24:59.920 --> 25:02.920]  Or is it just not done because it's...
+[25:02.920 --> 25:05.920]  I've never carried any Slurm patches, to be honest.
+[25:05.920 --> 25:08.920]  I've always, both at Slurm and at EPFL,
+[25:08.920 --> 25:10.920]  we just use Slurm out of the box.
+[25:10.920 --> 25:13.920]  It works well enough for our use cases.
+[25:13.920 --> 25:16.920]  It is true that you could, for instance, do a patch
+[25:16.920 --> 25:21.920]  to enable finer granularity for the permissions.
+[25:21.920 --> 25:24.920]  For instance, you could enable any user to pull the config file.
+[25:24.920 --> 25:26.920]  That would be a nice patch.
+[25:26.920 --> 25:28.920]  We don't do it.
+[25:28.920 --> 25:31.920]  Okay, thank you.
+[25:31.920 --> 25:34.920]  We have time for one short question.
+[25:34.920 --> 25:35.920]  Hi, thanks.
+[25:35.920 --> 25:37.920]  We actually are very interested in this
+[25:37.920 --> 25:41.920]  because we are applying...
+[25:41.920 --> 25:43.920]  We have a Jupyter Hub frontend
+[25:43.920 --> 25:47.920]  that actually talks to a Slurm cluster through SSH
+[25:47.920 --> 25:49.920]  because we don't want to install all that stuff,
+[25:49.920 --> 25:52.920]  like the munch and the full Slurm deployment
+[25:52.920 --> 25:54.920]  into the Jupyter Hub host.
+[25:54.920 --> 25:57.920]  And I'm wondering, how does it talk actually to Slurm control?
+[25:57.920 --> 26:02.920]  So is the Slurm control always listening to any...
+[26:02.920 --> 26:05.920]  any of the hosts that will talk to it?
+[26:05.920 --> 26:06.920]  Yes.
+[26:06.920 --> 26:08.920]  Or is there any restrictions to who is connecting
+[26:08.920 --> 26:10.920]  to the Slurm control demo?
+[26:10.920 --> 26:15.920]  So there's an alloc nodes setting in the SlurmConf, I believe,
+[26:15.920 --> 26:19.920]  which will allow you to restrict from which nodes
+[26:19.920 --> 26:21.920]  you can allocate resources.
+[26:21.920 --> 26:22.920]  Okay.
+[26:22.920 --> 26:24.920]  So you can limit it.
+[26:24.920 --> 26:26.920]  However, if you don't have that,
+[26:26.920 --> 26:29.920]  the Slurm will happily accept anything
+[26:29.920 --> 26:31.920]  because if you have the shared secret,
+[26:31.920 --> 26:33.920]  it's considered good enough.
+[26:33.920 --> 26:34.920]  Okay.
+[26:34.920 --> 26:35.920]  Or a valid JSON web token.
+[26:35.920 --> 26:36.920]  Okay.
+[26:36.920 --> 26:37.920]  Yeah.
+[26:37.920 --> 26:38.920]  Thank you.
+[26:38.920 --> 26:39.920]  Thank you very much, Pablo.
+[26:39.920 --> 26:40.920]  Thanks.
+[26:40.920 --> 26:57.920]  Thank you very much.

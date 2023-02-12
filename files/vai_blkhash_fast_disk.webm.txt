@@ -1,0 +1,192 @@
+[00:00.000 --> 00:16.520]  Thank you.
+[00:16.520 --> 00:17.520]  So welcome everyone.
+[00:17.520 --> 00:22.720]  We are going to talk about fast disk images checksums.
+[00:22.720 --> 00:30.720]  So who am I? I'm a long time contributor to this of the project, and I worked for Red Hat
+[00:30.720 --> 00:39.280]  more than nine years on over storage. Who knows, obviously.
+[00:39.280 --> 00:44.360]  And I focused on incremental backup, image transfer, and NBD tools.
+[00:44.360 --> 00:50.320]  And this project is continuous, the work on fast disk checksum in Ovid that is available
+[00:50.320 --> 00:57.680]  for Ovid. So we're going to talk about why do we need disk image checksums, and why we
+[00:57.680 --> 01:01.440]  cannot use the standard tools for disk images.
+[01:01.440 --> 01:06.760]  And we'll introduce the blockchain command, which is optimized for disk images.
+[01:06.760 --> 01:11.320]  And the block cache library, which is used by the blockchain command.
+[01:11.320 --> 01:17.960]  And you can also use it in your program. And a good example of this usage is the new
+[01:17.960 --> 01:23.920]  checksum command in QMMA image, which is work in progress using the block cache library.
+[01:23.920 --> 01:28.240]  Then we see a live demo. We'll play with the tools.
+[01:28.240 --> 01:33.880]  And finally, the most important stuff, you can contribute to this project.
+[01:33.880 --> 01:40.920]  So what is the issue with disk images? Why the additional than standard images?
+[01:40.920 --> 01:47.360]  Let's say we want to upload a disk to, we have this QGAP2 image, usually it's compressed
+[01:47.360 --> 01:51.560]  because it's the best format to publish images.
+[01:51.560 --> 01:55.240]  And we want to upload it to Ovid, or maybe to OKD.
+[01:55.240 --> 02:01.840]  Maybe Simon wants to upload it to OKD, so what we have to do is get the data from the
+[02:01.840 --> 02:07.960]  disk image, and we need to upload it to some server on the virtualization system, and this
+[02:07.960 --> 02:14.640]  server we write in with some disk. Now the disk can be many things.
+[02:14.640 --> 02:22.200]  It can be just NFS server with, and we'll have there look a file similar to the file
+[02:22.200 --> 02:29.640]  we uploaded, but not the same. It can be raw sparse image, and it will not be compressed
+[02:29.640 --> 02:32.640]  while we have QGAP2 compressed image.
+[02:32.640 --> 02:39.680]  Or it can be a small block device if it's Ovid, it can be a small block device just large
+[02:39.680 --> 02:51.760]  enough to fit the guest data that we uploaded on some escasi server, or it can be SAS image
+[02:51.760 --> 02:58.640]  stored in many nodes, in a cluster, in many disks.
+[02:58.640 --> 03:04.240]  So we have very different shapes on the two sides, like disk image on one side, something
+[03:04.240 --> 03:11.480]  completely different on the other side, different format, different way of storage.
+[03:11.480 --> 03:15.880]  One thing must be the same. The bits must be the same. The guest data must be the same.
+[03:15.880 --> 03:20.320]  So if we start the guest with the disk image, or with the virtual disk, we must get the
+[03:20.320 --> 03:21.960]  same bits.
+[03:21.960 --> 03:28.280]  So we can verify this operation by creating a checksum of the disk image, the guest data
+[03:28.280 --> 03:33.680]  inside the disk image, and the guest data inside the virtual disk, whatever the format
+[03:33.680 --> 03:39.080]  and shape, and the checksum must be the same.
+[03:39.080 --> 03:46.280]  The logic image is mostly the same problem. We have some shape of disk on one side, some
+[03:46.280 --> 03:51.520]  shape of disk on the other side, different formats, but the guest data must be the same,
+[03:51.520 --> 03:55.520]  and the checksum must be the same.
+[03:55.520 --> 04:00.000]  Another interesting problem is incremental backup. In this case, the backup system will
+[04:00.000 --> 04:06.040]  only copy, only change blocks on each backup if it wants to be efficient.
+[04:06.040 --> 04:12.680]  So let's say two days ago we did a full backup, and we stored it on this full QR2, and this
+[04:12.680 --> 04:17.640]  is just one way that we can store the backups. It can be many other things.
+[04:17.640 --> 04:23.000]  And yesterday we did another backup, and we stored it in one file, which is sitting on
+[04:23.000 --> 04:28.320]  top of the full QR2, and this is the backing file of this file.
+[04:28.320 --> 04:32.640]  So we created a chain, and today we did another backup. We copied more data from the virtual
+[04:32.640 --> 04:36.520]  disk. We created another layer.
+[04:36.520 --> 04:41.960]  So also in this case, the guest data inside the virtual disk must be the same as the guest
+[04:41.960 --> 04:46.960]  data inside this entire chain. So if we know how to read the guest data from the entire
+[04:46.960 --> 04:52.200]  chain, like a guest does, we can create a checksum, and we can compare it to the checksum
+[04:52.200 --> 04:56.920]  of the virtual disk at the time of the backup, and we know if our backup is correct.
+[04:56.920 --> 05:04.920]  So if we will restore this chain to another virtual disk, we will get the same data.
+[05:04.920 --> 05:11.000]  So what is the issue with the standard tools? Can we use SHA-SUM to create a checksum of
+[05:11.000 --> 05:14.760]  this chain?
+[05:14.760 --> 05:18.720]  So first we have the issue of image format. Standard tools do not understand image format.
+[05:18.720 --> 05:24.760]  So if we have the raw image, everything is fine. But if we have QCAP2 image, which is
+[05:24.760 --> 05:32.160]  identical, and here I compare the images, QM image compare, which access the guest data
+[05:32.160 --> 05:38.280]  and compare it bit by bit, so the images are identical, but we get different checksum from
+[05:38.280 --> 05:46.400]  SHA-SUM. Image compression, even with the same format, both images are QCAP, but one
+[05:46.400 --> 05:53.840]  of the compressed will get different checksum, because the host clusters are compressed, and
+[05:53.840 --> 05:59.920]  SHA-SUM is looking at the host data, not at the guest data. Even if we have the same image
+[05:59.920 --> 06:05.400]  format without compression, everything is the same, right? I just converted one image
+[06:05.400 --> 06:13.360]  to the other image, and the images are identical, but we get different checksum. Why? I use
+[06:13.360 --> 06:19.920]  the dash w flag, and this allows an order rights. So the order of the cluster on the
+[06:19.920 --> 06:28.200]  host can be different. The guest data is the same. Finally, the issue of sparseness. Standard
+[06:28.200 --> 06:34.640]  tools do not understand sparseness, so here we have six gigabyte image, but only little
+[06:34.640 --> 06:42.400]  more than one gigabyte of data. But SHA-SUM must read the entire image, so it will read
+[06:42.400 --> 06:47.760]  this one gigabyte of data, complete a hash from this one gigabyte, and then read almost
+[06:47.760 --> 06:53.880]  five gigabyte of zeros, because anything which is not allocated is read the zeros. So it
+[06:53.880 --> 07:00.520]  must do a lot of work, which is pretty slow. For example, if we take a bigger image, here
+[07:00.520 --> 07:07.480]  I created 100 gigabyte image, but there is no data in this image. It's completely empty,
+[07:07.480 --> 07:14.760]  just a big role, and completing your checksum took more than three minutes. So do we really
+[07:14.760 --> 07:24.520]  want to use this for one terabyte image? It's not the best tool for this job. And let's
+[07:24.520 --> 07:30.240]  introduce the blockchain command, which is optimized for this case. So first it looks
+[07:30.240 --> 07:35.640]  just like the standard tools. If you know to use standard tools, you know to use it.
+[07:35.640 --> 07:42.600]  Just run it and you get the checksum. It understands your image format, so if you use identical
+[07:42.600 --> 07:47.640]  image, you will get the same checksum. Although the images are different. The size is different.
+[07:47.640 --> 07:53.280]  They do not look the same on the host. Of course, it supports compressed QCaul, because
+[07:53.280 --> 07:59.120]  it reads the QCaul image, which the compressor data, and it gets the actual guest data, so
+[07:59.120 --> 08:06.680]  we get the same checksum. And it also supports snapshot. So if I create a snapshot, here
+[08:06.680 --> 08:13.520]  I created a snapshot, this snapshot QCaul, on top of the Fedora35 image. Fedora35 is
+[08:13.520 --> 08:21.320]  the backing file of your snapshot. And if I compute a checksum of the snapshot, I actually
+[08:21.320 --> 08:26.480]  compute a snapshot of the guest data inside the entire chain, not of the tiny snapshot
+[08:26.480 --> 08:37.560]  file, which has no data yet. And we also support NVD URL. For example, if I start NVD server,
+[08:37.560 --> 08:46.360]  this QMNVD is NVD server. Here I started it, exposing this QCaul2 file using this NVD
+[08:46.360 --> 08:51.840]  URL. And if you compute a checksum with the URL, we access QMNVD. I will get the guest
+[08:51.840 --> 08:59.160]  data and compute a checksum. And actually, this is the way we always access images. Under
+[08:59.160 --> 09:05.160]  the hood, we always run QMNVD and use NVD URL internally to access images. This is the
+[09:05.160 --> 09:14.000]  reason it works. We also support reading for pipe, like the standard tools, but in this
+[09:14.000 --> 09:19.240]  case, we cannot support any format, just raw format. And this is less efficient, because
+[09:19.240 --> 09:30.280]  we must read the entire image. In other cases, we can read only the data. But it works. So
+[09:30.280 --> 09:37.400]  it's not enough to create tools to get correct snapshot checksums. We want it to be much
+[09:37.400 --> 09:41.560]  faster than a standard tool, because we are dealing with huge images, which are usually
+[09:41.560 --> 09:47.680]  empty. Usually, when you start to use an image, it's completely empty. Then you install operating
+[09:47.680 --> 09:55.520]  system, add some files. Everything starts really empty, and then goes. So here we tested
+[09:55.520 --> 10:03.960]  this 6-gigabyte image with about 1 gigabit of data. And in this case, Blocksum was about
+[10:03.960 --> 10:12.880]  16 times faster. And another example, can we compute a checksum for 8 terabyte image?
+[10:12.880 --> 10:23.720]  Is it practical? It is. It took only 2.5 or 2.6 seconds. And if we do it with checksum,
+[10:23.720 --> 10:30.440]  it's not practical to actually do it. So I tested 100 gigabyte image. It took about 200
+[10:30.440 --> 10:36.560]  seconds. So the estimated time is 4 hours and 29 minutes. It means, in this case, we
+[10:36.560 --> 10:45.040]  have 6,000 sign faster. And of course, we create a different checksum. It's probably
+[10:45.040 --> 10:52.880]  obvious, but any tool exists on checksum because they use different algorithms. So Blocksum
+[10:52.880 --> 10:59.840]  is using, under the hood, some cryptographic hash function, but it's a different construction.
+[10:59.840 --> 11:10.280]  So we don't get the same checksum. Now, it's not available everywhere, anywhere. But I
+[11:10.280 --> 11:16.960]  build it in copper. So if you have Fedora or CentOS or L-System, you can enable the copper
+[11:16.960 --> 11:24.800]  repo, and then you can install the package and play with the tool. So the block hash
+[11:24.800 --> 11:31.800]  library. Basically, Blocksum is just using the library to compute the hash. So you can
+[11:31.800 --> 11:38.240]  also use the library to integrate this functionality in your program. The library is very simple.
+[11:38.240 --> 11:46.280]  This is the entire API. It gives you the standard interface to create a new hash, to update it,
+[11:46.280 --> 11:53.400]  and to get the result, the final interface, and of course, to free the resources used.
+[11:53.400 --> 12:03.120]  So if you use any cryptographic hash libraries, maybe Hashlib or OpenSSL, you know these interfaces.
+[12:03.120 --> 12:09.960]  Now the important difference is that when you update, when you give it a buffer with
+[12:09.960 --> 12:16.640]  data, this API will detect zeros in the data. And if you find the zero block, we will hash
+[12:16.640 --> 12:27.280]  it much, much faster. So this increases the throughput by one order of magnitude or something
+[12:27.280 --> 12:35.680]  like this. Even if you read from the file, you give it a buffer with zeros, we can hash
+[12:35.680 --> 12:41.480]  it much faster. But the most important API is the zero API, because new API, that no
+[12:41.480 --> 12:47.200]  other library supports. So if you know that a range in a file is not allocated, let's
+[12:47.200 --> 12:55.240]  say empty 8TB image, you check the file, you see that you have an 8TB hole. So you can
+[12:55.240 --> 13:02.760]  just input this range to the library, and it will hash it really, really quickly, much,
+[13:02.760 --> 13:09.320]  much faster than any other way. And you don't have to read anything for this. So how fast
+[13:09.320 --> 13:19.040]  it is? For data, we can process about two gigabytes of data. If you give it a buffer
+[13:19.040 --> 13:26.640]  with zeros, we can process almost 50 gigabytes per second. And the BLCache zero API can process
+[13:26.640 --> 13:34.880]  almost three terabytes per second. And this is on this laptop. If you try on a Peler one,
+[13:34.880 --> 13:45.040]  and this is the first one, like from two years ago, it's almost three times faster for data,
+[13:45.040 --> 13:52.600]  and almost five times faster for zero, up to 13 gigabytes per second. And I didn't try
+[13:52.600 --> 14:01.520]  the newer M1s or M2s. So if you want to use this library, you install the developer package,
+[14:01.520 --> 14:07.240]  you install the headers, and the library package, the Libs package, and your application will
+[14:07.240 --> 14:17.280]  depend on the Libs package. And everything should be automatic using RPM. Now, the most
+[14:17.280 --> 14:22.320]  important step is integrating this into your image, because this is the natural tool to
+[14:22.320 --> 14:32.040]  consume this functionality. So I have patches in review for adding this new command. It's
+[14:32.040 --> 14:38.240]  pretty simple. You give it the fine name. You have bogus. You can control caching, and
+[14:38.240 --> 14:43.640]  you can enforce the image format. And with this, you can compute a checksum of anything
+[14:43.640 --> 14:51.280]  that your image can access. You get the same checksum. It uses the block hash library using
+[14:51.280 --> 14:59.240]  the same configuration. So both tools are compatible. You can check my QMFork if you
+[14:59.240 --> 15:07.200]  want to see the details. So what is the difference if you compare to a block sum? Usually, it
+[15:07.200 --> 15:15.520]  runs almost the same. A little faster, maybe five percent faster. In some cases, it can
+[15:15.520 --> 15:22.040]  be 45 percent faster, like in this special case, the image full of zeros. I think it,
+[15:22.040 --> 15:28.920]  because QMFork image is closer to the data, it does not have to copy the data to QMFBD
+[15:28.920 --> 15:37.840]  and then read it over the socket. So this is really the best place to use this technology.
+[15:37.840 --> 15:54.600]  So let's see a small live demo. So we have several images. Let's try to look at the third
+[15:54.600 --> 16:13.800]  of 35 images. So we have a 60-gigabit image, a little more than 1 gigabit of data, and
+[16:13.800 --> 16:40.520]  we have this Q2 image, again similar size, and we can compare them. And of course they
+[16:40.520 --> 16:57.200]  are identical, and we can create checksum with bilkash, bilkasum, and we'll get the
+[16:57.200 --> 17:06.040]  same checksum pretty quickly. So let's try a bigger image, and this time we'll use the
+[17:06.040 --> 17:15.960]  progress flag to make it more fun. This is a 60-gigabit file with 24 gigabit of data,
+[17:15.960 --> 17:29.200]  so it will take some time to compute it. You can see that the progress jumps really quickly
+[17:29.200 --> 17:37.800]  when we find a big hole. So it took 12 seconds, and we will not try to use Chassum now. And
+[17:37.800 --> 17:47.400]  let's say the 8-terabyte image, which is really fast, and let's say the same is QMFBD
+[17:47.400 --> 18:17.200]  with the new checksum command. Okay, takes more time to type than to compute it. Okay,
+[18:17.200 --> 18:23.760]  so this is all for the demo, and the last part is how you can contribute to the project.
+[18:23.760 --> 18:28.440]  So the easiest stuff is just install it, and play with it, and test it, and if you find
+[18:28.440 --> 18:36.240]  an issue, report it. If you have interesting machines, benchmark it, and send the results
+[18:36.240 --> 18:41.320]  to the project. We have some results in the readme now, probably should be in a better
+[18:41.320 --> 18:47.680]  place. To run the benchmark, you need to build it on your system. It should be easy enough.
+[18:47.680 --> 18:56.680]  The most important stuff is packaging and hardware. Packaging for Fedora and Centro
+[18:56.680 --> 19:01.920]  Centrail is mostly done. I just need to get this into Fedora. There is some review process
+[19:01.920 --> 19:09.400]  that I probably need some help on this. Other Linux resources, if you want to package it for
+[19:09.400 --> 19:16.560]  Debian or whatever arch, please do, and contribute to the project. I like to keep all packaging
+[19:16.560 --> 19:26.520]  upstream, so I will be very happy to add whatever you need to make it transparent. So it will
+[19:26.520 --> 19:34.400]  not break when I change something upstream. Mac OS and 3BSD, I tested it on this platform
+[19:34.400 --> 19:42.440]  without LibNBD, because we don't have LibNBD there, and we can also cannot port it before
+[19:42.440 --> 19:51.240]  we port LibNBD and package it. But we can package only the library part, which will be useful
+[19:51.240 --> 19:58.440]  for QML. Missing features, there are a lot of stuff that can be added. You can look at
+[19:58.440 --> 20:03.440]  the site, we have an issue tracker, a lot of issues, a lot of stuff that we can add,
+[20:03.440 --> 20:10.960]  like supporting any image format, because we can't support only QCAP 2.0, checksum, multiple
+[20:10.960 --> 20:18.800]  image, use the file to verify checksum using what we recorded before, and stuff like this,
+[20:18.800 --> 20:25.360]  improve the CI. And even more important, but of course much more work integrates into your
+[20:25.360 --> 20:32.960]  system. So Ovid already supports checksum API using older implementation, Ovid's REST
+[20:32.960 --> 20:42.960]  project uses this API to verify criminal backups. It can be upgraded to the new tool.
+[20:42.960 --> 20:51.840]  Ovid can use it. For example, when you import an image to using CDI importer, or mainly
+[20:51.840 --> 21:01.120]  for storage operation, Ovid can verify operation with this tool. For example, running a port
+[21:01.120 --> 21:08.240]  connected to the disk and reading the image and verifying it. Maybe other systems, I don't
+[21:08.240 --> 21:15.240]  know, if you like other systems and think that it can be useful there, you can contact
+[21:15.240 --> 21:23.120]  me to discuss it. If I want to see the project links, we have the project in GitLab, also
+[21:23.120 --> 21:33.120]  the issue tracker in the project, and the copy that I showed before. So that's all.
+[21:33.120 --> 21:59.120]  How much time? How much time do we have? Five minutes per question. Okay. Yes. I have a question about the special case with block hash, blocks, I'm sorry, zero. Yes. How do you handle it under the hood? I see you specify the chat with the six, but how's that done?
+[21:59.120 --> 22:23.120]  Okay. Okay. So how do we handle zeros? How do we do it efficiently? So I have a bonus section at the end of the slides that you can get from the site, and basically the idea is that we split the image to blocks using fixed size.
+[22:23.120 --> 22:38.120]  The last block can be smaller, but it doesn't matter. And then we compute the hash for each block, but for zero blocks, we don't need to compute anything because we know that, like, we compute basically when you start operation, we compute the hash of the zero block based on the
+[22:38.120 --> 22:54.120]  configuration. And then each time we see a zero block, we can use the pre-computed hash, so it's cost nothing. And then we compute a hash from the list of hashes. This is called a hash list. It's not really new.
+[22:54.120 --> 23:10.120]  And now this costs something. You need to pay something for computing the hashes, but they are much, much smaller, like one of those magnitude smaller than the actual data. And to make it even faster, we also use multiple threads.
+[23:10.120 --> 23:27.120]  So this, what I, the previous slide show actually what's done in each worker. So we map the blocks, when you write something, we split the blocks and we map them to multiple workers at the same time and send them to the worker queue and the
+[23:27.120 --> 23:41.120]  others go and compute this combined hash, this block hash. And finally, we create a hash from the worker hashes. Yes.
+[23:41.120 --> 23:58.120]  So, oh, how hard is it for you to add a new checksum algorithm instead of Shah? How hard is it to use? So how, can we use another checksum algorithm? Yes, in Blocksum, you have the parameter, you can specify another
+[23:58.120 --> 24:14.120]  algorithm, you can use Shah1 or MD5 or whatever, but anything that OpenSSL supports, it also supports. I'm not sure if this is the best option, maybe we limit it because Shah1 is considered broken.
+[24:14.120 --> 24:20.120]  But currently, this is what we support. Anything that OpenSSL provides. Yes.
+[24:20.120 --> 24:37.120]  How do you identify zero blocks? What? How do you identify zero blocks? We, how do we identify zero blocks? So we use the very popular method that somebody ought to block about it, someone from the kernel a few
+[24:37.120 --> 24:57.120]  years ago, you can use MenComp to, with an offset to compare the file against itself. So you check the first 16 bytes and then you can just check the two pointers, the start of the image and the start of the image plus 16.
+[24:57.120 --> 25:08.120]  And it, it can process up to 50 gigabytes per second on this machine. Very efficient. Yes.
+[25:08.120 --> 25:36.120]  Okay. I did get the question. Yes.
+[25:36.120 --> 25:52.120]  Did we try on cryptographic algorithm? We didn't try, because we try to use something secure, like we try to get something which is secure as the original hash function, but we can try other algorithms.
+[25:52.120 --> 26:05.120]  It's interesting stuff that we can try. Thank you.
+[26:05.120 --> 26:10.120]  We're going to use the mic.

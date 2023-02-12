@@ -1,0 +1,384 @@
+[00:00.000 --> 00:09.520]  All right, so thanks for coming to this talk.
+[00:09.520 --> 00:11.880]  I know there are a lot of interesting talks
+[00:11.880 --> 00:16.280]  for interest talks, so thanks for choosing this one.
+[00:16.280 --> 00:19.360]  So I'm going to talk about such more specifically
+[00:19.360 --> 00:25.280]  about how to deploy one within an organization.
+[00:25.280 --> 00:29.000]  So in this today's talk, I'm going to cover these topics.
+[00:29.000 --> 00:32.680]  So it all started with engineers using multiple content
+[00:32.680 --> 00:34.520]  management tools.
+[00:34.520 --> 00:38.920]  And I'm going to talk about how searching became a problem
+[00:38.920 --> 00:43.480]  and how we use an OSS tool to address their problem
+[00:43.480 --> 00:45.960]  and the name of the tool is FES.
+[00:45.960 --> 00:50.640]  And how we overcame some of the problems with FES.
+[00:50.640 --> 00:53.440]  And I'm going to touch on the contribution side
+[00:53.440 --> 00:54.400]  of the project.
+[00:54.400 --> 00:59.680]  And I'm going to share some insights and observations.
+[00:59.680 --> 01:07.320]  OK, so here's the list of chapters, so let's go.
+[01:07.320 --> 01:10.920]  So just quickly, me and the team.
+[01:10.920 --> 01:13.360]  So I'm an engineer at Toshiba.
+[01:13.360 --> 01:16.360]  I've been recently maintaining the company's cloud
+[01:16.360 --> 01:20.360]  infrastructure and just trying to increase the scope
+[01:20.360 --> 01:23.520]  and range of automation through these activities
+[01:23.520 --> 01:27.000]  because otherwise, without increasing the automation,
+[01:27.000 --> 01:28.200]  we are doomed.
+[01:28.200 --> 01:30.480]  But more importantly, here's the list
+[01:30.480 --> 01:33.600]  of very capable, hard-working engineers that
+[01:33.600 --> 01:35.160]  made this project possible.
+[01:35.160 --> 01:38.480]  So I have a huge respect to them.
+[01:38.480 --> 01:41.120]  So now onto the background.
+[01:44.200 --> 01:48.520]  So in large corporations like ours,
+[01:48.520 --> 01:51.080]  we typically have lots and lots of companies.
+[01:51.080 --> 01:54.520]  And our team's job as a software engineering center
+[01:54.520 --> 01:59.400]  is to deploy and provide tools to other Toshiba companies,
+[01:59.400 --> 02:04.800]  like product development departments and R&D departments.
+[02:04.800 --> 02:08.280]  Now, we have about 200 units of deployment.
+[02:08.280 --> 02:15.800]  And we have these tools that are basically sort of heavily
+[02:15.800 --> 02:17.920]  OSS-based.
+[02:17.920 --> 02:24.200]  And now let me quickly turn on the user point here.
+[02:24.200 --> 02:27.200]  So we have a few more, but these four
+[02:27.200 --> 02:32.320]  are like a core of our tools.
+[02:32.320 --> 02:36.320]  So now as we diversify with the tools,
+[02:36.320 --> 02:40.160]  the searching became increasingly a problem.
+[02:40.160 --> 02:42.760]  And there were two major reasons.
+[02:42.760 --> 02:46.960]  For one thing, there is no easy way
+[02:46.960 --> 02:49.240]  to search laterally.
+[02:49.240 --> 02:54.240]  That is, sometimes we want to search all of these places
+[02:54.240 --> 02:58.200]  exhaustively to make sure that we're not missing anything.
+[02:58.200 --> 03:00.400]  But there's no easy way to do that.
+[03:00.400 --> 03:03.200]  And one more thing is, one more problem
+[03:03.200 --> 03:08.960]  is that as we found out, these tools are not quite cut out
+[03:08.960 --> 03:13.160]  for searching inside certain binary files, like PDF files
+[03:13.160 --> 03:17.640]  and Office document files, which are really something
+[03:17.640 --> 03:19.440]  we use quite often.
+[03:19.440 --> 03:23.880]  So what all of these lead to is that, ideally, what we want
+[03:23.880 --> 03:29.840]  is a single search box that, given a query, searches
+[03:29.840 --> 03:34.880]  all the places, like really no matter where they are
+[03:34.880 --> 03:38.800]  and where the documents are and what the formats are.
+[03:38.800 --> 03:43.800]  So that's what we are going for.
+[03:43.800 --> 03:47.640]  However, this is going to be a daunting task, though,
+[03:47.640 --> 03:52.720]  because such a tool would have to not only
+[03:52.720 --> 03:57.000]  be able to solve the two problems that I talked about,
+[03:57.000 --> 04:05.160]  but it would have to come with all the essential features,
+[04:05.160 --> 04:08.360]  both on the user side and on the admin side.
+[04:08.360 --> 04:13.000]  That is, we have to be able to easily set up crawlers
+[04:13.000 --> 04:18.600]  and all those things and run them and maintain them easily.
+[04:18.600 --> 04:23.600]  But there is a tool specifically designed for this task.
+[04:23.600 --> 04:25.800]  And the name of the tool is FES.
+[04:25.800 --> 04:28.240]  So next, I'm going to quickly talk
+[04:28.240 --> 04:33.160]  about what this tool is and what it's like to use it,
+[04:33.160 --> 04:37.240]  as I don't think this is particularly a well-known tool.
+[04:37.240 --> 04:41.320]  So FES is, as read me on the GitHub repo sets,
+[04:41.320 --> 04:47.000]  a powerful but easily deployable enterprise search server.
+[04:47.000 --> 04:50.160]  So an enterprise search here describes software
+[04:50.160 --> 04:53.720]  for searching information within an enterprise,
+[04:53.720 --> 04:56.360]  as opposed to web search, like Google and Dr. Go.
+[04:59.280 --> 05:03.160]  Now, FES uses elastic search as its search engine,
+[05:03.160 --> 05:07.600]  meaning that indexing certain binary files, like office files
+[05:07.600 --> 05:12.080]  and PD files, are more or less automatic.
+[05:12.080 --> 05:14.760]  And one notable feature of this tool
+[05:14.760 --> 05:18.520]  is that it comes with several types of web crawlers.
+[05:18.520 --> 05:21.200]  There's one for web pages, and there's also
+[05:21.200 --> 05:25.640]  one for file system, like a directory hierarchies.
+[05:25.640 --> 05:28.560]  And there's one for a database as well.
+[05:28.560 --> 05:31.440]  And all of this is to get data from many different kinds
+[05:31.440 --> 05:33.320]  of sources.
+[05:33.320 --> 05:35.600]  And if you look at the screenshots,
+[05:35.600 --> 05:37.400]  there is a search box.
+[05:37.400 --> 05:40.040]  And also, they have admin console.
+[05:40.040 --> 05:42.000]  And the search engine results page
+[05:42.000 --> 05:46.800]  looks only familiar to many, I think.
+[05:46.800 --> 05:51.120]  And this tool is developed by a company named CodeLyps,
+[05:51.120 --> 05:54.480]  which is a company that develops and opens sources tools.
+[05:54.480 --> 05:56.200]  And they have a lot of experience
+[05:56.200 --> 05:59.240]  engaging with OSS community.
+[05:59.240 --> 06:05.800]  And let's take a quick look at how this tool works
+[06:05.800 --> 06:09.880]  by looking at one of its core features, which is a web crawler.
+[06:09.880 --> 06:11.320]  And I think it's a web crawler.
+[06:11.320 --> 06:15.400]  It's basically a backbone of this whole system.
+[06:15.400 --> 06:19.400]  And I think the concept is familiar to everyone.
+[06:19.400 --> 06:24.960]  It basically crawls and indexes web pages, web page contents,
+[06:24.960 --> 06:27.840]  and uploaded files.
+[06:27.840 --> 06:32.000]  So the way you create web crawlers on Fisk
+[06:32.000 --> 06:35.480]  is you go to admin console and then
+[06:35.480 --> 06:38.280]  set these parameters for web crawlers.
+[06:38.280 --> 06:40.200]  Now, there are quite a few parameters here,
+[06:40.200 --> 06:44.000]  but I'm going to focus on a few important ones.
+[06:44.000 --> 06:47.920]  And first, there is, of course, URLs field.
+[06:47.920 --> 06:52.440]  And then you can include and exclude certain URLs.
+[06:52.440 --> 06:57.800]  Fisk respects robots.gxt, but certain robots.gxt
+[06:57.800 --> 07:03.080]  file doesn't disallow certain not so relevant pages.
+[07:03.080 --> 07:07.480]  So in this case, in that kind of case, this comes in handy.
+[07:07.480 --> 07:11.640]  And there are also fields like depth and max access count,
+[07:11.640 --> 07:17.640]  which you probably want to set to a very high large value
+[07:17.640 --> 07:21.840]  so that crawler is not going to stop pretty much early.
+[07:21.840 --> 07:26.520]  And then we came to the permissions parameter.
+[07:26.520 --> 07:29.840]  And I think this one needs a little bit more expansion.
+[07:29.840 --> 07:35.320]  So this parameter is where you can implement per user access
+[07:35.320 --> 07:36.120]  control.
+[07:36.120 --> 07:40.680]  That is, when you, I hope the phone is large enough,
+[07:40.680 --> 07:45.160]  but when you list users like that,
+[07:45.160 --> 07:49.440]  and let's say the crawlers index everything
+[07:49.440 --> 07:54.600]  and search is ready, then, and the users search something,
+[07:54.600 --> 07:58.880]  only the users listed there see the results.
+[07:58.880 --> 08:04.320]  So but notice that this setting is per web crawler basis,
+[08:04.320 --> 08:07.760]  meaning that if you have 100 projects on GitLab,
+[08:07.760 --> 08:10.280]  you're going to need 100 web crawlers, which is a lot.
+[08:10.280 --> 08:12.840]  So clearly, some kind of automation is necessary.
+[08:12.840 --> 08:15.200]  And I get back to this point later.
+[08:15.200 --> 08:20.960]  One more thing to mention here is that user name here
+[08:20.960 --> 08:27.600]  can be either users on FIS, FIS has its own users and groups,
+[08:27.600 --> 08:32.120]  but can also be users authenticated
+[08:32.120 --> 08:34.840]  by LDAP directory service.
+[08:34.840 --> 08:40.280]  There's an option to configure this on FIS.
+[08:40.280 --> 08:46.440]  So I hope that gave you some feel on how things work on FIS.
+[08:46.440 --> 08:52.440]  So let's move on to the customization part of the stock.
+[08:52.440 --> 08:55.280]  So no tools are perfect, and FIS is not an exception.
+[08:55.280 --> 09:01.120]  So we have to customize on patch FIS in a few ways.
+[09:01.120 --> 09:04.960]  So just quickly, here is a list of patches.
+[09:04.960 --> 09:07.080]  So our dev team engineers over time
+[09:07.080 --> 09:10.960]  wrote more than a few patches.
+[09:10.960 --> 09:15.560]  And the general quality improvement patches and bug
+[09:15.560 --> 09:18.200]  fix patches have been merged upstream.
+[09:18.200 --> 09:24.680]  But there are also more experimental patches
+[09:24.680 --> 09:27.240]  that are very specific to our problem.
+[09:27.240 --> 09:29.280]  And those are kept proprietary.
+[09:29.280 --> 09:33.000]  And I'm going to talk about two of those patches.
+[09:33.000 --> 09:35.800]  First one is the authentication for web crawlers.
+[09:35.800 --> 09:38.600]  Now, most of the pages of GitLab and RedMind
+[09:38.600 --> 09:42.480]  are behind logging pages.
+[09:42.480 --> 09:47.960]  And FIS has, so the web crawler has to authenticate itself
+[09:47.960 --> 09:49.400]  as it makes its way.
+[09:49.400 --> 09:52.200]  Now, FIS has a mechanism for this.
+[09:52.200 --> 09:56.000]  That is, you can create web authentication object
+[09:56.000 --> 09:59.560]  and attach it to each web crawler.
+[09:59.560 --> 10:04.720]  This works in some cases out of the box
+[10:04.720 --> 10:09.800]  if the logging form page is fairly standard.
+[10:09.800 --> 10:17.000]  But our GitLab uses SAML.
+[10:17.000 --> 10:19.600]  And then as it turns out, FIS does not support this.
+[10:19.600 --> 10:22.920]  We have to do some patching.
+[10:22.920 --> 10:26.600]  To just go over how the patching works
+[10:26.600 --> 10:28.520]  at the conceptual level, what we did
+[10:28.520 --> 10:31.960]  is we defined extra optional parameters
+[10:31.960 --> 10:36.480]  that Admin can write on the console.
+[10:36.480 --> 10:41.040]  That is, if there were parameters
+[10:41.040 --> 10:44.240]  starting with SAML underscore, the patched parser
+[10:44.240 --> 10:46.920]  of this form is going to pick them up and store them.
+[10:46.920 --> 10:52.160]  And later, web crawler is going to see these parameters
+[10:52.160 --> 10:57.920]  and recognizes that SAML authentication, SAML logging,
+[10:57.920 --> 11:05.160]  needs to be attempted and runs extra SAML specific logic.
+[11:05.160 --> 11:09.080]  So that's the patch one.
+[11:09.080 --> 11:15.440]  And then the second one is about repository contents.
+[11:15.440 --> 11:18.440]  So many of the repositories we have on GitLab
+[11:18.440 --> 11:22.200]  are several gigabytes in size.
+[11:22.200 --> 11:27.280]  And both GitLab and RedMind have pages
+[11:27.280 --> 11:29.720]  to view repository files.
+[11:29.720 --> 11:32.200]  So in theory, if you wait long enough,
+[11:32.200 --> 11:37.920]  web crawler is going to index all these contents
+[11:37.920 --> 11:39.560]  through those pages, in theory.
+[11:39.560 --> 11:42.040]  But this turned out to be a complete non-starter
+[11:42.040 --> 11:47.840]  because it's too slow and quite understandably so.
+[11:47.840 --> 11:52.600]  And the reason is it's just so the web crawler is
+[11:52.600 --> 11:54.760]  going to make HTTP requests.
+[11:54.760 --> 11:58.280]  And GitLab fetches the file, just one file from Ripple,
+[11:58.280 --> 12:00.240]  and then renders it to the web page.
+[12:00.240 --> 12:05.320]  So there's just too many steps to just get
+[12:05.320 --> 12:07.000]  the content of one file.
+[12:07.000 --> 12:13.160]  So what we did is to first clone the repository contents
+[12:13.160 --> 12:17.720]  to a local file system, and then run
+[12:17.720 --> 12:22.720]  this file crawler, which is a crawler for directory hierarchy
+[12:22.720 --> 12:25.760]  and do everything locally.
+[12:25.760 --> 12:30.560]  Now this more or less solved the problem of speed.
+[12:30.560 --> 12:36.520]  But one problem is that since everything is done locally,
+[12:36.520 --> 12:38.480]  when the search indices are stored,
+[12:38.480 --> 12:41.720]  these things are the filesystem paths.
+[12:41.720 --> 12:45.120]  So we had to remap these to the URL
+[12:45.120 --> 12:48.680]  so that later when the user clicks a link,
+[12:48.680 --> 12:54.680]  it takes the user to the repository file page
+[12:54.680 --> 12:56.960]  on GitLab.
+[12:56.960 --> 13:01.240]  So what we did is, again, we defined
+[13:01.240 --> 13:06.360]  custom optional parameters that the admin can
+[13:06.360 --> 13:10.640]  write on the console config parameters field,
+[13:10.640 --> 13:15.640]  specifically this prefix URL and map URL parameters.
+[13:15.640 --> 13:19.440]  And when these parameters are present,
+[13:19.440 --> 13:22.040]  the parser is going to pick them up,
+[13:22.040 --> 13:27.080]  and then later the web crawler is going to see these parameters.
+[13:27.080 --> 13:32.560]  And then if these are present, it will perform remapping.
+[13:32.560 --> 13:35.440]  So this is the conceptual overview
+[13:35.440 --> 13:38.320]  of how this patching works.
+[13:41.080 --> 13:44.520]  And now most of these parameters are
+[13:44.520 --> 13:47.800]  related to the web driver client on this.
+[13:47.800 --> 13:51.760]  And there is information about this web driver
+[13:51.760 --> 13:58.120]  client and Fist 14 issue, as since the web driver client
+[13:58.120 --> 14:03.120]  is discontinued on Fist 14, and Fist 14 is latest.
+[14:03.120 --> 14:09.760]  And Fist 14 has playwright-based crawler,
+[14:09.760 --> 14:12.600]  which is still in development, and the information
+[14:12.600 --> 14:14.040]  in the appendix.
+[14:14.040 --> 14:17.960]  Now I'm going to talk about another important subject,
+[14:17.960 --> 14:20.120]  and which is automation.
+[14:20.120 --> 14:25.280]  And as you might have guessed, our configuration
+[14:25.280 --> 14:29.960]  grew more and more complicated, as it always does.
+[14:29.960 --> 14:35.720]  So for instance, we have way more than quite a few configurations
+[14:35.720 --> 14:38.080]  for each Fist instance.
+[14:38.080 --> 14:42.080]  And so there are lots of manual edits of config files.
+[14:42.080 --> 14:45.360]  But these are taken care of by Ansible and Docker file,
+[14:45.360 --> 14:47.080]  and I think that's standard.
+[14:47.080 --> 14:50.480]  But perhaps a more interesting instance
+[14:50.480 --> 14:53.240]  is we have to create several hundred web
+[14:53.240 --> 14:56.480]  crawlers per Fist instance.
+[14:56.480 --> 14:58.800]  And the reason is, typically on GitLab,
+[14:58.800 --> 15:00.320]  you have projects.
+[15:00.320 --> 15:03.400]  And for each project, you have members.
+[15:03.400 --> 15:07.040]  And what you want to make sure is, when
+[15:07.040 --> 15:10.600]  user searches something, you use it
+[15:10.600 --> 15:16.880]  to see only the resources they have access to.
+[15:16.880 --> 15:28.240]  So to automate the creation of web crawlers in such a case,
+[15:28.240 --> 15:33.360]  Fist has APIs, just like GitLab APIs.
+[15:33.360 --> 15:39.120]  So to explain how this is handled,
+[15:39.120 --> 15:42.440]  to look at the sample script, you
+[15:42.440 --> 15:46.680]  can combine the GitLab APIs and Fist APIs.
+[15:46.680 --> 15:49.800]  First, you can use GitLab APIs to get all the projects.
+[15:49.800 --> 15:53.760]  And then for each project, you can get the list of members.
+[15:53.760 --> 15:57.360]  And then for using that list of members,
+[15:57.360 --> 16:02.040]  you can create web crawler.
+[16:02.040 --> 16:06.360]  And this is where Fist API comes in to create web crawler.
+[16:06.360 --> 16:10.720]  And then you can also create web authentication object
+[16:10.720 --> 16:13.040]  and attach it to that web crawler.
+[16:13.040 --> 16:18.720]  So the Fist APIs are mostly like GitLab APIs.
+[16:18.720 --> 16:21.080]  And for those who have used them,
+[16:21.080 --> 16:23.920]  I think they'll be fairly intuitive.
+[16:28.640 --> 16:32.320]  So that's the quick intro to the Fist APIs.
+[16:32.320 --> 16:38.280]  And I'm going to share some insights and observations
+[16:38.280 --> 16:40.400]  that I can make.
+[16:40.400 --> 16:44.120]  So the first is did Fist solve our problems?
+[16:44.120 --> 16:48.200]  And the answer would be definitely yes.
+[16:48.200 --> 16:53.840]  So the users can now search across tools
+[16:53.840 --> 16:56.800]  and inside binary files.
+[16:56.800 --> 17:00.080]  And this turned out to be quite powerful as, for instance,
+[17:00.080 --> 17:03.000]  even if the file is like a DocEx file,
+[17:03.000 --> 17:06.760]  or even if it's a legacy doc format,
+[17:06.760 --> 17:10.240]  and even if it's in a very obscure location
+[17:10.240 --> 17:16.040]  in a very old repository, deeply nested places,
+[17:16.040 --> 17:20.560]  users can actually find texts inside the file.
+[17:20.560 --> 17:23.400]  So this turned out to be quite powerful.
+[17:23.400 --> 17:27.360]  But it's not without a problem, though.
+[17:27.360 --> 17:30.560]  So one problem is the performance.
+[17:30.560 --> 17:34.560]  If you want to index contents of GitLab, which
+[17:34.560 --> 17:39.240]  have, say, several hundred projects and several thousand
+[17:39.240 --> 17:42.640]  issues using Fist Instance running
+[17:42.640 --> 17:46.560]  on this level of computing resource,
+[17:46.560 --> 17:51.600]  it takes us about a couple days to index everything.
+[17:51.600 --> 17:56.440]  And this is something we are trying to improve on,
+[17:56.440 --> 18:01.640]  like how to incrementally index contents
+[18:01.640 --> 18:04.520]  and using some other techniques.
+[18:04.520 --> 18:09.800]  So for now, that's it for this talk.
+[18:09.800 --> 18:11.760]  So thank you so much for listening.
+[18:11.760 --> 18:14.720]  And I want to open this up to the Q&A session.
+[18:14.720 --> 18:35.080]  So you have a different type of resources, right?
+[18:35.080 --> 18:38.760]  So every resource has different properties, I guess.
+[18:38.760 --> 18:43.520]  So I do index the same properties for every source.
+[18:43.520 --> 18:46.680]  So you have a set of properties to index.
+[18:46.680 --> 18:50.200]  Are you only indexing content?
+[18:50.200 --> 18:52.800]  So I'm trying to understand the question.
+[18:52.800 --> 18:55.160]  When you're indexing documents, you
+[18:55.160 --> 18:58.840]  are indexing the content of the document, the text of the document?
+[18:58.840 --> 19:01.480]  Or are you indexing also some of the properties,
+[19:01.480 --> 19:06.840]  like the name, the title, the author, the?
+[19:06.840 --> 19:08.720]  I would say yes.
+[19:08.720 --> 19:10.360]  So let me repeat the question.
+[19:10.360 --> 19:16.960]  The question is, whether this first index, only the contents,
+[19:16.960 --> 19:24.640]  like the text inside the file, or does it index things
+[19:24.640 --> 19:29.080]  such as metadata, like title field, or PowerPoint,
+[19:29.080 --> 19:32.840]  or they have several metadata.
+[19:32.840 --> 19:33.840]  Yes, it does.
+[19:33.840 --> 19:37.360]  It indexes those metadata as well.
+[19:37.360 --> 19:42.840]  And those are handled by, most likely, the elastic search.
+[19:42.840 --> 19:51.120]  But yes, those metadata are indexed.
+[19:51.120 --> 19:56.200]  And actually, it shows the metadata title
+[19:56.200 --> 20:01.080]  if they are present on the search results page.
+[20:01.080 --> 20:03.360]  So yeah, I guess that's fine.
+[20:03.360 --> 20:07.360]  The second one is a quick one, so are you accepting contributions
+[20:07.360 --> 20:09.360]  to the project?
+[20:09.360 --> 20:11.280]  It's an open project, and you are accepting
+[20:11.280 --> 20:14.760]  contributions and new plugins?
+[20:14.760 --> 20:16.760]  I'm sorry.
+[20:16.760 --> 20:22.440]  So your question is, whether we are accepting contributions
+[20:22.440 --> 20:24.840]  to the?
+[20:24.840 --> 20:32.960]  So on our side of it, I don't quite think so.
+[20:32.960 --> 20:39.560]  So you have a catalogue of connectors to all of them,
+[20:39.560 --> 20:42.560]  and so on, to elastic search, and so on.
+[20:42.560 --> 20:44.520]  So for instance, I was thinking on CMIS,
+[20:44.520 --> 20:47.560]  that is a standard for content management.
+[20:47.560 --> 20:50.560]  So I was thinking on trying to contribute this new connector
+[20:50.560 --> 20:54.680]  to the best project.
+[20:54.680 --> 20:56.480]  Is that an option?
+[20:56.480 --> 20:57.280]  I'm sorry.
+[20:57.280 --> 21:00.720]  I'm trying to understand the question.
+[21:00.720 --> 21:04.080]  You said something about connectors, right?
+[21:04.080 --> 21:07.240]  I'm naming that connector, but I don't know if connectors
+[21:07.240 --> 21:08.960]  is the right word for you.
+[21:08.960 --> 21:11.840]  I mean, so you have a specific browser
+[21:11.840 --> 21:15.200]  for every different system, right?
+[21:15.200 --> 21:16.920]  You have a browser for elastic search,
+[21:16.920 --> 21:25.720]  a browser for office, a browser for set options, right?
+[21:25.720 --> 21:32.400]  So we can add new browsers for different systems.
+[21:32.400 --> 21:33.280]  Yes, yes.
+[21:33.280 --> 21:36.680]  I mean, FES has seven different crawlers
+[21:36.680 --> 21:40.520]  for different types of resources.
+[21:40.520 --> 21:46.640]  And so the question is that are we
+[21:46.640 --> 21:54.920]  going to be accepting new types of crawlers as contribution?
+[21:54.920 --> 21:57.160]  Is that the question?
+[21:57.160 --> 21:57.640]  Yes.
+[21:57.640 --> 21:59.640]  It's not right.
+[21:59.640 --> 22:03.080]  We're kind of sort of like a corporation
+[22:03.080 --> 22:06.120]  and then working on our side, working
+[22:06.120 --> 22:09.480]  as a project inside a corporation.
+[22:09.480 --> 22:14.440]  So we buy ourselves, not at the moment,
+[22:14.440 --> 22:18.960]  accepting a contribution to the project, but yeah.
+[22:18.960 --> 22:19.960]  So yeah.
+[22:19.960 --> 22:21.960]  Perfect thing.
+[22:21.960 --> 22:22.960]  Another question?
+[22:22.960 --> 22:23.460]  Yes.
+[22:23.460 --> 22:26.440]  Are you going to publish the slides that you presented?
+[22:26.440 --> 22:27.440]  OK.
+[22:27.440 --> 22:28.920]  Are the slides that you presented,
+[22:28.920 --> 22:31.440]  are you going to publish them somewhere?
+[22:31.440 --> 22:33.160]  Then they are on their own page.
+[22:33.160 --> 22:34.520]  Yes.
+[22:34.520 --> 22:37.640]  Yeah, they are on Fesda website.
+[22:37.640 --> 22:41.520]  So you should be able to download them.
+[22:41.520 --> 22:43.200]  I'm sure I'll be able to.
+[22:43.200 --> 22:44.320]  That's the short one.
+[22:44.320 --> 22:47.640]  You said indexing takes about several days
+[22:47.640 --> 22:50.320]  for this project you have.
+[22:50.320 --> 22:50.820]  Yes.
+[22:50.820 --> 22:52.800]  It's about re-indexing.
+[22:52.800 --> 22:57.960]  So if content changes, re-index all the time a new index,
+[22:57.960 --> 23:01.800]  making the whole index new, or is it fast?
+[23:01.800 --> 23:04.320]  Just re-index certain documents.
+[23:04.320 --> 23:08.760]  So the question is, let's say after index everything,
+[23:08.760 --> 23:13.000]  and then in the subsequent run of web crawlers
+[23:13.000 --> 23:20.520]  and all kind of crawlers, are they updated incrementally,
+[23:20.520 --> 23:23.840]  faster, or do we have to re-index everything?
+[23:27.680 --> 23:37.960]  So the Fesda tries to crawl efficiently.
+[23:37.960 --> 23:41.360]  It tries to ignore the contents of web pages
+[23:41.360 --> 23:42.760]  that haven't been updated.
+[23:42.760 --> 23:47.200]  It checks the last modified field.
+[23:47.200 --> 23:51.400]  So the mechanism of incremental crawling
+[23:51.400 --> 23:56.840]  is not very ideal.
+[23:56.840 --> 24:02.200]  For instance, the last modified field is not quite
+[24:02.200 --> 24:03.960]  well-inforced, for instance.
+[24:03.960 --> 24:12.120]  It's only the certain types of static web pages use it.
+[24:12.120 --> 24:18.200]  And so there are a lot of unnecessary re-indexing
+[24:18.200 --> 24:19.400]  happening.
+[24:19.400 --> 24:23.720]  But there are some mechanisms to only index things
+[24:23.720 --> 24:25.000]  that have been updated.
+[24:25.000 --> 24:30.880]  But I've got to say that that mechanism is not very well run.
+[24:30.880 --> 24:32.440]  And there are a lot of re-indexing.
+[24:32.440 --> 24:45.240]  And then the subsequent crawling is not as efficient
+[24:45.240 --> 24:46.240]  as we want.
+[24:46.240 --> 24:48.240]  And then it is.
+[24:48.240 --> 24:48.740]  Yeah.
+[24:51.720 --> 24:52.720]  Yes.
+[24:52.720 --> 24:53.220]  OK.
+[24:53.220 --> 24:54.080]  Thank you very much.
+[24:54.080 --> 25:02.680]  Thank you very much.

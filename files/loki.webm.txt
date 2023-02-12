@@ -1,0 +1,457 @@
+[00:00.000 --> 00:14.640]  All right, hey everyone, my name is Owen, this is Kavi, we're going to be talking about
+[00:14.640 --> 00:18.680]  Loki today, this is a project that's very near and dear to my heart, been working on
+[00:18.680 --> 00:23.440]  for a while, but I believe it's actually the second FOSDEM top on the subject.
+[00:23.440 --> 00:29.240]  First one right here by Tom 2017 or 2018, so we'll cover some of the differences since
+[00:29.240 --> 00:32.640]  then and let's jump in.
+[00:32.640 --> 00:38.320]  So first of all we're going to get a few things from this talk, one how Loki works a little
+[00:38.320 --> 00:42.500]  bit differently than a lot of things that came before it, and what some of those trade-offs
+[00:42.500 --> 00:47.280]  look like and why I think that's an advantage, and then you can also learn some of the tips
+[00:47.280 --> 00:52.920]  and tricks that we've learned building cloud-native distributed systems that need to be up all
+[00:52.920 --> 00:58.360]  the time, and maybe you can incorporate some of that into your designs later.
+[00:58.360 --> 01:01.760]  So we are both engineers at Grafana Labs.
+[01:01.760 --> 01:06.400]  We work primarily on Loki, the open source project, but then also do a bunch to make
+[01:06.400 --> 01:13.120]  sure it runs as part of our SAS, I'm Owen and this is Kavi again.
+[01:13.120 --> 01:18.280]  And you can find the project here, this is our GitHub repo.
+[01:18.280 --> 01:23.040]  We are operators and implementers, so we both build and operate and run the software.
+[01:23.040 --> 01:32.160]  I use Loki every day to debug Loki, and that's kind of a labor of love, but it comes because
+[01:32.160 --> 01:37.160]  we get paged a lot, well not a lot, I actually shouldn't say that on it, you know.
+[01:37.160 --> 01:42.200]  But we do get paged and so we are very empathetic to that fact.
+[01:42.200 --> 01:46.240]  This is actually the last time I was here in Belgium, this is in Ghent on top of the
+[01:46.240 --> 01:53.120]  Gravenstein, this is not stage, I actually did get paged here.
+[01:53.120 --> 01:58.480]  And so this is actually using Loki to figure out what was wrong with our hosted version
+[01:58.480 --> 02:01.160]  of Loki itself.
+[02:01.160 --> 02:05.640]  But this is my first time here at Fozdom, and it's been a lot of fun so far, so thanks
+[02:05.640 --> 02:09.920]  for having me.
+[02:09.920 --> 02:14.440]  So this was actually coined by a friend and colleague Ed Welch, Loki is a time series
+[02:14.440 --> 02:19.760]  database, but for strings, this is effectively how Loki works at the end of the day.
+[02:19.760 --> 02:26.440]  And so the first off we'll jump into figuring out what exactly a time series database is.
+[02:26.440 --> 02:29.760]  So yeah, what exactly is time series database, right?
+[02:29.760 --> 02:35.960]  So if you think from the like a normal database, all you always see like a key and value, right?
+[02:35.960 --> 02:39.200]  And in time series database, surprise, surprise, you have timestamp.
+[02:39.200 --> 02:45.760]  So what you see is like for every unique identifier, you have array of records, or tuple, what
+[02:45.760 --> 02:46.920]  are you going to call.
+[02:46.920 --> 02:51.520]  So on each record, we'll have a value and a timestamp attached to it, right?
+[02:51.520 --> 02:57.320]  So in this example, as you see, so for this identifier, you have a value v0, a timestamp
+[02:57.320 --> 03:01.600]  t0, and value v1, a timestamp t1, so on and so forth, right?
+[03:01.600 --> 03:06.920]  So this is the mental model, we want you to like, yeah, I mean, keep in mind throughout
+[03:06.920 --> 03:11.560]  the talk, so that you understand some of the decisions, why we made the way we are.
+[03:11.560 --> 03:14.120]  So to see this in action, right?
+[03:14.120 --> 03:17.800]  So this is how it looks like in Prometheus, and this is how it looks like in Loki.
+[03:17.800 --> 03:25.520]  So what is identified here is a unique combination of this, what we call label set, right?
+[03:25.520 --> 03:29.640]  Here it's app equal to NGNX, cluster equal to US central zero.
+[03:29.640 --> 03:33.880]  So this is like a unique identifier, which has this list of records.
+[03:33.880 --> 03:39.520]  And as you can see, the only difference between Prometheus and Loki here is the type of the
+[03:39.520 --> 03:40.880]  value, right?
+[03:40.880 --> 03:46.400]  So in the record, you see timestamp, comma, value, and the value is floor 64 in Prometheus,
+[03:46.400 --> 03:49.200]  which is 34.5, you see here.
+[03:49.200 --> 03:50.960]  And in Loki, it's a string.
+[03:50.960 --> 03:53.600]  It's a log line you ingest into Loki.
+[03:53.600 --> 03:59.120]  So that's what, when we say Loki is a time series for strings, that's what we mean.
+[03:59.120 --> 04:03.720]  So yeah, it's a log line there.
+[04:03.720 --> 04:09.880]  So we definitely take or steal, or however you want to put it, a lot from Prometheus itself.
+[04:09.880 --> 04:15.960]  And this is actually what this looks like in terms of how we index and store data.
+[04:15.960 --> 04:20.320]  We're going to talk a lot about indexing in this talk, or particularly the lack of indexing.
+[04:20.320 --> 04:26.160]  So Loki just basically takes in index and metadata, but doesn't index all content at
+[04:26.160 --> 04:29.720]  all, which tends to be the vast majority of all this data.
+[04:29.720 --> 04:36.160]  So here we're looking at the set of Prometheus-style label values and the timestamp.
+[04:36.160 --> 04:40.520]  All that is kind of controlled and used for routing purposes of queries.
+[04:40.520 --> 04:46.120]  And then the log contents themselves, which, contrary to the size of the underlying graphs
+[04:46.120 --> 04:50.000]  on the screen, the lines, the log contents are much, much larger.
+[04:50.000 --> 04:53.240]  So that's the biggest piece here.
+[04:53.240 --> 04:56.840]  So this allows us to kind of figure out and use our expertise for the systems that we
+[04:56.840 --> 05:03.360]  run and use these labels, which tend to be topological, so the source of your contents.
+[05:03.360 --> 05:08.920]  The application equals API, the cluster, the environment, that sort of thing.
+[05:08.920 --> 05:12.280]  And then slice down to the time period that you care about, and we can use our own expertise
+[05:12.280 --> 05:16.320]  as operators to figure out where we should look.
+[05:16.320 --> 05:21.320]  And so as you can see here, this maybe is a pretty broad section corresponding to about
+[05:21.320 --> 05:26.280]  a terabyte of data over that period, but you can mix and match these things.
+[05:26.280 --> 05:31.440]  And so this goes to a fraction of that down to about 10 gigabytes by just looking at the
+[05:31.440 --> 05:35.720]  sets of applications that we actually care about rather than all of the applications
+[05:35.720 --> 05:40.360]  and replicas deployed in that cluster.
+[05:40.360 --> 05:46.720]  So to give you a bit of a taste of what we mean when we say Loki is performant and Loki
+[05:46.720 --> 05:49.760]  executes code faster, so this is what we mean.
+[05:49.760 --> 05:53.160]  This is the metric we took from one of our internal cluster.
+[05:53.160 --> 05:59.840]  So what you're basically seeing here is this particular Loki cell at peak, it's processing
+[05:59.840 --> 06:02.400]  like 50 terabytes per day, right?
+[06:02.400 --> 06:06.240]  And what you see in the UI, it's a Grafana UI, by the way, where you're running some
+[06:06.240 --> 06:12.280]  lock yield, which is a Kodi language we use to get visibility of your logs that you ingest
+[06:12.280 --> 06:13.280]  right into Loki.
+[06:13.280 --> 06:15.200]  We'll talk about lock yield a bit later.
+[06:15.200 --> 06:18.160]  So yeah, this is specifically a metric Kodi.
+[06:18.160 --> 06:24.880]  This is, like, basically you are trying to figure out the metrics on the fly just from
+[06:24.880 --> 06:27.120]  your logs without any instrumentation, right?
+[06:27.120 --> 06:32.360]  So this particular query is processed like 10 terabytes of data in 12 seconds, which
+[06:32.360 --> 06:35.120]  is almost like one terabytes per second throughput.
+[06:35.120 --> 06:40.480]  So that's what we mean when we say, yeah, Loki is faster performant.
+[06:40.480 --> 06:44.440]  Yeah, so my favorite piece here is that these are actually constructed from logs themselves
+[06:44.440 --> 06:48.480]  are not Prometheus metrics or anything, we log query metadata for every query that comes
+[06:48.480 --> 06:52.640]  into Loki and we're kind of extracting the part of the log line that talks about how
+[06:52.640 --> 06:56.640]  fast it processes data and then accumulating it over a bunch of subqueries to get this
+[06:56.640 --> 07:01.160]  final value and then graphing that over time.
+[07:01.160 --> 07:06.600]  So let's step back now and I like to think about how Loki was designed kind of in response
+[07:06.600 --> 07:11.720]  to what came before it, you know, if we look really far back, we remember using tail and
+[07:11.720 --> 07:17.440]  grep on like individual log files and that's still in use a ton today, but it doesn't work
+[07:17.440 --> 07:23.720]  so well when you start to need, you know, hundreds or thousands of machines and maybe
+[07:23.720 --> 07:25.160]  they're ephemeral, right?
+[07:25.160 --> 07:30.080]  So we had to kind of build new strategies for handling this and a bunch of things have
+[07:30.080 --> 07:33.440]  come up in the past, you know, 10, 15 years.
+[07:33.440 --> 07:38.680]  And sometimes it leads us into the next point where we've accumulated all of this complexity
+[07:38.680 --> 07:43.280]  and sometimes we've really missed that experience and I like this tweet because it's just incredibly
+[07:43.280 --> 07:49.880]  emblematic of that experience that sometimes I just really wish I did have grep on top
+[07:49.880 --> 07:54.480]  of, you know, all of the log aggregation and on top of the underlying complexity and scale
+[07:54.480 --> 07:58.320]  that we've accumulated over the past couple decades.
+[07:58.320 --> 08:05.520]  Yeah, so broadly speaking, like, so that's one of the goal of Loki, at least on the query
+[08:05.520 --> 08:10.520]  side, to have to take the same experience you have before, like with just grep and tail
+[08:10.520 --> 08:14.600]  that you're confident with, can we bring the same experience in this modern cloud native
+[08:14.600 --> 08:19.160]  distributor systems era, right, where you have your logs, like speeding out from different
+[08:19.160 --> 08:23.480]  machines from different applications, yeah, similar setup, right?
+[08:23.480 --> 08:30.440]  So like I mentioned before, Loki has this language called lockium, and that's how you
+[08:30.440 --> 08:35.320]  query your logs back to get some visibility, and this is heavily inspired from Prometheus.
+[08:35.320 --> 08:40.760]  So people who are familiar with Prometheus may already get, could I get a grasp here?
+[08:40.760 --> 08:47.160]  So this particular query what you see at the top is basically saying, like, give all the
+[08:47.160 --> 08:52.840]  logs from this particular namespace, let's say Loki day of 005, and then give me all
+[08:52.840 --> 08:56.000]  the logs that matches only the error in the log line, right?
+[08:56.000 --> 09:00.360]  So as you can see, the experience is like a pipe equal to error.
+[09:00.360 --> 09:03.280]  So you can still combine multiple pipes here.
+[09:03.280 --> 09:07.480]  So that's the kind of like experience we're talking about, right, so, yeah.
+[09:07.480 --> 09:12.840]  So doesn't mean you have to, you can only like grep for only specific pattern, you can
+[09:12.840 --> 09:18.360]  also grep for specific IDs, like use case can be like your order ID or trace ID you
+[09:18.360 --> 09:19.800]  want to find in the logs.
+[09:19.800 --> 09:23.600]  So you can also do some kind of regress match here, and also, like I said, you can also
+[09:23.600 --> 09:28.520]  like put multiple pipelines here, right, you can do under R, doesn't matter.
+[09:28.520 --> 09:33.360]  So it's basically like, first you choose which logs to look for, like a routing, what Owen
+[09:33.360 --> 09:37.400]  was saying, and then you can do all your piping, so, to mix and match.
+[09:37.400 --> 09:39.840]  So that's the idea we're talking about.
+[09:39.840 --> 09:44.840]  So this query is a bit different, as you'd have seen, like compared to previous two examples,
+[09:44.840 --> 09:48.200]  which we called as a lock query, and this is a metric query.
+[09:48.200 --> 09:53.200]  So in the lock query, the output you see after when your query is executed, you will see,
+[09:53.200 --> 09:57.000]  you're going to see like list of logs that matches the particular pattern, right?
+[09:57.000 --> 09:58.640]  So here, it's a metric.
+[09:58.640 --> 10:03.960]  So if you see what this query does, it's similar to the last one, but we added two different
+[10:03.960 --> 10:06.540]  things, right, here, the rate and the sum by.
+[10:06.540 --> 10:13.440]  So what this means is, without doing any instrumentation, like the logs are coming as it is, so you can
+[10:13.440 --> 10:19.080]  really find your error per second rate of all your application aggregated by the container,
+[10:19.080 --> 10:22.880]  which means, so, doesn't matter like how many applications running in this namespace, so
+[10:22.880 --> 10:26.160]  you can aggregate by container just from this metric query.
+[10:26.160 --> 10:33.040]  So yeah, that's the idea we are trying to, like, the experience we want to, like, with
+[10:33.040 --> 10:34.040]  a lock here.
+[10:34.040 --> 10:35.040]  Yeah.
+[10:35.040 --> 10:38.840]  This is probably my favorite part about Loki of all the things, right, the ability to extract
+[10:38.840 --> 10:43.480]  information at query time ultimately means that you can be reactive instead of proactive.
+[10:43.480 --> 10:47.080]  You don't have to, you know, figure out a schema and make sure that you're recording
+[10:47.080 --> 10:51.600]  something in a precise way before the bad thing happens, right, because a lot of the
+[10:51.600 --> 10:53.720]  time it's the unknown unknowns that get us.
+[10:53.720 --> 11:00.080]  And so this, the ability to extract this structure, you know, and particularly to do it from logs,
+[11:00.080 --> 11:04.360]  really allows you to figure out when things go wrong rather than having to re-instrument
+[11:04.360 --> 11:09.240]  before you can get that information.
+[11:09.240 --> 11:13.520]  So next up, we're going to talk a little bit less about the experience querying it and
+[11:13.520 --> 11:15.560]  more about how it's constructed.
+[11:15.560 --> 11:19.120]  So this is the kind of design choices that we make.
+[11:19.120 --> 11:23.200]  So particularly individually being able to scale different parts of the system, particularly
+[11:23.200 --> 11:29.920]  tuning your kind of preference for cost versus latency.
+[11:29.920 --> 11:36.480]  On the read path, Loki runs, is intended to run across commodity hardware, and our only
+[11:36.480 --> 11:38.080]  real dependency is object storage.
+[11:38.080 --> 11:42.560]  So we store everything cheaply in a generally managed solution, although you can, you know,
+[11:42.560 --> 11:51.080]  run your own object storage or use file system backends if you prefer.
+[11:51.080 --> 11:56.240]  So this is how Loki ingestion path architecture looks at the high level.
+[11:56.240 --> 11:59.440]  So when you send logs to Loki, and this is what it goes through.
+[11:59.440 --> 12:05.920]  So the key takeaway here is, like Owen said, the only external dependency you see here
+[12:05.920 --> 12:07.240]  is the object store.
+[12:07.240 --> 12:09.600]  So everything else is a component of Loki.
+[12:09.600 --> 12:12.120]  So of course we have like different deployment models.
+[12:12.120 --> 12:16.200]  So usually all these components can be put together in a single binary.
+[12:16.200 --> 12:19.680]  So if you're new to Loki, you are starting just to play with it at maybe like a small
+[12:19.680 --> 12:20.680]  scale.
+[12:20.680 --> 12:24.120]  So you just run it as a single binary, as a single process, and you send all the logs
+[12:24.120 --> 12:25.480]  to a single process.
+[12:25.480 --> 12:28.000]  And the only, you just put the bucket name and you're done.
+[12:28.000 --> 12:31.120]  So all your logs are getting ingested into Loki, just fine, right?
+[12:31.120 --> 12:36.080]  So that's what when we say like, yeah, like less dependency in running Loki.
+[12:36.080 --> 12:41.400]  Yeah, in this case, it's an ingestion path.
+[12:41.400 --> 12:46.120]  And so one of the things about not indexing the log contents themselves means that it's
+[12:46.120 --> 12:49.360]  really easy to ingest data from a bunch of different sources.
+[12:49.360 --> 12:52.720]  So maybe you work at an organization, and one team writes in one language, one team
+[12:52.720 --> 12:53.720]  writes in another language.
+[12:53.720 --> 13:00.400]  They have no standardization over the formats that they're using, the schemas of the logs,
+[13:00.400 --> 13:01.400]  if they're using structured logging.
+[13:01.400 --> 13:07.600]  So you can have one team in JSON, one team who just pulls in NGINX logs, and then another
+[13:07.600 --> 13:09.160]  team that uses something like log format.
+[13:09.160 --> 13:11.920]  And that's all OK, because Loki doesn't really care.
+[13:11.920 --> 13:16.800]  We just index the source of where this came from, along with the timing information.
+[13:16.800 --> 13:20.560]  So you can, each individual team, in that sense, can extract that information when they
+[13:20.560 --> 13:26.040]  query it and choose what and how that they actually do care about in their logs.
+[13:26.040 --> 13:30.600]  Yes, speaking of query path, right?
+[13:30.600 --> 13:33.680]  So this is high-level architecture on the query side.
+[13:33.680 --> 13:39.960]  So again, these are all like Loki components, except like a two dependency here.
+[13:39.960 --> 13:42.000]  One is object storage, of course.
+[13:42.000 --> 13:44.600]  The other one is like optional, which is like a cache.
+[13:44.600 --> 13:48.120]  So again, the same pattern applied here, right?
+[13:48.120 --> 13:52.000]  So you can combine all these Loki components into a single binary, and you can just run
+[13:52.000 --> 13:53.560]  it as a single process.
+[13:53.560 --> 13:57.680]  And all you need to do is just point to the persistent object store, and then cache for
+[13:57.680 --> 13:58.680]  the performance.
+[13:58.680 --> 13:59.680]  And that's it.
+[13:59.680 --> 14:01.520]  So you're good to go on the read path, right?
+[14:01.520 --> 14:07.400]  So again, if you want to run in a highly available fashion, let's say you hit some scale and
+[14:07.400 --> 14:09.440]  you want to tweak some things.
+[14:09.440 --> 14:14.760]  So this is how particularly we run in our internal like SAS.
+[14:14.760 --> 14:19.920]  So here you have more control in a way, say you can tweak individual component, you can
+[14:19.920 --> 14:23.200]  scale individual component, and yeah, that's the idea.
+[14:23.200 --> 14:27.920]  So again, the key thing here is the simple external dependencies.
+[14:27.920 --> 14:32.200]  So yeah, and it's really powerful to be able to develop on a single binary running all
+[14:32.200 --> 14:37.720]  these subcomponents or things that eventually run in microservices in a single process, and
+[14:37.720 --> 14:43.840]  then being able to scale that out depending on your tolerance for scale and running HA
+[14:43.840 --> 14:47.560]  or data replication, that sort of thing.
+[14:47.560 --> 14:53.440]  So because the index in Loki is very minimal, it's just this routing information or the
+[14:53.440 --> 14:55.640]  data topology, really.
+[14:55.640 --> 14:58.520]  It allows this to be much, much smaller than you would otherwise think.
+[14:58.520 --> 15:02.160]  So I actually pulled this from one of the clusters that we run internally.
+[15:02.160 --> 15:09.080]  It's close to 40 terabytes a day and just shy of 140 megabytes of index.
+[15:09.080 --> 15:10.840]  So it's much, much smaller.
+[15:10.840 --> 15:15.160]  And this gives us a lot of benefits when we talk about some of the next stuff.
+[15:15.160 --> 15:20.920]  Yeah, so if I were you, probably I'd be asking this question, okay, folks, you're talking
+[15:20.920 --> 15:23.120]  a lot about tiny indexes, right?
+[15:23.120 --> 15:25.200]  How on earth do you make the query faster?
+[15:25.200 --> 15:31.400]  So also this thought comes from the idea like either you are like from an academic background
+[15:31.400 --> 15:35.840]  or like a practitioner who is building a distributed systems, it's always been taught like if you
+[15:35.840 --> 15:39.040]  want to make something faster, you index it, right?
+[15:39.040 --> 15:44.920]  So here we are sharing our experience like where if you want to index everything to make
+[15:44.920 --> 15:49.560]  everything faster, so at some point in scale, your index is going to be much larger than
+[15:49.560 --> 15:51.440]  the actual data, right?
+[15:51.440 --> 15:57.280]  And in our experience, like handling huge index creates much more problems at scale.
+[15:57.280 --> 15:59.520]  So that's a whole idea here, right?
+[15:59.520 --> 16:06.520]  So let's understand like how low key makes the query faster with the tiny index, right?
+[16:06.520 --> 16:08.000]  And this is how.
+[16:08.000 --> 16:10.720]  So don't let the image scare you.
+[16:10.720 --> 16:13.080]  So let's understand piece by piece here.
+[16:13.080 --> 16:16.560]  So at the top, you see the query that comes in, right?
+[16:16.560 --> 16:22.760]  So for the sake of discussion, let's say this query is asking for the data for 1 hour period,
+[16:22.760 --> 16:23.760]  right?
+[16:23.760 --> 16:24.760]  Time period.
+[16:24.760 --> 16:29.960]  So the query path architecture what you saw before, what the first thing it does is it
+[16:29.960 --> 16:35.640]  takes this query, the huge query, and it try to make it like a sub-query by time split.
+[16:35.640 --> 16:41.040]  So in this case, it splits this 1 hour query into 4, 15 minutes query.
+[16:41.040 --> 16:42.920]  We call it a sub-query, right?
+[16:42.920 --> 16:45.160]  And the trick is it doesn't stop here.
+[16:45.160 --> 16:51.320]  So low key index is designed in such a way so that it can look into the index and say,
+[16:51.320 --> 16:55.440]  hey, this many data, like this many bytes, it needs to touch.
+[16:55.440 --> 17:00.600]  So we can dynamically decide how many worker pool you need to process that query.
+[17:00.600 --> 17:03.160]  So that's where this performance comes from.
+[17:03.160 --> 17:08.960]  So for example, like in this case, let's say this 15 minute sub-query is touching, I don't
+[17:08.960 --> 17:11.120]  know, like 10 gigabytes of data.
+[17:11.120 --> 17:17.040]  So and you can plan accordingly like how many worker pools I can schedule this query into,
+[17:17.040 --> 17:18.040]  right?
+[17:18.040 --> 17:20.200]  So let's think about this for a while, right?
+[17:20.200 --> 17:28.160]  So now the key takeaway here is you get to have a control over your cost versus performance.
+[17:28.160 --> 17:32.120]  So you start with low key and you hit some limit, right?
+[17:32.120 --> 17:34.560]  And at some scale, you're going to hit the limit.
+[17:34.560 --> 17:39.720]  And you can increase the performance just by adding more query pool, like more query
+[17:39.720 --> 17:40.720]  workers.
+[17:40.720 --> 17:44.440]  So yeah, that's like a key control we want to have with the low key.
+[17:44.440 --> 17:47.920]  So yeah, that's how we make query faster.
+[17:47.920 --> 17:52.400]  So the next thing we're going to talk about is retention.
+[17:52.400 --> 17:57.960]  We get asked this a lot, particularly wanting to store things like application logs for
+[17:57.960 --> 17:58.960]  some period of time.
+[17:58.960 --> 18:02.600]  You know, we use 30 days as kind of our standard, but it could be whatever your use case is
+[18:02.600 --> 18:06.480]  and then things like audit logs for much longer periods of time.
+[18:06.480 --> 18:09.480]  This is pretty easily tunable in low key.
+[18:09.480 --> 18:14.000]  But the important part here is we were talking about the index size earlier.
+[18:14.000 --> 18:21.360]  As we don't index the log contents themselves, retention is very, very easy and cost efficient
+[18:21.360 --> 18:25.400]  to do because all of our data is stored in object storage.
+[18:25.400 --> 18:29.160]  And so if we extract that kind of earlier index sizing slide out to what it would look
+[18:29.160 --> 18:33.120]  like in a year, this is roughly what we get.
+[18:33.120 --> 18:37.680]  And so again, we just use this index for routing information, which means that all of the data
+[18:37.680 --> 18:38.920]  is effectively live.
+[18:38.920 --> 18:43.160]  There's no like rehydrating or, you know, hot and cold storage tiers.
+[18:43.160 --> 18:46.040]  Everything is served out of object storage generally all the time.
+[18:46.040 --> 18:47.680]  Now you can, there's some nuance there.
+[18:47.680 --> 18:50.760]  You can put like caches in a couple of places and that sort of thing.
+[18:50.760 --> 18:56.400]  But the idea that you can use object storage as your primary back end is very powerful,
+[18:56.400 --> 19:01.440]  especially when you consider cost over long periods of time.
+[19:01.440 --> 19:04.080]  All right.
+[19:04.080 --> 19:09.200]  So yeah, we've been saying low key has been built for the operators and for dels, right?
+[19:09.200 --> 19:14.200]  And when it comes to operation, yeah, if you've been run any database or any distributed
+[19:14.200 --> 19:19.640]  systems at scale, so you always want to keep on like top of the latest release of whatever
+[19:19.640 --> 19:23.080]  the product you're running, right, to get the latest optimization, latest features,
+[19:23.080 --> 19:24.480]  so on and so forth.
+[19:24.480 --> 19:29.280]  And the other use case is like sometimes you want to migrate your data, right, from one
+[19:29.280 --> 19:30.480]  persistent store to another one.
+[19:30.480 --> 19:35.040]  In this case, maybe one GCS bucket to another one, even across the cloud provider, right?
+[19:35.040 --> 19:37.440]  You sometimes you find like maybe S3 is better.
+[19:37.440 --> 19:38.800]  Like I can go with S3.
+[19:38.800 --> 19:40.600]  I can change from GCS to S3.
+[19:40.600 --> 19:45.680]  So with all these use cases, can we do all these operations with zero downtime?
+[19:45.680 --> 19:46.800]  So can we do that?
+[19:46.800 --> 19:49.240]  So that's something like we can do in low key.
+[19:49.240 --> 19:50.600]  We have been doing it many times.
+[19:50.600 --> 19:55.000]  So to give you a complete example here, and this is one of my favorite part of low key
+[19:55.000 --> 19:57.720]  config, like we call it as a period config.
+[19:57.720 --> 20:02.480]  So what you're seeing here is we have something called like schema version.
+[20:02.480 --> 20:06.600]  So whenever we change anything with index or any new feature comes in, and if it's like
+[20:06.600 --> 20:10.520]  we use different index format or something, we change this version.
+[20:10.520 --> 20:14.720]  Like in this case, you see V11 to V12, right?
+[20:14.720 --> 20:19.400]  And so what you can do is, let's say you want to start using this new feature from
+[20:19.400 --> 20:21.400]  Jan 2023, right?
+[20:21.400 --> 20:25.680]  All you need to do is go and put the version V12 from the start date and you're done.
+[20:25.680 --> 20:31.640]  So low key can understand this and it can work with both different schema version.
+[20:31.640 --> 20:38.600]  So this is how you can like upgrade your schema and production like lively without downtime.
+[20:38.600 --> 20:41.160]  So this is one example.
+[20:41.160 --> 20:43.400]  The other one is like the migration, right?
+[20:43.400 --> 20:44.600]  Like I talked before.
+[20:44.600 --> 20:50.760]  So you may want to move your data within the cloud provider or across the cloud provider.
+[20:50.760 --> 20:52.480]  For example, it's the same thing here.
+[20:52.480 --> 20:58.760]  So from 2023 of Jan, I need to store all my new data into like S3 instead of GCS, right?
+[20:58.760 --> 21:01.560]  So you go back and you change this one config and you're done.
+[21:01.560 --> 21:03.040]  So low key again understands this.
+[21:03.040 --> 21:07.800]  So when the query comes in, it checks whether which data it's asking for, like which time
+[21:07.800 --> 21:12.040]  range it's asking for, and it can go and fix the data accordingly, right?
+[21:12.040 --> 21:13.840]  And yeah, again, without downtime.
+[21:13.840 --> 21:16.400]  So it also works really well with the retention.
+[21:16.400 --> 21:20.800]  Let's say if you have 30 day retention and yeah, after 30 days, you don't care.
+[21:20.800 --> 21:26.080]  So all your new data is stored to the new bucket.
+[21:26.080 --> 21:28.840]  So yeah, this is FOSDOM all about the community.
+[21:28.840 --> 21:34.960]  So we launched low key at 2019 as open source and we have like active community going on.
+[21:34.960 --> 21:37.560]  So these are some of the ways you can reach us.
+[21:37.560 --> 21:41.560]  We have a public Slack and we have a community forum.
+[21:41.560 --> 21:43.920]  And every month we also have a low key community call.
+[21:43.920 --> 21:46.160]  We alternate between US and EU time zone.
+[21:46.160 --> 21:47.680]  So yeah, come say hi.
+[21:47.680 --> 21:52.560]  Yeah, we are happy to, and if any of the things which we talked about excites you, come talk
+[21:52.560 --> 21:53.560]  to us.
+[21:53.560 --> 21:56.600]  We'll be like more than happy to have a new contributor to the project.
+[21:56.600 --> 21:57.600]  So yeah.
+[21:57.600 --> 22:00.760]  Yeah, we should have asked this probably in the beginning, but is there anyone out there
+[22:00.760 --> 22:01.760]  using Prometheus?
+[22:01.760 --> 22:02.760]  Yeah, a couple.
+[22:02.760 --> 22:03.760]  All right, a lot.
+[22:03.760 --> 22:04.760]  Yeah, good.
+[22:04.760 --> 22:06.760]  What about any low key users?
+[22:06.760 --> 22:08.760]  Okay, not bad.
+[22:08.760 --> 22:09.760]  Thanks.
+[22:09.760 --> 22:11.320]  That makes me really happy.
+[22:11.320 --> 22:14.640]  Anyone run into hard configuration problems with low key?
+[22:14.640 --> 22:15.640]  Yeah.
+[22:15.640 --> 22:17.160]  Oh, no hands.
+[22:17.160 --> 22:18.160]  That's weird.
+[22:18.160 --> 22:19.160]  No, I'm just kidding.
+[22:19.160 --> 22:21.160]  Yeah, we got some work to do on.
+[22:21.160 --> 22:24.720]  Yeah, so things to take away from the talk.
+[22:24.720 --> 22:29.080]  Key is meant to largely function like a distributed grep that you can also kind of pull metrics
+[22:29.080 --> 22:30.640]  and analytics out of.
+[22:30.640 --> 22:35.800]  It's low footprint, storing things in object storage and not relying on schemas.
+[22:35.800 --> 22:39.560]  And we really target kind of easy operations with that as well as low cost.
+[22:39.560 --> 22:41.480]  And then please come join the community.
+[22:41.480 --> 22:42.480]  Come talk to us.
+[22:42.480 --> 22:46.280]  We're going to be hanging out for probably at least 10, 15 minutes if you have any questions.
+[22:46.280 --> 22:48.280]  We'd love to hear from you.
+[22:48.280 --> 22:51.280]  All right, thank you.
+[22:51.280 --> 22:59.360]  Yeah, I can share.
+[22:59.360 --> 23:00.360]  Any questions?
+[23:00.360 --> 23:06.680]  Hey, great talk.
+[23:06.680 --> 23:11.640]  I was wondering with the amount of query sharding you're doing, how are you kind of synchronizing
+[23:11.640 --> 23:12.840]  the result in the end?
+[23:12.840 --> 23:15.880]  Or is it like synchronized in the UI at the end?
+[23:15.880 --> 23:19.080]  Or like, do you need to sort things because that might be very expensive?
+[23:19.080 --> 23:23.120]  All right, so I had a little difficulty hearing that, but I think the question was, how do
+[23:23.120 --> 23:26.480]  we synchronize sharding in the query engine?
+[23:26.480 --> 23:33.120]  Is that in the end when you show it in the UI?
+[23:33.120 --> 23:37.440]  When we show it in the UI, it happens a layer down in Loki itself.
+[23:37.440 --> 23:40.160]  So we've already merged everything.
+[23:40.160 --> 23:44.880]  I think the real answer to that is probably a lot longer than I can give in this question,
+[23:44.880 --> 23:45.880]  but talk to me.
+[23:45.880 --> 23:50.400]  It's one of my favorite things to talk about.
+[23:50.400 --> 23:51.400]  Thanks.
+[23:51.400 --> 23:52.900]  Great talk.
+[23:52.900 --> 23:58.600]  This was mentioned several times that the main power of Loki is that it indexes only
+[23:58.600 --> 24:04.160]  labels basically, and it doesn't index actual log messages.
+[24:04.160 --> 24:09.880]  But to make log messages searchable, you want to have many labels in this case, and many
+[24:09.880 --> 24:14.080]  labels often lead to cardinality explosions, how you deal with it.
+[24:14.080 --> 24:16.000]  Is there any good recommendation?
+[24:16.000 --> 24:18.240]  How many labels I should have?
+[24:18.240 --> 24:19.240]  What are trade-offs here?
+[24:19.240 --> 24:25.400]  Yeah, so the way that I think about this is you probably want to index where the log
+[24:25.400 --> 24:28.280]  came from less than what's in it, right?
+[24:28.280 --> 24:31.560]  So we definitely added the ability to kind of like, especially in PromTail configs, which
+[24:31.560 --> 24:36.720]  is the agent that we write, the ability to like add extra things in there, and people
+[24:36.720 --> 24:38.320]  have been really clever about what they put in.
+[24:38.320 --> 24:42.120]  Unfortunately, that can also be somewhat of a foot gun at times.
+[24:42.120 --> 24:47.080]  So I'd say index the things that correspond to your topology, right?
+[24:47.080 --> 24:48.360]  Where the logs come from.
+[24:48.360 --> 24:51.200]  So environment, application, cluster, that sort of thing.
+[24:51.200 --> 24:54.680]  And less things that have to do with the contents of them themselves.
+[24:54.680 --> 24:59.000]  There's probably a somewhat longer answer there, too, and then we've also been doing
+[24:59.000 --> 25:05.840]  some recent work to make some of this less of a user concern, particularly about distribution
+[25:05.840 --> 25:07.880]  of individual log stream throughput.
+[25:07.880 --> 25:13.680]  So if you have one application which is logging like 10 megabytes a second, that can be really
+[25:13.680 --> 25:15.880]  harmful on Loki in some ways.
+[25:15.880 --> 25:19.480]  And so people got clever around splitting that out into different streams.
+[25:19.480 --> 25:22.840]  But in the future, we're going to be doing a lot of that automatically and transparently
+[25:22.840 --> 25:26.480]  behind Loki's API.
+[25:26.480 --> 25:31.160]  Just to add one thing on top of what Owen said, like in log yield, which we didn't show here.
+[25:31.160 --> 25:36.200]  So if you have something in your log lying itself that you want to treat it as a label,
+[25:36.200 --> 25:39.960]  you can do it on the fly with the log yield query language itself.
+[25:39.960 --> 25:42.640]  So we have some like a parser.
+[25:42.640 --> 25:49.680]  If it's a log form, if it's a JSON parser, you can use it like labels, the things in
+[25:49.680 --> 25:51.680]  your log line itself.
+[25:51.680 --> 25:53.680]  Hi.
+[25:53.680 --> 25:54.680]  Thank you for the great talk.
+[25:54.680 --> 25:58.320]  I have many questions, but I'll ask one.
+[25:58.320 --> 26:03.720]  Do you have any tips in terms of scaling query and caching layers?
+[26:03.720 --> 26:07.840]  Like from my experience, usually they're very overutilized, but when people start querying,
+[26:07.840 --> 26:08.840]  you get all the crashes.
+[26:08.840 --> 26:11.240]  Do you have any code and ratios or anything?
+[26:11.240 --> 26:12.240]  Yeah.
+[26:12.240 --> 26:16.960]  So this is one of the things like how we expose configurations around query parallelism and
+[26:16.960 --> 26:18.280]  controls.
+[26:18.280 --> 26:24.640]  I wish I had a do over on this a few years back, because there's a couple different configurations.
+[26:24.640 --> 26:29.880]  Largely around for every individual tenant, how many subqueries you want to be allowed
+[26:29.880 --> 26:35.600]  to be processed per query at a time, and then there's also things like concurrency for each
+[26:35.600 --> 26:37.160]  of your query components, right?
+[26:37.160 --> 26:41.320]  How many go routines should you associate with or should you devote to running queries
+[26:41.320 --> 26:43.840]  independently?
+[26:43.840 --> 26:52.200]  But yeah, I got some work to do to make that easily digestible, if that's fair.
+[26:52.200 --> 26:59.040]  So this year at work, I end up kind of giving to Loki for 10 minutes about 20 gigabytes
+[26:59.040 --> 27:01.600]  of log from a 500 machine.
+[27:01.600 --> 27:06.280]  It was just a one-time experiment that they ran from time to time.
+[27:06.280 --> 27:08.040]  And we started using Loki.
+[27:08.040 --> 27:10.640]  We optimized it as intended.
+[27:10.640 --> 27:12.840]  So using index query was great.
+[27:12.840 --> 27:18.960]  At a certain point, my colleagues come to me and say, we want the log string for each
+[27:18.960 --> 27:21.640]  individual machine in a file.
+[27:21.640 --> 27:27.200]  And I started asking Loki for this, and he took ages to extract this information.
+[27:27.200 --> 27:30.800]  Now I hope you're going to tell me, this is not the use case for Loki.
+[27:30.800 --> 27:35.520]  You did very well to use RC's log and just pushing things in a file.
+[27:35.520 --> 27:39.720]  But if you have another answer, I'll be glad.
+[27:39.720 --> 27:47.600]  We didn't catch the question fully, but my understanding is you're asking, like, can
+[27:47.600 --> 27:51.280]  the log yield find logs coming from a single machine?
+[27:51.280 --> 27:52.280]  Is that right?
+[27:52.280 --> 27:53.280]  Am I getting it right?
+[27:53.280 --> 28:06.480]  So you're talking about, I guess, some kind of federation, maybe?
+[28:06.480 --> 28:09.440]  So why do you want to store it in the file in a single machine?
+[28:09.440 --> 28:17.960]  Because they wanted to run analysis on a specific stream of log from a specific machine.
+[28:17.960 --> 28:21.280]  So technically, you can store log files in the file system.
+[28:21.280 --> 28:26.960]  So instead of using object storage, technically, you can use a file system.
+[28:26.960 --> 28:28.120]  That's completely possible.
+[28:28.120 --> 28:33.800]  But we encourage to use object storage when it comes to scale, because that's how it works.
+[28:33.800 --> 28:40.120]  Yeah, is the question behind the question there changing where you actually store it
+[28:40.120 --> 28:43.640]  so that you can then run your own processing tools on top?
+[28:43.640 --> 28:44.640]  Yeah?
+[28:44.640 --> 28:45.640]  Yeah?
+[28:45.640 --> 28:46.640]  Okay.
+[28:46.640 --> 28:48.680]  Yeah, that's actually a relatively common ask.
+[28:48.680 --> 28:50.280]  It's not something that we support at the moment.
+[28:50.280 --> 28:53.840]  We kind of have our own format that we store in object storage or whatnot.
+[28:53.840 --> 28:57.560]  We do have some tooling, one's called chunk inspect, which allows you to kind of iterate
+[28:57.560 --> 29:01.800]  through all of the chunks, which could be from a particular stream or log file.
+[29:01.800 --> 29:07.280]  But it's not incredibly batteries included at the moment, if that makes sense.
+[29:07.280 --> 29:17.320]  Hello, I have the use case that I store some telemetry data with my logs sometimes, like
+[29:17.320 --> 29:23.320]  a metric or sometimes, which I don't want to be indexed, but I also don't want to encode
+[29:23.320 --> 29:28.200]  in the actual log message because it's already structured data.
+[29:28.200 --> 29:35.400]  Is it possible to have fields that are not indexed or data that are not indexed?
+[29:35.400 --> 29:36.800]  It's funny that you asked that.
+[29:36.800 --> 29:43.680]  Yeah, so there's kind of a growing question around non-index metadata like that, right?
+[29:43.680 --> 29:48.120]  That's not actually stored in the index itself, but like includes some degree of structure.
+[29:48.120 --> 29:54.720]  I know we see this as kind of a current need, particularly for like hotel formats, so it's
+[29:54.720 --> 29:59.560]  something that we're looking into right now, actually.
+[29:59.560 --> 30:08.960]  So thanks a lot, everyone.
+[30:08.960 --> 30:17.280]  Thank you.

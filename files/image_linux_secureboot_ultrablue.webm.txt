@@ -1,0 +1,254 @@
+[00:00.000 --> 00:13.440]  Okay, so today I'm not going to talk about image based or anything, but I'm going to
+[00:13.440 --> 00:14.440]  talk about the containers.
+[00:14.440 --> 00:15.440]  So what do you mean by containers?
+[00:15.440 --> 00:16.440]  So what do you mean by containers?
+[00:16.440 --> 00:17.440]  So what do you mean by containers?
+[00:17.440 --> 00:34.880]  So what do you mean by containers?
+[00:34.880 --> 00:52.320]  So what do you mean by containers?
+[00:52.320 --> 01:19.720]  So again, maybe for the remote audience, when you got a boot chain, you put up your computer,
+[01:19.720 --> 01:24.720]  you have UEFI, it goes to bootloader, it goes to the kernel, it goes to initramfs.
+[01:24.720 --> 01:32.360]  And then because we're talking about a lot today, security things, you want to crypt
+[01:32.360 --> 01:38.640]  your disk partition and so enter a passphrase to unlock it.
+[01:38.640 --> 01:45.360]  Then if you want to make sure that what you've loaded is what you expect, you can store measurements,
+[01:45.360 --> 01:50.080]  so signatures, hashes of every step inside the TPM.
+[01:50.080 --> 01:52.520]  A TPM is a passive component.
+[01:52.520 --> 01:59.080]  It is just there to store information, perform some cryptographic computation on it if you
+[01:59.080 --> 02:03.080]  ask it, but it doesn't block anything in the boot chain, right?
+[02:03.080 --> 02:09.280]  It is just there to store and execute comments that you pass to it.
+[02:09.280 --> 02:15.600]  And so later on, after the boot is done, you can go back, for instance, in init in your
+[02:15.600 --> 02:23.000]  kernel to read back what you had in the TPM and check that what you have is what you expect.
+[02:23.000 --> 02:25.560]  The problem is, is there is an issue?
+[02:25.560 --> 02:31.120]  If it's not what you expect, you end up here, you enter your passphrase, but your system
+[02:31.120 --> 02:37.440]  was already compromised into the passphrase that you've just entered, maybe got excreted
+[02:37.440 --> 02:41.040]  and now your disk is compromised as well.
+[02:41.040 --> 02:46.200]  That's typically the case when you have offline attacks on a laptop, you may have forgotten
+[02:46.200 --> 02:52.120]  or left unattended in a FOSDEM conference room.
+[02:52.120 --> 03:02.240]  So what we can do and what people in large organizations typically do is use remote attestation.
+[03:02.240 --> 03:11.080]  So you have an app started, for instance, in the initrmfs, which will talk to the TPM,
+[03:11.080 --> 03:20.200]  get the measurements, and then ask a remote attestation server somewhere trusted to check
+[03:20.200 --> 03:22.960]  that the measurements are what's expected.
+[03:22.960 --> 03:28.080]  And that's where what you got in the previous talk, that you want to have images that are
+[03:28.080 --> 03:33.560]  reproducible, that are signed, comes very key, because a remote attestation server would
+[03:33.560 --> 03:38.000]  typically be your organization server, it knows about the signatures, so you can check
+[03:38.000 --> 03:45.120]  that the image is the one that it signed, that it is the one that is blessed by your
+[03:45.120 --> 03:46.520]  security team.
+[03:46.520 --> 03:50.600]  And then everything is fine, typically the remote attestation server would hand back
+[03:50.600 --> 03:59.480]  a secret to your dedicated attestation client, and the client could use that secret to decrypt
+[03:59.480 --> 04:00.480]  your disk.
+[04:00.480 --> 04:03.480]  And in that case, you don't even need to enter a passphrase anymore.
+[04:03.480 --> 04:13.760]  I mean, you could also add a passphrase if you want to be more sure, but if you had some
+[04:13.760 --> 04:22.560]  kind of control on the attestation server, then you may not even need the passphrase.
+[04:22.560 --> 04:26.480]  The issue is that everybody in this room, maybe some of you work at big companies, but
+[04:26.480 --> 04:31.720]  not everybody obviously, and so how do you set up this server?
+[04:31.720 --> 04:35.920]  You need to rent something in the cloud, it's super inconvenient.
+[04:35.920 --> 04:45.640]  As a matter of fact, all of you, I think, have a server in their pocket, it's called
+[04:45.640 --> 04:54.280]  a mobile phone, and so you just need to run the remote attestation server, that's a security
+[04:54.280 --> 05:05.240]  part because I work for a government agency, and so you have the server run on your phone,
+[05:05.240 --> 05:10.200]  and then you can communicate with your laptop over Bluetooth.
+[05:10.200 --> 05:15.040]  And that's what we implemented, a user-friendly, lightweight TPM remote attestation running
+[05:15.040 --> 05:21.280]  over Bluetooth with a server, well, client, it depends, we will change names, but one
+[05:21.280 --> 05:25.240]  of them running on your phone and the other on your laptop.
+[05:25.240 --> 05:32.760]  It's an idea that was proselytized by Matthew Garrett a couple of years ago at Linux kind
+[05:32.760 --> 05:38.480]  of Australia, but it was just a rough prototype and basically you're trying to make it production
+[05:38.480 --> 05:42.360]  grade, at least hacker grade.
+[05:42.360 --> 05:47.440]  So we have the server running on the laptop, you can know I'm switching names between clients
+[05:47.440 --> 05:50.320]  and server because we can't decide.
+[05:50.320 --> 05:57.840]  So on your laptop, you have the server, it's written in Go, it talks to Bluetooth stack,
+[05:57.840 --> 06:07.840]  and then we have clients for Android and iOS written, well, for the TPM part in Go, and
+[06:07.840 --> 06:13.760]  then for the UI in Kotlin or Swift.
+[06:13.760 --> 06:19.800]  So the way it works is when you start the server on the laptop, it shows a QR code with
+[06:19.800 --> 06:28.200]  some key so that we can encrypt the communication between the laptop and the phone and pair
+[06:28.200 --> 06:35.600]  them in a secure way, you scan the QR code on your phone, it gives you the key, and then
+[06:35.600 --> 06:42.640]  on first use, you have a trust on first use step where you need to kind of trust the measurements
+[06:42.640 --> 06:44.480]  the very first time.
+[06:44.480 --> 06:50.040]  We do not support right now downloading trusted measurements from an external server the way
+[06:50.040 --> 06:53.280]  you would do if you're in a larger organization.
+[06:53.280 --> 06:58.480]  Remember this is for individual users, but we could extend it to support that use case
+[06:58.480 --> 06:59.720]  if needed.
+[06:59.720 --> 07:06.800]  And then every time you want to test and that things haven't changed, then you just run
+[07:06.800 --> 07:13.800]  the server here again on the laptop, you don't need to scan a QR code anymore, you just start
+[07:13.800 --> 07:19.160]  the attestation on the client, it pairs over Bluetooth systematically using the key that
+[07:19.160 --> 07:25.400]  is remembered, it exchanged graphically the results of the measurements.
+[07:25.400 --> 07:29.040]  Thanks to the TPM remote attestation protocol, it can check that it is the same physical
+[07:29.040 --> 07:33.840]  machine or at least the same physical TPM if you left your laptop and attend in the first
+[07:33.840 --> 07:44.080]  dem room unless like the attacker put it open, swap TPM stuff like that, it doesn't have
+[07:44.080 --> 07:45.080]  it.
+[07:45.080 --> 07:49.720]  So it can really make sure it is the same hardware it is talking to or at least the same
+[07:49.720 --> 07:57.960]  TPM, and then it checks that the measurements of the blockchain haven't changed since last
+[07:57.960 --> 07:58.960]  time.
+[07:58.960 --> 08:03.600]  And it can send back a secret optionally to the laptop if you want to use it for disconfusion.
+[08:03.600 --> 08:09.760]  Of course, it doesn't send a secret back if things have failed.
+[08:09.760 --> 08:18.480]  So we have a demo and because we know how demo works, it's a recorded video.
+[08:18.480 --> 08:24.680]  I mean I can also try the demo for real afterwards.
+[08:24.680 --> 08:32.960]  So this is running in a virtual machine created with May Cozy that was mentioned in previous
+[08:32.960 --> 08:33.960]  talks.
+[08:33.960 --> 08:36.240]  So here I'll first show the enrolment.
+[08:36.240 --> 08:40.960]  So the virtual machine is booting for the first time.
+[08:40.960 --> 08:45.240]  So on the left you have the virtual machine, on the right you have the phone.
+[08:45.240 --> 08:51.160]  In that case, the iOS client because it is much more beautiful because my intern spent
+[08:51.160 --> 08:53.760]  a lot more time working on it.
+[08:53.760 --> 08:59.160]  But I don't have Xcode, so the client I reviewed is the Android one and so the one you get
+[08:59.160 --> 09:06.240]  on GitHub has fewer features, I'm sorry, but eventually it will merge everything back.
+[09:06.240 --> 09:07.800]  So here's the first time we boot.
+[09:07.800 --> 09:12.800]  We need to enter a passphrase because we haven't enrolled yet.
+[09:12.800 --> 09:17.600]  And then, sorry, it's the bottom of the screen, but we run the old server to perform the initial
+[09:17.600 --> 09:22.480]  trust and first use enrolment that we are fully booted to a Linux system.
+[09:22.480 --> 09:24.080]  So here you have to trust your system.
+[09:24.080 --> 09:30.200]  It's the first time you boot if it's already compromised your host.
+[09:30.200 --> 09:35.880]  It's going to display the QR code that we are going to scan with the phone.
+[09:35.880 --> 09:42.200]  And then it starts at station showing the steps on both sides, get the measurements,
+[09:42.200 --> 09:45.560]  and now we have the device registered on the right.
+[09:45.560 --> 09:52.000]  So we can change its name, we know when we created it, when we last run an attestation.
+[09:52.000 --> 09:58.680]  And as you'll see, you can edit the security policy.
+[09:58.680 --> 10:03.000]  So the way it works when you boot is you choose what kind of measurements you want to check.
+[10:03.000 --> 10:11.840]  Again, this is only in the iOS application, but coming soon on Android.
+[10:11.840 --> 10:21.560]  Then the next step is to run system decrypt enrol so that because when we enroll the phone,
+[10:21.560 --> 10:28.080]  we send back a secret to the laptop which was stored in the TPM in a special register,
+[10:28.080 --> 10:30.560]  register 9, PCR 9.
+[10:30.560 --> 10:35.800]  And so here we run system decrypt enrol so that we add another factor, another slot
+[10:35.800 --> 10:43.720]  to unlock the disk based not on the passphrase, but on the contents on TPM register 9.
+[10:43.720 --> 10:46.840]  So here basically, yeah, that's what we did.
+[10:46.840 --> 10:52.040]  And now we regenerate the Initram FS using Dracot, Dracot modules.
+[10:52.040 --> 10:57.920]  We would like to get rid of them because they're very buggy, but maybe see preview stock one
+[10:57.920 --> 11:04.760]  day we can, so that we can enable ultra blue and start up.
+[11:04.760 --> 11:10.000]  And here we start again, but now start up stops at some point, starting the ultra blue
+[11:10.000 --> 11:12.280]  server.
+[11:12.280 --> 11:18.000]  And we go on the phone and just press this button, the play button.
+[11:18.000 --> 11:22.760]  Starting an attestation, fetching the measurements, it works.
+[11:22.760 --> 11:26.760]  So we send back the secret and we don't need to enter a passphrase anymore because we send
+[11:26.760 --> 11:31.120]  back the secret so it unlocked the disk based on the secret.
+[11:31.120 --> 11:35.640]  Now what happens if something has changed in the boot?
+[11:35.640 --> 11:43.600]  So again, we start an attestation, yada, yada.
+[11:43.600 --> 11:45.440]  And here we do not send back the secret.
+[11:45.440 --> 11:50.000]  We say, oh, something is different this time.
+[11:50.000 --> 11:53.000]  It's in PCR8, right?
+[11:53.000 --> 11:54.000]  It has changed.
+[11:54.000 --> 11:58.440]  And PCR8, we provide some info to the user, is expected to contain the hash of the kernel
+[11:58.440 --> 11:59.440]  command line.
+[11:59.440 --> 12:05.000]  Then you can even look at the diff, and if you look at the diff you can see that you
+[12:05.000 --> 12:10.480]  have a new command line option, super-heavillopt, that has been added, right?
+[12:10.480 --> 12:17.480]  So this data, you can actually trust it, but you can trust that this data, it's digest,
+[12:17.480 --> 12:20.560]  is the same as the one stored in the TPM.
+[12:20.560 --> 12:23.200]  And then you can choose what you want to do.
+[12:23.200 --> 12:27.480]  You can say, OK, this is a legitimate update, for instance, I updated my firmware, it's
+[12:27.480 --> 12:30.360]  an expected change, so I saved the new one.
+[12:30.360 --> 12:34.960]  You can say, OK, trust, but only once, as you would do in a browser.
+[12:34.960 --> 12:37.040]  Or you can say, oh, no, it's definitely an attack.
+[12:37.040 --> 12:41.280]  I want to reject it, maybe call some security team.
+[12:41.280 --> 12:47.840]  We haven't implemented that yet, but do not send back the secrets in any case.
+[12:47.840 --> 12:50.240]  That's what we do here.
+[12:50.240 --> 12:52.720]  We reject it.
+[12:52.720 --> 13:00.560]  And so it falls back to asking you a passphrase to end up your disk.
+[13:00.560 --> 13:02.960]  And that's about it for today.
+[13:02.960 --> 13:07.520]  So you can, it's Versatile, you can embed it in any TramFS.
+[13:07.520 --> 13:09.520]  You can use it as a second factor.
+[13:09.520 --> 13:14.880]  We provide in the release sample, make a script to build the VM that I just demonstrated.
+[13:14.880 --> 13:20.680]  We also just today published a release just for you, first time attendee, so that you
+[13:20.680 --> 13:22.360]  do not need to rebuild everything.
+[13:22.360 --> 13:25.480]  You can just test.
+[13:25.480 --> 13:30.680]  Then if you're interested about the protocol, you have five minutes of questions.
+[13:30.680 --> 13:37.160]  But trust us, we ask the security team, I mean, the cryptography team in our lab to
+[13:37.160 --> 13:38.560]  review it.
+[13:38.560 --> 13:39.560]  It's fairly standard.
+[13:39.560 --> 13:44.200]  It's fairly standard for a multi-station protocol.
+[13:44.200 --> 13:47.560]  And so, yeah, we want to integrate more.
+[13:47.560 --> 13:50.880]  That's why we are here today to talk to you.
+[13:50.880 --> 13:58.920]  So go on ncfr slash ultra blue, add slash release if you want some binaries for Android
+[13:58.920 --> 14:02.520]  and x86 Linux.
+[14:02.520 --> 14:08.240]  And yeah, I'm here for questions.
+[14:08.240 --> 14:13.600]  I'll start with a question.
+[14:13.600 --> 14:16.840]  How practical would it be to run this on your laptop?
+[14:16.840 --> 14:26.720]  Well, I'm not like I just basically mentored Loic, but I co-mentored Loic with Nicolas
+[14:26.720 --> 14:32.520]  Bouchiner, who should be in this room somewhere, I think, yes, here.
+[14:32.520 --> 14:37.480]  And Nicolas mentioned just yesterday that he's now quite ready to use it on his laptop.
+[14:37.480 --> 14:38.920]  So I guess ask him.
+[14:38.920 --> 14:45.480]  I don't even have secure boot enabled on this laptop.
+[14:45.480 --> 14:51.040]  So I guess the French NSA doesn't allow you to use that.
+[14:51.040 --> 14:58.880]  So it's like, I mean, this is the public, so it's endorsed by our agency.
+[14:58.880 --> 15:05.880]  It's been endorsed in the sense that it's OK to release the code publicly.
+[15:05.880 --> 15:09.520]  We have reviewed it as carefully as we can.
+[15:09.520 --> 15:15.160]  We do not consider it production grade right now.
+[15:15.160 --> 15:23.160]  Have you thought about using it to assess the IMA log at runtime as well, so for files
+[15:23.160 --> 15:29.200]  that are accessed against some network-accessible database, not only for boot, but also for
+[15:29.200 --> 15:30.440]  checks at runtime?
+[15:30.440 --> 15:38.960]  So I think for checks at runtime, there are two things here.
+[15:38.960 --> 15:47.040]  Checks at runtime of your file system, I think you want to use more like the VM variety and
+[15:47.040 --> 15:49.040]  other mechanisms that we have.
+[15:49.040 --> 15:54.040]  But the TPM doesn't only have uses at boot time.
+[15:54.040 --> 15:58.600]  So the fact that you run remote attestation, this could be done later.
+[15:58.600 --> 16:03.760]  The advantage to make it early is that you can detect if you're compromised in the before
+[16:03.760 --> 16:05.840]  inputting your password, basically.
+[16:05.840 --> 16:11.280]  Yes, I see some questions here in the back.
+[16:11.280 --> 16:16.920]  Let's say that nobody swaps your TPM, yes, put that case aside.
+[16:16.920 --> 16:22.640]  Could you get the same level of attestation just with signatures with the TPM?
+[16:22.640 --> 16:25.560]  Let's say you don't think that somebody was going to swap your TPM.
+[16:25.560 --> 16:32.640]  So could you just check some of the parts of the boot chain and just sign the hashes
+[16:32.640 --> 16:38.520]  and just add boot, verify the signature with TPM?
+[16:38.520 --> 16:45.600]  The problem is how do you trust what you see on the screen of your laptop?
+[16:45.600 --> 16:51.000]  The idea that the phone remains in your pocket, so the phone is trusted or it's more trusted
+[16:51.000 --> 16:56.640]  to have two devices than one, because it's harder to compromise two devices.
+[16:56.640 --> 17:03.560]  So if something in your boot loader is compromised, it could show you on your computer that, okay,
+[17:03.560 --> 17:07.200]  the TPM measures check out, et cetera.
+[17:07.200 --> 17:12.120]  And this is even more true for something that's called dynamic root trust measurement, root
+[17:12.120 --> 17:13.640]  of trust measurements.
+[17:13.640 --> 17:18.360]  So not only trusting your BIOS to make the measurements, but like some special instructions
+[17:18.360 --> 17:24.320]  in CPUs where you restart the root of trust later in the boot process.
+[17:24.320 --> 17:32.480]  But for this to work, the check has to be external.
+[17:32.480 --> 17:34.080]  You said it's not production ready.
+[17:34.080 --> 17:37.400]  Do you see it being production ready anytime soon?
+[17:37.400 --> 17:40.040]  Is that the goal?
+[17:40.040 --> 17:44.680]  It's not a stated goal of the agency.
+[17:44.680 --> 17:50.880]  I'd be very happy for it to be used more widely.
+[17:50.880 --> 17:56.680]  But I think for this to happen, we need people outside of the agency interested.
+[17:56.680 --> 17:59.920]  Yeah, looks great.
+[17:59.920 --> 18:03.840]  I have a question regarding the app on the mobile phone.
+[18:03.840 --> 18:08.520]  So how does the app know that it's speaking to a trusted server or the server that it
+[18:08.520 --> 18:09.680]  can trust?
+[18:09.680 --> 18:16.680]  So does it exchange keys with the server on first use or how does it work?
+[18:16.680 --> 18:20.600]  So there is a trust on first use.
+[18:20.600 --> 18:23.320]  So there are two levels of security.
+[18:23.320 --> 18:31.240]  First, the Bluetooth communication is encrypted and the key for that communication is embedded
+[18:31.240 --> 18:36.000]  in the QR code that you scan first.
+[18:36.000 --> 18:38.600]  And then the identity of the TPM.
+[18:38.600 --> 18:45.680]  The TPM has a secret key inside and uses it to...
+[18:45.680 --> 18:49.520]  And so the public key is stored in the app on the mobile phone.
+[18:49.520 --> 18:54.280]  And so the app can check that it talks to the expected TPM.
+[18:54.280 --> 19:00.520]  So basically, the encryption key is used to attest that it's the same operating system
+[19:00.520 --> 19:06.960]  or E-NITRA MFS, and the TPM key is used to check that it's the same TPM.
+[19:06.960 --> 19:15.360]  Yeah, but that's still, as far as I understand, does not prevent a malicious server to send
+[19:15.360 --> 19:20.920]  the app the wrong values or to just imagine the values and send them echoed.
+[19:20.920 --> 19:31.680]  So there is something that we haven't implemented right now because we wanted it to be easy
+[19:31.680 --> 19:37.320]  to test with virtual machines and software TPMs.
+[19:37.320 --> 19:47.640]  But one thing is that the TPM certificates, like basically you have a list, the TPM keys
+[19:47.640 --> 19:52.440]  are signed by vendor, and so you have a list of the keys of the vendor that are used to
+[19:52.440 --> 19:53.840]  sign the certificates.
+[19:53.840 --> 19:59.000]  So when you get the quote from the TPM, you can check that it's a hardware TPM by some
+[19:59.000 --> 20:03.600]  well-known manufacturers and not some eliminated TPM.
+[20:03.600 --> 20:11.080]  So you can be sure that you're actually talking to a physical TPM device, and so the server
+[20:11.080 --> 20:13.480]  cannot mess with that.
+[20:13.480 --> 20:20.600]  But you're right, we haven't implemented this right now, otherwise the demo on purpose,
+[20:20.600 --> 20:24.480]  so to say, because otherwise the demo wouldn't work.
+[20:24.480 --> 20:27.640]  That's an option I want to add.
+[20:27.640 --> 20:29.400]  Very good question.
+[20:29.400 --> 20:33.600]  This is using Bluetooth, Bluetooth specification is very complicated.
+[20:33.600 --> 20:39.640]  How much does it rely on Bluetooth working fine or as expected?
+[20:39.640 --> 20:43.480]  So it's using Bluetooth low energy.
+[20:43.480 --> 20:51.120]  It's relying on the Go Bluetooth library to work fine.
+[20:51.120 --> 20:59.080]  So we don't use any of the Bluetooth stack encryption for the encryption part.
+[20:59.080 --> 21:08.640]  We roll out our stuff, and we layered the code so that it's mostly agnostic to the underlying
+[21:08.640 --> 21:10.640]  transport.
+[21:10.640 --> 21:15.880]  So if you want it to run over infrared, it should be relatively easy to port.
+[21:15.880 --> 21:21.800]  I just don't know how to code that.
+[21:21.800 --> 21:26.760]  And we are extremely conservative in that we just abort as soon as we receive packets
+[21:26.760 --> 21:29.720]  out of orders or unexpected packets.
+[21:29.720 --> 21:33.800]  OK, last question from online.
+[21:33.800 --> 21:40.320]  Someone asked if any distribution expressed any interest in making it in the Ultra Blue?
+[21:40.320 --> 21:46.080]  Yes, in fact, but not officially, some Twitter messages.
+[21:46.080 --> 21:52.120]  We presented this at Open Source PMWare conference last September as well.
+[21:52.120 --> 21:57.400]  And after that, there was some interest online and people saying that Fedora, they may be
+[21:57.400 --> 22:00.400]  interested, but it was not official Fedora position.
+[22:00.400 --> 22:01.400]  Some Fedora contributors.
+[22:01.400 --> 22:08.000]  I can say that this is interesting to that.
+[22:08.000 --> 22:09.000]  Thank you.
+[22:09.000 --> 22:11.480]  Thanks, for the speaker.
+[22:11.480 --> 22:13.480]  We have one request.

@@ -1,0 +1,1207 @@
+WEBVTT
+
+00:00.000 --> 00:14.600
+So, I hope it will be fun enough for you to wake up at the end of the day and very excited
+
+00:14.600 --> 00:18.920
+to be here at FOSDEM and specifically at the CI CD Dev Room.
+
+00:18.920 --> 00:23.840
+And today I'd like to share with you about how we gained observability into our CI CD
+
+00:23.840 --> 00:28.120
+pipeline and how you can do too.
+
+00:28.120 --> 00:36.600
+So let's start with a day in the life of a DoD developer on duty, at least in my company.
+
+00:36.600 --> 00:38.120
+And it goes like that.
+
+00:38.120 --> 00:42.400
+So the first thing the DoD does in the morning, at least it used to be before we did this
+
+00:42.400 --> 00:45.400
+exercise, is going into the Jenkins.
+
+00:45.400 --> 00:51.880
+We worked with Jenkins, but the takeaways, by the way, will be very applicable to any
+
+00:51.880 --> 00:57.280
+other system you work with, so nothing too specific here.
+
+00:57.280 --> 01:02.640
+Going into Jenkins at the beginning of the morning, we're looking at the status there,
+
+01:02.640 --> 01:07.440
+the pipelines for the last few hours over the night, and of course checking if anything
+
+01:07.440 --> 01:13.640
+is red, and most importantly, if there's a red master.
+
+01:13.640 --> 01:20.360
+And if you can obviously finish your coffee or jump straight into the investigation.
+
+01:20.360 --> 01:25.120
+And to be honest, sometimes people actually forgot to go into the Jenkins and check this,
+
+01:25.120 --> 01:28.960
+so that's another topic we'll maybe touch upon.
+
+01:28.960 --> 01:32.480
+So you go in, and then you need to go, let's say you see a failure, you see something red,
+
+01:32.480 --> 01:39.920
+you need to start going one by one on the different runs, and start figuring out, understanding
+
+01:39.920 --> 01:45.640
+what failed, where it failed, why it failed, and so on.
+
+01:45.640 --> 01:51.800
+And it's important that you actually, you needed to go one by one on the different runs,
+
+01:51.800 --> 01:55.920
+and we have several runs, we have the backend, we have the app, we have smoke tests, several
+
+01:55.920 --> 02:01.600
+of these, and start getting the picture, getting the pattern across, and understanding cross
+
+02:01.600 --> 02:05.440
+runs, across branches, what's going on.
+
+02:05.440 --> 02:10.640
+And on top of all of that, it was very difficult to compare with historical behavior, with
+
+02:10.640 --> 02:16.280
+the past behavior, to understand what's, and anomaly, what's the steady state for these
+
+02:16.280 --> 02:18.920
+days, and so on.
+
+02:18.920 --> 02:24.960
+So, and just to give you a few examples of questions that we found it difficult or time-consuming
+
+02:24.960 --> 02:31.080
+to answer, things such as, did all runs fail on the same step, did all runs fail for the
+
+02:31.080 --> 02:39.680
+same reason, is that on a specific branch, is that on a specific machine, if something's
+
+02:39.680 --> 02:46.400
+taking longer, is that normal, is that anomalous, what's the benchmark?
+
+02:46.400 --> 02:54.320
+And so these sorts of questions, it took us too long to answer, and we realized we need
+
+02:54.320 --> 02:55.320
+to improve.
+
+02:55.320 --> 03:02.360
+A word about myself, my name is Dotan Horvitz, I'm the Principal Developer Advocate at a company
+
+03:02.360 --> 03:10.280
+called Logs.io, Logs.io provides a cloud-native observability platform that's built on popular
+
+03:10.280 --> 03:16.840
+open-source tools such as you probably know, Prometheus, OpenSearch, OpenTelemetry, Yeager,
+
+03:16.840 --> 03:17.840
+and others.
+
+03:17.840 --> 03:25.680
+I come from a background as a developer, a solutions architect, even a product manager,
+
+03:25.680 --> 03:30.880
+and most importantly, I'm an advocate of open-source and communities.
+
+03:30.880 --> 03:37.640
+I run a podcast called Open Observability Talks about open-source DevOps observability,
+
+03:37.640 --> 03:41.600
+so if you're interested in these topics and you like podcasts, do check it out.
+
+03:41.600 --> 03:47.720
+I also run, organize, co-organize several communities, the local chapter of the CNCF,
+
+03:47.720 --> 03:52.440
+the cloud-native computing foundation in Tel Aviv, Kubernetes Community Days, DevOps
+
+03:52.440 --> 03:57.480
+Days, et cetera, and you can find me everywhere at Horvitz.
+
+03:57.480 --> 04:02.200
+So if you have something interesting, you tweet, feel free to tag me.
+
+04:02.200 --> 04:10.960
+So before I get into how we improved our CI CD pipeline or capabilities, let's first
+
+04:10.960 --> 04:14.360
+understand what we want to improve on.
+
+04:14.360 --> 04:19.560
+And actually, I see very often that people jump into solving before really understanding
+
+04:19.560 --> 04:27.440
+the metric, the KPI that they want to improve, and very basically, therefore, primary metrics
+
+04:27.440 --> 04:34.920
+for, let's say, DevOps performance, and you can see there on the screen, there's the
+
+04:34.920 --> 04:42.560
+deployment frequency, lead time for changes, change failure rate, and MPTR, mean time to
+
+04:42.560 --> 04:44.040
+recovery.
+
+04:44.040 --> 04:48.600
+I don't have time to go over all of these, but very important, so if you're new to this
+
+04:48.600 --> 04:54.240
+and if you want to read a bit more about that, I left a QR code and a short link for you
+
+04:54.240 --> 05:02.040
+at the bottom for a 101 on the Dora metrics, do check it out, I think it's priceless.
+
+05:02.040 --> 05:07.560
+And in our case, we needed to improve on the lead time for changes or sometimes called
+
+05:07.560 --> 05:14.480
+cycle time, which is the amount of time it takes a commit to get into production, which
+
+05:14.480 --> 05:22.120
+in our case was the time was too long, too high, and was holding us back.
+
+05:22.120 --> 05:27.640
+So we are experts at observability in our engineering team.
+
+05:27.640 --> 05:31.840
+That's what we do for a living, so it was very clear to us that what we're missing in
+
+05:31.840 --> 05:37.120
+our case is observability into our CICD pipeline.
+
+05:37.120 --> 05:42.000
+And to be fair with Jenkins, and there are lots of things to complain about Jenkins,
+
+05:42.000 --> 05:44.560
+but there is some capabilities within Jenkins.
+
+05:44.560 --> 05:49.720
+You can go into a specific pipeline run, you can see the different steps, you can see how
+
+05:49.720 --> 05:53.600
+much time an individual step took.
+
+05:53.600 --> 05:59.320
+Using some plugins, you can also visualize the graph and we even wired Jenkins to get
+
+05:59.320 --> 06:05.640
+alerts on Slack, but that wasn't good enough for us.
+
+06:05.640 --> 06:11.680
+And the reason that we wanted to find a way to monitor aggregated and filtered information
+
+06:11.680 --> 06:17.160
+according to our own timescale, according to our own filters, obviously to see things
+
+06:17.160 --> 06:23.760
+across branches, across runs, to compare with historical data, with our own filtering,
+
+06:23.760 --> 06:26.400
+so that's where we aimed at.
+
+06:26.400 --> 06:32.360
+And we launched this internal project with these requirements, four requirements.
+
+06:32.360 --> 06:37.920
+One, first and foremost, as we need the dashboard, we need the dashboard with aggregated views
+
+06:37.920 --> 06:44.080
+to be able to see the aggregated data across pipelines, across runs, across branches as
+
+06:44.080 --> 06:46.280
+we talked about.
+
+06:46.280 --> 06:52.240
+Finally we wanted to have access to historical data to be able to compare, to understand
+
+06:52.240 --> 06:57.480
+trends, to identify patterns, anomalies, and so on.
+
+06:57.480 --> 07:04.280
+Thirdly, we wanted reports and alerts to be able to automate as much as possible.
+
+07:04.280 --> 07:09.840
+And lastly, we wanted some ability to view flaky tests, test performance, and to be able
+
+07:09.840 --> 07:13.560
+to understand their impact on the pipeline.
+
+07:13.560 --> 07:20.240
+So that was the project requirements and how we did that.
+
+07:20.240 --> 07:29.400
+Essentially it takes four steps, collect, store, visualize, and report.
+
+07:29.400 --> 07:33.600
+And I'll show you exactly how it's done and what each step entails.
+
+07:33.600 --> 07:39.920
+In terms of the tech stack, we were very versed with the Elk stack, Elasticsearch, Kabbana.
+
+07:39.920 --> 07:45.440
+Then we also switched over to OpenSearch and OpenSearch dashboards after Elastic re-licensed
+
+07:45.440 --> 07:47.640
+and it was no longer open source.
+
+07:47.640 --> 07:53.000
+So that was our natural point to start our observability journey.
+
+07:53.000 --> 07:58.160
+And I'll show you how we did these four steps with this tech stack.
+
+07:58.160 --> 08:00.560
+So the first step is collect.
+
+08:00.560 --> 08:05.560
+And for that we instrumented the pipeline to collect all the relevant information and
+
+08:05.560 --> 08:08.280
+put it in environment variables.
+
+08:08.280 --> 08:14.200
+Which information, you can see some examples here on the screen, the branch, the Kamecha,
+
+08:14.200 --> 08:19.840
+the machine IP, the run type, whether it's scheduled, triggered by merge to master or
+
+08:19.840 --> 08:25.400
+something else, fail step, step duration, build number, anything essentially that you
+
+08:25.400 --> 08:28.320
+find useful for investigation later.
+
+08:28.320 --> 08:32.160
+My recommendation, collect it and persist it.
+
+08:32.160 --> 08:36.920
+So that's the collect phase and after collect comes store.
+
+08:36.920 --> 08:43.440
+And for that we created a new summary step at the end of the pipeline one where we ran
+
+08:43.440 --> 08:49.560
+a command to collect all of that information that we did in the first step and created
+
+08:49.560 --> 08:59.800
+a JSON and persisted it to Elasticsearch, as I mentioned then move to OpenSearch.
+
+08:59.800 --> 09:04.520
+And it's important to say again for the fairness of Jenkins and for the Jenkins experts here,
+
+09:04.520 --> 09:08.120
+Jenkins does have some built in persistency capabilities.
+
+09:08.120 --> 09:12.000
+And we tried them out, but it wasn't good enough for us.
+
+09:12.000 --> 09:18.280
+And the reason is that by default Jenkins essentially keeps all the bills and stores
+
+09:18.280 --> 09:23.760
+them on the Jenkins machine, which burdens these machines of course.
+
+09:23.760 --> 09:29.320
+And then you start needing to limit the number of bills and the duration, how many days and
+
+09:29.320 --> 09:30.320
+so on and so forth.
+
+09:30.320 --> 09:33.200
+So that wasn't good enough for us.
+
+09:33.200 --> 09:36.960
+We needed a more powerful access to historical data.
+
+09:36.960 --> 09:44.040
+We wanted to persist historical data in our own control, the duration, the retention and
+
+09:44.040 --> 09:51.480
+most importantly off of the Jenkins servers so as not to risk and overload the critical
+
+09:51.480 --> 09:54.080
+path.
+
+09:54.080 --> 09:56.160
+So that's about store and after store.
+
+09:56.160 --> 10:01.400
+Once we have all the data in Elasticsearch or OpenSearch, now it's very easy to build
+
+10:01.400 --> 10:07.480
+command dashboards or OpenSearch dashboards and visualizations on top of that.
+
+10:07.480 --> 10:13.200
+And then comes the question, sorry, then comes the question, okay, so which visualizations
+
+10:13.200 --> 10:16.160
+should I build?
+
+10:16.160 --> 10:20.960
+And for that, and that's a tip, take it with you, go back to the pains, go back to the
+
+10:20.960 --> 10:25.560
+questions that you found it hard to answer and this would be the starting point.
+
+10:25.560 --> 10:29.920
+So if you remember before we mentioned things such as did all runs fail on the same step,
+
+10:29.920 --> 10:35.880
+did all runs fail for the same reason, how many fail, is that a specific branch, is that
+
+10:35.880 --> 10:41.640
+a specific machine and so on, these are the questions that we guide you then to choose
+
+10:41.640 --> 10:44.720
+the right visualizations for your dashboard.
+
+10:44.720 --> 10:47.680
+And I'll give you some examples here.
+
+10:47.680 --> 10:50.000
+So let's start with the top line view.
+
+10:50.000 --> 10:54.240
+You want to understand the health of your house table, your pipeline is.
+
+10:54.240 --> 11:00.840
+So visualize the success and failure rates, you can do that overall in general or at a
+
+11:00.840 --> 11:07.520
+specific time window on a graph, very easy to see the first glance, what's the health
+
+11:07.520 --> 11:11.840
+status of your pipeline.
+
+11:11.840 --> 11:18.200
+You want to find problematic steps, then visualize failures segmented by pipeline steps, again
+
+11:18.200 --> 11:22.520
+very easy to see the spiking step there.
+
+11:22.520 --> 11:28.400
+You want to detect problematic build machines, visualize failures segmented by machine and
+
+11:28.400 --> 11:36.440
+that by the way saved us a lot of wasted time going and checking bugs in the release code.
+
+11:36.440 --> 11:41.240
+When we saw such a thing, we just go, you kill the machine, you let the auto scaler spin
+
+11:41.240 --> 11:46.240
+up a new instance and you start clean and in many cases it solves the problem.
+
+11:46.240 --> 11:55.120
+So lots of time saved, in general this aspect of code based or environmental based issues
+
+11:55.120 --> 12:02.360
+is definitely a challenge I'm assuming, not just for me, so I'll get back to that soon.
+
+12:02.360 --> 12:10.320
+Another example duration per step, again very easy to see where and at the time is spent.
+
+12:10.320 --> 12:17.840
+So that's the visualize part and after visualize comes the reporting and alerting phase.
+
+12:17.840 --> 12:23.120
+And if you remember before the DOD, the developer on duty, needed to go manually and check Jenkins
+
+12:23.120 --> 12:32.560
+and then the health check, now the DOD gets start of day report directly to Slack and
+
+12:32.560 --> 12:37.200
+actually as you can see the report already contains the link to the dashboard and even
+
+12:37.200 --> 12:43.440
+a snapshot of the dashboard embedded within the Slack so that at the first glance even
+
+12:43.440 --> 12:48.920
+without going into the dashboard you can see if you can finish your coffee or if there's
+
+12:48.920 --> 12:54.320
+something alerting that you need to click that link and go start investigating.
+
+12:54.320 --> 12:58.120
+And of course it doesn't have to be a schedule report, it could be also you can define triggered
+
+12:58.120 --> 13:04.160
+alerts on any of that, the fields, the data that we collected in the first phase and the
+
+13:04.160 --> 13:11.080
+collect phase so and you can do any complex queries or conditions that you want, you want
+
+13:11.080 --> 13:16.920
+to do something like if the sum of failures goes above x or the average duration goes
+
+13:16.920 --> 13:19.000
+above y trigger an alert.
+
+13:19.000 --> 13:24.280
+So essentially anything that you can formalize as a Lucene query, you can automate as an
+
+13:24.280 --> 13:29.400
+alert and that's some alerting layer that we built on top of elastic search and open
+
+13:29.400 --> 13:32.280
+search for that.
+
+13:32.280 --> 13:37.080
+One last note, I'm giving the examples from Slack because that's what we use in our environment
+
+13:37.080 --> 13:42.880
+but you're not limited obviously to Slack, you have support for many notification endpoints
+
+13:42.880 --> 13:48.240
+depending on your systems, pager duty, victorops, ops genie, MS themes, whatever.
+
+13:48.240 --> 13:53.680
+We personally work with Slack so that the examples are with Slack.
+
+13:53.680 --> 14:00.280
+So that's how we build observability into the Jenkins pipelines but as we all know especially
+
+14:00.280 --> 14:06.600
+here in the CI CD dev room, Jenkins, CI CD is much more than just Jenkins.
+
+14:06.600 --> 14:09.880
+So what else?
+
+14:09.880 --> 14:14.720
+So we wanted to analyze if you remember the original requirements to analyze flaky tests
+
+14:14.720 --> 14:22.520
+and test performance and following the same process, collecting all the relevant information
+
+14:22.520 --> 14:29.720
+from test run and storing it in elastic search and open search and then creating a cabana
+
+14:29.720 --> 14:36.760
+dashboard or open search dashboards and as you can see very all the relevant usual suspects
+
+14:36.760 --> 14:43.000
+that you'd expect, the test duration, fail test, flaky test, failure count and rate moving
+
+14:43.000 --> 14:48.160
+averages, fail test by branch over time, all of the things that you would need in order
+
+14:48.160 --> 14:56.160
+to analyze and understand the impact of your test and the flaky tests in your system.
+
+14:56.160 --> 15:03.280
+And similarly after visualize you can also report, we created reports to Slack, we have
+
+15:03.280 --> 15:08.120
+a dedicated Slack channel for that, following the same pattern.
+
+15:08.120 --> 15:10.800
+One important point is about the openness.
+
+15:10.800 --> 15:16.560
+So once you have the data in open search or in elastic search, it's very easy for different
+
+15:16.560 --> 15:21.120
+teams to create different visualizations on top of that same data.
+
+15:21.120 --> 15:26.160
+So I took another extreme, a different team that didn't like the graphs and preferred
+
+15:26.160 --> 15:37.240
+the table views and the counters to visualize, again, very similarly, test stats and so on.
+
+15:37.240 --> 15:40.440
+And that's the beauty of it.
+
+15:40.440 --> 15:46.000
+So just to summarize, we instrumented Jenkins pipeline to collect relevant data and put
+
+15:46.000 --> 15:50.720
+it in environment variables, then at the end of the pipeline we created a JSON with all
+
+15:50.720 --> 15:57.600
+this data and persisted it to elastic search open search, then we created Kibana dashboards
+
+15:57.600 --> 16:03.360
+on top of that data and lastly we created reports and alerts on that data.
+
+16:03.360 --> 16:10.040
+So four steps, collect, store, visualize and report.
+
+16:10.040 --> 16:13.880
+So that was our first step in the journey but we didn't stop there.
+
+16:13.880 --> 16:22.440
+The next step was we asked ourselves, what can we do in order to investigate performance
+
+16:22.440 --> 16:24.680
+of specific pipeline runs?
+
+16:24.680 --> 16:30.120
+So you have a run that takes a lot of time, you want to optimize, but where is the problem?
+
+16:30.120 --> 16:36.480
+And that's actually what distributed tracing is ideal for.
+
+16:36.480 --> 16:40.200
+How many people know what distributed tracing is with a show of hands?
+
+16:40.200 --> 16:44.440
+Okay, I see that most of us, there are a few that know, so maybe I'll say a word about
+
+16:44.440 --> 16:46.080
+that soon.
+
+16:46.080 --> 16:52.600
+Very importantly, Jenkins has the capability to emit trace data spans, just like it does
+
+16:52.600 --> 16:55.360
+for logs, so it's already built in.
+
+16:55.360 --> 17:00.720
+So we decided to visualize jobs and pipeline executions as distributed tracing.
+
+17:00.720 --> 17:05.320
+That was the next step.
+
+17:05.320 --> 17:12.800
+And for those who don't know, distributed tracing essentially helps pinpoint where issues occur
+
+17:12.800 --> 17:19.560
+and where latency is in production environments, in distributed systems, it's not specific
+
+17:19.560 --> 17:20.560
+for CICD.
+
+17:20.560 --> 17:25.080
+If you think about a microservice architecture and a request coming in and flowing through
+
+17:25.080 --> 17:31.000
+a chain of interacting microservices, then when something goes wrong, you get an error
+
+17:31.000 --> 17:35.280
+on that request, you want to know where the error is within this chain, or if there's a
+
+17:35.280 --> 17:38.680
+latency, you want to know where the latency is.
+
+17:38.680 --> 17:40.520
+That's distributed tracing in a nutshell.
+
+17:40.520 --> 17:45.760
+And the way it works is that each step in this call chain, or in our case, each step
+
+17:45.760 --> 17:50.320
+in the pipeline, creates and emits a span.
+
+17:50.320 --> 17:55.520
+You can think about a span as a structured log that also contains the trace ID, the start
+
+17:55.520 --> 17:58.160
+time, the duration, and some other context.
+
+17:58.160 --> 18:02.360
+And then there is a back end that collects all these spans, reconstruct the trace, and
+
+18:02.360 --> 18:11.560
+then visualizes it typically in this timeline view or gun chart that you can see on the
+
+18:11.560 --> 18:13.120
+right-hand side.
+
+18:13.120 --> 18:18.720
+So now that we understand the distributed tracing, let's see how we add distributed
+
+18:18.720 --> 18:25.520
+tracing type of performance, pipeline performance into a CICD pipeline.
+
+18:25.520 --> 18:27.440
+And same process.
+
+18:27.440 --> 18:29.280
+For the collect step, collect.
+
+18:29.280 --> 18:38.840
+And for the collect step, we decided to use an open telemetry collector who doesn't know
+
+18:38.840 --> 18:43.040
+about open telemetry, who doesn't know the project, just so I have a background, okay.
+
+18:43.040 --> 18:47.520
+I have a few, so I'll say a word about that.
+
+18:47.520 --> 18:54.080
+And anyway, I added a link, you see a QR code and a link at the lower corner there for a
+
+18:54.080 --> 18:56.880
+beginner's guide to open telemetry that I wrote.
+
+18:56.880 --> 19:01.360
+I gave a talk about open telemetry at KubeCon Europe, so you'll find it useful.
+
+19:01.360 --> 19:09.640
+But very briefly, it's an observability platform for collecting logs, metrics, and traces.
+
+19:09.640 --> 19:16.440
+So it's not specific only to traces in an open unified standard manner.
+
+19:16.440 --> 19:22.760
+It's an open source project under the CNCF, the Cloud Native Computing Foundation.
+
+19:22.760 --> 19:28.320
+And at the time, it's a fairly young project by the time, the tracing piece of open telemetry
+
+19:28.320 --> 19:32.200
+was already GA generally available, so we decided to go with that.
+
+19:32.200 --> 19:38.160
+Today, by the way, also metrics is soon to be GA, it's already in release candidate,
+
+19:38.160 --> 19:41.520
+and logging is still not there.
+
+19:41.520 --> 19:43.480
+So what do you need to do if you choose open telemetry?
+
+19:43.480 --> 19:48.120
+You need to set up the open telemetry collector, it's sort of an agent for it to send.
+
+19:48.120 --> 19:54.120
+You need to install the Jenkins open telemetry plug-in, very easy to do that on the UI.
+
+19:54.120 --> 19:59.400
+And then you need to configure the Jenkins open telemetry plug-in to send to the open
+
+19:59.400 --> 20:05.240
+telemetry collector and point over OTLP over GRPC protocol.
+
+20:05.240 --> 20:10.280
+That's the collect phase, and after collect comes store.
+
+20:10.280 --> 20:12.280
+For the back end, we used Jega.
+
+20:12.280 --> 20:21.400
+Jega is also a very popular open source under the CNCF, specifically for distributed tracing.
+
+20:21.400 --> 20:25.240
+And we use Jega to monitor our own production environment, so that was our natural choice
+
+20:25.240 --> 20:27.200
+also for this.
+
+20:27.200 --> 20:32.240
+We also have a Jager-based service, so we just use that.
+
+20:32.240 --> 20:38.240
+But anything that I show here, actually you can use with any Jager distro, whichever one
+
+20:38.240 --> 20:41.400
+you use, managed or self-serve.
+
+20:41.400 --> 20:46.600
+And if you do run your own, by the way, I added the link on how to deploy Jager on Kubernetes
+
+20:46.600 --> 20:53.480
+in production, so you have a link there, a short link that I added, a very useful guide.
+
+20:53.480 --> 20:54.480
+So what do you need to do?
+
+20:54.480 --> 21:00.800
+You need to configure open telemetry collector to export in open telemetry collector terms
+
+21:00.800 --> 21:07.120
+to export to Jager in the right format, all the aggregated information.
+
+21:07.120 --> 21:11.640
+And once you have that, then you can visualize, the visualized part is much easier in this
+
+21:11.640 --> 21:17.640
+case, because you have a Jager UI with predefined dashboard, you don't need to start composing
+
+21:17.640 --> 21:18.640
+visuals.
+
+21:18.640 --> 21:25.680
+Essentially, what you can see here on the left-hand side, you can see this indented
+
+21:25.680 --> 21:27.880
+tree structure, and then on the right, the gun chart.
+
+21:27.880 --> 21:33.800
+Each line here is a span, and it's very easy to see the pipeline sequence.
+
+21:33.800 --> 21:38.520
+The text is a bit small, but you can see, for each step of the pipeline, you can see
+
+21:38.520 --> 21:45.320
+the duration, how much it took, you see which ones ran in parallel, and which ones ran sequentially.
+
+21:45.320 --> 21:50.320
+If you have a very long latency on the overall, you can see where most of the time is being
+
+21:50.320 --> 21:56.080
+spent, where the critical path, where you best optimize, and so on.
+
+21:56.080 --> 22:02.280
+And by the way, Jager also offers other views, like recently added the flame graph, and you
+
+22:02.280 --> 22:06.720
+have trace statistics, and graph view, and so on.
+
+22:06.720 --> 22:11.120
+But this is what people are used to, so I'm showing the timeline view.
+
+22:11.120 --> 22:17.160
+So that's on Jager, and of course, as we said before, CICD is more than just Jenkins, so
+
+22:17.160 --> 22:24.320
+what we can do beyond just Jenkins, and what you can do is actually to instrument additional
+
+22:24.320 --> 22:31.240
+pieces like Maven, Ansible, and other elements to get final granularity into your traces
+
+22:31.240 --> 22:32.240
+and steps.
+
+22:32.240 --> 22:37.040
+For example, here, the things that you see in yellow is Maven build steps.
+
+22:37.040 --> 22:41.520
+So what before used to be one black box span in the trace.
+
+22:41.520 --> 22:46.000
+Suddenly, now you can click, open, and see the different build steps, each one with its
+
+22:46.000 --> 22:50.440
+own duration, each one with its own context, and so on.
+
+22:50.440 --> 22:57.280
+So that's in a nutshell how we added tracing to our CICD pipeline.
+
+22:57.280 --> 23:02.200
+The next step is, as I mentioned before, many of the pipelines actually failed not because
+
+23:02.200 --> 23:06.200
+of the released code, but because of the CICD environment.
+
+23:06.200 --> 23:09.880
+So we decided to monitor metrics from the Jenkins servers and the environment.
+
+23:09.880 --> 23:15.600
+It goes to the system, the containers, the JVM, essentially anything that could break
+
+23:15.600 --> 23:20.160
+irrespective of the released code, and following the same flow.
+
+23:20.160 --> 23:27.880
+So the first step, collect, we use the telegraph, we use that in production, so we use that
+
+23:27.880 --> 23:35.120
+here as well, that's an open source by inflex data, and essentially you need two steps.
+
+23:35.120 --> 23:43.120
+You need to first enable, configure, sorry, Jenkins to expose metrics in Prometheus format.
+
+23:43.120 --> 23:49.000
+We work a lot with Prometheus for metrics, so that was our natural choice, and that's
+
+23:49.000 --> 23:53.720
+a simple configuration in the Jenkins web UI, and then you need to install telegraph
+
+23:53.720 --> 23:58.120
+if you don't already have that, and then make sure that it configured to scrape the
+
+23:58.120 --> 24:05.440
+metrics off of the Jenkins server using the Prometheus input plugin.
+
+24:05.440 --> 24:06.440
+So that's the first step.
+
+24:06.440 --> 24:11.560
+The second step is on the store side.
+
+24:11.560 --> 24:14.880
+As I mentioned, we use Prometheus for metrics, so we use that as well here.
+
+24:14.880 --> 24:19.760
+We even have our own managed Prometheus, so we use that, but anything that I show here
+
+24:19.760 --> 24:26.800
+is identical whether you use Prometheus or any Prometheus compatible backend.
+
+24:26.800 --> 24:30.920
+And essentially you need to configure telegraph to send the metrics to Prometheus, and you
+
+24:30.920 --> 24:32.040
+have two ways to do that.
+
+24:32.040 --> 24:35.000
+You can do that in pull mode or in push mode.
+
+24:35.000 --> 24:40.680
+So pull mode is the default for Prometheus, essentially when you configure a telegraph
+
+24:40.680 --> 24:47.560
+to expose a slash metrics endpoint, and then it can be exposed for Prometheus to scrape
+
+24:47.560 --> 24:48.560
+it from.
+
+24:48.560 --> 24:53.280
+If you want to do that, you use the Prometheus client output plugin, or if you want to do
+
+24:53.280 --> 24:56.720
+it in push mode, then you use the HTTP output plugin.
+
+24:56.720 --> 25:02.680
+Just an important note, make sure that you set the data format to Prometheus remote write.
+
+25:02.680 --> 25:06.520
+So that's the store phase, and then once you have all the data in Prometheus, then it's
+
+25:06.520 --> 25:11.680
+very easy to create Grafana dashboards on top of that.
+
+25:11.680 --> 25:14.520
+And I gave some examples here.
+
+25:14.520 --> 25:19.120
+You can filter, of course, by build type, by branch, machine ID, build number, and so
+
+25:19.120 --> 25:20.360
+on.
+
+25:20.360 --> 25:25.240
+And you can monitor in this example, this is a system monitoring, so CPU, memory, disk
+
+25:25.240 --> 25:27.080
+usage, load, and so on.
+
+25:27.080 --> 25:35.600
+You can monitor the Docker container, like the CPU, IO, inbound, outbound, disk usage,
+
+25:35.600 --> 25:41.600
+obviously the running, stopped, paused containers by Jenkins machine, everything that you'd
+
+25:41.600 --> 25:50.760
+expect, and JVM metrics, by being a Java implementation, thread count, heap memory, garbage collection,
+
+25:50.760 --> 25:52.720
+duration, things like that.
+
+25:52.720 --> 25:57.360
+You can even, of course, monitor the Jenkins nodes, queues, executors themselves.
+
+25:57.360 --> 26:00.000
+So again, you have an example dashboard here.
+
+26:00.000 --> 26:05.200
+You can see the queue size, status breakdown, the Jenkins jobs, the count executed over
+
+26:05.200 --> 26:08.160
+time, breakdown by job status, and so on.
+
+26:08.160 --> 26:12.600
+So this is the types, just to, obviously, lots of other visualizations that you can
+
+26:12.600 --> 26:14.960
+create, and you can also create alerts.
+
+26:14.960 --> 26:23.600
+I won't show that in the lack of time, so just to summarize what we've seen.
+
+26:23.600 --> 26:27.400
+Treat your CICD the same as you treat your production.
+
+26:27.400 --> 26:33.320
+For your production, use whatever, elastic search, open search, Grafana to monitor to
+
+26:33.320 --> 26:34.920
+create observability.
+
+26:34.920 --> 26:42.400
+Do the same with your CICD pipeline, and preferably leverage the same stack, the same tool chain
+
+26:42.400 --> 26:46.240
+for that, and don't reinvent the wheel.
+
+26:46.240 --> 26:47.920
+That was our journey.
+
+26:47.920 --> 26:53.640
+As I mentioned, we wanted dashboards and aggregated views to see several pipelines across different
+
+26:53.640 --> 26:56.120
+run branches over time, and so on.
+
+26:56.120 --> 27:02.840
+We wanted historical data and controlled persistence off of the Jenkins servers to determine the
+
+27:02.840 --> 27:05.360
+duration, the retention of that data.
+
+27:05.360 --> 27:10.080
+We wanted reports and alerts to automate as much as possible, and lastly, we wanted test
+
+27:10.080 --> 27:13.080
+performance, flaky tests, and so on.
+
+27:13.080 --> 27:15.680
+You saw how we achieved that.
+
+27:15.680 --> 27:16.680
+Four steps.
+
+27:16.680 --> 27:22.760
+If there's one thing to take out of that talk, take this one, collect, store, visualize,
+
+27:22.760 --> 27:25.280
+and report an alert.
+
+27:25.280 --> 27:31.880
+And what we gained, just to summarize, significant improvement in our lead time for changes,
+
+27:31.880 --> 27:37.200
+in our cycle time, if you remember the Dora metrics at the beginning.
+
+27:37.200 --> 27:44.960
+On the way, we also got an improved developer-on-duty experience, much less of a sufferer there.
+
+27:44.960 --> 27:46.320
+It's based on open source.
+
+27:46.320 --> 27:47.320
+Very important.
+
+27:47.320 --> 27:48.320
+We're here on FOSDEM.
+
+27:48.320 --> 27:53.280
+So based on open search, open telemetry, Yeager, Prometheus, Telegraph, you saw the stack.
+
+27:53.280 --> 27:58.800
+If you want more information, you have here a QR code for a guide to CICD observability
+
+27:58.800 --> 27:59.800
+that I wrote.
+
+27:59.800 --> 28:05.840
+You're welcome to take a short or a bit short link and read more about this, but this was
+
+28:05.840 --> 28:08.440
+very much in a nutshell.
+
+28:08.440 --> 28:10.520
+Thank you very much for listening.
+
+28:10.520 --> 28:13.480
+I'm Doton Horvitz, and enjoy the rest of the conference.
+
+28:13.480 --> 28:20.280
+I don't know if we have time for questions.
+
+28:20.280 --> 28:21.280
+No.
+
+28:21.280 --> 28:24.680
+So I'm here if you have questions or if you have a sticker, and may the open source be
+
+28:24.680 --> 28:25.680
+with you.
+
+28:25.680 --> 28:26.680
+Thank you.
+
+28:26.680 --> 28:31.960
+We have time for questions, if there are any.
+
+28:31.960 --> 28:35.440
+We have time for questions, so if you want, we can just see for a few minutes.
+
+28:35.440 --> 28:36.440
+Is that a question?
+
+28:36.440 --> 28:39.440
+Yeah, the other question in the back.
+
+28:39.440 --> 28:40.440
+Okay.
+
+28:40.440 --> 28:46.680
+Which one do you want to be the first one to ask a question?
+
+28:46.680 --> 28:47.680
+Thanks.
+
+28:47.680 --> 28:51.080
+So have you considered persistence?
+
+28:51.080 --> 28:53.920
+How long do you store your metrics and your traces?
+
+28:53.920 --> 28:55.320
+Have you wondered about that?
+
+28:55.320 --> 28:58.320
+And for how long at a time you store your metrics?
+
+28:58.320 --> 28:59.320
+So we have.
+
+28:59.320 --> 29:03.360
+That was part of the original challenge when we used the Jenkins persistence, because when
+
+29:03.360 --> 29:06.880
+you persist it on the nodes themselves, and obviously you're very limited, there's the
+
+29:06.880 --> 29:12.880
+plugin that you can configure per days or per number of bills and so on.
+
+29:12.880 --> 29:17.400
+When you do it off of that critical path, you have much more room to maneuver, and then
+
+29:17.400 --> 29:19.760
+it depends on the amount of data you collect.
+
+29:19.760 --> 29:25.240
+We started small, so we collected for longer periods, but the more it came with the app,
+
+29:25.240 --> 29:29.400
+the more the appetite grew, and people wanted more and more types of metrics and time series
+
+29:29.400 --> 29:35.560
+data, so we needed to be a bit more conservative, but it's very much dependent on your practices
+
+29:35.560 --> 29:36.560
+in terms of the data.
+
+29:36.560 --> 29:42.440
+Yeah, the question was more about the process, so iterative, you explained it, so it starts
+
+29:42.440 --> 29:43.440
+small.
+
+29:43.440 --> 29:44.440
+Yeah, exactly.
+
+29:44.440 --> 29:46.680
+And iterative is the best, because it really depends, you need to learn the patterns of
+
+29:46.680 --> 29:52.360
+your data consumption, the telemetry, and then you can optimize the balance between having
+
+29:52.360 --> 29:55.680
+the observability and not overloading and overpricing costs.
+
+29:55.680 --> 29:56.680
+Right.
+
+29:56.680 --> 29:57.680
+Thank you very, very interesting.
+
+29:57.680 --> 29:58.680
+Thank you.
+
+29:58.680 --> 30:00.320
+There was another question in the back, yeah?
+
+30:00.320 --> 30:01.320
+Thank you.
+
+30:01.320 --> 30:06.600
+So what was the most surprising insight that you've learned, good or bad, and how did you
+
+30:06.600 --> 30:08.200
+react to it?
+
+30:08.200 --> 30:13.040
+I think I was most surprised personally about the amount of failures that occur because
+
+30:13.040 --> 30:18.680
+of the environment and what kinds of things, and how simple it is to just kill the machine,
+
+30:18.680 --> 30:22.720
+kill the instance, let the auto-scaler spin it back up, and you save yourself a lot of
+
+30:22.720 --> 30:26.480
+hassle and a lot of waking people up at night, so that was astonishing.
+
+30:26.480 --> 30:30.480
+How many things are irrespective of the code and just environmental, and we took a lot
+
+30:30.480 --> 30:34.200
+of learnings out there to make the environment more robust, to get people to clean after
+
+30:34.200 --> 30:39.600
+them, to automate the cleanups and things like that, that's what me was insightful.
+
+30:39.600 --> 30:40.600
+Thank you.
+
+30:40.600 --> 30:41.600
+Any other questions?
+
+30:41.600 --> 30:44.600
+Then I have one last one, sorry.
+
+30:44.600 --> 30:45.600
+No, no worries.
+
+30:45.600 --> 30:50.880
+My question is, who are usually the people looking at the dashboard, because I maintain
+
+30:50.880 --> 30:54.200
+a lot of dashboard in the past, and sometimes I had a feeling that I was the only one looking
+
+30:54.200 --> 30:58.720
+at those dashboards, so I'm just wondering if you identify a type of people who really
+
+30:58.720 --> 31:00.960
+benefit from those dashboards.
+
+31:00.960 --> 31:07.480
+So it's a very interesting question because we also learned and we changed the org structure
+
+31:07.480 --> 31:10.720
+several times, so it moves between Dev and DevOps.
+
+31:10.720 --> 31:16.200
+We now have a release engineering team, so they are the main stakeholders to look at that,
+
+31:16.200 --> 31:20.760
+but this dashboard is the goal, as I said, the developer on duty, so everyone that is
+
+31:20.760 --> 31:27.360
+now on call needs to see that, that's for sure, and the tier two, tier three, so let's
+
+31:27.360 --> 31:30.040
+say the chain for that.
+
+31:30.040 --> 31:35.680
+You also use that as a high level also by the team leads in the developer side of things,
+
+31:35.680 --> 31:39.440
+so these are the main stakeholders, depending on if it's the critical part of the developer
+
+31:39.440 --> 31:44.600
+on duty and the tiers, or if it's the overall thing the health state in general by the release
+
+31:44.600 --> 31:45.600
+engineer.
+
+31:45.600 --> 31:46.600
+Thank you.
+
+31:46.600 --> 32:13.160
+Thank you very much, everyone.

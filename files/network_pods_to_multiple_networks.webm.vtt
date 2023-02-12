@@ -1,0 +1,748 @@
+WEBVTT
+
+00:00.000 --> 00:15.480
+Hi everyone, so that's the last speaker of the day, so I'm going to talk about community
+
+00:15.480 --> 00:18.640
+spot connecting to multiple networks.
+
+00:18.640 --> 00:24.360
+So Doug already spoke about this in a slightly different way, I'll take a slightly different
+
+00:24.360 --> 00:26.360
+approach.
+
+00:26.360 --> 00:31.360
+So first a few things about myself, I'm a software engineer at Cisco working on container
+
+00:31.360 --> 00:37.400
+networking things, and I'm a maintainer of Calico VPP, which is going to be the topic
+
+00:37.400 --> 00:38.400
+of this talk.
+
+00:38.400 --> 00:43.160
+This talk is also a bit particular, it's a result of a collaboration effort with many
+
+00:43.160 --> 00:49.040
+awesome people like Tajera, Intel mostly and Cisco, and direct on collaboration with
+
+00:49.040 --> 00:54.520
+Mritika Ganguly, which is a P at Intel, but she sadly couldn't be here today because it's
+
+00:54.520 --> 01:02.920
+quite far from the US where she lives, but I'll do my best to present her work.
+
+01:02.920 --> 01:09.000
+So first, a bit of a background story of this work, so in the world of employee applications
+
+01:09.000 --> 01:16.280
+Kubernetes has really become the solution of choice when it comes to deploying large
+
+01:16.280 --> 01:22.880
+scale services in various environments because it provides the primitives for scalability,
+
+01:22.880 --> 01:28.320
+so Metal LB that we saw in a previous talk, services, health checks and so on.
+
+01:28.320 --> 01:33.760
+It also provides the uniformity of deployment, and it's also far from the sequence, so you
+
+01:33.760 --> 01:36.880
+don't need to know what you're running on.
+
+01:36.880 --> 01:42.640
+But coming from the CNF land, so trying to deploy a network function in this environment,
+
+01:42.640 --> 01:44.280
+the story is not the same.
+
+01:44.280 --> 01:49.240
+So I'll define a bit more what I mean by CNF because it's a bit different between the
+
+01:49.240 --> 01:54.200
+standard CNF use case, the 5G one.
+
+01:54.200 --> 02:00.080
+What I mean by that is, so I'll take an example for the sake of this presentation, so typically
+
+02:00.080 --> 02:02.600
+what I mean by that is the wire guard head end.
+
+02:02.600 --> 02:06.920
+For example, you have a customer and you want to deploy a fleet of wire guard head ends
+
+02:06.920 --> 02:15.720
+to give that user access to a resource in a company network, so typically a very prior
+
+02:15.720 --> 02:21.640
+printer that everybody wants to access to because people like to print.
+
+02:21.640 --> 02:27.000
+So the particularity of this use case is that it's dynamic enough to benefit from the abstraction
+
+02:27.000 --> 02:31.400
+that humanities brings, and I've lost my mouse.
+
+02:31.400 --> 02:37.040
+So typically load balancing, scheduling and those kinds of things.
+
+02:37.040 --> 02:42.880
+But it has a lot of specific needs, for example ingress has to be done in a particular way
+
+02:42.880 --> 02:46.320
+because you have some wire guard encrypted traffic, so typically you want to see which
+
+02:46.320 --> 02:49.880
+IP it's coming from.
+
+02:49.880 --> 02:53.720
+You also constrain on how you receive traffic because typically, and that's the place where
+
+02:53.720 --> 02:56.960
+you need multiple interfaces to go into your pod.
+
+02:56.960 --> 03:02.920
+And you also require high performance because encrypted traffic, so typically you want those
+
+03:02.920 --> 03:06.920
+things to run fast and you have a lot of user using them.
+
+03:06.920 --> 03:13.440
+So not for that printer, but assuming it's a bigger use case.
+
+03:13.440 --> 03:15.880
+So we tried to design a solution for that.
+
+03:15.880 --> 03:22.360
+So there are lots of components at play, I'll try to go quickly into them.
+
+03:22.360 --> 03:28.160
+So in the top we have our application, so here the wire guard VPN head end.
+
+03:28.160 --> 03:32.280
+We want to deploy it on top of humanity, so we have to choose a CNI, so we want to have
+
+03:32.280 --> 03:38.800
+it with Calico, mainly because of the cuteness of the cat, but also because it provides a
+
+03:38.800 --> 03:45.080
+really nice interface into supporting multiple data planes and also a nice BGP integration
+
+03:45.080 --> 03:52.520
+that allows to tweak the way we process packets.
+
+03:52.520 --> 03:58.840
+And for carrying packets we use the FDIO's LPP as a data plane that gave us more control
+
+03:58.840 --> 04:01.960
+on how packets are processed.
+
+04:01.960 --> 04:09.680
+And so that allowed us to go deeper into the way networks actually manage at a really low
+
+04:09.680 --> 04:10.680
+level.
+
+04:10.680 --> 04:16.820
+There are also other components that are going to play, but more on this later.
+
+04:16.820 --> 04:22.480
+So I'm going to go quickly over Calico and VPP because they have been presented many
+
+04:22.480 --> 04:23.480
+times.
+
+04:23.480 --> 04:29.360
+So in short Calico is a community CNI, providing a lot of great features, policies, BGP, support
+
+04:29.360 --> 04:34.840
+for really huge clusters, and the point that's important for this presentation is that it
+
+04:34.840 --> 04:40.160
+has a very well-defined control plane data plane interface, allowing to plug new performance
+
+04:40.160 --> 04:46.880
+oriented software underneath it without much hassle, and that's what we are going to leverage.
+
+04:46.880 --> 04:53.600
+So we choose to sleep VPP underneath Calico, first because we were originally contributors
+
+04:53.600 --> 04:59.560
+in this open-source user space networking data plane, so it was a solution of choice.
+
+04:59.560 --> 05:06.520
+But also it has a lot of cool functionalities that are built in and it's extensible.
+
+05:06.520 --> 05:13.240
+So I am doing a bit of publicity for the software I'm coming from, but it was a good tool for
+
+05:13.240 --> 05:14.240
+this use case.
+
+05:14.240 --> 05:21.120
+And also it's quite fast, so it really fits the needs for this application.
+
+05:21.120 --> 05:23.800
+So how did we bind the two together?
+
+05:23.800 --> 05:28.160
+What we do is we built an agent running in a demand set on every node, so deployment
+
+05:28.160 --> 05:33.520
+is the same as a simple pod, just with more privileges.
+
+05:33.520 --> 05:40.120
+We registered these agents in Calico as a Calico data plane and used their GRPC interface
+
+05:40.120 --> 05:45.640
+and their APIs that they exposed to decouple control data plane.
+
+05:45.640 --> 05:50.240
+That agent listens for Calico events and then programs VPP accordingly.
+
+05:50.240 --> 05:56.080
+And we also built a series of custom plug-ins for handling that, servicing and so on.
+
+05:56.080 --> 06:01.880
+And we tweaked the configuration so that things behave nicely in a container-oriented environment.
+
+06:01.880 --> 06:08.240
+And with all this, we have every brick to bring VPP into the clusters and so to have
+
+06:08.240 --> 06:15.280
+really control on everything that happens, indeed, the communities networking.
+
+06:15.280 --> 06:17.280
+How does that happen under the hood?
+
+06:17.280 --> 06:23.600
+So what happens exactly under the hood, what we do is we swap all the network logic that
+
+06:23.600 --> 06:31.280
+was happening in Linux to VPP, so from this configuration to there.
+
+06:31.280 --> 06:39.000
+In order to, so, yeah, the thing is as VPP is a user space stack, we have to do a few
+
+06:39.000 --> 06:43.520
+things a bit differently compared to what was previously done in Linux.
+
+06:43.520 --> 06:48.760
+So in order to insert VPP between the host and the network, we will grab the host interface,
+
+06:48.760 --> 06:54.320
+the uplink, and consume it in VPP with the appropriate driver.
+
+06:54.320 --> 06:58.200
+And then we restore the host connectivity by creating a turn interface in the host root
+
+06:58.200 --> 06:59.360
+network main space.
+
+06:59.360 --> 07:01.880
+So that's the turn tap here.
+
+07:01.880 --> 07:05.840
+And we replicate everything on that interface, it resists the routes.
+
+07:05.840 --> 07:09.440
+So basically we insert ourselves as a bump in the wire on the uplink.
+
+07:09.440 --> 07:15.120
+It's not very network-ish, but it works pretty well in that configuration.
+
+07:15.120 --> 07:22.760
+And that way we restore pod connectivity as before with turn taps instead of a VIF.
+
+07:22.760 --> 07:27.440
+We create an interface in every pod.
+
+07:27.440 --> 07:30.800
+And then everything runs normally, the Calico control plane is running normally on the host
+
+07:30.800 --> 07:37.040
+and it configures the data plan functions in VPP via the agent.
+
+07:37.040 --> 07:40.360
+So now we have the green part covered.
+
+07:40.360 --> 07:42.080
+So all those components run neatly.
+
+07:42.080 --> 07:47.760
+And what we achieve with that is that when we create a pod, Kubernetes will call Calico,
+
+07:47.760 --> 07:49.320
+Calico will call VPP.
+
+07:49.320 --> 07:54.760
+And we can provide an interface that we fully handle on a network network player directly
+
+07:54.760 --> 07:55.760
+in VPP.
+
+07:55.760 --> 08:02.160
+But for this specific wire guard add-on application, we need a bit more than that.
+
+08:02.160 --> 08:08.200
+We need multiple interfaces and we also potentially have overlapping addresses.
+
+08:08.200 --> 08:13.840
+So we don't really manage where the IPs are going to end.
+
+08:13.840 --> 08:20.040
+So for the multiple interface part, our goal to show us was to go with multis that provides
+
+08:20.040 --> 08:21.040
+multiplexing.
+
+08:21.040 --> 08:26.920
+And we chose also dedicated IPAM that we patched, which we were about because it was quite
+
+08:26.920 --> 08:33.560
+simple to patch and brought those two pieces in.
+
+08:33.560 --> 08:39.400
+So when I mean multiple interfaces, what does that exactly contain?
+
+08:39.400 --> 08:47.720
+So the thing is, the typical Kubernetes deployment looks like this.
+
+08:47.720 --> 08:51.880
+So each pod has a single interface.
+
+08:51.880 --> 08:57.320
+And the CNI provides a pod-to-pod connectivity, typically with an encapsulation from node
+
+08:57.320 --> 08:58.320
+to node.
+
+08:58.320 --> 09:03.640
+But in our application, we want to differentiate the encrypted traffic from the clear-text
+
+09:03.640 --> 09:07.800
+traffic, so before and after the head end.
+
+09:07.800 --> 09:10.800
+But we still want Kubernetes as the end to operate.
+
+09:10.800 --> 09:15.240
+So we still want the nice things about Kubernetes, so service IPs and everything.
+
+09:15.240 --> 09:20.800
+So it's not only multiple interfaces, it's really multiple interfaces wired into Kubernetes.
+
+09:20.800 --> 09:23.960
+So it's more multiple isolated networks.
+
+09:23.960 --> 09:29.880
+So conceptually, what we needed was the ability to create multiple Kubernetes networks.
+
+09:29.880 --> 09:35.640
+So each network behaving a bit like a standalone cluster stacked on top of each other.
+
+09:35.640 --> 09:43.720
+So with this, we request networks that provide complete isolation between each other, meaning
+
+09:43.720 --> 09:48.360
+that traffic cannot cross from a network to another without going from to the outside
+
+09:48.360 --> 09:49.360
+world.
+
+09:49.360 --> 09:56.360
+And so that means that we have to bind Calico, VPP, so on, integration, and multist together
+
+09:56.360 --> 10:03.000
+to create a model where everybody is aware of that definition of networks, have a catalog
+
+10:03.000 --> 10:06.960
+of isolated networks, specify the way they are going to communicate from node to node
+
+10:06.960 --> 10:13.360
+via VXLAN encapsulations, and have a way to propose to attach to those networks with
+
+10:13.360 --> 10:18.840
+annotations, so that in the end, Kubernetes is aware of these networks and we can still
+
+10:18.840 --> 10:23.600
+maintain the SDN part of the logic.
+
+10:23.600 --> 10:33.360
+So the way this works quickly is that the C&I interface will call Calico once per pod.
+
+10:33.360 --> 10:40.200
+So the thing is, multist will call the C&I Calico once per top all pod interface.
+
+10:40.200 --> 10:46.040
+And we will in turn receive in origin those calls and we can map those with annotations
+
+10:46.040 --> 10:50.400
+and do our magics to provide the logic.
+
+10:50.400 --> 10:54.760
+And having also the IPAM patch allows us to support multiple IPs and to have different
+
+10:54.760 --> 10:59.600
+realms where the IP lives and gets located from.
+
+10:59.600 --> 11:03.840
+So from a user's perspective, what we expose is a network catalog where our networks are
+
+11:03.840 --> 11:06.160
+defining CRDs for now.
+
+11:06.160 --> 11:10.600
+We are starting a standardization effort to bring that into Kubernetes, but that will
+
+11:10.600 --> 11:12.560
+probably take time.
+
+11:12.560 --> 11:18.440
+So right now we kept it that simple with just specifying a V&I using VXLAN by default,
+
+11:18.440 --> 11:19.960
+just passing a range.
+
+11:19.960 --> 11:25.240
+And we also keep a network attachment definition from multist with one-to-one mapping to network
+
+11:25.240 --> 11:30.640
+so that things, we don't change too many things at once.
+
+11:30.640 --> 11:34.920
+And then we use those networks into the pod definitions.
+
+11:34.920 --> 11:39.440
+So we reference them the multist way.
+
+11:39.440 --> 11:44.720
+We can reference them as well in services with dedicated annotations.
+
+11:44.720 --> 11:50.480
+And so that way we tell our agents to program VP in a way where the services apply only
+
+11:50.480 --> 11:52.600
+in a specific network.
+
+11:52.600 --> 11:54.200
+The policy is the same way.
+
+11:54.200 --> 12:01.880
+And also that gives us the ability for pods to have a bit more tweaking on the parameters
+
+12:01.880 --> 12:03.240
+exposed on the interface.
+
+12:03.240 --> 12:09.400
+So to specify the number of queues we want, the queue depth, and also support multiple
+
+12:09.400 --> 12:10.400
+types.
+
+12:10.400 --> 12:15.120
+So that gives a lot of flexibility to get the performance right and to get, so first
+
+12:15.120 --> 12:16.800
+to get the functionalities.
+
+12:16.800 --> 12:21.480
+So the fact that we have multiple interfaces and so also size them so that the performance
+
+12:21.480 --> 12:26.120
+is appropriate for the use case that we want to achieve.
+
+12:26.120 --> 12:33.480
+The last nice feature of this is that as we have GoBGP support, we can pair those networks
+
+12:33.480 --> 12:39.720
+with the outside world if we have a fabric that's VXLAN and if GoBGP supports it.
+
+12:39.720 --> 12:44.400
+So that part is still a bit work in progress and there are a lot of things to get right.
+
+12:44.400 --> 12:49.320
+But that's the end picture we want to go.
+
+12:49.320 --> 12:57.080
+And this could, so if we put everything together, we would get probably something like that,
+
+12:57.080 --> 12:58.480
+that looks like that.
+
+12:58.480 --> 13:04.280
+So basically when the users want to connect to this hypothetical VPN and that hypothetical
+
+13:04.280 --> 13:12.120
+printer, it would get into the cluster via GoBGP peering, so traffic is going to be
+
+13:12.120 --> 13:18.760
+attracted to the green network, heat service IP in that network, so get some load balancing
+
+13:18.760 --> 13:27.320
+across the nodes, then it's going to be deciphered in a pod that then encapsulate traffic and
+
+13:27.320 --> 13:31.280
+pass it, for example, to a NAT pod running in user space.
+
+13:31.280 --> 13:38.200
+So here I put another type of interface that is more performance oriented and then exit
+
+13:38.200 --> 13:43.800
+the cluster on a different VLAN peered with the outside world.
+
+13:43.800 --> 13:48.480
+So some parts still need to be done, but the general internal logic of the cluster is still
+
+13:48.480 --> 13:56.600
+something that works and that brings the ability for container networking functions to run
+
+13:56.600 --> 14:07.600
+unmodified with their multiple interfaces directly in a somewhat regular cluster.
+
+14:07.600 --> 14:18.920
+So we spoke about improving performance of the network, of the underlying interface,
+
+14:18.920 --> 14:27.800
+but we can also improve the performance with which the application in the pod consumes their
+
+14:27.800 --> 14:29.200
+own interfaces.
+
+14:29.200 --> 14:36.400
+So the standard way applications usually consume packets within pods is via socket APIs.
+
+14:36.400 --> 14:40.600
+So it's really standard, but you have to go through the kernel and it's a code path that
+
+14:40.600 --> 14:44.120
+wasn't designed for the performance levels of modern apps.
+
+14:44.120 --> 14:48.120
+So that's why GSO came up as a network stack optimization.
+
+14:48.120 --> 14:53.240
+But here with VPP running, it would be nice to be able to bypass the network stack and
+
+14:53.240 --> 14:57.160
+pass the packets directly from VPP and not touching the kernel.
+
+14:57.160 --> 15:04.360
+So fortunately, VPP exposes two different ways to consume those interfaces.
+
+15:04.360 --> 15:09.880
+We'll mostly go into the first one, which is the memory interface.
+
+15:09.880 --> 15:18.200
+So basically, it's a packet oriented interface standard relying on a memory segment for speed.
+
+15:18.200 --> 15:21.040
+And this can be leveraged by an application via a simple library.
+
+15:21.040 --> 15:28.680
+So either GoMemi, PhiliBMMF in C, or DPDK, or even a VPP.
+
+15:28.680 --> 15:37.960
+And so provide a really high speed way of consuming that extra interface in the pod.
+
+15:37.960 --> 15:44.280
+And the really nice thing about this is that it brings also the connection between the
+
+15:44.280 --> 15:51.560
+Kubernetes network, Kubernetes SDN, and the pod into user space, meaning that now that
+
+15:51.560 --> 15:57.880
+connection lives in a regular C program, we can also leverage.
+
+15:57.880 --> 16:02.600
+So it's easier to leverage CPU optimizations and new features.
+
+16:02.600 --> 16:09.320
+And that's where the Silicon re-enters the picture and the work from Mrytka from Intel
+
+16:09.320 --> 16:12.200
+and their team.
+
+16:12.200 --> 16:20.840
+So they benchmarked this kind of setup and also introduced an optimization that's coming
+
+16:20.840 --> 16:25.800
+into the fourth generation Intel Xeon that's called Data Streaming Accelerator.
+
+16:25.800 --> 16:33.840
+Basically, it's a way to optimize copies between processes on some CPUs.
+
+16:33.840 --> 16:39.040
+And so what they did is compare the performance that we get with the Kubernetes clusters,
+
+16:39.040 --> 16:42.200
+multiple interfaces, and a simple pod.
+
+16:42.200 --> 16:50.840
+So not bringing in the old VPN logic, just doing L3 patch and seeing how fast things
+
+16:50.840 --> 17:00.440
+could go between regular kernel interfaces, the turn, the memory interfaces, and the memory
+
+17:00.440 --> 17:07.400
+interfaces leveraging those optimizations in the CPU.
+
+17:07.400 --> 17:15.360
+So that gives those graphs that are really, so that have a lot of numbers in them.
+
+17:15.360 --> 17:21.280
+But basically, I try to sum up quite quickly what this gives.
+
+17:21.280 --> 17:27.120
+There are two MTUs, 1,500 bytes and 9,000 bytes here.
+
+17:27.120 --> 17:30.880
+The performance for turn interfaces in dark blue.
+
+17:30.880 --> 17:36.920
+Blue is the first MAMIF and the DSA optimized MAMIF is in yellow.
+
+17:36.920 --> 17:49.920
+And basically, what this gives is that the performance is really, so it brings really
+
+17:49.920 --> 18:04.880
+a huge difference between, so, sorry, throughput with DSA is 2.3 times faster than with regular
+
+18:04.880 --> 18:09.080
+MAMIF for the 1,500 bytes packets.
+
+18:09.080 --> 18:14.640
+And if you go with DSA enabled, it's 23 times faster than turn tap.
+
+18:14.640 --> 18:22.720
+And with a 9,000 byte MTU, basically, you get more than 60 times faster with the MAMIF
+
+18:22.720 --> 18:26.200
+that's optimized with DSA.
+
+18:26.200 --> 18:36.240
+Basically the digit, so the number that's really interesting is that with 200,000, so
+
+18:36.240 --> 18:40.600
+basically you get a single call doing 100 Gs with that.
+
+18:40.600 --> 18:45.000
+And that without too much modifications of the applications.
+
+18:45.000 --> 18:47.920
+So basically, you just spin a regular cluster.
+
+18:47.920 --> 18:52.760
+If the CPU supports it, you use a regular library and you're able to consume packets
+
+18:52.760 --> 18:59.960
+at really huge speeds without modifying the application too much.
+
+18:59.960 --> 19:10.120
+So there is another graph looking into the scaling with number of calls, both with small
+
+19:10.120 --> 19:13.520
+MTUs and large MTUs.
+
+19:13.520 --> 19:19.920
+Basically that shows that we can spare calls when going, so turn tap does not scale very
+
+19:19.920 --> 19:20.920
+well.
+
+19:20.920 --> 19:34.520
+So the regular MAMIF scales with 1 to 6 calls and DSA achieves the same results with 2 to
+
+19:34.520 --> 19:38.560
+3 less calls than its regular MAMIF counterpart.
+
+19:38.560 --> 19:44.360
+So basically you achieve 100 Gs, which was the limit of the setup with a single call
+
+19:44.360 --> 19:53.600
+in the case of large MTUs and 3 calls in the case of smaller MTUs.
+
+19:53.600 --> 19:56.080
+So that's all for the talk.
+
+19:56.080 --> 20:03.440
+Sorry I went into a variety of different subjects because that topic goes into a lot of different
+
+20:03.440 --> 20:04.440
+directions.
+
+20:04.440 --> 20:10.800
+Basically that was to give you another view of the duration we are trying to go, trying
+
+20:10.800 --> 20:16.680
+to bring all those pieces together in a framework that allows us to make those CNFs run into
+
+20:16.680 --> 20:19.520
+a community environment.
+
+20:19.520 --> 20:21.440
+This work is open source.
+
+20:21.440 --> 20:27.480
+There are the details of the tests that were done in the following slides.
+
+20:27.480 --> 20:33.680
+You can find us on GitHub and there is also a Slack channel open where you can ask questions.
+
+20:33.680 --> 20:39.280
+And we have a new release coming up in Beta aiming for GA that's going to go without soon.
+
+20:39.280 --> 20:45.200
+So thanks a lot for listening, so here are the details.
+
+20:45.200 --> 21:00.720
+And I'm open for questions if you have any.
+
+21:00.720 --> 21:06.680
+Just one question for the sake of it, have you ever thought about some shared memory between
+
+21:06.680 --> 21:13.720
+the different parts to eliminate the need to copy over the packets?
+
+21:13.720 --> 21:24.840
+So we thought of this, so there are different ways to do that.
+
+21:24.840 --> 21:32.720
+So there is the VCR which I haven't spoken about, which is a way of opening the sockets
+
+21:32.720 --> 21:33.960
+directly in VPP.
+
+21:33.960 --> 21:40.480
+So basically you do a list in VPP for TCP, UDP or given protocol, so like the sockets
+
+21:40.480 --> 21:41.480
+APIs.
+
+21:41.480 --> 21:47.480
+And that supports directly, so basically the data never leaves VPP and you can do direct
+
+21:47.480 --> 21:55.200
+copies between processes without having to copy because everything stays in VPP in the
+
+21:55.200 --> 21:56.200
+end.
+
+21:56.200 --> 22:02.760
+For MMF, we don't support that out of the box but nothing forbids you to spawn two pods,
+
+22:02.760 --> 22:07.640
+make them share a socket and it's only shared memory so you can directly do it without having
+
+22:07.640 --> 22:10.760
+to spin up the whole thing.
+
+22:10.760 --> 22:16.000
+So you could even do that in any cluster or directly on bare metal.
+
+22:16.000 --> 22:25.600
+So MMF is really a lightweight protocol so you can do that just with a regular socket.
+
+22:25.600 --> 22:35.600
+Okay, cool, thank you very much.

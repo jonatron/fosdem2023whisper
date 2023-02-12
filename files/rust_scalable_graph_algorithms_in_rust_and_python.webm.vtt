@@ -1,0 +1,823 @@
+WEBVTT
+
+00:00.000 --> 00:16.040
+Paul, we're going to talk about scalable graph algorithms in Rust.
+
+00:16.040 --> 00:17.040
+Thank you.
+
+00:17.040 --> 00:18.040
+Hello.
+
+00:18.040 --> 00:19.040
+I am Martin.
+
+00:19.040 --> 00:20.040
+I'm here with Paul.
+
+00:20.040 --> 00:24.800
+And we talk about scalable graph algorithms in Rust and some Python.
+
+00:24.800 --> 00:25.800
+Who are we?
+
+00:25.800 --> 00:33.320
+We're both engineers at a company called Neo4j, and the J stands not for R, like Rust, unfortunately.
+
+00:33.320 --> 00:38.800
+But we will talk about a little bit what we do in our day job, which is we work on a product
+
+00:38.800 --> 00:42.800
+which is called Neo4j Graph Data Science, so Neo4j is a graph database.
+
+00:42.800 --> 00:43.920
+Maybe you heard of it.
+
+00:43.920 --> 00:46.280
+It's written in Java.
+
+00:46.280 --> 00:51.040
+And the two of us, we work on a project called Graph Data Science, which is essentially a
+
+00:51.040 --> 00:53.600
+plug-in for the Neo4j Graph Database.
+
+00:53.600 --> 00:58.360
+And it provides a collection of graph and machine learning algorithms that we deploy
+
+00:58.360 --> 01:02.480
+to our customers, and they use it for many different things, but like the top three
+
+01:02.480 --> 01:08.680
+applications of these things are fraud detection, recommendation, and identity resolution.
+
+01:08.680 --> 01:14.520
+And we have customers with up to 10 billion nodes and 65 billion relationship graphs that
+
+01:14.520 --> 01:17.480
+they compute our algorithms on.
+
+01:17.480 --> 01:22.120
+And you can find out more about the product and the source code is available online and
+
+01:22.120 --> 01:26.800
+in the documentation, of course, if you follow those things.
+
+01:26.800 --> 01:32.000
+Last week, we released version 2.3 of the Graph Data Science product, and what you can
+
+01:32.000 --> 01:37.400
+see here is basically all the graph and machine learning algorithm that we provide to our
+
+01:37.400 --> 01:44.000
+customers or users, ordered by some category, and some of them you probably know from university
+
+01:44.000 --> 01:50.200
+like Dijkstra path searching algorithms or connect components algorithms.
+
+01:50.200 --> 01:56.720
+Okay, but we are in the Rust step room, so why do we talk about Java?
+
+01:56.720 --> 02:01.480
+So first of all, so Paul and I, we discovered Rust like two or three years ago, and we started
+
+02:01.480 --> 02:07.720
+building like smaller tools, libraries, fell in love with the language, and we were curious
+
+02:07.720 --> 02:12.640
+about how we can actually do what we do at work, like implementing those parallel algorithms
+
+02:12.640 --> 02:17.200
+in Java, how good would they perform if we would do the same thing in Rust, and also
+
+02:17.200 --> 02:21.040
+make a bit more use of what Rust has to offer.
+
+02:21.040 --> 02:22.040
+And we had a quick look around.
+
+02:22.040 --> 02:26.880
+There is only one graph library that is, I think, very popular, which is called PetGraph,
+
+02:26.880 --> 02:32.560
+which is focusing on a network X replacement, and it focused on like single-threaded execution
+
+02:32.560 --> 02:35.880
+of graph algorithms, basically textbook implementations.
+
+02:35.880 --> 02:39.520
+So we thought we want to go like the step further and do like the parallel implementations
+
+02:39.520 --> 02:44.240
+of the graph algorithms.
+
+02:44.240 --> 02:47.440
+So that's how we started the project.
+
+02:47.440 --> 02:49.560
+So we started in May 21.
+
+02:49.560 --> 02:53.640
+First of all, it was an experiment, basically, or a hobby project by the two of us, where
+
+02:53.640 --> 02:58.680
+we tried to figure out like what's the maximum performance we can get out of this implementation.
+
+02:58.680 --> 03:04.600
+And then over time, yeah, we got more interest into the project, and we added some more implementations
+
+03:04.600 --> 03:08.760
+of different algorithms, like it's not a lot, but you will see that later.
+
+03:08.760 --> 03:13.120
+And we added some Python support that we will talk about in a demo.
+
+03:13.120 --> 03:17.440
+We added an arrow server so that you can use this thing in a network, for example, and
+
+03:17.440 --> 03:24.840
+everything is available on GitHub and MAT licensed.
+
+03:24.840 --> 03:27.840
+The project itself contains or consists of five grades.
+
+03:27.840 --> 03:29.840
+Today we will talk about three of those.
+
+03:29.840 --> 03:34.040
+The one at the bottom is the graph builder, which is essentially the abstraction or data
+
+03:34.040 --> 03:37.720
+structure that represents the in-memory graph that we use to compute on.
+
+03:37.720 --> 03:40.920
+It's a CSR, compressed sparse row representation.
+
+03:40.920 --> 03:46.360
+And it also has a builder API, hence the name, to allow users of this library to construct
+
+03:46.360 --> 03:49.600
+graphs, either programmatically or from files.
+
+03:49.600 --> 03:53.000
+On top of that, we have the actual graph grade.
+
+03:53.000 --> 03:57.800
+And yes, the name was free on grades, I owe it wasn't actually free, but the owner wanted
+
+03:57.800 --> 04:03.000
+to give it away anyway, so we took it, lucky us.
+
+04:03.000 --> 04:06.800
+So yeah, this contains some algorithms, and then we have graph mate, which are our Python
+
+04:06.800 --> 04:11.840
+bindings on top of the graph and the graph builder grades.
+
+04:11.840 --> 04:15.160
+The servers, the arrow server, and the app is the CLI application that we won't talk
+
+04:15.160 --> 04:17.320
+about today.
+
+04:17.320 --> 04:19.200
+So let's start with the graph builder.
+
+04:19.200 --> 04:22.960
+The graph builder is basically an API for building directed and undirected so-called
+
+04:22.960 --> 04:25.520
+property graphs.
+
+04:25.520 --> 04:29.880
+What you can see on the right-hand side is a undirected graph consisting of five nodes,
+
+04:29.880 --> 04:33.120
+zero to four, which are connected by edges.
+
+04:33.120 --> 04:36.880
+And they have no direction, hence the graph is undirected.
+
+04:36.880 --> 04:38.440
+How do we construct such a graph?
+
+04:38.440 --> 04:41.120
+So what we show here is the Rust API.
+
+04:41.120 --> 04:47.520
+So the main entry point that you can see is the graph builder, which is this thing here.
+
+04:47.520 --> 04:52.400
+And the graph builder is just authenticated, and you give it, you can call the edges function,
+
+04:52.400 --> 04:56.800
+which takes, in this example, like we take an array of tuples where the first value is
+
+04:56.800 --> 05:00.640
+the source node and the second value is the target node to describe essentially the graph
+
+05:00.640 --> 05:02.920
+on the right-hand side.
+
+05:02.920 --> 05:09.360
+We call build, and what we want to construct here is basically controlled by the type that
+
+05:09.360 --> 05:14.080
+we assigned to the G variable, which is an undirected CSR graph.
+
+05:14.080 --> 05:18.440
+So it's very similar to collect, where you can specify I want to collect into a vec or
+
+05:18.440 --> 05:20.400
+a string or something like that.
+
+05:20.400 --> 05:25.880
+Basically we use a type system here, which is very nice or expressive in comparison to
+
+05:25.880 --> 05:31.320
+Java to basically define what the output of this function call is.
+
+05:31.320 --> 05:35.560
+And we have this undirected CSR graph, which is a concrete implementation of a graph.
+
+05:35.560 --> 05:43.880
+And the first, the type parameter we use here, U64, is basically the type for the node IDs.
+
+05:43.880 --> 05:47.640
+And then once you have this constructed, you have several methods available, like the degree,
+
+05:47.640 --> 05:50.240
+which is the number of edges that are connected to a node.
+
+05:50.240 --> 05:55.000
+So the degree of node one is free because it's connected to zero, two, and three.
+
+05:55.000 --> 05:59.200
+And you can get the neighbors of a specific node as an iterator.
+
+05:59.200 --> 06:03.440
+And in this particular implementation, you can also turn this iterator into a slice,
+
+06:03.440 --> 06:08.240
+which means you basically have zero copy if you want to access the neighborhood of a node,
+
+06:08.240 --> 06:14.160
+which is very useful if you want to implement performant graph algorithms.
+
+06:14.160 --> 06:17.840
+Now we want to turn this into a directed graph, which means now our edges have these
+
+06:17.840 --> 06:22.600
+little arrows at the end, which means an edge has always a source node, or a source node
+
+06:22.600 --> 06:25.760
+where it starts and an end node where it ends.
+
+06:25.760 --> 06:29.400
+The only thing that we need to change here is basically the return type or the type of
+
+06:29.400 --> 06:32.920
+our G variable, which is now a directed graph.
+
+06:32.920 --> 06:35.280
+And we have additional methods.
+
+06:35.280 --> 06:38.800
+We have the out degree, because now we have to differentiate between the outgoing edges
+
+06:38.800 --> 06:44.840
+and the incoming edges, and the same for the out neighbors and the in neighbors.
+
+06:44.840 --> 06:48.640
+What we can also do is, since we are talking about property graphs, which means we have
+
+06:48.640 --> 06:54.440
+properties on nodes and also on edges, we can add node values as another builder method
+
+06:54.440 --> 06:56.000
+or builder function.
+
+06:56.000 --> 07:02.120
+Again an array, which is node count minus one length, where you basically provide the
+
+07:02.120 --> 07:05.800
+node values that you want to add to your nodes.
+
+07:05.800 --> 07:11.160
+It gives you an additional function called node value to access the value.
+
+07:11.160 --> 07:19.120
+Similar for edge values, now you do basically a triple, where the third value is the relationship
+
+07:19.120 --> 07:20.120
+value.
+
+07:20.120 --> 07:27.200
+For example, here like the 0.1 for the edge between zero and zero and one, which is this
+
+07:27.200 --> 07:28.200
+one.
+
+07:28.200 --> 07:29.360
+All right.
+
+07:29.360 --> 07:32.760
+And we get another method down here, it's the out neighbors with values, which in addition
+
+07:32.760 --> 07:39.640
+to the target ID of this edge also gives you the relationship where the edge weight.
+
+07:39.640 --> 07:46.320
+For convenience, we have this so-called GDL string that you can provide, GDL stands for
+
+07:46.320 --> 07:49.680
+graph definition language, which is another crate that we wrote.
+
+07:49.680 --> 07:53.240
+It's basically a subset of the Cypher query language, that is the main query language
+
+07:53.240 --> 07:58.680
+of Neo4j, which allows you to declaratively describe the graph on the right-hand side
+
+07:58.680 --> 08:00.400
+using sqr syntax.
+
+08:00.400 --> 08:08.240
+So basically this in parenthesis n zero is node zero and this kind of JSON style map
+
+08:08.240 --> 08:14.320
+here is the property map, like P1 for example, to describe node zero and an edge is expressed
+
+08:14.320 --> 08:20.560
+by node zero where you can refer to a variable that you declared earlier and connect it to
+
+08:20.560 --> 08:26.200
+another one called n1, which is this edge description and you can also provide properties
+
+08:26.200 --> 08:28.000
+to this edge.
+
+08:28.000 --> 08:34.000
+It's basically used for testing or for building like small POCs to play around, it's much
+
+08:34.000 --> 08:37.440
+simpler than using the edges methods and so on.
+
+08:37.440 --> 08:41.080
+But it's basically the same graph that we constructed before.
+
+08:41.080 --> 08:45.640
+So as you can see, you can create those graphs programmatically if you use like the edges
+
+08:45.640 --> 08:46.640
+method and so on.
+
+08:46.640 --> 08:50.200
+The construction is also parallelized under the hood using rayon.
+
+08:50.200 --> 08:55.080
+But the main use case is usually from reading graphs from files and we have a graph input
+
+08:55.080 --> 08:56.960
+trade that you can implement.
+
+08:56.960 --> 08:58.800
+We provide three implementations.
+
+08:58.800 --> 09:02.200
+The most common one, especially if you want to start playing around, is using an edge
+
+09:02.200 --> 09:06.360
+list, which is basically a text file where in each row you have a source and a target
+
+09:06.360 --> 09:14.040
+and an optional value and graph 500 is a benchmark or a benchmark description specification
+
+09:14.040 --> 09:19.720
+for HPC graph algorithm benchmarks and they also provide a data generator and we basically
+
+09:19.720 --> 09:24.880
+can read the binary file format that this generator produces.
+
+09:24.880 --> 09:29.360
+Like I said, everything as part of graph creation is parallelized using rayon and we will see
+
+09:29.360 --> 09:31.640
+this in the demo in action.
+
+09:31.640 --> 09:37.640
+The next grade I want to just mention briefly is the graph grade, which contains the parallel
+
+09:37.640 --> 09:39.680
+graph algorithm implementations.
+
+09:39.680 --> 09:44.840
+At the moment, it's these four, which we implemented in the first place to compare them to our
+
+09:44.840 --> 09:46.560
+Java implementations.
+
+09:46.560 --> 09:53.000
+So for example, PageRank, it's an algorithm to give like a population, popularity value
+
+09:53.000 --> 09:54.000
+to a node.
+
+09:54.000 --> 09:58.080
+It basically tells like if you traverse the graph randomly, like how likely is it that
+
+09:58.080 --> 10:02.880
+you end up with that node, so it's kind of a popularity metric.
+
+10:02.880 --> 10:06.440
+Connected components, Paul will talk a little bit about that in the demo.
+
+10:06.440 --> 10:11.520
+Again, also the graph algorithms are parallelized using rayon and if you want to see more or
+
+10:11.520 --> 10:14.960
+just open an issue or PR.
+
+10:14.960 --> 10:22.000
+Just a quick Rust API where how we call this algorithm, so in the graph pre-loot, we also
+
+10:22.000 --> 10:26.880
+provide like all the algorithm methods, for example, PageRank as you can see in the middle.
+
+10:26.880 --> 10:30.880
+The first thing we do here, we have a GDL graph again.
+
+10:30.880 --> 10:33.600
+It's the graph on the right-hand side without any properties.
+
+10:33.600 --> 10:39.120
+We create a directed graph with a specific layout, which Paul will talk about and then
+
+10:39.120 --> 10:42.520
+we call the PageRank method using that graph as a reference.
+
+10:42.520 --> 10:46.160
+You can specify some parameters in the PageRank config, which are not that important right
+
+10:46.160 --> 10:51.200
+now and the result are the scores, which are the values assigned to each node after the
+
+10:51.200 --> 10:53.800
+computation is done.
+
+10:53.800 --> 10:55.280
+And that's basically it.
+
+10:55.280 --> 11:00.280
+Okay, over to Paul with GraphMate.
+
+11:00.280 --> 11:03.280
+Yeah.
+
+11:03.280 --> 11:15.880
+Hi, I'm Paul and I want to talk about GraphMate, which are our Python bindings over this set
+
+11:15.880 --> 11:19.640
+of crates that Martin just talked about.
+
+11:19.640 --> 11:24.400
+And we just had a wonderful talk about Python APIs on top of Rust and this is in the same
+
+11:24.400 --> 11:25.780
+spirit.
+
+11:25.780 --> 11:29.680
+So we want to expose a Python API for Rust implementations and we don't want to deal
+
+11:29.680 --> 11:37.880
+with all the shortcomings in Python in terms of like proper parallelism and memory management.
+
+11:37.880 --> 11:45.040
+We also integrate with NumPy and Pandas, which are de facto standard libraries in anything
+
+11:45.040 --> 11:47.080
+Python.
+
+11:47.080 --> 11:54.080
+It's very alpha, so it works and you can install it for a pip.
+
+11:54.080 --> 12:04.040
+It's available on PyPy and I just want to run through a demo, which is a notebook.
+
+12:04.040 --> 12:06.920
+And there we go.
+
+12:06.920 --> 12:12.320
+So first we, I think I need to clip this on once again.
+
+12:12.320 --> 12:29.080
+Okay, we configure some logging so we can see some outputs and we import typical Python
+
+12:29.080 --> 12:30.080
+prelude.
+
+12:30.080 --> 12:35.280
+We import our crates and as well as NumPy and Pandas.
+
+12:35.280 --> 12:42.240
+And in this demo, we are loading a Graph 500 graph in particular scale 42 and Graph 500
+
+12:42.240 --> 12:48.240
+describes it as you have your scale number, two to the power of the scale number of nodes
+
+12:48.240 --> 12:57.200
+and 16 times as many relationships and this ends up in, so we load that file.
+
+12:57.200 --> 13:02.440
+We also load a direct graph and it takes a few seconds and at the end we will get a
+
+13:02.440 --> 13:13.120
+graph that says we have about 16 million, almost 17 million nodes and about 260 million
+
+13:13.120 --> 13:14.120
+relationships.
+
+13:14.120 --> 13:19.000
+And we are loading a direct graph, which means we have two sets of logging outputs that look
+
+13:19.000 --> 13:23.800
+very similar because we do it once for the outgoing, once for the incoming direction.
+
+13:23.800 --> 13:31.840
+And we also use the duplicated layout, which will merge parallel edges between the same
+
+13:31.840 --> 13:33.400
+source and target node pair.
+
+13:33.400 --> 13:38.280
+It will de-duplicate them and we only represent one of them in the graph.
+
+13:38.280 --> 13:41.800
+And with that we can run PageRank.
+
+13:41.800 --> 13:50.120
+So PageRank is a method on the graph object that we get and PageRank is an iterative algorithm.
+
+13:50.120 --> 13:55.560
+It runs in a number of iterations and when it finds that the result is good enough, it
+
+13:55.560 --> 14:02.200
+will stop and we can now access some metadata about the run.
+
+14:02.200 --> 14:07.480
+So we see we ran eight iterations in about 1.3 seconds, but now we also want to access
+
+14:07.480 --> 14:10.640
+the actual scores, the PageRank scores.
+
+14:10.640 --> 14:18.400
+In the other slide that Martin showed, we store the scores in a WEC of F32 and we don't
+
+14:18.400 --> 14:22.920
+want to copy that WEC into Python land, into the Python heap, convert the floating point
+
+14:22.920 --> 14:27.120
+numbers into Python numbers.
+
+14:27.120 --> 14:34.640
+So we are interfacing with the C API from NumPy and we return an array view that points
+
+14:34.640 --> 14:37.920
+to that WEC.
+
+14:37.920 --> 14:41.200
+So when you call scores, there's no copying involved.
+
+14:41.200 --> 14:46.560
+We return you a NumPy array that directly accesses the data and there's nothing to be
+
+14:46.560 --> 14:49.440
+copied in the Python heap or anywhere else.
+
+14:49.440 --> 14:52.880
+And you can use that array, it's a proper NumPy array and you can use that for example
+
+14:52.880 --> 15:01.960
+to put it into a partner's data frame and then do some calculations based on that.
+
+15:01.960 --> 15:06.240
+The numbers here don't really mean anything in particular, it's just for demonstration.
+
+15:06.240 --> 15:14.360
+And the next algorithm you want to run is WCC, which stands for weekly connected components.
+
+15:14.360 --> 15:19.320
+So it basically identifies components within a graph.
+
+15:19.320 --> 15:25.600
+Every node that is connected together is one component and we run that, it takes about
+
+15:25.600 --> 15:29.640
+200 milliseconds, we're still running on the same graph.
+
+15:29.640 --> 15:35.880
+And similar to PageRank, we can access the data here and the data is an array where for
+
+15:35.880 --> 15:41.240
+every position in that array for that node ID, it's the component ID, so every node
+
+15:41.240 --> 15:45.800
+that is together in the same component will have the same component ID in that array.
+
+15:45.800 --> 15:52.640
+And we can use a pandas method here, drop duplicates, which will give us all the unique
+
+15:52.640 --> 15:58.160
+components IDs so we can identify the number of components here.
+
+15:58.160 --> 16:05.400
+And so we see, we are down from 16 million something something nodes down to almost eight
+
+16:05.400 --> 16:08.720
+million unique components.
+
+16:08.720 --> 16:15.360
+And yeah, that is WCC and for the last thing we want to count the total number of triangles
+
+16:15.360 --> 16:16.360
+in the graph.
+
+16:16.360 --> 16:22.840
+A triangle is defined as a connection between three nodes from A to B to Z back to A.
+
+16:22.840 --> 16:27.760
+And for that, first we need to convert the graph into an undirected graph.
+
+16:27.760 --> 16:31.600
+There's a method there.
+
+16:31.600 --> 16:38.840
+And it'll take a little while, a few seconds, because it's creating a new graph.
+
+16:38.840 --> 16:46.080
+We have to basically merge those two out and in lists together, we produce a new graph
+
+16:46.080 --> 16:52.360
+and since it's a new API, a new type in Rust, we also return it as a new graph.
+
+16:52.360 --> 16:56.800
+Which means if we, if we're low on memory, we can delete references to the old graph,
+
+16:56.800 --> 17:00.720
+we don't need that anymore.
+
+17:00.720 --> 17:09.480
+There's a particular optimization for triangle counting that makes it not be super slow,
+
+17:09.480 --> 17:12.000
+which we call make degree audit.
+
+17:12.000 --> 17:18.720
+I don't really want to go into details what it's actually doing, but it's, let me just
+
+17:18.720 --> 17:22.040
+run triangle counting here.
+
+17:22.040 --> 17:26.400
+It makes it so that triangle count finishes within a minute, not within five minutes.
+
+17:26.400 --> 17:29.480
+And that optimization only takes like one and a half seconds.
+
+17:29.480 --> 17:34.960
+At the bottom, you can see the H-top output, so you can see that it's actually using all
+
+17:34.960 --> 17:41.280
+the cores and proper parallelism without any typical Python shenanigans that you need
+
+17:41.280 --> 17:45.360
+to do to avoid the GIL and so on.
+
+17:45.360 --> 17:49.520
+And we don't have to watch it finish.
+
+17:49.520 --> 17:52.600
+We can go back to the presentation.
+
+17:52.600 --> 17:56.240
+This is a summary of the demonstration that we just went through.
+
+17:56.240 --> 17:59.360
+We don't need to look at it anymore.
+
+17:59.360 --> 18:04.880
+Once in our repository, we have three variations of the demonstration.
+
+18:04.880 --> 18:07.600
+We have the first one in Python that we just showed.
+
+18:07.600 --> 18:12.840
+We have another one using the Rust API and the third one using the arrow server that
+
+18:12.840 --> 18:18.720
+Martin mentioned, where there's a Python client, but it's not using the library directly.
+
+18:18.720 --> 18:24.360
+It's using arrow and arrow flight to communicate with the server and doing it remotely.
+
+18:24.360 --> 18:29.720
+I mean, if you're interested in those demos, you can follow those QR code links at the
+
+18:29.720 --> 18:30.720
+end.
+
+18:30.720 --> 18:34.080
+And I think by now, triangle counting should be done.
+
+18:34.080 --> 18:37.800
+So we took about a minute and it found 10 billion triangles.
+
+18:37.800 --> 18:45.360
+If I count it correctly, it seems, yeah, it seems it way.
+
+18:45.360 --> 18:49.560
+So that is for the demonstration.
+
+18:49.560 --> 18:54.040
+Now we can look back a little bit and talk about the lessons learned, particularly for
+
+18:54.040 --> 18:57.560
+us coming from the JVM world.
+
+18:57.560 --> 19:06.080
+And so using Rust as a Java developer, first of all, the way the Rust paradigms require
+
+19:06.080 --> 19:10.320
+us to think differently about the code and allow us to think differently about the code.
+
+19:10.320 --> 19:14.960
+Things like using the type system to define whether or not we have indirect or undirect
+
+19:14.960 --> 19:16.480
+the graph.
+
+19:16.480 --> 19:22.400
+And this is, of course, very nice and very refreshing coming from a Java world.
+
+19:22.400 --> 19:26.080
+But also, we have a better mechanical sympathy for what happens.
+
+19:26.080 --> 19:30.800
+We don't have to think about this JVM black box where things go through before they touch
+
+19:30.800 --> 19:34.360
+the hardware.
+
+19:34.360 --> 19:40.080
+Ecosystem cargo, Rust analyzer is very, very nice.
+
+19:40.080 --> 19:43.400
+But also, of course, there are some downsides to it.
+
+19:43.400 --> 19:48.400
+We don't have that experience of just clicking a fancy button in the IDE to run a debug or
+
+19:48.400 --> 19:49.400
+a profiler.
+
+19:49.400 --> 19:53.920
+We have to actually learn different tools and do things the proper way, I guess.
+
+19:53.920 --> 19:56.480
+Yeah, but what about performance?
+
+19:56.480 --> 19:59.360
+We talked about what we want to do in a performance way.
+
+19:59.360 --> 20:05.280
+And for every algorithm that we have implemented, we are faster and less memory-intensive than
+
+20:05.280 --> 20:07.040
+the Java implementations.
+
+20:07.040 --> 20:08.040
+It's not just about that.
+
+20:08.040 --> 20:11.080
+It's also predictable behavior.
+
+20:11.080 --> 20:17.920
+No latency spikes, no allocation rates, no cheat compiler that does things in the back.
+
+20:17.920 --> 20:23.160
+And just quickly showing what we want to do from the future, of course, expanding all
+
+20:23.160 --> 20:24.160
+the things.
+
+20:24.160 --> 20:31.040
+And if you want to play around with it, feel welcome and open issues.
+
+20:31.040 --> 20:35.480
+There's also a longer version of this talk because I'm already out of time, so thank
+
+20:35.480 --> 20:36.480
+you.
+
+20:36.480 --> 20:51.720
+We don't have time for all of this.

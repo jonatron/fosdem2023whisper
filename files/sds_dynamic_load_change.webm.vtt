@@ -1,0 +1,910 @@
+WEBVTT
+
+00:00.000 --> 00:13.280
+Okay, good morning, everyone.
+
+00:13.280 --> 00:20.320
+I want to talk about how we can dynamically change a load of the sort of front system
+
+00:20.320 --> 00:27.760
+to be a better resident in clouds.
+
+00:27.760 --> 00:34.920
+I did not move to IBM as part of the Reddit storage moving to IBM.
+
+00:34.920 --> 00:37.680
+So this is still a Reddit presentation.
+
+00:37.680 --> 00:43.480
+I don't have the Ceph logo here because it's generic presentation,
+
+00:43.480 --> 00:49.240
+but it would be highly based on work that I did with others on Ceph.
+
+00:49.240 --> 00:55.280
+So all the examples would be how this was implementing Ceph and how we could use it.
+
+00:55.280 --> 01:00.200
+But the concepts are generic and not Ceph specific.
+
+01:00.200 --> 01:05.160
+So it's a mix.
+
+01:05.160 --> 01:12.000
+Okay, so we will talk, we want what is optimal cluster performance
+
+01:12.000 --> 01:14.600
+and why we need optimal cluster performance.
+
+01:14.600 --> 01:17.040
+It would be just at the beginning.
+
+01:17.040 --> 01:24.760
+Then I'm going back to explain what we did in Ceph for Riff version.
+
+01:24.760 --> 01:31.840
+We have a new read balancer which I explained quite shortly.
+
+01:31.840 --> 01:37.840
+It's not into full details, but it's an infrastructure that could be used
+
+01:37.840 --> 01:42.680
+to better control the load later.
+
+01:42.680 --> 01:51.080
+Then some future plans that we already have which are good as examples
+
+01:51.080 --> 01:55.120
+to what we could do with this infrastructure.
+
+01:55.120 --> 01:58.280
+And then we'll go to the real problem,
+
+01:58.280 --> 02:07.440
+how we could actually dynamically change the way the load is spread across Ceph cluster
+
+02:07.440 --> 02:13.880
+in case we need to do it because other things change in the cluster.
+
+02:13.880 --> 02:18.680
+How we could fit the way the load is spread in Ceph
+
+02:18.680 --> 02:30.640
+because of some kind of external change in the conditions that we need to respond to.
+
+02:30.640 --> 02:35.240
+So, again, just an example.
+
+02:35.240 --> 02:39.200
+If we have a cluster, we have here nodes and we have three workloads
+
+02:39.200 --> 02:45.680
+and they are split not totally evenly over the nodes.
+
+02:45.680 --> 02:52.160
+And if we had bad luck, we could see that some nodes are more loaded than the other nodes.
+
+02:52.160 --> 02:59.120
+And the problem is, as everyone probably guesses, one node reaches 100% load,
+
+02:59.120 --> 03:06.080
+then the entire system starts to become slow because we have weakest link in the chain effect.
+
+03:06.080 --> 03:13.000
+Assuming these workloads cannot respond fast enough,
+
+03:13.000 --> 03:23.960
+so you get all kinds of cues created and the entire cluster loses its ability to perform well.
+
+03:23.960 --> 03:27.000
+It still performs, but not that well.
+
+03:27.000 --> 03:31.920
+So, basically, when we build a cluster and we look from the outside,
+
+03:31.920 --> 03:37.040
+we want the load to be spread almost evenly.
+
+03:37.040 --> 03:43.680
+So, when one node reaches 100%, we know the cluster is fully occupied.
+
+03:43.680 --> 03:47.160
+There is nothing we could do about it.
+
+03:47.160 --> 03:54.240
+This is another image which shows something which is way better
+
+03:54.240 --> 03:58.640
+because the nodes, again, it's the same.
+
+03:58.640 --> 04:00.280
+It's created the same number.
+
+04:00.280 --> 04:03.440
+The areas of each workloads are the same.
+
+04:03.440 --> 04:11.520
+And it actually shows the cluster itself is balanced.
+
+04:11.520 --> 04:15.640
+And we could get, when it fills up, it fills up together,
+
+04:15.640 --> 04:20.960
+so we use the cluster for the best that we can.
+
+04:20.960 --> 04:24.280
+So, actually, if we try to look at what we have,
+
+04:24.280 --> 04:26.800
+we want something flexible with fixed volume.
+
+04:26.800 --> 04:28.480
+A balloon is what I find.
+
+04:28.480 --> 04:32.400
+We want something, the performance that we want is the volume,
+
+04:32.400 --> 04:37.120
+but it should be flexible because we can't control all the workloads.
+
+04:37.120 --> 04:44.840
+So, if we take, for example, we have on the nodes a backup program
+
+04:44.840 --> 04:47.680
+which runs in nights, but not at the same time.
+
+04:47.680 --> 04:49.480
+It gradually goes over all the nodes.
+
+04:49.480 --> 04:56.080
+So, each one of the nodes gets some kind of peak either in IOs
+
+04:56.080 --> 05:02.080
+or in network traffic, and it peaks and it's more full than others.
+
+05:02.080 --> 05:09.000
+And then the others, the other one, and it goes over all the nodes.
+
+05:09.000 --> 05:11.120
+We can obviously mitigate this.
+
+05:11.120 --> 05:17.040
+We can say, OK, we allocate some capacity for this backup program
+
+05:17.040 --> 05:21.240
+so we know that other workloads could run on this node.
+
+05:21.240 --> 05:24.880
+But if these backup programs work for an hour every day,
+
+05:24.880 --> 05:30.040
+then we allocate some capacity for one hour and the other 23 hours,
+
+05:30.040 --> 05:31.800
+it is not used.
+
+05:31.800 --> 05:33.040
+Probably not used.
+
+05:33.040 --> 05:37.560
+It's much better if we could incorporate this change,
+
+05:37.560 --> 05:45.360
+these backup runs over the cluster and move the nodes of the nodes
+
+05:45.360 --> 05:49.560
+with the backup to other nodes for some time for an hour.
+
+05:49.560 --> 05:52.200
+Then the backup finishes go to another node,
+
+05:52.200 --> 05:57.440
+then we move the nodes from back to the original node and we make it.
+
+05:57.440 --> 06:02.040
+It's way more effective.
+
+06:02.040 --> 06:09.120
+So, in some sense, we do some kind of over provisioning on the nodes
+
+06:09.120 --> 06:14.200
+when we know that most of the time we are not over provisioning
+
+06:14.200 --> 06:16.520
+and when we are over provisioning, we could mitigate this.
+
+06:16.520 --> 06:20.360
+That's the idea.
+
+06:20.360 --> 06:23.240
+And the other use case that we could have,
+
+06:23.240 --> 06:28.520
+that we could get a node coming to full capacity when we didn't plan it,
+
+06:28.520 --> 06:32.720
+it could be all kinds of failure, NIC problems,
+
+06:32.720 --> 06:37.160
+all the top of the rack switch problems, other hardware,
+
+06:37.160 --> 06:40.560
+or if we talk about SEPH, disk failure,
+
+06:40.560 --> 06:48.240
+all kinds of other stuff could bring to a situation that may be bad
+
+06:48.240 --> 06:52.800
+but not critical enough to take node down and do full rebuild and all this stuff.
+
+06:52.800 --> 06:58.520
+So, that's the idea is to have something which is flexible and we could play with it.
+
+06:58.520 --> 07:03.160
+The problem is that our balloon is built of LEGO bricks
+
+07:03.160 --> 07:06.720
+and it's not as flexible as we think.
+
+07:06.720 --> 07:13.720
+So, I want to show the amount of flexibility that we have,
+
+07:13.720 --> 07:18.720
+that we could play with when we talk about software defined storage system
+
+07:18.720 --> 07:25.120
+and which are more challenging than other workloads because it's stateful,
+
+07:25.120 --> 07:31.640
+stateless workloads are easier to manage flexibly.
+
+07:31.640 --> 07:34.520
+So, we want to go from this, this was the first,
+
+07:34.520 --> 07:39.440
+this is the copy of the first diagram that I showed
+
+07:39.440 --> 07:45.320
+and this is where we want to be and I change only the orange workload.
+
+07:45.320 --> 07:50.720
+It's the same numbers, exactly the same numbers, exactly the same area,
+
+07:50.720 --> 07:52.960
+orange area but split differently.
+
+07:52.960 --> 07:59.360
+That's the approach that I want to take but, okay, it's a presentation.
+
+07:59.360 --> 08:03.680
+I could do miracles in presentation, how I do it in real life
+
+08:03.680 --> 08:13.080
+and I want to show how we could play assuming SEPH is or software defined storage
+
+08:13.080 --> 08:17.680
+is the orange one, how we could play with this to a limits.
+
+08:17.680 --> 08:20.840
+We can't do all the magic that we could do in presentation
+
+08:20.840 --> 08:27.240
+but we could do reasonable, under some condition, very good work,
+
+08:27.240 --> 08:35.840
+under other condition, improve the situation not to a perfect solution.
+
+08:35.840 --> 08:40.440
+So, it's all based on the idea of the SEPH read balancer
+
+08:40.440 --> 08:46.680
+and the idea today in SEPH, we have, not in SEPH, in every software defined storage,
+
+08:46.680 --> 08:51.800
+the main balancing requirement is that all the disks are full at the same percentage.
+
+08:51.800 --> 08:54.800
+The first disk which is full, the system is full.
+
+08:54.800 --> 08:58.720
+So, this is our basic assumption.
+
+08:58.720 --> 09:07.880
+Then, what we're doing today, we try to do is that if we have replica 3,
+
+09:07.880 --> 09:13.840
+then we have XPGs mapped to OSD, X divided by 3 would be primaries.
+
+09:13.840 --> 09:21.520
+So, the primaries are split evenly on the devices, not evenly split according to the number of the PGs.
+
+09:21.520 --> 09:27.720
+So, if we have a device with more PGs, it has more primaries.
+
+09:27.720 --> 09:32.920
+But, we don't have anything that does it, actually what is happening today in SEPH
+
+09:32.920 --> 09:38.280
+is that we rely on the statistics of crash.
+
+09:38.280 --> 09:43.200
+It works well for large clusters, it doesn't work well for small cluster.
+
+09:43.200 --> 09:50.600
+So, the SEPH read balancer comes to fix this and it's what we currently have,
+
+09:50.600 --> 09:56.320
+more in the next bullet, is for the small clusters where the statistics doesn't play well.
+
+09:56.320 --> 10:01.760
+So, what we actually did,
+
+10:01.760 --> 10:09.000
+we added three different things together, create a read balancer,
+
+10:09.000 --> 10:13.000
+which could actually split the reads evenly across us.
+
+10:13.000 --> 10:18.800
+This is actually what it does, it splits the primaries as I explained for replica X.
+
+10:18.800 --> 10:25.080
+One divided by replica X are primaries per OSDs for the PGs.
+
+10:25.080 --> 10:27.280
+So, it just changes the primaries.
+
+10:27.280 --> 10:31.200
+So, first of all, we created, it would be part of the RIF version.
+
+10:31.200 --> 10:33.520
+So, first of all, we created some kind of score.
+
+10:33.520 --> 10:38.800
+The score represents how well the read is balanced versus the optimum.
+
+10:38.800 --> 10:41.280
+Optimum is one.
+
+10:41.280 --> 10:46.040
+If we have a score of two, meaning that under full load of reads,
+
+10:46.040 --> 10:50.760
+the system would perform half of a good system.
+
+10:50.760 --> 10:56.600
+If it's three, for example, we have replica three and the score is three.
+
+10:56.600 --> 11:01.480
+And we have three disks and score is three, it means all the reads are for a single disk.
+
+11:01.480 --> 11:07.400
+So, it's obviously third of the optimal when the reads split evenly among three disks.
+
+11:07.400 --> 11:10.920
+So, that's what I have.
+
+11:10.920 --> 11:19.800
+Score works really well when the read affinity of the devices is high and it's still monotonous,
+
+11:19.800 --> 11:26.560
+but it's more difficult to explain the numbers when you have a lot of devices with small OSDs.
+
+11:26.560 --> 11:31.560
+With small read affinity numbers, and I could explain later why it is,
+
+11:31.560 --> 11:36.040
+it's not a good way to configure the system.
+
+11:36.040 --> 11:39.720
+It creates all kinds of illegal configuration.
+
+11:39.720 --> 11:47.480
+You have to do what the user asks you not to do, but that's for side code.
+
+11:47.480 --> 11:55.400
+Then we have two new commands, PG-UPMAP commands, as we have PG-UPMAP primary and RMPG-UPMAP primary,
+
+11:55.400 --> 12:01.560
+which actually say, okay, I get an OSD PG, the PG has X OSDs there,
+
+12:01.560 --> 12:04.200
+make one of them the primary, I tell them which one.
+
+12:04.200 --> 12:08.440
+So, I could actually change the primary within a PG.
+
+12:08.440 --> 12:15.360
+And it's metadata only, we don't move data, you must give an OSD, which is part of the PG.
+
+12:15.360 --> 12:17.880
+If you give OSD, which is not part of the PG, you get an error.
+
+12:17.880 --> 12:22.040
+So, we are not trying to do anything, it's very cheap, very fast.
+
+12:22.040 --> 12:29.280
+It just changes the order of the OSDs within the PG, that's everything that it does.
+
+12:29.280 --> 12:33.560
+And since it's first version, we want to make it opt-in option.
+
+12:33.560 --> 12:40.840
+So, we have a new command to the OSD MAP tool, which actually calculates everything and spits
+
+12:40.840 --> 12:46.960
+a script file that you could run in order to get to the perfect distribution.
+
+12:46.960 --> 12:51.080
+That's what we currently have.
+
+12:51.080 --> 12:56.040
+So, this is the example of when you run this, you could see smaller clusters,
+
+12:56.040 --> 13:00.680
+small cluster tend to be less balanced because statistics doesn't play well.
+
+13:00.680 --> 13:07.280
+So, we have number of primaries for three OSDs, we have 11, 6, 15, obviously, it's not balanced.
+
+13:07.280 --> 13:13.840
+And after you run it, you get 10, 11, 11, which is obviously the best that you could get.
+
+13:13.840 --> 13:20.760
+And the number is not one, because the average is 10 and 2 thirds.
+
+13:20.760 --> 13:28.720
+So, if you could have 10 and 2 thirds, you get a score of one, but it's 1.03 really good.
+
+13:28.720 --> 13:35.280
+And here, obviously, it's 1.4 because it's 15 divided by 10 and 2 thirds.
+
+13:35.280 --> 13:45.640
+This is the out file that you could actually run as a script in order to apply the changes.
+
+13:45.640 --> 13:53.400
+If you look really carefully, you see that we have six changes, but actually we could only have five changes,
+
+13:53.400 --> 13:57.120
+even maybe four, we could, we should just make this 10.
+
+13:57.120 --> 14:04.560
+So, we have 11, 10, 11, that's because of its greedy algorithm.
+
+14:04.560 --> 14:12.800
+Since these commands are really, really very, don't have overhead run really fast, it's not a problem.
+
+14:12.800 --> 14:19.240
+If we would have need to move data, this would be a totally wrong one because we have two additional data movements.
+
+14:19.240 --> 14:30.080
+We don't need it, it's really simple, so we didn't try to optimize on the number of changes just to make it come.
+
+14:30.080 --> 14:34.080
+So, what is the implementation?
+
+14:34.080 --> 14:37.400
+The implementation is, we have two functions.
+
+14:37.400 --> 14:44.440
+One of them is, we have one, it's an example, calc desired primary distribution.
+
+14:44.440 --> 14:51.200
+That's where we go over the configuration and decide what's the final distribution of primary that we want.
+
+14:51.200 --> 14:56.560
+For OSD, how many primaries we want to be on this OSD?
+
+14:56.560 --> 15:01.040
+It's really, it's some kind of policy function, it's really simple.
+
+15:01.040 --> 15:08.720
+Today, it's, it does one divided by replica count, as I said, and it's about 40 lines of code, something really simple.
+
+15:08.720 --> 15:17.960
+So, adding more policies just for, to understand if you want to add more policies and I'll talk about more policies immediately.
+
+15:17.960 --> 15:25.200
+If you want to add more policies, then we're talking about tens of lines of code, nothing more than this.
+
+15:25.200 --> 15:32.520
+Then we have the functions that actually takes the configuration and goes over all the PG's, it's all run by pool.
+
+15:32.520 --> 15:40.000
+I didn't say this before, it's all run by pool because pool represents a workload and it's important to balance pair workload.
+
+15:40.000 --> 15:50.440
+It goes over all the PG's on the pool and does its work and switches what it has to switch in order to get into the, what we calculated here.
+
+15:50.440 --> 15:59.400
+So basically, this is function, this is infrastructure function that could be used, we could add more and I'll talk about more policies.
+
+15:59.400 --> 16:07.480
+We could add more policies and adding the policy is really something simple and the command is fast.
+
+16:07.480 --> 16:16.360
+That's, I keep on saying this because I want to talk about dynamic, that's what is behind the dynamic thing.
+
+16:16.360 --> 16:24.480
+It's a cheap operation that we could run periodically and change things when we want to do it.
+
+16:24.480 --> 16:35.840
+It's not involved in any, any high overhead or anything, it's just a metadata operation.
+
+16:35.840 --> 16:50.880
+So we had the very simple read balancer, use case is small clusters, small clusters, it's very important use case for redhead,
+
+16:50.880 --> 17:02.720
+now IBM, it's for ODF or for CEPH in OpenShift, but there is much more than we could do.
+
+17:02.720 --> 17:09.960
+So now let's talk about the next, well, we have two use cases.
+
+17:09.960 --> 17:17.880
+So what we could do more?
+
+17:17.880 --> 17:27.920
+We have a mechanism, we could change the things, but it's a pretty strong mechanism and we want to use, to use it for further on.
+
+17:27.920 --> 17:37.840
+So one thing and this is one thing, this is a use case for larger cluster, load, load balance better on heterogeneous system.
+
+17:37.840 --> 17:49.920
+So you have a large CEPH cluster, you started to work five years ago, you have one terabyte devices, time comes, you need more capacity
+
+17:49.920 --> 17:55.560
+and it doesn't make sense to buy one terabyte devices anymore and you bought two terabyte devices.
+
+17:55.560 --> 18:08.840
+Now normally it means that you get twice the workload on the two terabyte devices because you need that the devices would be split, even filled evenly.
+
+18:08.840 --> 18:17.760
+You could create policies that says that you change gradually and when the smaller devices are not full, you have the same capacity.
+
+18:17.760 --> 18:22.120
+It doesn't work because every change is movement of data, it's very expensive.
+
+18:22.120 --> 18:31.520
+So you could in theory create really, really nice policies in practice, the price you pay in order to keep it is too much.
+
+18:31.520 --> 18:46.360
+Eventually you have device which is twice as large, it gets twice the capacity or you define it as a smaller device, then you lose capacity or it gets twice the load.
+
+18:46.360 --> 18:51.320
+If it gets twice the load, the smaller devices are working on half the potential load.
+
+18:51.320 --> 18:56.720
+So just for the numbers, I have a little exercise.
+
+18:56.720 --> 19:01.320
+So we have devices of same technology, same bandwidth, same IOPS.
+
+19:01.320 --> 19:06.840
+We have one OSD of two terabytes and four OSDs of one terabyte.
+
+19:06.840 --> 19:14.600
+So it's like three OSDs of two terabytes if you think about capacity, so one of two terabytes, four of one terabyte.
+
+19:14.600 --> 19:23.760
+So we have for each a PG, one copy on the large device and two copies on the small devices, a split.
+
+19:23.760 --> 19:32.160
+So that's the assumption to just show a bit of play with the numbers.
+
+19:32.160 --> 19:36.960
+And for the convenience, let's assume that we have 100 IOPS, it's just easy.
+
+19:36.960 --> 19:41.920
+People like to think in round numbers.
+
+19:41.920 --> 19:46.480
+So under full load, what happens?
+
+19:46.480 --> 19:50.960
+This device goes to 100 IOPS because that's what it could provide.
+
+19:50.960 --> 19:56.080
+And these devices get half the load and they would provide each 150 IOPS.
+
+19:56.080 --> 20:00.320
+So total we have 300 IOPS.
+
+20:00.320 --> 20:17.320
+And there is nothing we could actually do about it because the requirements to have the capacity split twice here than here is so strong that we can't change it, can't play with it.
+
+20:17.320 --> 20:19.160
+That's the rules of the game.
+
+20:19.160 --> 20:23.080
+Once we did it, we are bound in such a configuration.
+
+20:23.080 --> 20:34.240
+Actually, we had a working cluster and we added one larger disk and all the cluster performs way, way worse than it used to be.
+
+20:34.240 --> 20:42.760
+So it's not really something that we could do with it and accept, replace all the disks with larger disks or something like this.
+
+20:42.760 --> 20:46.240
+But if you want to do gradual, we can do with it.
+
+20:46.240 --> 20:51.480
+Now, there is something that we could do.
+
+20:51.480 --> 20:58.640
+Let's assume that we have, for now, the read-only, just read-only load.
+
+20:58.640 --> 21:02.240
+The capacity is still the same, 30 PG is 15, 15, 15.
+
+21:02.240 --> 21:08.080
+But the 10 primaries here, I moved them and moved them here and split them here.
+
+21:08.080 --> 21:16.960
+So we have here, when you have only reads, all the devices are fully working under full load.
+
+21:16.960 --> 21:29.600
+So we moved from 300 IOPS to 500 IOPS, but just very minor change of changing primaries and splitting them differently across the cluster.
+
+21:29.600 --> 21:33.040
+Now, this is the best that we could get.
+
+21:33.040 --> 21:43.160
+If we have read-write, obviously, if we have write-only workload, we can't improve using this technique because this technique changes only reads.
+
+21:43.160 --> 21:56.080
+So if we have write-only, we can't change, and if we have some writes, we can't get as good as this one because eventually this will get all the time, twice writes than the others.
+
+21:56.080 --> 21:58.680
+So there is limitation to what we could do.
+
+21:58.680 --> 22:04.000
+So the best potential is for read-only, but we could do also with mixed read-writes.
+
+22:04.000 --> 22:09.160
+We could get a lot of improvement under full load, a lot.
+
+22:09.160 --> 22:15.600
+So that's the idea, and this is already planned for the next version.
+
+22:15.600 --> 22:26.320
+On purpose, we didn't put it on the first version because we want adoption of the feature, but this is, we plan to add two steps for the next version.
+
+22:26.320 --> 22:36.320
+This is actually better supporting different sizes of devices.
+
+22:36.320 --> 22:49.080
+So, can we improve on other loads which are not read-only?
+
+22:49.080 --> 23:06.160
+And I already said this, we can do this, but in order to do this, in order to do good job, we need to understand per pool some characteristics of the workload.
+
+23:06.160 --> 23:08.480
+And basically the read-write ratio.
+
+23:08.480 --> 23:31.480
+If we get read-write ratio which is reasonably close to what we actually have, then we could do good improvement in the performance when we have different size devices and mixed workload.
+
+23:31.480 --> 23:40.160
+Well, I said it, there are limitations what we could do, so I said one thing, we can't improve on write-only using this technique.
+
+23:40.160 --> 23:52.200
+I've seen this, so it's real thing, but if you use replica three and we, instead of having one terabyte and two terabyte devices, we have one terabyte and five terabyte devices.
+
+23:52.200 --> 23:54.720
+I've seen this in real life.
+
+23:54.720 --> 24:06.320
+We can't improve, we can't, well, we can improve, but we can get to optimal performance when we have five terabyte devices and one terabyte devices on the same pool, the numbers are too low.
+
+24:06.320 --> 24:22.800
+We could reduce it to the minimum, moving all reads out of the five terabyte devices, but eventually when you have enough writes, the system would not perform optimally.
+
+24:22.800 --> 24:24.760
+So, we covered this.
+
+24:24.760 --> 24:43.840
+So, another case which was, another case which is, well, it's a no-no, big no-no, don't put SSDs and HDDs on the same pool, everyone knows this.
+
+24:43.840 --> 25:09.080
+Well, if you could, if you can make sure that you have enough SSDs that, sorry, that every PG is mapped to at least one SSD and then to HDDs, preferably replica three, one SSD, two HDDs, you could actually get the effect of read flash cache without cache misses.
+
+25:09.080 --> 25:20.120
+You always read from the SSDs and you only write to the HDDs. You could improve on the performance of your system and get really fast read latencies.
+
+25:20.120 --> 25:32.080
+So, I'm breaking this no-no, but it is important, don't mix the technologies if you can't make sure that all the reads are from the faster device.
+
+25:32.080 --> 25:45.320
+If you could make, so if you take replica three and you put one-third of your PG's, of your SSDs are SSD capacity, one-third of the capacity is on SSDs, two-third on HDDs.
+
+25:45.320 --> 25:58.680
+And you could also make sure, whatever techniques you use, it's really easy. You need to change a bit of crush rules, but all the copies, you have one copy on SSD and the other copies on HDDs.
+
+25:58.680 --> 26:07.880
+You could actually improve your performance dramatically because the bottleneck of HDD would be only for writes and all the reads would get the SSD or NVMe or whatever performance.
+
+26:07.880 --> 26:19.760
+So, I'm breaking one of the big no-no's here, but if you can't make sure that all the reads are from the fast devices, then you waste, it wouldn't work.
+
+26:19.760 --> 26:25.880
+Eventually, under full load, you'll get the known weakest link in the chain and it would be blocked.
+
+26:25.880 --> 26:47.480
+But if you can do it, so this is a way to modernize the devices gradually and not moving all the HDD to SSDs once, one-third in case of replica three could be the first step and you could do it gradually and you don't know to do anything.
+
+26:47.480 --> 26:59.800
+So, that's another thing that could be with existing, by the way, for this, because it's different technique, you don't need what we did in the read balancer.
+
+26:59.800 --> 27:07.200
+It's enough to have good crush rules. This could be managed by crush rules differently.
+
+27:07.200 --> 27:16.800
+Okay, now we come to the dynamic aspect of this.
+
+27:16.800 --> 27:28.000
+So, the thing is that we have cluster, we build cluster, we know we have the numbers, how the cluster performs, what are the network bandwidths, how devices perform.
+
+27:28.000 --> 27:30.640
+It all works well until it doesn't.
+
+27:30.640 --> 27:41.200
+So, we may have problems, hardware problems, and we may have noisy neighbors where we work.
+
+27:41.200 --> 27:47.000
+As I said, full isolation of neighbors has a cost.
+
+27:47.000 --> 27:59.240
+If you prevent over provisioning in all costs, well, it has a cost, depending on your workloads, you allocate a lot for temporary workloads.
+
+27:59.240 --> 28:05.880
+So, in some cases, doing over provisioning of nodes makes sense if you know how to behave.
+
+28:05.880 --> 28:26.120
+And this is especially in hyperconverged. So, we know that hyperconverged deployment, noisy neighbors, it could be in Kubernetes, we tend to limit, we know how to limit, we use, we tend to limit these CPUs and memories and not network.
+
+28:26.120 --> 28:39.880
+Obviously, for sort of defense systems, the network is really important. So, noisy neighbor on the network could cause huge performance problems.
+
+28:39.880 --> 28:49.760
+So, the process, and this is the process is, I want to explain, because it's more than just technical thing.
+
+28:49.760 --> 29:00.760
+We want to monitor the IO performance from OSD level and up. We want to identify what happens. It could be on OSD level, it could be on node level, it could be on rack level.
+
+29:00.760 --> 29:08.880
+We need to understand what happens. Then we could tune up the system. We could reduce the load. If the problem is temporary, we don't want to move data.
+
+29:08.880 --> 29:29.760
+Even if the problem is that we have a faulty nick, and we know that it would take 24 hours to fix it, it may not be worth the effort of, for a node, to move all the data from this node to another node, to other nodes, to the rest of the cluster and then move it back.
+
+29:29.760 --> 29:40.800
+If we could make sure that we have a faulty nick and until it is fixed, we don't read from this node at all. We just write to it. Maybe we could live with it.
+
+29:40.800 --> 29:53.440
+So, the idea is that we don't want, the obvious solution is mark OSD is out and move the data and everything fix itself, but it costly, especially if you have a lot of data over the node.
+
+29:53.440 --> 30:07.720
+So, this is a way to reduce the load temporarily until it is fixed. And then, once you did all your magic, fixed everything, you could go back to the normal.
+
+30:07.720 --> 30:37.000
+So, and by the way, this is something that is not related to software-defined storage, but it's much easier, all this much easier to do for a stateless application. If we have a web server that gives us the stock exchange quotes, and it doesn't function, one of the servers doesn't function, we change the proxy and we send the request to other servers.
+
+30:37.000 --> 30:54.040
+It's way more difficult to do with stateful application when you can't exchange every server with every other server and you need, there are more limitations and obviously we talk about storage. It's the most stateful thing that you could think of.
+
+30:54.040 --> 31:13.720
+So, option one, it's something we thought about even for the rebalances we did. This is what is a very good solution for the stateless part, it's called the power of two.
+
+31:13.720 --> 31:23.920
+Before you send the request, you randomly select two candidates to get the request, you find out who is more loaded and you send to the one that is less loaded. It does magic.
+
+31:23.920 --> 31:42.520
+That's really, really good way to move the load from the loaded servers to the unloaded servers and it works. Unfortunately, in order to fix, to do such thing in SEF, you need to go into the data path. Everything that I explained up until now is totally outside of the data path.
+
+31:42.520 --> 32:04.720
+You have to add things to the data path and to change the clients and we thought about this also in order to do the read balancing, it would be very simple. Every PG, since we have read from non-replicant in SEF now, we could say for every PG, don't send the request to the primary, send it randomly to any of the PG's and automatically you'll get the balance spread.
+
+32:04.720 --> 32:20.720
+Sorry, for HPG to any of the OSD's, don't send to the primary OSD, just send to whatever you have there. We decided not to do it, it's risky and we don't like to play with the data path. I don't like to play with the data path personally, but it was a mutual decision, not only me.
+
+32:20.720 --> 32:40.720
+So that's option two, monitor centrally, monitor centrally, obviously, create the policy. This is something that you need to get the function of the policy that knows what to do when you find these discrepancies.
+
+32:40.720 --> 32:54.720
+You need to understand what you're doing, what you want to achieve, how much time you want to play with this before you decide to move data or maybe you need the human involvement which will tell me, okay, I'm going to fix this, don't do anything.
+
+32:54.720 --> 33:06.720
+It's a policy you need to do both in the terms of workflow and then program what you need to program for this.
+
+33:06.720 --> 33:24.720
+The policy function is small, we talked about this, it's nothing. And when the performance changes, first you need to notify operator because we suspect that a lot of the problems could be hardware problems that should be fixed and we need to tell something that we see something bad.
+
+33:24.720 --> 33:36.720
+And then change primary settings so we remove the load from the less performant OSDs or components to other places.
+
+33:36.720 --> 34:04.720
+And before monitoring the system and when it's back to normal, we could remove everything and go back to full things. So here is the conclusion, again, it's data path outside of the data path, syncing the metadata, the performance to the clients, which is also something that we didn't want to do,
+
+34:04.720 --> 34:19.720
+versus the external metadata configuration that we do on the server side, whatever, because we trigger the policy from server side and no change.
+
+34:19.720 --> 34:36.720
+So that's the idea for, again, this is for how to implement this in the future, but the idea we could, if we measure, if we know what's going on, we could improve to send it some point aside whether this improvement is good enough for us until we fix,
+
+34:36.720 --> 34:45.720
+or in some cases we decide to move data and don't say don't move data, but don't move it as the default option for every problem.
+
+34:45.720 --> 34:54.720
+Acknowledgements, Orit, which worked with me a lot on the ideas that I put here, and she's now in IBM.
+
+34:54.720 --> 35:07.720
+And Laura, which did a lot of the coding with me on this, and actually since my coding skills were a bit rusty, I couldn't do a lot without her.
+
+35:07.720 --> 35:16.720
+So thanks to Orit and Laura that helped in this project, and I'm done. Questions?
+
+35:16.720 --> 35:43.720
+Yes, please. Can you use the new OSD map rule that is like released for brief, as I said, like master? Can you use that to generate a list of distribution of the primaries that will be optimal on all the clusters,
+
+35:43.720 --> 35:56.720
+and use the temporary map feature that is already existing in all our releases to actually apply that policy that this would be optimal.
+
+35:56.720 --> 35:57.720
+Okay.
+
+35:57.720 --> 35:59.720
+Basically, I'd like to back forward, but then without.
+
+35:59.720 --> 36:14.720
+The question was, if you could use the OSD map tool on older classes, and then instead of using the new PG op map use a temporary permit permit temp in order to do it.
+
+36:14.720 --> 36:32.720
+I think it should, the OSD, you should have a new set cluster with all the new tools because there are some other changes, but you run OSD map tools on a file that generated from the OSD map tools work on configuration file that you take.
+
+36:32.720 --> 36:44.720
+So you could create a configuration file out of an old cluster and run it with the new OSD map tool. And then so I think actually the primary temp is how we tested this.
+
+36:44.720 --> 37:05.720
+What is missing is that the new OSD map tool relates on the score. And actually I'm not sure, it not depends on the score, but it uses a score internally. So it should run on a new environment, but I think it should be able to work.
+
+37:05.720 --> 37:19.720
+I have my information here, or I'll give you my email and send me, I'll verify this. It should work. I'm not 100% sure, but it should work.
+
+37:19.720 --> 37:36.720
+If it doesn't work, it is a problem. You said that you defined that it's especially good for smaller clusters. How big would you define smaller clusters?
+
+37:36.720 --> 37:53.720
+See, the question was, what is small cluster and big cluster? The thing is, the way CRUSH works, it uses statistics to do the split to primaries.
+
+37:53.720 --> 38:06.720
+If you have a cluster in which primaries are not balanced, probably it falls into the smaller side. But if you look at hundreds of OSD, even it's a number of PG's, not number of OSD's.
+
+38:06.720 --> 38:21.720
+In the past, I did an experiment and I saw that you saw the score here, 1.4. Every time that you double the number of the PG's, roughly the difference from 1 goes by half.
+
+38:21.720 --> 38:37.720
+So we put 1.4 for 32 PG's, probably around 1.2 for 64. So it's large clusters with pools with large number of PG's, usually somehow balance themselves.
+
+38:37.720 --> 38:44.720
+But it's a matter of, you need to look, if you have unbalanced pools, it's unbalanced pools. It doesn't matter which cluster you are in.
+
+38:44.720 --> 38:58.720
+But that's why we do it. But most benefit for the larger pools, the pools with the data, is when you have smaller clusters, it's not worth putting 512 PG's per pool and you work with smaller numbers.
+
+38:58.720 --> 39:06.720
+If you have 510K or 2K PG's per cluster, probably your score would be pretty good.
+
+39:06.720 --> 39:14.720
+Would it also be useful for erasure coded pools?
+
+39:14.720 --> 39:25.720
+The question whether it's good for erasure coded pools, probably not. Well, way, way, way less sufficient. I tried to do the theory behind it.
+
+39:25.720 --> 39:36.720
+Then maybe really, really little, I don't know. So currently we check in the code, it doesn't work for erasure coded at all because we think it doesn't worth the hassle.
+
+39:36.720 --> 39:45.720
+So it's tested and it works only on replicables.
+
+39:45.720 --> 39:57.720
+Okay, my time is up. Thank you very much. It was pleasure being face to face here. Thank you.

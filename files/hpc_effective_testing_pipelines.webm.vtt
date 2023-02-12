@@ -1,0 +1,1372 @@
+WEBVTT
+
+00:00.000 --> 00:07.000
+Okay, now we come to it.
+
+00:07.000 --> 00:08.000
+Alright.
+
+00:08.000 --> 00:10.000
+So last talk.
+
+00:10.000 --> 00:13.000
+Alright, testing, testing.
+
+00:13.000 --> 00:16.000
+Okay, so I started here.
+
+00:16.000 --> 00:19.000
+My talk is about developing effective testing pipelines
+
+00:19.000 --> 00:21.000
+for HPC applications.
+
+00:21.000 --> 00:25.000
+Just to give a short introduction about who I am,
+
+00:25.000 --> 00:27.000
+relatively new here.
+
+00:27.000 --> 00:31.000
+So, you know, I first started in the HPC industry while I was in college.
+
+00:31.000 --> 00:37.000
+I joined my university's HPC Institute as a software consultant,
+
+00:37.000 --> 00:39.000
+so largely in that role.
+
+00:39.000 --> 00:41.000
+I was kind of more focused on support.
+
+00:41.000 --> 00:44.000
+So in that case, I was working on, like, singularity deployments,
+
+00:44.000 --> 00:46.000
+you know, helping debug Fortran.
+
+00:46.000 --> 00:48.000
+Not very good at writing Fortran, you know,
+
+00:48.000 --> 00:51.000
+helping build custom kernels for Jupyter, all that good stuff.
+
+00:51.000 --> 00:54.000
+And then I left for a bit to go work at another university
+
+00:54.000 --> 00:58.000
+to do some adversarial machine learning workflow orchestration framework.
+
+00:58.000 --> 01:02.000
+And then, eventually, I came back to my university's HPC site
+
+01:02.000 --> 01:05.000
+then as an engineer, instead of a kind of support role.
+
+01:05.000 --> 01:07.000
+So more in that case, what I worked on was, like,
+
+01:07.000 --> 01:09.000
+building, you know, a suite of singularity containers
+
+01:09.000 --> 01:11.000
+that clients could consume,
+
+01:11.000 --> 01:13.000
+and then also working on, like, debugging tools
+
+01:13.000 --> 01:17.000
+that interfaced with, like, Moab and Torque and PBS and all that.
+
+01:17.000 --> 01:20.000
+And then after I graduated university, I joined Canonical.
+
+01:20.000 --> 01:23.000
+So that was probably, like, nine months ago now.
+
+01:23.000 --> 01:27.000
+So, you know, kind of the start then, you know,
+
+01:27.000 --> 01:30.000
+what sent me down this path of wanting to develop
+
+01:30.000 --> 01:34.000
+effective testing pipelines for HPC applications?
+
+01:34.000 --> 01:37.000
+Well, first, when I started at Canonical, to be frank,
+
+01:37.000 --> 01:39.000
+I wasn't very good at Debian packaging.
+
+01:39.000 --> 01:42.000
+I had mostly deployed most of my software using bash scripts,
+
+01:42.000 --> 01:44.000
+compiling from source.
+
+01:44.000 --> 01:47.000
+And so part of that is I had to write provisioning scripts,
+
+01:47.000 --> 01:50.000
+so I mostly work in cloud orchestration,
+
+01:50.000 --> 01:53.000
+like, nodes and whatnot, onto clouds.
+
+01:53.000 --> 01:56.000
+And so I had to, you know, develop dangerous code, you know.
+
+01:56.000 --> 01:58.000
+So it's installing packages, making configurations,
+
+01:58.000 --> 02:03.000
+kind of setting pre-seeds in, what is it, Debian, Ubuntu.
+
+02:03.000 --> 02:06.000
+And so basically, I kind of had this, you know, dilemma of where,
+
+02:06.000 --> 02:10.000
+okay, I want an easy way to test these provisioning scripts
+
+02:10.000 --> 02:13.000
+without kind of having to go through all this manual effort.
+
+02:13.000 --> 02:15.000
+So originally, you know, I just, you know,
+
+02:15.000 --> 02:19.000
+typed in vagrant virtual box or any real kind of virtual machine
+
+02:19.000 --> 02:21.000
+or a supervisor, bring it up, install the script,
+
+02:21.000 --> 02:24.000
+and then once I was done with it, blow it out.
+
+02:24.000 --> 02:26.000
+And then kind of also have this issue of where I had a desire
+
+02:26.000 --> 02:29.000
+for reproducible tests, because even though, like, you know,
+
+02:29.000 --> 02:32.000
+I know how to bring up, like, a virtual machine on my system,
+
+02:32.000 --> 02:35.000
+you know, I might be working with someone who's off of Windows
+
+02:35.000 --> 02:38.000
+or Mac, and so they don't have the same setup that I do,
+
+02:38.000 --> 02:42.000
+or they're using a different distribution, in fact.
+
+02:42.000 --> 02:45.000
+So this gave me the idea of, you know, kind of,
+
+02:45.000 --> 02:48.000
+if I'm on my personal workstation here, so my laptop,
+
+02:48.000 --> 02:51.000
+unfortunately, my current laptop's X server isn't working,
+
+02:51.000 --> 02:53.000
+so the HDMI cable gets all screwed up,
+
+02:53.000 --> 02:56.000
+so thank you, EasyBuild folks, for lending me your computer.
+
+02:56.000 --> 02:59.000
+But basically, I had the idea that what if I take a test
+
+02:59.000 --> 03:03.000
+that's written on my system and then have the ability to run it
+
+03:03.000 --> 03:06.000
+using any hypervisor I want on any operating system
+
+03:06.000 --> 03:08.000
+that I need to test that code on without any extra hassle
+
+03:08.000 --> 03:11.000
+of having to really go through supporting
+
+03:11.000 --> 03:14.000
+or teaching someone else how to bring up that instance.
+
+03:14.000 --> 03:17.000
+And basically the case of, like, oh, I have to write code,
+
+03:17.000 --> 03:19.000
+or run or anything else that needs to run,
+
+03:19.000 --> 03:23.000
+like Ubuntu, CentOS, Alma, or Rocky.
+
+03:23.000 --> 03:25.000
+And then kind of after working for that a bit,
+
+03:25.000 --> 03:27.000
+you know, I had kind of an initial prototype
+
+03:27.000 --> 03:30.000
+that would bring up, you know, basic operating system image,
+
+03:30.000 --> 03:34.000
+and then kind of as I, you know, got more into my HBC work at Canonical,
+
+03:34.000 --> 03:38.000
+I kind of realized, like, oh, okay, you know,
+
+03:38.000 --> 03:41.000
+maybe don't want to rack up the cloud bill trying to test
+
+03:41.000 --> 03:43.000
+and deploy to AWS or, you know, Azure,
+
+03:43.000 --> 03:46.000
+or, you know, even our own private internal public cloud
+
+03:46.000 --> 03:48.000
+or private cloud using OpenStack
+
+03:48.000 --> 03:51.000
+for, you know, just trying to provision HBC nodes.
+
+03:51.000 --> 03:53.000
+So, for example, have, like, identity management,
+
+03:53.000 --> 03:56.000
+open LDAP, shared file system using NFS,
+
+03:56.000 --> 03:58.000
+you know, have other options.
+
+03:58.000 --> 04:01.000
+And then also working in the case of just setting up
+
+04:01.000 --> 04:03.000
+and configuring a Slurm cluster, all kind of headless
+
+04:03.000 --> 04:06.000
+without any kind of manual user intervention.
+
+04:06.000 --> 04:09.000
+And so I kind of had this revelation where I'm like,
+
+04:09.000 --> 04:12.000
+why waste precious compute time on your HBC cluster
+
+04:12.000 --> 04:14.000
+because the fact is it's expensive, you know,
+
+04:14.000 --> 04:16.000
+you're kind of paying for that tenancy.
+
+04:16.000 --> 04:18.000
+And what if you could test your simulations,
+
+04:18.000 --> 04:22.000
+jobs or applications and whatnot on a mini HBC cluster
+
+04:22.000 --> 04:25.000
+that's kind of similar to the target platform
+
+04:25.000 --> 04:27.000
+that you're deploying, but it's more of a mock
+
+04:27.000 --> 04:29.000
+so that you can kind of get the general feel for the platform
+
+04:29.000 --> 04:32.000
+before moving on to the more expensive resources.
+
+04:32.000 --> 04:35.000
+So in this case, you know,
+
+04:35.000 --> 04:38.000
+I started working on a custom testing framework
+
+04:38.000 --> 04:43.000
+called CleanTest, which is basically a fancy Python testing library
+
+04:43.000 --> 04:46.000
+that allows you to bring up many HBC clusters
+
+04:46.000 --> 04:48.000
+on your local system and, you know,
+
+04:48.000 --> 04:50.000
+just kind of in general usage for developers
+
+04:50.000 --> 04:52.000
+who are in a hurry.
+
+04:52.000 --> 04:55.000
+So kind of then breaking into a question, you know,
+
+04:55.000 --> 04:57.000
+what exactly is a CleanTest?
+
+04:57.000 --> 05:00.000
+Because, you know, originally I named it SimpleTest
+
+05:00.000 --> 05:02.000
+because I just wanted it to be really dead simple,
+
+05:02.000 --> 05:05.000
+but for some reason PyPI wouldn't let me register that name.
+
+05:05.000 --> 05:07.000
+So CleanTest it is.
+
+05:07.000 --> 05:10.000
+So basically it comes in three parts.
+
+05:10.000 --> 05:12.000
+There's kind of a different breakdown.
+
+05:12.000 --> 05:15.000
+First, you have the bootstrap and configuration stage.
+
+05:15.000 --> 05:18.000
+So for that, it's kind of where you can register hooks and whatnot
+
+05:18.000 --> 05:21.000
+for configuring the instances that you're bringing up
+
+05:21.000 --> 05:23.000
+or do some more advanced bootstrapping.
+
+05:23.000 --> 05:25.000
+So the example I had shown in the previous slide
+
+05:25.000 --> 05:27.000
+of where you're able to bring up NFS,
+
+05:27.000 --> 05:29.000
+open LDAP, slurm services and whatnot,
+
+05:29.000 --> 05:33.000
+and then be able to inject scriptlets into that.
+
+05:33.000 --> 05:36.000
+And so kind of that's when we get to the second part here,
+
+05:36.000 --> 05:38.000
+which is a Tesla.
+
+05:38.000 --> 05:41.000
+Kind of interesting little word that I came up with,
+
+05:41.000 --> 05:43.000
+joking with some of my colleagues,
+
+05:43.000 --> 05:45.000
+but basically a Tesla is an entire Python program
+
+05:45.000 --> 05:47.000
+that's wrapped into a regular function,
+
+05:47.000 --> 05:50.000
+and kind of the idea is that they contain the full body of the test
+
+05:50.000 --> 05:54.000
+that you want to be able to run inside this virtual machine container
+
+05:54.000 --> 05:56.000
+or, you know, test mini-cluster.
+
+05:56.000 --> 05:58.000
+And then kind of the last part here
+
+05:58.000 --> 06:01.000
+is the evaluation reporting aspect.
+
+06:01.000 --> 06:04.000
+And then kind of with that, you know, I took a test, you know,
+
+06:04.000 --> 06:06.000
+subtest framework, you know, agnostic approach
+
+06:06.000 --> 06:09.000
+where I know that everyone kind of has their own taste that they like.
+
+06:09.000 --> 06:12.000
+Some people like pie tests, some like unit tests, you know.
+
+06:12.000 --> 06:14.000
+I don't want to sit here and make opinions for you,
+
+06:14.000 --> 06:17.000
+so, you know, I want you to be able to write tests
+
+06:17.000 --> 06:20.000
+in the format that you're most comfortable with.
+
+06:20.000 --> 06:23.000
+Oh, that came out small, but that's okay.
+
+06:23.000 --> 06:25.000
+So kind of the first part here
+
+06:25.000 --> 06:27.000
+is the going more advanced into, like,
+
+06:27.000 --> 06:29.000
+what exactly is the bootstrap in configuration
+
+06:29.000 --> 06:32.000
+is that you're able to bring up example nodes,
+
+06:32.000 --> 06:36.000
+you're able to provision them.
+
+06:36.000 --> 06:38.000
+What is it? You can also register hooks,
+
+06:38.000 --> 06:41.000
+so it's kind of similar to anyone who's done any Debian packaging.
+
+06:41.000 --> 06:44.000
+Listening to Todd, I don't think he's still here.
+
+06:44.000 --> 06:47.000
+Yeah, you seem to have some experience with Debian developers.
+
+06:47.000 --> 06:49.000
+So, but...
+
+06:49.000 --> 06:51.000
+How do you, like, circuit 2,000?
+
+06:51.000 --> 06:53.000
+Yeah, circuit 2,000, yeah, it's cool.
+
+06:53.000 --> 06:56.000
+But, yeah, so if anyone's ever, like, worked with P-Builder before,
+
+06:56.000 --> 06:58.000
+kind of one of the features that I really like about P-Builder
+
+06:58.000 --> 07:02.000
+for building Debian packages is that you can have different hooks
+
+07:02.000 --> 07:05.000
+that you can ingest, or you can create that run at certain parts
+
+07:05.000 --> 07:07.000
+of the package build.
+
+07:07.000 --> 07:10.000
+So I kind of wanted to replicate that same functionality.
+
+07:10.000 --> 07:12.000
+And then kind of the general process
+
+07:12.000 --> 07:14.000
+is instantiating a configure instance,
+
+07:14.000 --> 07:17.000
+so that's, like, a Python singleton class object
+
+07:17.000 --> 07:20.000
+that basically takes in all that info, shares it across,
+
+07:20.000 --> 07:22.000
+you know, the whole test suite.
+
+07:22.000 --> 07:24.000
+They can bring up nodes that you need,
+
+07:24.000 --> 07:26.000
+and then you define your hooks,
+
+07:26.000 --> 07:28.000
+so that's kind of, like, what do I want to run
+
+07:28.000 --> 07:31.000
+when I start the environment and then register them
+
+07:31.000 --> 07:33.000
+so that, you know, when you run the test,
+
+07:33.000 --> 07:36.000
+the program knows about it.
+
+07:36.000 --> 07:39.000
+And then kind of the next part here is the testlets.
+
+07:39.000 --> 07:43.000
+So that part kind of uses some little bit more tricky programming.
+
+07:43.000 --> 07:46.000
+So in this case, I use Python decorators and metaprogramming,
+
+07:46.000 --> 07:49.000
+so kind of reading class descriptors and whatnot,
+
+07:49.000 --> 07:52.000
+assessing the current state of the program.
+
+07:52.000 --> 07:55.000
+And what the decorators do in this case with the metaprogramming
+
+07:55.000 --> 07:58.000
+is that rather than having that function run locally,
+
+07:58.000 --> 08:01.000
+instead it kind of takes out the body of that function
+
+08:01.000 --> 08:03.000
+that you defined.
+
+08:03.000 --> 08:08.000
+And then it injects it inside of the container instance
+
+08:08.000 --> 08:10.000
+and runs it there, so the idea is that, like,
+
+08:10.000 --> 08:12.000
+oh, you could be working off of a new bunch of machine,
+
+08:12.000 --> 08:15.000
+but you're developing for a cluster that's running Rocky Linux.
+
+08:15.000 --> 08:17.000
+So in that case, you can just easily bring it up,
+
+08:17.000 --> 08:20.000
+inject it in there, get the results back.
+
+08:20.000 --> 08:22.000
+And then finally, kind of the last part,
+
+08:22.000 --> 08:24.000
+evaluation slash reporting.
+
+08:24.000 --> 08:27.000
+It's like each testlet kind of returns this results object,
+
+08:27.000 --> 08:30.000
+so that kind of contains an exit code, standard out, standard error.
+
+08:30.000 --> 08:34.000
+And from there, you can evaluate the results locally
+
+08:34.000 --> 08:37.000
+instead of having to kind of instead do it inside of the container,
+
+08:37.000 --> 08:40.000
+so you could say, like, oh, in this case,
+
+08:40.000 --> 08:42.000
+if you're, like, doing a spread test,
+
+08:42.000 --> 08:45.000
+so kind of if you have, like, oh, you know,
+
+08:45.000 --> 08:50.000
+I need to test this on Ubuntu 22.04 or 20.04 and 18.04,
+
+08:50.000 --> 08:53.000
+it returns a generator object of a name and a result.
+
+08:53.000 --> 08:57.000
+So, you know, let's say that your code works on 22.04 and 20.04,
+
+08:57.000 --> 09:01.000
+but the version of Python on 18.04 is too old for what you're trying to do,
+
+09:01.000 --> 09:04.000
+so report back is an error.
+
+09:04.000 --> 09:08.000
+So kind of then, you know, breaking into how does it exactly work.
+
+09:08.000 --> 09:11.000
+So the idea is that you kind of start on your local host,
+
+09:11.000 --> 09:13.000
+so that's kind of your computer there.
+
+09:13.000 --> 09:15.000
+So you have the host operating system,
+
+09:15.000 --> 09:17.000
+and then you have the clean test package installed
+
+09:17.000 --> 09:20.000
+as, you know, I'm part of your Python interpreter,
+
+09:20.000 --> 09:22.000
+which is a regular Python package.
+
+09:22.000 --> 09:25.000
+The idea is that then, as you see that dotted line in the middle there,
+
+09:25.000 --> 09:28.000
+it then makes the request of the hypervisor of your choice
+
+09:28.000 --> 09:32.000
+and tells it, like, hey, so, you know, the user who wrote this test
+
+09:32.000 --> 09:36.000
+told me that I need to bring up a certain instance,
+
+09:36.000 --> 09:39.000
+you know, says that they need, like, a centOS image,
+
+09:39.000 --> 09:41.000
+so bring up a centOS image for me,
+
+09:41.000 --> 09:44.000
+and then once that's done, you know, what clean test does
+
+09:44.000 --> 09:46.000
+is that it takes that test body function
+
+09:46.000 --> 09:49.000
+and it kind of creates a simple JSON packet,
+
+09:49.000 --> 09:52.000
+which is a checksum to verify the authenticity of the testlet,
+
+09:52.000 --> 09:55.000
+the data, which is basically the testlet encoded,
+
+09:55.000 --> 09:59.000
+and then, or any data necessary for the testlet,
+
+09:59.000 --> 10:01.000
+and then the injectable, which is basically, like, hey,
+
+10:01.000 --> 10:03.000
+you know, when you get this data packet,
+
+10:03.000 --> 10:05.000
+here's what you need to do with it.
+
+10:05.000 --> 10:07.000
+And then once that happens then, you know, clean test,
+
+10:07.000 --> 10:11.000
+what it does is that it copies itself onto the container image
+
+10:11.000 --> 10:14.000
+and then from there it ingests that data packet,
+
+10:14.000 --> 10:16.000
+does the evaluation that you requested,
+
+10:16.000 --> 10:19.000
+and then it returns that result object back to the clean test
+
+10:19.000 --> 10:21.000
+that's on local host.
+
+10:21.000 --> 10:24.000
+So kind of two different ways that it works.
+
+10:24.000 --> 10:27.000
+Then for, like, how do you control the hypervisor?
+
+10:27.000 --> 10:29.000
+The first way is kind of Archon,
+
+10:29.000 --> 10:31.000
+which is a fancy word for director, you know.
+
+10:31.000 --> 10:33.000
+I kind of wanted to have a buzzword in there somewhere.
+
+10:33.000 --> 10:36.000
+But the idea is that what the Archon does
+
+10:36.000 --> 10:38.000
+is that it's kind of more declarative approach
+
+10:38.000 --> 10:40.000
+to doing clean tests, so rather than, you know,
+
+10:40.000 --> 10:42.000
+saying, like, oh, you know, automatically do this, wrap it,
+
+10:42.000 --> 10:45.000
+you know, you can kind of direct the deployment of said
+
+10:45.000 --> 10:48.000
+mini-HBC cluster, and then what Harness does
+
+10:48.000 --> 10:51.000
+is that instead of, you know, having to explicitly declare,
+
+10:51.000 --> 10:54.000
+like, this is the infrastructure that I want for my deployment,
+
+10:54.000 --> 10:57.000
+it just brings up an instance based on the function
+
+10:57.000 --> 10:59.000
+that it's been wrapped around.
+
+10:59.000 --> 11:02.000
+So this is a short demo video.
+
+11:02.000 --> 11:05.000
+Let's see if I can choose better quality here.
+
+11:05.000 --> 11:07.000
+Oh, don't tell me.
+
+11:07.000 --> 11:09.000
+Came as a PDF, but let's see here.
+
+11:09.000 --> 11:11.000
+All right, YouTube, sweet.
+
+11:14.000 --> 11:16.000
+They go full-spring. There we go.
+
+11:16.000 --> 11:19.000
+Oh, settings, playback.
+
+11:19.000 --> 11:22.000
+180p. There we go.
+
+11:22.000 --> 11:23.000
+It's a little interesting.
+
+11:23.000 --> 11:25.000
+But yeah, so basically what happens here is that
+
+11:25.000 --> 11:27.000
+just using, like, simple talks, in that case,
+
+11:27.000 --> 11:30.000
+I use talks as kind of the test administrator.
+
+11:30.000 --> 11:33.000
+I started a test, which is called LSD Archon,
+
+11:33.000 --> 11:35.000
+which basically says bring up a test environment instance.
+
+11:35.000 --> 11:37.000
+So first it starts with LDAP,
+
+11:37.000 --> 11:40.000
+so it's provisioning an LDAP node on top of LSD hypervisor.
+
+11:40.000 --> 11:42.000
+That's what I'm using here.
+
+11:42.000 --> 11:45.000
+So first it starts with LDAP, and then after a few minutes,
+
+11:45.000 --> 11:50.000
+for it to boot, crappy hotel Wi-Fi was when I was doing this.
+
+11:50.000 --> 11:52.000
+And then see there?
+
+11:52.000 --> 11:55.000
+Now you have the NFS image.
+
+11:55.000 --> 11:58.000
+That starts provisioning, and then somewhere in here.
+
+11:58.000 --> 12:02.000
+Now you have the Slurm CTLD node that comes up.
+
+12:06.000 --> 12:08.000
+And now you have the Slurm,
+
+12:08.000 --> 12:11.000
+three Slurm compute nodes that come up,
+
+12:11.000 --> 12:13.000
+and the idea is that then what the framework does
+
+12:13.000 --> 12:16.000
+is that it injects a testlet inside of Slurm CTLD,
+
+12:16.000 --> 12:18.000
+and then from there it uses SBatch
+
+12:18.000 --> 12:21.000
+to submit the job off to the test cluster.
+
+12:23.000 --> 12:25.000
+Takes a bit.
+
+12:29.000 --> 12:31.000
+Ooh.
+
+12:31.000 --> 12:33.000
+A little too far ahead.
+
+12:33.000 --> 12:35.000
+Give it a few seconds.
+
+12:36.000 --> 12:38.000
+Yep, and then it cleans up the cluster
+
+12:38.000 --> 12:44.000
+so that it doesn't linger on afterwards.
+
+12:44.000 --> 12:46.000
+Oh, goodbye.
+
+12:49.000 --> 12:51.000
+Oh, God.
+
+12:51.000 --> 12:53.000
+What happened here?
+
+12:57.000 --> 12:58.000
+All right.
+
+12:58.000 --> 12:59.000
+Okay.
+
+12:59.000 --> 13:01.000
+That's not fun.
+
+13:03.000 --> 13:05.000
+Okay.
+
+13:05.000 --> 13:07.000
+Yeah, I want to go back to the video.
+
+13:07.000 --> 13:10.000
+I don't know why I jumped into the other video.
+
+13:15.000 --> 13:17.000
+I just had an auto play moment.
+
+13:17.000 --> 13:18.000
+Wow.
+
+13:18.000 --> 13:20.000
+I feel like a school teacher.
+
+13:28.000 --> 13:30.000
+This is right for the end.
+
+13:30.000 --> 13:31.000
+Okay.
+
+13:31.000 --> 13:38.000
+All right, thank you.
+
+13:38.000 --> 13:39.000
+Yeah.
+
+13:39.000 --> 13:40.000
+All right, okay.
+
+13:40.000 --> 13:41.000
+Ooh, no auto play.
+
+13:41.000 --> 13:43.000
+All right, so basically what happens here,
+
+13:43.000 --> 13:49.000
+I'm going to full screen it so it's a little bit bigger.
+
+13:49.000 --> 13:50.000
+What?
+
+13:50.000 --> 13:52.000
+Come on.
+
+13:52.000 --> 13:55.000
+I'm an engineer, not a YouTube video player
+
+13:55.000 --> 13:58.000
+on a projector kind of guy, but what is it?
+
+13:58.000 --> 13:59.000
+Yeah.
+
+13:59.000 --> 14:03.000
+So what I've seen here is that the test starts,
+
+14:03.000 --> 14:05.000
+brings up the nodes that you need to use.
+
+14:05.000 --> 14:08.000
+So in that case, it was just LDAP for basic identity management,
+
+14:08.000 --> 14:11.000
+manifest for shared file system,
+
+14:11.000 --> 14:14.000
+and then just like Slurm for kind of resource management services.
+
+14:14.000 --> 14:17.000
+And then from there, it just like injects like a little test script
+
+14:17.000 --> 14:18.000
+to run.
+
+14:18.000 --> 14:21.000
+And then, yeah, what's if the job succeeds,
+
+14:21.000 --> 14:23.000
+it kind of copies back to the results.
+
+14:23.000 --> 14:26.000
+And then, yeah, and then it says like, okay,
+
+14:26.000 --> 14:30.000
+we get the result that we expect, so in the case of the test
+
+14:30.000 --> 14:33.000
+that I wrote, it just prints out basically like,
+
+14:33.000 --> 14:35.000
+I love doing research, and then it says like,
+
+14:35.000 --> 14:38.000
+I love doing research in the log file for standard out.
+
+14:38.000 --> 14:42.000
+So, yeah, pretty low fidelity right now is mostly a lot of work,
+
+14:42.000 --> 14:45.000
+went into just getting it to work and all that.
+
+14:45.000 --> 14:48.000
+Okay, now I want to go back to the slides.
+
+14:48.000 --> 14:50.000
+There we go.
+
+14:50.000 --> 14:54.000
+Hey, so now you saw that video, you know,
+
+14:54.000 --> 14:56.000
+kind of overgoing some of the current limitations.
+
+14:56.000 --> 14:59.000
+The first is that I'm kind of bad at playing YouTube videos
+
+14:59.000 --> 15:03.000
+and presentations, but the next part here is that kind of,
+
+15:03.000 --> 15:06.000
+right now, big issue is that there's kind of a lack of
+
+15:06.000 --> 15:08.000
+robust multi-distribution support.
+
+15:08.000 --> 15:11.000
+So currently, I mostly developed it to work on Ubuntu
+
+15:11.000 --> 15:14.000
+and work with Ubuntu, I wonder why.
+
+15:14.000 --> 15:18.000
+But you can't launch Alma, Rocky, CentOS, Arch instances, et cetera,
+
+15:18.000 --> 15:21.000
+but kind of the macros, hooks, and like utilities that I built
+
+15:21.000 --> 15:23.000
+into the framework aren't really fully there yet
+
+15:23.000 --> 15:25.000
+for supporting it.
+
+15:25.000 --> 15:27.000
+And then public documentation is behind because, you know,
+
+15:27.000 --> 15:29.000
+usually I write code before I write documentation.
+
+15:29.000 --> 15:32.000
+Unfortunately, it just seems to be how it always goes.
+
+15:32.000 --> 15:34.000
+Yeah, so I need to update that.
+
+15:34.000 --> 15:37.000
+And then kind of big issue right now
+
+15:37.000 --> 15:39.000
+is lack of package manager integration.
+
+15:39.000 --> 15:41.000
+So a lot of the support has been added ad hoc.
+
+15:41.000 --> 15:43.000
+So currently, I support like charm libraries,
+
+15:43.000 --> 15:45.000
+which is something that Canonically uses,
+
+15:45.000 --> 15:47.000
+and then snap packages, which are kind of controversial,
+
+15:47.000 --> 15:49.000
+depending on your opinions.
+
+15:49.000 --> 15:52.000
+And then also just pips because I do a lot of Python development.
+
+15:52.000 --> 15:54.000
+But in the future, I hope to add support
+
+15:54.000 --> 15:57.000
+for like Debian packages, RPMs, you know, Arch installs,
+
+15:57.000 --> 15:59.000
+it's back in EasyBuild.
+
+15:59.000 --> 16:02.000
+So, yeah, and then lastly, I'm the only developer currently.
+
+16:02.000 --> 16:05.000
+So, you know, code developed in isolation isn't reviewed
+
+16:05.000 --> 16:07.000
+as thoroughly as it could be.
+
+16:07.000 --> 16:11.000
+So, you know, yeah, I make design choices
+
+16:11.000 --> 16:13.000
+based on what I think is appropriate.
+
+16:13.000 --> 16:18.000
+So, yeah, so last thing too is that, you know,
+
+16:18.000 --> 16:20.000
+testing framework I think is a lot cooler
+
+16:20.000 --> 16:23.000
+than the video that I kind of struggled to play here.
+
+16:23.000 --> 16:25.000
+So if you want to scan the QR code,
+
+16:25.000 --> 16:27.000
+if you're interested, feel free.
+
+16:27.000 --> 16:29.000
+Slides are also online as well.
+
+16:29.000 --> 16:31.000
+So if you're not available right now, you can check it out.
+
+16:31.000 --> 16:36.000
+And then lastly, you know, this is kind of a, you know,
+
+16:36.000 --> 16:38.000
+call for involvement.
+
+16:38.000 --> 16:40.000
+So, you know, really, at Canonical,
+
+16:40.000 --> 16:42.000
+we're trying to start getting Ubuntu kind of geared better
+
+16:42.000 --> 16:44.000
+for HPC, you know, we kind of know
+
+16:44.000 --> 16:46.000
+that we're a little bit behind Red Hat
+
+16:46.000 --> 16:48.000
+in the case of like network driver support and whatnot.
+
+16:48.000 --> 16:50.000
+So, you know, just if you're interested
+
+16:50.000 --> 16:52.000
+in using Ubuntu for your workflows and whatnot,
+
+16:52.000 --> 16:54.000
+we have a public Mattermost channel
+
+16:54.000 --> 16:56.000
+so you can scan that QR code or you can, you know,
+
+16:56.000 --> 16:57.000
+check it out later.
+
+16:57.000 --> 17:02.000
+But, yeah, we have a public channel for HPC online.
+
+17:02.000 --> 17:04.000
+So, yeah, if there's something that's missing
+
+17:04.000 --> 17:06.000
+or, you know, there's kind of some reason
+
+17:06.000 --> 17:09.000
+why you're being held back on using Ubuntu for HPC,
+
+17:09.000 --> 17:11.000
+we'd really love to hear that feedback.
+
+17:11.000 --> 17:14.000
+So, yeah, that's it.
+
+17:14.000 --> 17:22.000
+Thank you.
+
+17:22.000 --> 17:24.000
+Any questions for Jason?
+
+17:24.000 --> 17:27.000
+Last chance for today.
+
+17:27.000 --> 17:30.000
+So, you're just doing, this is all Python code
+
+17:30.000 --> 17:32.000
+that does this system for you.
+
+17:32.000 --> 17:33.000
+Yes, yes.
+
+17:33.000 --> 17:35.000
+So, how are you spinning up the LXD containers?
+
+17:35.000 --> 17:39.000
+So, the idea is that, in the case of LXD,
+
+17:39.000 --> 17:42.000
+it has a public API socket that uses,
+
+17:42.000 --> 17:44.000
+I think it's like open API standard or something.
+
+17:44.000 --> 17:46.000
+But, yeah, so you can make, like,
+
+17:46.000 --> 17:48.000
+HTTP requests out to that API
+
+17:48.000 --> 17:50.000
+that basically say, like, oh, you know,
+
+17:50.000 --> 17:52.000
+I need this instance or tear this down
+
+17:52.000 --> 17:54.000
+or set this configuration so I can install, like,
+
+17:54.000 --> 17:56.000
+AppTanner or some other container hypervisor
+
+17:56.000 --> 17:58.000
+inside of LXD and whatnot.
+
+17:58.000 --> 18:03.000
+So, yeah, so I'm just using the API.
+
+18:03.000 --> 18:11.000
+Any other questions?
+
+18:11.000 --> 18:13.000
+So, yeah, I'm interested in this.
+
+18:13.000 --> 18:18.000
+So, the, like, you had an NFS server
+
+18:18.000 --> 18:19.000
+and some other stuff.
+
+18:19.000 --> 18:21.000
+Are you, how are you, are those preassembled images
+
+18:21.000 --> 18:22.000
+that you're just using?
+
+18:22.000 --> 18:25.000
+Are you building up with some kind of configuration management
+
+18:25.000 --> 18:27.000
+to use Ansible to build them or how do you do that?
+
+18:27.000 --> 18:30.000
+Yeah, so currently what I have is,
+
+18:30.000 --> 18:32.000
+like, the way that I provision,
+
+18:32.000 --> 18:36.000
+I'm using, like, base Ubuntu images
+
+18:36.000 --> 18:37.000
+for configuration right now,
+
+18:37.000 --> 18:40.000
+but you do have the ability to register your own custom instances
+
+18:40.000 --> 18:41.000
+and pull them in as well.
+
+18:41.000 --> 18:44.000
+But basically, I have a little mechanism
+
+18:44.000 --> 18:46.000
+built into the framework where you can write,
+
+18:46.000 --> 18:48.000
+like, provisioning scripts using, like,
+
+18:48.000 --> 18:49.000
+the clean test utilities.
+
+18:49.000 --> 18:51.000
+So, there's some stuff for, like, installing apps,
+
+18:51.000 --> 18:55.000
+running commands on, like, sub-processes on the unit
+
+18:55.000 --> 18:57.000
+and then also, like, you can reach out to the network,
+
+18:57.000 --> 18:58.000
+download anything you need.
+
+18:58.000 --> 19:00.000
+So, yeah, I'm just using custom Python scripts,
+
+19:00.000 --> 19:02.000
+the provision that are...
+
+19:02.000 --> 19:09.000
+Yes, yes.
+
+19:09.000 --> 19:11.000
+Anyone else?
+
+19:11.000 --> 19:12.000
+Last chance there?
+
+19:12.000 --> 19:15.000
+All right.
+
+19:15.000 --> 19:18.000
+It's for the stream and the recording.
+
+19:18.000 --> 19:20.000
+We've been doing well all day.
+
+19:20.000 --> 19:21.000
+Let's keep it up.
+
+19:21.000 --> 19:23.000
+Thank you very much.
+
+19:23.000 --> 19:27.000
+Would you mind please to move to the previous slide
+
+19:27.000 --> 19:30.000
+so I can scan my QR code correctly?
+
+19:30.000 --> 19:32.000
+Okay, thank you very much.
+
+19:32.000 --> 19:34.000
+You're welcome.
+
+19:34.000 --> 19:35.000
+That was a good last question.
+
+19:35.000 --> 19:37.000
+The other one?
+
+19:37.000 --> 19:39.000
+Which one are you looking for?
+
+19:39.000 --> 19:40.000
+This one or...?
+
+19:40.000 --> 19:41.000
+Yeah, this one.
+
+19:41.000 --> 19:42.000
+Okay.
+
+19:42.000 --> 19:44.000
+That's all good.
+
+19:44.000 --> 19:45.000
+All right.
+
+19:45.000 --> 19:47.000
+If there's no more questions, we can wrap up here.
+
+19:47.000 --> 19:49.000
+Thanks a lot, everyone.
+
+19:49.000 --> 19:51.000
+That was a wrap for today.
+
+19:51.000 --> 19:53.000
+The 9th HPC Dev Room at FOSDEM,
+
+19:53.000 --> 19:55.000
+that means if FOSDEM likes us,
+
+19:55.000 --> 19:57.000
+we can have a 10th one next year.
+
+19:57.000 --> 19:59.000
+That would be really nice.
+
+19:59.000 --> 20:00.000
+Some practical stuff.
+
+20:00.000 --> 20:02.000
+If you're leaving the room, if you see any trash,
+
+20:02.000 --> 20:04.000
+please take it with you and dump it
+
+20:04.000 --> 20:06.000
+in an appropriate place outside.
+
+20:06.000 --> 20:09.000
+And the FOSDEM team has asked us to ask you
+
+20:09.000 --> 20:11.000
+to leave the building as soon as possible
+
+20:11.000 --> 20:13.000
+so they can lock up the whole building.
+
+20:13.000 --> 20:15.000
+There's another talk going on in Janssen,
+
+20:15.000 --> 20:17.000
+in the really big room.
+
+20:17.000 --> 20:19.000
+I would recommend going there.
+
+20:19.000 --> 20:21.000
+It's a really nice way to wrap up FOSDEM,
+
+20:21.000 --> 20:23.000
+and there will be places there to get one
+
+20:23.000 --> 20:25.000
+or maybe two or three more beers
+
+20:25.000 --> 20:27.000
+and have some more chats with people.
+
+20:27.000 --> 20:30.000
+Thanks a lot, and hopefully see you next year.
+
+20:30.000 --> 20:37.000
+Thank you.

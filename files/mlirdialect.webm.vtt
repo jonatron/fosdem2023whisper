@@ -1,0 +1,880 @@
+WEBVTT
+
+00:00.000 --> 00:10.520
+Yeah, I hope you had a great Boston so far.
+
+00:10.520 --> 00:14.400
+I'm happy to talk about how to build your own MLIR dialect.
+
+00:14.400 --> 00:20.520
+So just as a first question, who is aware of what MLIR actually is, who have heard of
+
+00:20.520 --> 00:22.440
+the MLIR subproject?
+
+00:22.440 --> 00:24.440
+Awesome.
+
+00:24.440 --> 00:29.240
+So it's not the whole audience, so I'm going to talk a little bit more about what MLIR
+
+00:29.240 --> 00:30.240
+is.
+
+00:30.240 --> 00:37.440
+So my outline is, yeah, what is MLIR actually, but I only have a really short slide on that.
+
+00:37.440 --> 00:44.440
+I will show you the standalone example, which exists in the MLIR, or in the LLVM repository
+
+00:44.440 --> 00:46.920
+as part of the MLIR project.
+
+00:46.920 --> 00:52.040
+And I will tell you a little bit more about how you can extend it, how you can build your
+
+00:52.040 --> 00:57.560
+own dialect, because following the discussions on discourse and discourse, it always seems
+
+00:57.560 --> 01:04.160
+like people hitting the same pain points, at least we did several times.
+
+01:04.160 --> 01:10.360
+So that's why I set up this kind of tutorial to show you some of the tricks behind, mainly
+
+01:10.360 --> 01:14.960
+from the CMake perspective, which is some kind of tricky sometimes.
+
+01:14.960 --> 01:20.080
+So beside that, how to build it, I show you how you can combine it with other dialects.
+
+01:20.080 --> 01:27.920
+And last but not least, how to extend your dialect with types or attributes.
+
+01:27.920 --> 01:33.480
+So and just as a side note, all code snippets are, of course, licensed under Apache 2 with
+
+01:33.480 --> 01:35.480
+LLVM exceptions.
+
+01:35.480 --> 01:36.480
+So what is MLIR?
+
+01:36.480 --> 01:46.920
+MLIR is actually a reusable compiler infrastructure that was introduced by Google in 2019, early
+
+01:46.920 --> 01:52.480
+2019, and at the end of 2019, Google donated it to the LLVM foundation.
+
+01:52.480 --> 02:02.240
+So it's officially part of the LLVM project, and there it lives in the mono repo and MLIR,
+
+02:02.240 --> 02:09.200
+and what it allows you is to define operations, attributes and types, which are grouped in
+
+02:09.200 --> 02:14.280
+so-called dialects, and that let you define your own intermediate representation.
+
+02:14.280 --> 02:19.680
+Later on in the session, we will also have an update about the Flang compiler, which
+
+02:19.680 --> 02:25.520
+also uses MLIR to define its own intermediate representation.
+
+02:25.520 --> 02:31.360
+And these dialects that can be part either of MLIR core, meaning they are in upstream,
+
+02:31.360 --> 02:36.520
+like the hung dialect, which gives you the ability to define what a function is, or there's
+
+02:36.520 --> 02:42.360
+also an LLVM IR dialect, which actually mirrors what LLVM IR is.
+
+02:42.360 --> 02:49.200
+But it is modeled in MLIR, sorry, what LLVM IR is, but it is modeled in MLIR.
+
+02:49.200 --> 02:55.120
+There are tons of other dialects, like a GPU dialect, a Tosa dialect, which is the
+
+02:55.120 --> 03:01.520
+tensor-operate set architecture, or MTC, which I am one of the developers behind.
+
+03:01.520 --> 03:07.440
+And there are also many, many out-of-tree dialects, like the SORC project is using it,
+
+03:07.440 --> 03:12.720
+or Torch MLIR, which is actually modeling PyTorch in MLIR.
+
+03:12.720 --> 03:16.440
+Many, many more, and these are considered as out-of-tree.
+
+03:16.440 --> 03:22.200
+So when we look at the standalone example, which is really a brilliant starter when you
+
+03:22.200 --> 03:30.000
+want to create your own dialect, you find it as part of the LLVM Mono repository, and
+
+03:30.000 --> 03:34.600
+you can just build it against an installed LLVM.
+
+03:34.600 --> 03:40.200
+You can just run CMake, configure it accordingly.
+
+03:40.200 --> 03:46.200
+You just need to pass where you find your installed MLIR and where the LLVM external
+
+03:46.200 --> 03:49.520
+lit is present.
+
+03:49.520 --> 03:53.840
+And actually, then you can just build your target, which is here's a check standalone.
+
+03:53.840 --> 03:57.880
+It builds all the tools and further runs some tests.
+
+03:57.880 --> 04:03.040
+This actually assumes, as I have mentioned, that LLVM and MLIR are built here and built
+
+04:03.040 --> 04:06.320
+here, and then they are installed to prefix.
+
+04:06.320 --> 04:10.200
+And that corresponds to out-of-tree somehow.
+
+04:10.200 --> 04:18.520
+And for me, when I began with LLVM or MLIR, I was not a compiler developer, but I had
+
+04:18.520 --> 04:24.600
+some experience in CMake and how these terms out-of-tree are used in LLVM and MLIR and
+
+04:24.600 --> 04:30.880
+the outer world are sometimes confusing, so I want to give at least a short definition.
+
+04:30.880 --> 04:38.840
+So in the LLVM world, entry also often or nearly every time refers to a monolithic build.
+
+04:38.840 --> 04:45.240
+That means you build LLVM or your LLVM subproject plus your dialects or whatever.
+
+04:45.240 --> 04:47.800
+Entry can refer to the source location.
+
+04:47.800 --> 04:53.320
+So here we have an out-of-tree dialect, which is however part of the LLVM monorepo, but
+
+04:53.320 --> 04:59.720
+it's considered out-of-tree because you can pull it out and you don't need to have it
+
+04:59.720 --> 05:01.400
+in the monorepo.
+
+05:01.400 --> 05:06.400
+So out-of-tree normally refers to work with a separate repository.
+
+05:06.400 --> 05:11.720
+However, there is also a mechanism which you can use to build your project with this LLVM
+
+05:11.720 --> 05:17.960
+external projects mechanism, and projects using this, and if you look into their CMake configuration
+
+05:17.960 --> 05:23.160
+or into other tutorials, either they call it out-of-tree monolithic build.
+
+05:23.160 --> 05:28.480
+So it's not a component build like you have against an installed MLIR or LLVM, or they
+
+05:28.480 --> 05:33.520
+even call it entry, which is somehow confusing because when you look to CMake, normally infantry
+
+05:33.520 --> 05:39.160
+just means you're building where your source code lives, which is actually a bad practice.
+
+05:39.160 --> 05:40.660
+You shouldn't do this.
+
+05:40.660 --> 05:42.240
+Normally you do out-of-tree builds.
+
+05:42.240 --> 05:47.640
+It just means you create a separate directory where you set up your configuration and where
+
+05:47.640 --> 05:48.800
+you do your build.
+
+05:48.800 --> 05:55.400
+This can also be a sub-directory in the source tree, but it's a separate directory not checked
+
+05:55.400 --> 05:57.920
+into your Git later on.
+
+05:57.920 --> 06:05.440
+So within this talk, I just call it the external project mechanism.
+
+06:05.440 --> 06:10.040
+For me, it's always an out-of-tree build, regardless of what I do.
+
+06:10.040 --> 06:15.920
+Even if I build LLVM, I wouldn't call it personally entry because I'm using the CMake notation
+
+06:15.920 --> 06:22.320
+normally just to make it clear when you look into some of the projects and don't get confused.
+
+06:22.320 --> 06:29.040
+So what we can do is we can extend the standalone project by this LLVM external projects mechanism
+
+06:29.040 --> 06:31.680
+and the question is, why should we do this?
+
+06:31.680 --> 06:37.080
+So Stephen Noindover gave a great tutorial about how to architecture LLVM projects at
+
+06:37.080 --> 06:40.880
+the LLVM DevMitting 2021, which is available on YouTube.
+
+06:40.880 --> 06:45.920
+I also have the link in my references.
+
+06:45.920 --> 06:54.000
+Here we are referring to a monolithic build and in his tutorial, he says, use the component
+
+06:54.000 --> 06:55.000
+build.
+
+06:55.000 --> 06:58.160
+That is what the standalone project already gives you.
+
+06:58.160 --> 07:03.120
+But there are some benefits when you maybe want to use the LLVM external projects.
+
+07:03.120 --> 07:08.520
+So what we actually do is when we developed the IMHC dialect, we developed this as an
+
+07:08.520 --> 07:18.920
+out of three dialect, completely independent or buildable against an installed MLIR version.
+
+07:18.920 --> 07:23.720
+IMHC is now part of the MLIR core, so it's upstreamed.
+
+07:23.720 --> 07:29.800
+And what we normally do is, or what's quite nice is, sometimes we want to look into when
+
+07:29.800 --> 07:35.320
+we change our dialect upstream or when we extend it, how does it behave together with
+
+07:35.320 --> 07:41.000
+these out of three source, which we still have, all our conversions, all our transformations
+
+07:41.000 --> 07:43.840
+are not upstreamed yet.
+
+07:43.840 --> 07:48.720
+And it is quite nice to build it as a run project because you can easily debug into,
+
+07:48.720 --> 07:55.080
+you don't have to keep your installation and what you're building out of source, you don't
+
+07:55.080 --> 07:57.680
+have to keep this in sync, you just have a monolithic build.
+
+07:57.680 --> 08:02.760
+So there are some benefits and we just want to look into what do we need to do to build
+
+08:02.760 --> 08:06.400
+it with the LLVM external project mechanism.
+
+08:06.400 --> 08:13.760
+So we are creating our build directory again, then we have to define the LLVM targets to
+
+08:13.760 --> 08:14.760
+build.
+
+08:14.760 --> 08:18.760
+So here you need to specify for which architect you want to build LLVM.
+
+08:18.760 --> 08:22.840
+So here it's just host or x86, which is also an option.
+
+08:22.840 --> 08:30.240
+You must specify the build type, either release, debug, minstars with relinfo, whatever.
+
+08:30.240 --> 08:36.400
+And we need to enable our project MLIR, otherwise it's not build.
+
+08:36.400 --> 08:44.520
+And in addition to that, as we want to build our standalone project, we specify LLVM external
+
+08:44.520 --> 08:48.400
+projects, standalone dialect, which is our project name.
+
+08:48.400 --> 08:54.160
+And furthermore, we specify LLVM external standalone dialect source tree to specify where
+
+08:54.160 --> 09:02.080
+do we find our source, that are the two additional parameters you need to pass.
+
+09:02.080 --> 09:07.240
+And here LLVM source tier, actually, we assume that it points to the root of our monorepo
+
+09:07.240 --> 09:08.360
+checked out.
+
+09:08.360 --> 09:10.920
+So that is what we want to have later on.
+
+09:10.920 --> 09:13.480
+Right now the standalone example can't do this.
+
+09:13.480 --> 09:17.680
+What do we need to change to make this possible?
+
+09:17.680 --> 09:23.480
+So right now it's looking like the following, looking to the main CMake configuration and
+
+09:23.480 --> 09:30.120
+what is important here is we have find package, we call find package MLIR, and find package
+
+09:30.120 --> 09:34.880
+in general imports information which were exported by a project.
+
+09:34.880 --> 09:40.760
+So here find package imports information from the installed MLIR version.
+
+09:40.760 --> 09:47.080
+And furthermore, the find package MLIR also calls find package LLVM for us, so we don't
+
+09:47.080 --> 09:49.320
+need to care about this.
+
+09:49.320 --> 09:59.000
+So then just the MLIR config CMake is actually parsed as well as the LLVM config CMake parsed
+
+09:59.000 --> 10:06.840
+and we can gladly just do our includes, which adds some further code for us.
+
+10:06.840 --> 10:12.280
+So for the external project mechanism build, we don't need to do this.
+
+10:12.280 --> 10:17.380
+So what we need to change is we only need to call find package.
+
+10:17.380 --> 10:21.360
+If there is an installed MLIR otherwise there won't be one because we're just building it
+
+10:21.360 --> 10:23.840
+as part of our build process.
+
+10:23.840 --> 10:32.240
+So in that case CMake source here normally is equal to CMake current source here.
+
+10:32.240 --> 10:37.400
+If it's not the case we have a different build type and we're just adding this if else block
+
+10:37.400 --> 10:46.360
+and we don't have the need no longer for our other project to load the CMake models with
+
+10:46.360 --> 10:47.800
+include.
+
+10:47.800 --> 10:56.840
+And the code we're adding is we're just setting the variables which are not available as export
+
+10:56.840 --> 10:59.240
+a project settings by yourself.
+
+10:59.240 --> 11:04.480
+So MLIR main source here, main include here and that's actually it.
+
+11:04.480 --> 11:08.240
+So that are the few lines we need to make it buildable.
+
+11:08.240 --> 11:11.360
+However, your LIT tests will fail.
+
+11:11.360 --> 11:16.920
+So there is a little bit more code that we need to modify.
+
+11:16.920 --> 11:23.480
+Here we just define a standalone source here and standalone binary variables which are
+
+11:23.480 --> 11:28.800
+then later on used also for include directories.
+
+11:28.800 --> 11:33.560
+And we adjust our LIT side CFG upon pi accordingly.
+
+11:33.560 --> 11:42.320
+So here we actually need to change CMake binary D or CMake source here by our newly set variable.
+
+11:42.320 --> 11:53.200
+Otherwise, yeah, the LIT tests are the location of LIT CFG is assumed in the wrong place.
+
+11:53.200 --> 11:58.520
+So we just fix that here.
+
+11:58.520 --> 12:00.320
+That's nearly it.
+
+12:00.320 --> 12:06.760
+So when you now want to use a dialect with other dialects and you have these in several
+
+12:06.760 --> 12:13.200
+repositories or with several projects at least, you can either use LLVM external projects
+
+12:13.200 --> 12:14.880
+to build multiple dialects.
+
+12:14.880 --> 12:18.920
+Torch MLIR for example is doing exactly this.
+
+12:18.920 --> 12:25.000
+Another option is to use CMake's external project at which is considered as the cleanest
+
+12:25.000 --> 12:32.560
+way as it really keeps the projects enclosed and doesn't transfer variables between the
+
+12:32.560 --> 12:33.560
+projects.
+
+12:33.560 --> 12:42.280
+However, what I normally do is I use a sub directory, but in addition with the exclude
+
+12:42.280 --> 12:48.040
+from awesome no only require the build targets I really use are exported or transferred to
+
+12:48.040 --> 12:50.640
+the other project.
+
+12:50.640 --> 12:57.880
+And we do this in our MLIR MLC repository and to do this we actually have an option just
+
+12:57.880 --> 13:02.080
+embedded which changes our source code a little bit.
+
+13:02.080 --> 13:10.400
+So only when we want to call it embedded then we check is it the case or not because the
+
+13:10.400 --> 13:12.760
+find package is already done by the other project.
+
+13:12.760 --> 13:14.280
+We don't need to call this.
+
+13:14.280 --> 13:20.440
+We only do the includes which we don't need for the external project mechanism.
+
+13:20.440 --> 13:24.960
+So getting to types.
+
+13:24.960 --> 13:29.720
+This is how the standalone dialect is currently structured or at least most of it.
+
+13:29.720 --> 13:34.360
+There are also some tools standalone ops standalone translate which are considered here.
+
+13:34.360 --> 13:40.720
+And you see we have multiple finds and types could be specified in standalone ops.td in
+
+13:40.720 --> 13:43.600
+our table definition file.
+
+13:43.600 --> 13:52.280
+However, it's quite nice to not put it into all into one file but to use separate files
+
+13:52.280 --> 13:53.280
+for it.
+
+13:53.280 --> 13:55.040
+So what we're doing is we're adding new files.
+
+13:55.040 --> 13:58.720
+We're adding a table gen file standalone types.
+
+13:58.720 --> 14:03.280
+We're adding a header file and we're adding the CPP for our implementation.
+
+14:03.280 --> 14:07.840
+And what you need to put into those are actually the following.
+
+14:07.840 --> 14:09.880
+Let's start with the table gen file.
+
+14:09.880 --> 14:17.160
+First of all, we include the attribute type base and the dialect itself because the dialect
+
+14:17.160 --> 14:24.480
+has some definitions and then we can define our standalone types class which is the base
+
+14:24.480 --> 14:27.600
+class for types.
+
+14:27.600 --> 14:32.080
+And in addition to that, we can define a custom type.
+
+14:32.080 --> 14:36.160
+Actually this is a simple copy of a mid-seas or park type.
+
+14:36.160 --> 14:43.800
+Quite straightforward but here we use a standard assembly format so no custom parser and printer
+
+14:43.800 --> 14:45.680
+and it just holds a string of parameters.
+
+14:45.680 --> 14:48.480
+So nothing special just to illustrate the example.
+
+14:48.480 --> 14:53.840
+So that is how the table gen file could look like.
+
+14:53.840 --> 14:59.720
+Getting to standalone ops, we can just replace the include of standalone dialect by standalone
+
+14:59.720 --> 15:02.120
+types.
+
+15:02.120 --> 15:08.720
+And this is because the types already includes the table gen TDE file so that's fine and
+
+15:08.720 --> 15:11.880
+that's it.
+
+15:11.880 --> 15:15.200
+Regarding the CMAC list, we don't need anything to change.
+
+15:15.200 --> 15:16.600
+Why is that?
+
+15:16.600 --> 15:25.320
+Actually at MLIR dialect already calls MLIR table gen for you with gen type decals and
+
+15:25.320 --> 15:29.640
+type definitions so that's fine.
+
+15:29.640 --> 15:31.960
+We don't need to change anything here.
+
+15:31.960 --> 15:38.320
+Whatever for attributes that would be different because for attributes, the at MLIR dialect
+
+15:38.320 --> 15:44.880
+doesn't call MLIR table gen for you to just set the LRM target definitions by yourself,
+
+15:44.880 --> 15:51.120
+call MLIR table gen by yourself, add a public table gen target and that's it.
+
+15:51.120 --> 15:58.800
+So attributes are quite close related to, are quite similar except for that you need
+
+15:58.800 --> 16:01.920
+to adjust your CMAC configuration by yourself.
+
+16:01.920 --> 16:08.600
+For the header file, just include the auto-generated type dev classes in the header, that's it,
+
+16:08.600 --> 16:12.920
+add the define, the include, nothing more to do.
+
+16:12.920 --> 16:20.400
+For our implementation, we need to make sure that the types can actually be registered
+
+16:20.400 --> 16:22.680
+by the parent dialect.
+
+16:22.680 --> 16:29.480
+So what we do is we have a define here, get type dev classes, we include then our generated
+
+16:29.480 --> 16:38.520
+code, generated by table gen and then we implement or we write a function register types which
+
+16:38.520 --> 16:46.240
+actually calls the method add types plus some of the auto-generated code and this needs
+
+16:46.240 --> 16:50.160
+to be called in our standalone dialect.cpp.
+
+16:50.160 --> 16:56.600
+So we just add the register types here and that's nearly the real trick.
+
+16:56.600 --> 17:01.640
+You can do the same not with ad operands or add types but with add attributes for attributes
+
+17:01.640 --> 17:05.760
+and to register your attributes.
+
+17:05.760 --> 17:13.880
+For the CMAC list itself, just add this to your MLIR standalone live or MLIR dialect
+
+17:13.880 --> 17:18.520
+library target, that's it, nothing more to do.
+
+17:18.520 --> 17:23.880
+For attributes, you can also just add your source code or you must add your source file
+
+17:23.880 --> 17:25.360
+here of course.
+
+17:25.360 --> 17:30.280
+But in addition, you also need a dependency on MLIR standalone attributes, ink gen, the
+
+17:30.280 --> 17:37.120
+target we generate or we create it by hand because it's not auto-generated just to make
+
+17:37.120 --> 17:46.760
+sure that table gen generates the code before CMAC tries to, or before the MLIR standalone
+
+17:46.760 --> 17:48.480
+target is built.
+
+17:48.480 --> 17:52.320
+You might be lucky otherwise you might have a race condition in your build system.
+
+17:52.320 --> 18:00.280
+I experienced that several times, tried to fix it or just keep it in mind and that's
+
+18:00.280 --> 18:01.760
+mainly it.
+
+18:01.760 --> 18:07.680
+For the standalone dialect, here we use the default printer and parser.
+
+18:07.680 --> 18:12.160
+Just let us tell table gen to generate those.
+
+18:12.160 --> 18:19.200
+And for register types, actually we need of course a declaration.
+
+18:19.200 --> 18:24.600
+We have the implementation but we also need the extra cards declaration generated by table
+
+18:24.600 --> 18:25.600
+gen.
+
+18:25.600 --> 18:32.520
+Otherwise, yeah, we cannot use it in our standalone ops.cpp.
+
+18:32.520 --> 18:39.240
+So all the examples are available in my fork of the LLVM project.
+
+18:39.240 --> 18:45.840
+I couldn't make it to senses, we are fabricated to be reviewed through upstream inclusion
+
+18:45.840 --> 18:48.200
+prior to my talk.
+
+18:48.200 --> 18:56.560
+But I will do so, I will add some more documentation to this, that's at least my goal.
+
+18:56.560 --> 19:03.000
+So when I planned this talk, I thought maybe some hints which could have one or the other
+
+19:03.000 --> 19:07.840
+and hopefully it's even more helpful if you not only find it in the slidespot also in
+
+19:07.840 --> 19:10.000
+the upstream example.
+
+19:10.000 --> 19:12.280
+And there are many good resources out there.
+
+19:12.280 --> 19:18.600
+So the talk given by media mini and river riddle, the MLIR primer, the MLIR tutorial
+
+19:18.600 --> 19:21.080
+at the 2020 LLVM deaf meeting.
+
+19:21.080 --> 19:30.080
+We have some great docs at MLIRLLVM.org, here how to create a dialect, the toy example
+
+19:30.080 --> 19:35.040
+for example, how to combine it, how to add attribute and types if you want to get more
+
+19:35.040 --> 19:39.560
+into the details what you can do all in the table gen world.
+
+19:39.560 --> 19:45.800
+Thanks, last but not least, the tutorial given by Steven Neuerhender at the LLVM 2021 deaf
+
+19:45.800 --> 19:47.040
+meeting.
+
+19:47.040 --> 19:50.160
+Yeah, so that's it from my side.
+
+19:50.160 --> 19:57.440
+So if you have questions, please let me know and I try to answer them.
+
+19:57.440 --> 20:12.760
+Hey, I just recently got into learning how to develop compilers, even less how to create
+
+20:12.760 --> 20:13.760
+languages.
+
+20:13.760 --> 20:19.760
+I've been focusing mostly on the front end part, like lexing and parsing.
+
+20:19.760 --> 20:30.240
+And my idea was to use LLVM as the back end for a really abstracted C type language which
+
+20:30.240 --> 20:38.400
+I'm working on and use LLVM as a back end to generate machine code for x86.
+
+20:38.400 --> 20:47.560
+And my understanding was that I only had to use or generate an IR for LLVM, the LLVM
+
+20:47.560 --> 20:48.560
+IR.
+
+20:48.560 --> 21:00.600
+And now you mentioned that LLVM IR can be described or is somehow related with the MLIR, right?
+
+21:00.600 --> 21:06.600
+So I was wondering if I'm still in the correct track to try to generate the parse tree and
+
+21:06.600 --> 21:15.040
+use LLVM and try to generate the standard LLVM IR and target the x86 or an x86 platform
+
+21:15.040 --> 21:19.800
+or do I need to learn something about the MLIR?
+
+21:19.800 --> 21:27.040
+So to try to summarize the question, the question is when as a compiler starter you're mostly
+
+21:27.040 --> 21:32.480
+focusing on parsing an abstract C type like language and want to know if you can just
+
+21:32.480 --> 21:39.680
+go through the ordinary LLVM IR way or if you need to plug in switch over to MLIR to
+
+21:39.680 --> 21:41.920
+do what you want.
+
+21:41.920 --> 21:43.320
+So in real short.
+
+21:43.320 --> 21:45.200
+So you can do this definitely.
+
+21:45.200 --> 21:49.600
+You can go the way you're right now doing.
+
+21:49.600 --> 21:54.200
+So MLIR actually is a little bit different.
+
+21:54.200 --> 22:01.800
+So if we are looking to clang, if you're talking about an abstract C language, looking into
+
+22:01.800 --> 22:07.000
+clang, there is clang AST and then we directly or more or less go to LLVM IR and that is
+
+22:07.000 --> 22:16.560
+one of the things which yeah isn't that nice or if you look into other compilers they introduce
+
+22:16.560 --> 22:21.560
+more intermediate representations in between like we will see later on in the session the
+
+22:21.560 --> 22:27.880
+flang app that for example or even Swift has two intermediate representations for example.
+
+22:27.880 --> 22:36.240
+So MLIR just gives you the ability to define additional intermediate representations.
+
+22:36.240 --> 22:46.240
+So you can also write a front end for your language, parse it into MLIR, convert it to
+
+22:46.240 --> 22:51.120
+the LLVM IR dialect and then translate it to LLVM IR.
+
+22:51.120 --> 22:52.400
+So that would be identical.
+
+22:52.400 --> 22:56.240
+It really depends on what you want to do, what kind of infrastructure you want to use.
+
+22:56.240 --> 23:00.400
+But you can go the way you're already going.
+
+23:00.400 --> 23:07.720
+So hopefully that somehow at least answers your question.
+
+23:07.720 --> 23:30.360
+Okay, the question is not directly related to the talk but as I'm one of the developers
+
+23:30.360 --> 23:35.000
+behind MLC, why we developed MLC?
+
+23:35.000 --> 23:44.120
+Sometimes you cannot compile with clang or directly or with LLVM at all to your target.
+
+23:44.120 --> 23:56.760
+So the idea was to get something independent of the compiler and when we actually generate
+
+23:56.760 --> 24:03.320
+C code with MLC you can have send the freedom to choose which compiler you want to use to
+
+24:03.320 --> 24:06.800
+translate for your final target.
+
+24:06.800 --> 24:12.000
+So we are in the domain of compilers for machine learning and sometimes we have some very exotic
+
+24:12.000 --> 24:17.920
+targets where clang unfortunately is not the option to use it as a compiler.
+
+24:17.920 --> 24:22.920
+So that's the simple reason.
+
+24:22.920 --> 24:35.080
+Hi, I was coming from the opposite side of the spectrum, I was looking into doing some
+
+24:35.080 --> 24:43.760
+sort of just in time compilation but I also wanted to define my own types and my own let's
+
+24:43.760 --> 24:44.760
+say things.
+
+24:44.760 --> 24:54.760
+My question is would MLIR be a good fit for that or would possibly just see with some
+
+24:54.760 --> 25:01.920
+sort of, I don't know, C++ with templates and some sort of, I don't know, dynamic language
+
+25:01.920 --> 25:04.240
+or something like that.
+
+25:04.240 --> 25:13.240
+So the question is when coming from the other side, so for JIT essentially if MLIR might
+
+25:13.240 --> 25:20.920
+be a good fit to define your own types and attributes and well I'm not an expert regarding
+
+25:20.920 --> 25:29.960
+JIT but MLIR provides you, I think most of the codes are upstream provides you the possibility
+
+25:29.960 --> 25:35.240
+to register types and attributes I'm quite sure at least at runtime.
+
+25:35.240 --> 25:40.920
+So you can extend your dialect after you compiled MLIR.
+
+25:40.920 --> 25:46.000
+So that is maybe, yeah, depending on what you want to do.
+
+25:46.000 --> 25:57.040
+If you really want to modify it during runtime, that should be possible with MLIR.
+
+25:57.040 --> 26:13.080
+So I'm not 100% sure but at least worth a look, I think.
+
+26:13.080 --> 26:41.480
+Well, I'm partly aware of IRDL but I don't know, you mean how you composite VRC make
+
+26:41.480 --> 26:50.440
+into targets or would, yeah, probably you, as you with IRDL as far as I know as you do
+
+26:50.440 --> 26:55.600
+most of the time at runtime, you wouldn't need to build it in advance.
+
+26:55.600 --> 27:03.440
+So yeah, the CMake stuff would be somehow obsolete, yeah, I think so.
+
+27:03.440 --> 27:14.320
+All right, if we're out of questions, thank you Marius, thank you.

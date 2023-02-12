@@ -1,0 +1,1654 @@
+WEBVTT
+
+00:00.000 --> 00:14.100
+We want to start, and that means I need to once again ask you to quiet down, please,
+
+00:14.100 --> 00:16.760
+so that we can hear our speaker.
+
+00:16.760 --> 00:22.000
+Our next talk is by Adrian Reber, and he's going to talk about Kubernetes and Checkpoint
+
+00:22.000 --> 00:25.000
+Restore.
+
+00:25.000 --> 00:33.000
+Hello, Mike is on. So welcome everyone to my talk about Kubernetes and Checkpoint Restore.
+
+00:33.000 --> 00:35.000
+Please quiet down.
+
+00:35.000 --> 00:40.000
+So I've actually done the talk about container migration here in 2020.
+
+00:40.000 --> 00:43.000
+This was using Portman in the last three years.
+
+00:43.000 --> 00:47.000
+I was able to move it into Kubernetes.
+
+00:47.000 --> 00:49.000
+It's not on.
+
+00:49.000 --> 00:52.000
+It's green.
+
+00:52.000 --> 00:58.000
+Better now? No?
+
+00:58.000 --> 01:01.000
+Too soft?
+
+01:01.000 --> 01:03.000
+What's too soft?
+
+01:03.000 --> 01:07.000
+I think the only thing that you can do is move it slightly down.
+
+01:07.000 --> 01:09.000
+Down?
+
+01:09.000 --> 01:11.000
+Better now? No.
+
+01:11.000 --> 01:13.000
+You can turn it up?
+
+01:13.000 --> 01:15.000
+Oh, there was...
+
+01:15.000 --> 01:17.000
+That's for the...
+
+01:17.000 --> 01:23.000
+Green is good.
+
+01:23.000 --> 01:25.000
+Better now? Better now?
+
+01:25.000 --> 01:28.000
+Not too good?
+
+01:28.000 --> 01:34.000
+Is it better now? No? No? No?
+
+01:34.000 --> 01:39.000
+Okay, we've got to make do with what we have for now, but please, if you all quiet down,
+
+01:39.000 --> 01:46.000
+we can hear our speaker a lot better.
+
+01:46.000 --> 01:51.000
+Okay, so I'm working on process migration for at least 13 years now.
+
+01:51.000 --> 01:59.000
+I'm involved in CRIU, which is the basis for the container migration we are doing here today.
+
+01:59.000 --> 02:01.000
+I don't know.
+
+02:01.000 --> 02:08.000
+Since around 2012, and I'm focusing mainly on container migration since 2015.
+
+02:08.000 --> 02:13.000
+So the agenda for today's session here is...
+
+02:13.000 --> 02:19.000
+Can we turn something down? I get feedback.
+
+02:19.000 --> 02:22.000
+Okay, so the agenda is something like...
+
+02:22.000 --> 02:25.000
+I'm going to talk a bit about background of checkpoint restore,
+
+02:25.000 --> 02:29.000
+especially how CRIU is integrated in different things.
+
+02:29.000 --> 02:35.000
+Then I will present use cases for container checkpoint restore, container migration.
+
+02:35.000 --> 02:38.000
+Then I want to talk about few technical details about CRIU.
+
+02:38.000 --> 02:41.000
+I might make this very short depending on the time.
+
+02:41.000 --> 02:45.000
+And then I want to talk about a future of checkpoint restore,
+
+02:45.000 --> 02:50.000
+especially in Kubernetes, what we are thinking about topic right now.
+
+02:50.000 --> 02:54.000
+So checkpoint restore in user space is the name of the tool CRIU.
+
+02:54.000 --> 02:58.000
+The reason for the name is that checkpointing and restoring is a thing
+
+02:58.000 --> 03:01.000
+for over 20 years now in Linux, even longer maybe.
+
+03:01.000 --> 03:02.000
+And there were different implementations.
+
+03:02.000 --> 03:04.000
+There were ones using an external module.
+
+03:04.000 --> 03:07.000
+There were ones doing LD preload.
+
+03:07.000 --> 03:11.000
+And around 2006 or 2008 there was something called a patch set
+
+03:11.000 --> 03:13.000
+for Linux kernel to do it in the kernel.
+
+03:13.000 --> 03:15.000
+It was over 100 patches.
+
+03:15.000 --> 03:19.000
+It was never merged because it was really huge and complicated.
+
+03:19.000 --> 03:22.000
+And because the in kernel thing didn't work,
+
+03:22.000 --> 03:29.000
+CRIU was named in user space because it's not in the kernel, it's in user space.
+
+03:29.000 --> 03:34.000
+There are multiple integrations of CRIU in different container engines,
+
+03:34.000 --> 03:38.000
+sometimes orchestration. The first one to mention here is OpenVizet.
+
+03:38.000 --> 03:42.000
+They invented CRIU for their container product many years ago
+
+03:42.000 --> 03:46.000
+to live migrate containers from one node to another.
+
+03:46.000 --> 03:51.000
+So the thing is about CRIU, it has been developed with containers in mind.
+
+03:51.000 --> 03:55.000
+At that time it was for different containers probably,
+
+03:55.000 --> 04:02.000
+but it's for containers and that's why it works as well as it does today.
+
+04:02.000 --> 04:08.000
+Then we know that Google uses CRIU in their internal container engine called Borg.
+
+04:08.000 --> 04:13.000
+I have no details about it except the things I've heard at conferences from them.
+
+04:13.000 --> 04:22.000
+So what they told us at CRIU upstream is that they use container migration
+
+04:22.000 --> 04:26.000
+for low priority jobs on nodes.
+
+04:26.000 --> 04:31.000
+And if there's not enough resources then the container will be migrated.
+
+04:31.000 --> 04:37.000
+They said they killed the container before and restarted it somewhere else.
+
+04:37.000 --> 04:42.000
+All the work was lost and now they can just migrate it to another node
+
+04:42.000 --> 04:48.000
+and they say they use it for background tasks like the example they gave
+
+04:48.000 --> 04:51.000
+is YouTube recoding of things which happens in the background,
+
+04:51.000 --> 04:56.000
+it's not time-critical then so that's why they use a checkpoint restore for it.
+
+04:56.000 --> 05:02.000
+There's an integration in CXD which enables you to migrate container from one host to another,
+
+05:02.000 --> 05:06.000
+then it's integrated in Docker, it's integrated in Portman,
+
+05:06.000 --> 05:09.000
+this is what I've been working on the last five years mainly
+
+05:09.000 --> 05:17.000
+and the thing I've been working on in the last three years to get it into Kubernetes
+
+05:17.000 --> 05:21.000
+is to integrate CRIU support into Cryo.
+
+05:21.000 --> 05:27.000
+This is one of the existing container engines which Kubernetes can use.
+
+05:27.000 --> 05:31.000
+Interestingly enough there's a ticket about container live migration
+
+05:31.000 --> 05:35.000
+in Kubernetes open since 2015, since then nothing has happened
+
+05:35.000 --> 05:40.000
+until now where we kind of can migrate container,
+
+05:40.000 --> 05:46.000
+we can definitely checkpoint them and we introduce this into Kubernetes
+
+05:46.000 --> 05:49.000
+and the label forensic container checkpointing.
+
+05:49.000 --> 05:54.000
+This was an interesting experience for me because I was not aware
+
+05:54.000 --> 05:58.000
+how Kubernetes processes are working to get something new in there,
+
+05:58.000 --> 06:02.000
+so I wrote some code, I submitted the patches and then nothing happened
+
+06:02.000 --> 06:07.000
+and at some point people told me you have to write something called a Kubernetes enhancement proposal,
+
+06:07.000 --> 06:10.000
+it's a document where you describe what you want to do,
+
+06:10.000 --> 06:13.000
+so I did this, so this is the links to the documents,
+
+06:13.000 --> 06:19.000
+I wrote for this, the third link is then the pull request for the actual code changes which is marginal
+
+06:19.000 --> 06:25.000
+and the last link is a blog post where it is described
+
+06:25.000 --> 06:31.000
+how to today use forensic container checkpointing in combination with Kubernetes.
+
+06:31.000 --> 06:35.000
+The reason for the name forensic container checkpointing is
+
+06:35.000 --> 06:39.000
+we were looking at a way to introduce checkpointing into Kubernetes
+
+06:39.000 --> 06:43.000
+with the minimal impact on Kubernetes,
+
+06:43.000 --> 06:48.000
+the thing is it's a more or less completely new concept for containers
+
+06:48.000 --> 06:52.000
+because Kubernetes thinks about containers, you start them, you stop them,
+
+06:52.000 --> 06:55.000
+they're done, you don't care about anything,
+
+06:55.000 --> 06:58.000
+and now there's something new there which tries to,
+
+06:58.000 --> 07:02.000
+okay, but I can still move my container from one node to another node,
+
+07:02.000 --> 07:08.000
+keep all the state and so it was a long discussion to get it into Kubernetes.
+
+07:08.000 --> 07:11.000
+The idea behind forensic container checkpointing is
+
+07:11.000 --> 07:17.000
+you have a container running somewhere and you suspect there might be something wrong,
+
+07:17.000 --> 07:21.000
+you don't want to immediately stop it, maybe the attacker can detect if you stop it
+
+07:21.000 --> 07:25.000
+and remove things from it so you can take a checkpoint from the container,
+
+07:25.000 --> 07:27.000
+the container never knows it was checkpointed,
+
+07:27.000 --> 07:31.000
+you can analyze it in a sandbox environment somewhere else,
+
+07:31.000 --> 07:36.000
+you can look at all the memory pages offline without the container running
+
+07:36.000 --> 07:39.000
+or you can restart it as many times as you want,
+
+07:39.000 --> 07:42.000
+so that's the idea for forensic container checkpointing
+
+07:42.000 --> 07:46.000
+and under which label it's currently available in Kubernetes.
+
+07:46.000 --> 07:50.000
+So use cases for checkpoint and restore container migration,
+
+07:50.000 --> 07:54.000
+I have a couple of them and one has a demo which relies on the network
+
+07:54.000 --> 07:56.000
+so we will see if this works.
+
+07:56.000 --> 08:00.000
+So first and maybe simplest use case for checkpoint restore
+
+08:00.000 --> 08:03.000
+for containers is reboot and save state,
+
+08:03.000 --> 08:07.000
+so I have a host with a blue kernel running on it,
+
+08:07.000 --> 08:09.000
+the kernel is getting out of the state,
+
+08:09.000 --> 08:12.000
+I have to update it, I have a stateful container
+
+08:12.000 --> 08:15.000
+because for stateless containers it doesn't make sense,
+
+08:15.000 --> 08:18.000
+but the container, the stateful container takes some time to start
+
+08:18.000 --> 08:21.000
+so what can you do with checkpoint restore,
+
+08:21.000 --> 08:25.000
+you can take a copy of the container, write it to the disk with all the state,
+
+08:25.000 --> 08:29.000
+with all memory pages saved as they were just before,
+
+08:29.000 --> 08:33.000
+you update the kernel, you reboot the system and it comes up with a green kernel
+
+08:33.000 --> 08:35.000
+with all security holes fixed,
+
+08:35.000 --> 08:38.000
+but a container you can restore it without waiting a long time,
+
+08:38.000 --> 08:42.000
+it's immediately there on your rebooted host.
+
+08:42.000 --> 08:46.000
+Another use case which is similar to this is quick startup use case,
+
+08:46.000 --> 08:49.000
+I have, people were talking to me about this,
+
+08:49.000 --> 08:53.000
+so this is what people actually use in production from what I've been told,
+
+08:53.000 --> 08:57.000
+so they have a container it takes forever to start,
+
+08:57.000 --> 08:59.000
+it takes like eight minutes to initialize,
+
+08:59.000 --> 09:03.000
+and they have some software as a service thing
+
+09:03.000 --> 09:06.000
+where they want customers to have a container immediately,
+
+09:06.000 --> 09:09.000
+so what they do, they don't initialize it from scratch,
+
+09:09.000 --> 09:12.000
+they take a checkpoint once it's initialized
+
+09:12.000 --> 09:16.000
+and then they can create multiple copies really fast of the container
+
+09:16.000 --> 09:18.000
+in matters of seconds,
+
+09:18.000 --> 09:22.000
+and so the customers can have their containers faster
+
+09:22.000 --> 09:24.000
+and maybe they are happier.
+
+09:24.000 --> 09:28.000
+The next thing is the combination of those things is container live migration,
+
+09:28.000 --> 09:31.000
+I have a source node, I have a destination node,
+
+09:31.000 --> 09:35.000
+and I want to move my container from one system to the other system
+
+09:35.000 --> 09:37.000
+without losing the state of the container,
+
+09:37.000 --> 09:41.000
+so I take a checkpoint and then I can restore the container
+
+09:41.000 --> 09:45.000
+on the destination system one or multiple times,
+
+09:45.000 --> 09:49.000
+and this is the place where I want to do my demo,
+
+09:49.000 --> 09:57.000
+so let's see, so I want to have a Kubernetes thing running here
+
+09:57.000 --> 10:02.000
+and I have a small YAML file with two containers,
+
+10:02.000 --> 10:05.000
+let's have a look at the YAML file,
+
+10:12.000 --> 10:15.000
+so it has, it's a part with two containers,
+
+10:15.000 --> 10:19.000
+one is called WildFly, this is a WildFly-based Java-based application
+
+10:19.000 --> 10:21.000
+and the other one is Counter,
+
+10:21.000 --> 10:23.000
+both are really simple, stateful containers,
+
+10:23.000 --> 10:26.000
+if I do a request to the container I get back a number,
+
+10:26.000 --> 10:30.000
+the number is increased and second time the number is the increased number,
+
+10:30.000 --> 10:34.000
+so let's talk to the container, hopefully it works.
+
+10:38.000 --> 10:43.000
+Okay, this is hard to read, but I think I need this ID,
+
+10:43.000 --> 10:46.000
+so I'll just do a curl to the container here
+
+10:46.000 --> 10:51.000
+and then I need to replace the ID to figure out the IP address
+
+10:51.000 --> 10:55.000
+of my, where's my mouse here, container,
+
+10:55.000 --> 11:00.000
+and it returns counter zero, counter one, counter two,
+
+11:00.000 --> 11:03.000
+so it's stateful, but it's simple,
+
+11:03.000 --> 11:08.000
+so and to use checkpoint restore in Kubernetes,
+
+11:08.000 --> 11:11.000
+so this is currently a kubelet only interface
+
+11:11.000 --> 11:13.000
+because we still don't know how it,
+
+11:13.000 --> 11:16.000
+it's the best way to integrate it into Kubernetes,
+
+11:16.000 --> 11:20.000
+so it's not straightforward yet to use it, but it's there,
+
+11:20.000 --> 11:23.000
+so I'm also doing a curl,
+
+11:23.000 --> 11:26.000
+now let's find my command in the history, now that's the wrong one,
+
+11:26.000 --> 11:29.000
+oh there it was, missed,
+
+11:29.000 --> 11:35.000
+sorry, almost have it,
+
+11:35.000 --> 11:37.000
+okay, so this is the command,
+
+11:37.000 --> 11:40.000
+so what I'm doing here, I'm just talking to the kubelet,
+
+11:40.000 --> 11:45.000
+you see the HTTPS address at the end of the long line
+
+11:45.000 --> 11:49.000
+and it says I'm using the checkpoint API endpoint
+
+11:49.000 --> 11:52.000
+and I'm using, I'm trying to checkpoint a container
+
+11:52.000 --> 11:55.000
+in the default Kubernetes namespace in the pod counters
+
+11:55.000 --> 11:58.000
+and the container counters, so I'm doing this
+
+11:58.000 --> 12:01.000
+and now it's creating the checkpoint in the back
+
+12:01.000 --> 12:03.000
+and if I'm looking at what it says,
+
+12:03.000 --> 12:05.000
+it's just created a file somewhere
+
+12:05.000 --> 12:09.000
+which contains all file system changes, all memory pages,
+
+12:09.000 --> 12:11.000
+complete state of the container
+
+12:11.000 --> 12:14.000
+and now I want to migrate it to another host
+
+12:14.000 --> 12:17.000
+and now I have to create an OCI,
+
+12:17.000 --> 12:21.000
+kind of an OCI image out of it, I'm using builder here
+
+12:21.000 --> 12:25.000
+and then I'm saying,
+
+12:25.000 --> 12:28.000
+I'll give it an annotation so that the destination knows
+
+12:28.000 --> 12:31.000
+this is a container image,
+
+12:31.000 --> 12:35.000
+then I'm gonna include the checkpoint archive
+
+12:35.000 --> 12:38.000
+into the container, into the image
+
+12:38.000 --> 12:42.000
+and then I will say commit, it's the wrong one,
+
+12:42.000 --> 12:46.000
+commit and I'm gonna call it checkpoint image latest
+
+12:46.000 --> 12:51.000
+so now I have an OCI type container image locally
+
+12:51.000 --> 12:53.000
+which contains the checkpoint
+
+12:53.000 --> 12:57.000
+and now I will push it to a registry,
+
+12:57.000 --> 13:02.000
+here it was, and I will call it tech39
+
+13:02.000 --> 13:05.000
+and now it's getting pushed to a registry
+
+13:05.000 --> 13:08.000
+so this works pretty good but this VM is not local
+
+13:08.000 --> 13:12.000
+and now I want to restore the container on my local VM
+
+13:12.000 --> 13:15.000
+and that's happening here,
+
+13:15.000 --> 13:21.000
+right, ctrl-ps, so nothing is running
+
+13:21.000 --> 13:25.000
+then I have to edit my YAML file
+
+13:28.000 --> 13:31.000
+and so it's pretty similar to the one I had before
+
+13:31.000 --> 13:35.000
+I have a pod called counters
+
+13:35.000 --> 13:37.000
+and I have a container wildfly
+
+13:37.000 --> 13:40.000
+which is started from a normal image
+
+13:40.000 --> 13:44.000
+and the other container called counter
+
+13:44.000 --> 13:49.000
+is started from the checkpoint image
+
+13:49.000 --> 13:53.000
+and now I say apply
+
+13:53.000 --> 13:59.000
+and now let's see what the network says
+
+13:59.000 --> 14:02.000
+if it likes me
+
+14:02.000 --> 14:05.000
+so it now says, so it's really hard to read
+
+14:05.000 --> 14:07.000
+because it's a large font but it said
+
+14:07.000 --> 14:09.000
+pulling the initial image so that's already there
+
+14:09.000 --> 14:13.000
+so it doesn't need to pull, it created a container wildfly
+
+14:13.000 --> 14:15.000
+it started a container wildfly
+
+14:15.000 --> 14:18.000
+and now it's actually pulling the checkpoint archive
+
+14:18.000 --> 14:21.000
+from the registry, oh and it's created a container
+
+14:21.000 --> 14:25.000
+and started a container so now we have a restored container
+
+14:25.000 --> 14:28.000
+hopefully running here, let's get the idea,
+
+14:28.000 --> 14:30.000
+the idea of the container
+
+14:30.000 --> 14:34.000
+and let's talk to the container again
+
+14:34.000 --> 14:37.000
+and so now we shouldn't see counter zero
+
+14:37.000 --> 14:40.000
+but counter, I don't know, three or four
+
+14:40.000 --> 14:42.000
+I don't remember what it was last time
+
+14:42.000 --> 14:45.000
+this is the right idea, I hope
+
+14:45.000 --> 14:48.000
+yeah and it says, so now we have a stateful migration
+
+14:48.000 --> 14:51.000
+of a container from one Kubernetes host
+
+14:51.000 --> 14:53.000
+to another Kubernetes host
+
+14:53.000 --> 14:56.000
+by creating a checkpoint, pushing it to a registry
+
+14:56.000 --> 14:59.000
+and then tricking, kind of tricking Kubernetes
+
+14:59.000 --> 15:02.000
+into starting a container
+
+15:02.000 --> 15:06.000
+but in the background we kind of used a checkpoint container
+
+15:06.000 --> 15:09.000
+so Kubernetes thinks it started a container, a normal container
+
+15:09.000 --> 15:12.000
+but there was a checkpoint container behind it
+
+15:12.000 --> 15:16.000
+so the checkpoint restore, the restoring of the checkpoint
+
+15:16.000 --> 15:19.000
+all happens in the container engine below it
+
+15:19.000 --> 15:22.000
+in cryo and for Kubernetes it's just a normal container
+
+15:22.000 --> 15:27.000
+it has restored so back to my slides
+
+15:27.000 --> 15:30.000
+so another use case
+
+15:30.000 --> 15:33.000
+people are interested in a lot
+
+15:33.000 --> 15:36.000
+which I have never thought about is spot instances
+
+15:36.000 --> 15:39.000
+which AWS and Google has
+
+15:39.000 --> 15:42.000
+it's cheap machines which you can get
+
+15:42.000 --> 15:45.000
+but the deal is they can take it away anytime they want
+
+15:45.000 --> 15:48.000
+like you have two minutes before they take it away
+
+15:48.000 --> 15:51.000
+and so if you have checkpointing
+
+15:51.000 --> 15:54.000
+it's now independent of Kubernetes or not
+
+15:54.000 --> 15:57.000
+but if you have Kubernetes on your spot instances
+
+15:57.000 --> 16:00.000
+you can checkpoint your containers right into some storage
+
+16:00.000 --> 16:03.000
+and then restore the container on another system
+
+16:03.000 --> 16:07.000
+and still use spot instances without losing any of your
+
+16:07.000 --> 16:11.000
+calculation work, whatever it was doing
+
+16:11.000 --> 16:15.000
+so something about cryo
+
+16:15.000 --> 16:19.000
+so I mentioned everything we are doing here is using cryo
+
+16:19.000 --> 16:22.000
+so the call stack is basically
+
+16:22.000 --> 16:25.000
+the kubelet talks to cryo, cryo talks to runc, runc
+
+16:25.000 --> 16:28.000
+talks to cryo, cryo does the checkpoint
+
+16:28.000 --> 16:31.000
+and then each layer adds some metadata to it
+
+16:31.000 --> 16:34.000
+and so that's how we have it but all the main work
+
+16:34.000 --> 16:37.000
+of checkpointing a process is done by cryo
+
+16:37.000 --> 16:40.000
+and some details about cryo so of course the first step
+
+16:40.000 --> 16:43.000
+is it's checkpointing the container
+
+16:43.000 --> 16:46.000
+cryo uses ptrace or the secret freezer to stop
+
+16:46.000 --> 16:49.000
+all processes in the container
+
+16:49.000 --> 16:52.000
+and then we look at proc pit
+
+16:52.000 --> 16:55.000
+to collect information about the processes
+
+16:55.000 --> 16:58.000
+that's also one of the reasons why it's called in user space
+
+16:58.000 --> 17:02.000
+because we use existing user space interfaces
+
+17:02.000 --> 17:05.000
+cryo over the years added additional interfaces
+
+17:05.000 --> 17:08.000
+to the kernel but they've never been checkpoint only
+
+17:08.000 --> 17:12.000
+they are usually just adding additional information
+
+17:12.000 --> 17:15.000
+you can get from a running process
+
+17:15.000 --> 17:18.000
+so once all the information in proc pit has been collected
+
+17:18.000 --> 17:21.000
+by cryo another part of cryo comes
+
+17:21.000 --> 17:24.000
+which is called the parasite code
+
+17:24.000 --> 17:27.000
+the parasite code is injected into the process
+
+17:27.000 --> 17:30.000
+and it's now running as a daemon in the address space
+
+17:30.000 --> 17:33.000
+of the process and this way
+
+17:33.000 --> 17:36.000
+cryo can talk to this parasite code
+
+17:36.000 --> 17:39.000
+and now get information about the process
+
+17:39.000 --> 17:42.000
+from inside the address space of the process
+
+17:42.000 --> 17:45.000
+from memory pages to get to dump them all really fast
+
+17:45.000 --> 17:48.000
+to this but a lot of steps are done
+
+17:48.000 --> 17:51.000
+by the parasite code which is injected into the
+
+17:51.000 --> 17:54.000
+target process we want to checkpoint
+
+17:54.000 --> 17:57.000
+the parasite code is removed after usage and the process never knows
+
+17:57.000 --> 18:00.000
+it was under the control from the parasite code
+
+18:00.000 --> 18:03.000
+I have a diagram which tries to
+
+18:03.000 --> 18:06.000
+show how this could look like so we have
+
+18:06.000 --> 18:09.000
+the original process code to be checkpointed
+
+18:09.000 --> 18:12.000
+we put something out of the code
+
+18:12.000 --> 18:15.000
+it's not perfectly correct but we put a parasite code
+
+18:15.000 --> 18:18.000
+in the original process now the parasite code is running
+
+18:18.000 --> 18:21.000
+doing the things it has to do
+
+18:21.000 --> 18:24.000
+and then we remove it and the program looks the same as it was before
+
+18:24.000 --> 18:27.000
+and at this point all checkpointing
+
+18:27.000 --> 18:30.000
+information has been written to disk
+
+18:30.000 --> 18:33.000
+and the process is killed or continues running
+
+18:33.000 --> 18:36.000
+this really depends on what you want to do
+
+18:36.000 --> 18:39.000
+and no
+
+18:39.000 --> 18:42.000
+we are not aware of any effect on the process
+
+18:42.000 --> 18:45.000
+if it continues to run after checkpointing
+
+18:45.000 --> 18:48.000
+and to migrate the process you have then the last step
+
+18:48.000 --> 18:51.000
+is restoring and what CRIU does it reads all the checkpoint images
+
+18:51.000 --> 18:54.000
+then it recreates the process tree of the container
+
+18:54.000 --> 18:57.000
+by doing a clone, clone 3 for each PID
+
+18:57.000 --> 19:00.000
+a thread ID and then the process tree is recreated
+
+19:00.000 --> 19:03.000
+as before and then CRIU kind of morphs
+
+19:03.000 --> 19:06.000
+all the processes in the process tree
+
+19:06.000 --> 19:09.000
+to the original process and always a good
+
+19:09.000 --> 19:12.000
+example is file descriptors
+
+19:12.000 --> 19:15.000
+this is easy so what CRIU does during checkpointing
+
+19:15.000 --> 19:18.000
+it looks at all the file descriptors
+
+19:18.000 --> 19:21.000
+looks the ID and the file name
+
+19:21.000 --> 19:24.000
+the path and the file pointer where it is
+
+19:24.000 --> 19:27.000
+and during restore it's just put again
+
+19:27.000 --> 19:30.000
+so it opens the same file with the same file ID
+
+19:30.000 --> 19:33.000
+and then it points the file pointer to the same location
+
+19:33.000 --> 19:36.000
+and then the process can continue to run
+
+19:36.000 --> 19:39.000
+and then the file is the same as it was before
+
+19:39.000 --> 19:42.000
+the file descriptor
+
+19:42.000 --> 19:45.000
+then all the memory pages are loaded back into memory
+
+19:45.000 --> 19:48.000
+and mapped to the right location
+
+19:48.000 --> 19:51.000
+we load all the security settings like app-amor as ilinux.com
+
+19:51.000 --> 19:54.000
+we do this really late in CRIU
+
+19:54.000 --> 19:57.000
+because some of these things make
+
+19:57.000 --> 20:00.000
+it very difficult but it's happening late
+
+20:00.000 --> 20:03.000
+so it's working well
+
+20:03.000 --> 20:06.000
+and then when everything
+
+20:06.000 --> 20:09.000
+all the resources are restored, all the memory pages are back
+
+20:09.000 --> 20:12.000
+then CRIU tells the process to continue to run
+
+20:12.000 --> 20:15.000
+and then you have a restored process
+
+20:15.000 --> 20:18.000
+so now to what's next
+
+20:18.000 --> 20:21.000
+in Kubernetes so we can kind of migrate
+
+20:21.000 --> 20:24.000
+a container like I have shown
+
+20:24.000 --> 20:27.000
+and then we are only at the start of the whole thing
+
+20:27.000 --> 20:30.000
+so the next thing would maybe be
+
+20:30.000 --> 20:33.000
+kubectl checkpoint so that you don't have to talk directly to the kubelet
+
+20:33.000 --> 20:36.000
+for kubectl checkpoint
+
+20:36.000 --> 20:39.000
+one of the things which is currently under discussion
+
+20:39.000 --> 20:42.000
+is if you do a checkpoint all of a sudden
+
+20:42.000 --> 20:45.000
+you have all the memory pages on disk with all secrets
+
+20:45.000 --> 20:48.000
+private keys, random numbers, whatever
+
+20:48.000 --> 20:51.000
+and so what we do for the current Kubernetes setup is
+
+20:51.000 --> 20:54.000
+it's only readable by root because if you root
+
+20:54.000 --> 20:57.000
+then you could easily access the memory of all the processes
+
+20:57.000 --> 21:00.000
+so if the checkpoint archive
+
+21:00.000 --> 21:03.000
+is also only readable as root
+
+21:03.000 --> 21:06.000
+it's the same problem you have
+
+21:06.000 --> 21:09.000
+the thing is you can take the checkpoint archive
+
+21:09.000 --> 21:12.000
+move it to another machine and then maybe somebody else can read it
+
+21:12.000 --> 21:15.000
+so there's still a problem that you can leak information
+
+21:15.000 --> 21:18.000
+you don't want to leak so the thing
+
+21:18.000 --> 21:21.000
+about is to maybe encrypt the image
+
+21:21.000 --> 21:24.000
+we don't know yet if we do it at the OCI
+
+21:24.000 --> 21:27.000
+image level or at the CRIU level
+
+21:27.000 --> 21:30.000
+we're talking about but it's not yet clear what we want to do
+
+21:30.000 --> 21:33.000
+but at some point the goal is definitely to have something
+
+21:33.000 --> 21:36.000
+like kubectl checkpoint to make it easy
+
+21:36.000 --> 21:39.000
+then I've shown only how I can
+
+21:39.000 --> 21:42.000
+checkpoint a container out of a pod and restore it into another
+
+21:42.000 --> 21:45.000
+pod so the other thing would be to do a complete
+
+21:45.000 --> 21:48.000
+pod checkpoint restore
+
+21:48.000 --> 21:51.000
+I've done proof of concepts of this so this is not really a technical
+
+21:51.000 --> 21:54.000
+challenge but you have to figure out
+
+21:54.000 --> 21:57.000
+how can the interface in Kubernetes look to implement this
+
+21:57.000 --> 22:00.000
+then maybe if all of this works maybe you can do a
+
+22:00.000 --> 22:03.000
+kubectl migrate to just tell Kubernetes
+
+22:03.000 --> 22:06.000
+please migrate this container to some other node to some other hosts
+
+22:06.000 --> 22:09.000
+and if this works then maybe we also
+
+22:09.000 --> 22:12.000
+could have schedule integration that if certain resources
+
+22:12.000 --> 22:15.000
+are getting low, low priority containers
+
+22:15.000 --> 22:18.000
+can be moved to another place
+
+22:18.000 --> 22:21.000
+another thing which we're also discussing concerning this is
+
+22:21.000 --> 22:24.000
+so I've shown you I've migrated a container with my
+
+22:24.000 --> 22:27.000
+own private OCI image standard
+
+22:27.000 --> 22:30.000
+which is the thing which I came up with
+
+22:30.000 --> 22:33.000
+it's a tar file with some metadata in it
+
+22:33.000 --> 22:36.000
+but we would like to have it standardized so that
+
+22:36.000 --> 22:39.000
+other container engines can use
+
+22:39.000 --> 22:42.000
+that information, the standard and not the thing I came up with
+
+22:42.000 --> 22:45.000
+which just felt like the right thing to do
+
+22:45.000 --> 22:48.000
+so this is the place where the standardization discussion is going on
+
+22:48.000 --> 22:51.000
+it's not going on really fast
+
+22:51.000 --> 22:54.000
+or anything like this but yeah I guess that's how
+
+22:54.000 --> 22:57.000
+creating a standard works and with this
+
+22:57.000 --> 23:00.000
+I'm at the end of my talk, the summary is basically
+
+23:00.000 --> 23:03.000
+query you can checkpoint and restore containers, it's integrated
+
+23:03.000 --> 23:06.000
+into different container engines, it's used in production
+
+23:06.000 --> 23:09.000
+use cases are things like reboot into new kernel
+
+23:09.000 --> 23:12.000
+without losing container states, start multiple copies
+
+23:12.000 --> 23:15.000
+quickly, migrate running containers, the new spot instances
+
+23:15.000 --> 23:18.000
+I've been asked about, this has all been done under the
+
+23:18.000 --> 23:21.000
+forensic container checkpoint in Kubernetes enhancement proposal
+
+23:21.000 --> 23:24.000
+and currently we
+
+23:24.000 --> 23:27.000
+trick Kubernetes to restore a container
+
+23:27.000 --> 23:30.000
+by using create and start without letting
+
+23:30.000 --> 23:33.000
+Kubernetes know that it's a checkpoint
+
+23:33.000 --> 23:36.000
+and with this I'm at the end, thanks for your time
+
+23:36.000 --> 23:39.000
+and I guess questions
+
+23:44.000 --> 23:47.000
+we have time for questions
+
+23:48.000 --> 23:51.000
+I have two questions, the first one is
+
+23:51.000 --> 23:54.000
+Howard
+
+23:54.000 --> 23:58.000
+one second please, stay quiet until the talk is over
+
+23:58.000 --> 24:01.000
+so two questions, how are network connections
+
+24:01.000 --> 24:04.000
+handled when the containers are stored
+
+24:04.000 --> 24:07.000
+and the other question is does CreeU support some kind of optimization
+
+24:07.000 --> 24:10.000
+in incremental checkpoints?
+
+24:10.000 --> 24:13.000
+so the first question is network connections
+
+24:13.000 --> 24:16.000
+so CreeU can checkpoint and restore
+
+24:16.000 --> 24:19.000
+TCP connections established
+
+24:19.000 --> 24:22.000
+established is an interesting thing, if they're just open
+
+24:22.000 --> 24:25.000
+and listening it's not really a difficult thing to do
+
+24:25.000 --> 24:28.000
+but it can restore established TCP connections
+
+24:28.000 --> 24:31.000
+but I'm not sure it's important
+
+24:31.000 --> 24:34.000
+in the case of Kubernetes because
+
+24:34.000 --> 24:37.000
+if you migrate, maybe you migrate
+
+24:37.000 --> 24:40.000
+to some other cluster or somewhere else
+
+24:40.000 --> 24:43.000
+maybe the network is set up differently
+
+24:43.000 --> 24:46.000
+and you can only restore a TCP connection if the
+
+24:46.000 --> 24:49.000
+both IP addresses of the connection are the same
+
+24:49.000 --> 24:52.000
+and it makes sense for live migration
+
+24:52.000 --> 24:55.000
+because at some point the TCP timers will time out anyway
+
+24:55.000 --> 24:58.000
+but I think maybe it would make sense
+
+24:58.000 --> 25:01.000
+if you migrate a part and keep the TCP connections
+
+25:01.000 --> 25:04.000
+between the container and the part alive
+
+25:04.000 --> 25:07.000
+then it would make sense, it's technically possible
+
+25:07.000 --> 25:10.000
+I'm not sure how important it is
+
+25:10.000 --> 25:13.000
+for external connections
+
+25:13.000 --> 25:16.000
+but for internal connections it makes sense
+
+25:16.000 --> 25:19.000
+the other question was about optimization
+
+25:19.000 --> 25:22.000
+so CreeU itself supports pre-copy and post-copy
+
+25:22.000 --> 25:25.000
+migration techniques just like VMs
+
+25:25.000 --> 25:28.000
+so you can take a copy of the memory
+
+25:28.000 --> 25:31.000
+move it to the destination then just do the
+
+25:31.000 --> 25:34.000
+diff at the end or you can do page faults
+
+25:34.000 --> 25:37.000
+if on missing pages and missing pages
+
+25:37.000 --> 25:40.000
+are then collected during the runtime
+
+25:40.000 --> 25:43.000
+so this is all just like QEMU does
+
+25:43.000 --> 25:46.000
+all the technology is the same
+
+25:46.000 --> 25:49.000
+but it's not integrated into Kubernetes at all
+
+25:49.000 --> 25:52.000
+it's...
+
+25:52.000 --> 25:55.000
+technically it's possible
+
+25:55.000 --> 25:58.000
+in Portman we can do this
+
+25:58.000 --> 26:01.000
+the only thing is you have to decide
+
+26:01.000 --> 26:04.000
+if this is an incremental checkpoint
+
+26:04.000 --> 26:07.000
+or not because the checkpoint looks differently
+
+26:07.000 --> 26:10.000
+so if we know it's an incremental checkpoint
+
+26:10.000 --> 26:13.000
+only the memory pages are dumped
+
+26:13.000 --> 26:16.000
+and if it's the final checkpoint
+
+26:16.000 --> 26:19.000
+we have to dump everything
+
+26:19.000 --> 26:22.000
+and if it's the first checkpoint you say
+
+26:22.000 --> 26:25.000
+it's the final checkpoint you cannot do an incremental checkpoint
+
+26:25.000 --> 26:28.000
+on that one
+
+26:28.000 --> 26:31.000
+very impressive thing
+
+26:31.000 --> 26:34.000
+except network what else do you know
+
+26:34.000 --> 26:37.000
+will not be possible to migrate
+
+26:37.000 --> 26:40.000
+I'm impressed by this thing
+
+26:40.000 --> 26:43.000
+except network you mentioned
+
+26:43.000 --> 26:46.000
+something else that cannot be checkpoints
+
+26:46.000 --> 26:49.000
+so the main problem is every external hardware
+
+26:49.000 --> 26:52.000
+like infinite band, GPUs, FPGAs
+
+26:52.000 --> 26:55.000
+because there's state in the hardware
+
+26:55.000 --> 26:58.000
+and we cannot get it out
+
+26:58.000 --> 27:01.000
+two years ago AMD actually provided a plugin
+
+27:01.000 --> 27:04.000
+for KreeU to get the state out of their
+
+27:04.000 --> 27:07.000
+GPGPUs so KreeU
+
+27:07.000 --> 27:10.000
+should be able to checkpoint
+
+27:10.000 --> 27:13.000
+and store processes using AMD GPUs
+
+27:13.000 --> 27:16.000
+I never use it myself
+
+27:16.000 --> 27:19.000
+I don't have one but they implemented it
+
+27:19.000 --> 27:22.000
+so I assume it's working
+
+27:22.000 --> 27:25.000
+and so everything external hardware
+
+27:25.000 --> 27:28.000
+where you don't have the state in the kernel
+
+27:28.000 --> 27:31.000
+that's the main limitation
+
+27:31.000 --> 27:34.000
+Hi, thank you for this
+
+27:34.000 --> 27:37.000
+you said there's parasite code, does that mean it changes the container hash
+
+27:37.000 --> 27:40.000
+so how do you propose to secure them again
+
+27:40.000 --> 27:43.000
+and make sure that's your parasite code
+
+27:43.000 --> 27:46.000
+and it's somebody else's
+
+27:46.000 --> 27:49.000
+I didn't get it 100%
+
+27:49.000 --> 27:52.000
+something about container hashes and making sure it's
+
+27:52.000 --> 27:55.000
+I think the worry is that if you inject parasite code
+
+27:55.000 --> 27:58.000
+that the container hash has changed somehow
+
+27:58.000 --> 28:01.000
+it doesn't
+
+28:01.000 --> 28:04.000
+it doesn't
+
+28:04.000 --> 28:07.000
+it doesn't change the container hash
+
+28:07.000 --> 28:10.000
+the parasite code is removed afterwards so it's
+
+28:10.000 --> 28:13.000
+okay, thank you
+
+28:16.000 --> 28:19.000
+thank you, excellent talk
+
+28:19.000 --> 28:22.000
+how big are the images the size of the process memory used
+
+28:22.000 --> 28:26.000
+or the total process allocated to the system
+
+28:26.000 --> 28:29.000
+I don't hear anything in the front
+
+28:29.000 --> 28:34.000
+how big are the images that you restore
+
+28:34.000 --> 28:37.000
+exactly, so the size of the checkpoint
+
+28:37.000 --> 28:40.000
+is basically the size of all memory pages
+
+28:40.000 --> 28:43.000
+which we dump, all the additional information
+
+28:43.000 --> 28:46.000
+which crew is dumping is compared to it is really small
+
+28:46.000 --> 28:49.000
+and then it depends if you do something like
+
+28:49.000 --> 28:52.000
+an importment or docker, if you do a diff
+
+28:52.000 --> 28:55.000
+you usually see which files changed in the container to your base image
+
+28:55.000 --> 28:58.000
+and this comes on top of it, all files which change
+
+28:58.000 --> 29:02.000
+we include all the files completely into the checkpoint
+
+29:02.000 --> 29:05.000
+whether we don't include this
+
+29:05.000 --> 29:08.000
+while I'm bringing the mic over there
+
+29:08.000 --> 29:11.000
+has anyone changed, has anything changed in terms of how complex
+
+29:11.000 --> 29:14.000
+process trees you can restore because we're thinking about
+
+29:14.000 --> 29:18.000
+we discussed using it for system deservices for example
+
+29:18.000 --> 29:21.000
+for you
+
+29:21.000 --> 29:24.000
+one of your limitations that you usually had is as soon as you run something
+
+29:24.000 --> 29:27.000
+fairly complex inside of the container and you try to
+
+29:27.000 --> 29:30.000
+check point restore it with crew it would just fail
+
+29:30.000 --> 29:33.000
+because it would use kernel features that it wouldn't support
+
+29:33.000 --> 29:36.000
+so the biggest problem we're currently seeing
+
+29:36.000 --> 29:39.000
+is containers using systemd, because systemd is very advanced
+
+29:39.000 --> 29:42.000
+it uses things nobody else uses
+
+29:42.000 --> 29:45.000
+so this is the point where crew might fail
+
+29:45.000 --> 29:48.000
+because it seems like at least from previous point
+
+29:48.000 --> 29:51.000
+or from what I've seen nobody uses as many
+
+29:51.000 --> 29:54.000
+new kernel features as systemd does
+
+29:54.000 --> 29:57.000
+so it sometimes fails
+
+29:57.000 --> 30:00.000
+the systemd is running there
+
+30:00.000 --> 30:03.000
+but usually I don't see often people in the OCI container
+
+30:03.000 --> 30:06.000
+world using systemd
+
+30:06.000 --> 30:08.000
+I guess it would be a good idea to have a real
+
+30:08.000 --> 30:11.000
+init system even in your container but it's not something people do
+
+30:11.000 --> 30:14.000
+so it's not something we get
+
+30:14.000 --> 30:17.000
+complaints at all about
+
+30:17.000 --> 30:21.000
+I also thought this talk was very interesting
+
+30:21.000 --> 30:24.000
+so I saw that you had these
+
+30:24.000 --> 30:27.000
+talked about having these
+
+30:27.000 --> 30:30.000
+kubectl migrate and kubectl
+
+30:30.000 --> 30:33.000
+checkpoints
+
+30:33.000 --> 30:36.000
+because I'm thinking that mostly what you want to migrate
+
+30:36.000 --> 30:39.000
+might be like a stateful application
+
+30:39.000 --> 30:42.000
+for example like a stateful, what is called a stateful something
+
+30:42.000 --> 30:45.000
+so I was thinking maybe you could have
+
+30:45.000 --> 30:48.000
+something in the stateful
+
+30:48.000 --> 30:51.000
+stateful deploy whatever it's called instead of
+
+30:51.000 --> 30:54.000
+say you want to drain a node
+
+30:54.000 --> 30:57.000
+actually one of the first implementations I did
+
+30:57.000 --> 31:00.000
+I was using drain
+
+31:00.000 --> 31:03.000
+I added an option to kubectl drain which is for checkpoints
+
+31:03.000 --> 31:06.000
+so all containers were check pointed during drain
+
+31:06.000 --> 31:09.000
+and then they were restored during
+
+31:09.000 --> 31:12.000
+boot up
+
+31:12.000 --> 31:15.000
+okay
+
+31:15.000 --> 31:18.000
+sorry for being the buskill but we're out of time
+
+31:18.000 --> 31:21.000
+thank you for their talk that was really interesting
+
+31:21.000 --> 31:46.000
+and thank you everyone for attending and being so quiet during your question

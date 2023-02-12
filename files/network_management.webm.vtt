@@ -1,0 +1,538 @@
+WEBVTT
+
+00:00.000 --> 00:14.120
+So, guys, there are some more seats. Please have a seat. And whenever you want, we can
+
+00:14.120 --> 00:15.120
+start.
+
+00:15.120 --> 00:23.640
+Okay. All right. So, let's start. Welcome, everyone. My name is Fernando. I'm a senior
+
+00:23.640 --> 00:28.880
+software engineer at Red Hat. I work on the networking services team, mainly focused on
+
+00:28.880 --> 00:35.560
+network management. So, today I'm going to talk how we can do networking management more
+
+00:35.560 --> 00:46.680
+simple and how we can make the life of CIS admins a little bit better. I know that network
+
+00:46.680 --> 00:53.240
+management can be complex, especially because most of the CIS admins need to sometimes configure
+
+00:53.240 --> 00:59.560
+networking and maybe they are not network experts. So, all right. The first thing is
+
+00:59.560 --> 01:05.440
+what is Network Manager. So, Network Manager is the standard Linux network configuration
+
+01:05.440 --> 01:12.200
+tool suite. Basically, it's almost on every distribution and it configures networking.
+
+01:12.200 --> 01:19.080
+It's just like that. It takes care of setting the IP address, all the properties, manage
+
+01:19.080 --> 01:26.320
+routes, manage DNS, manage almost everything. Make sure that when other to modify the network
+
+01:26.320 --> 01:31.640
+configuration, it will notify Network Manager, it will update the status, et cetera, et
+
+01:31.640 --> 01:32.640
+cetera.
+
+01:32.640 --> 01:38.600
+Network Manager provides Divas API and also they have their own library to communicate with
+
+01:38.600 --> 01:44.440
+the demo, which is LibNM. And this is why there are some tools built around Network Manager.
+
+01:44.440 --> 01:50.200
+For example, I know that some of you know them, NM-appler, NM-3, NM-CLI, or NM-Cloud
+
+01:50.200 --> 01:56.280
+setup. And there are more and we are building more of them. So, as I said, the Network Manager
+
+01:56.280 --> 02:04.720
+demo is the backend that we are going to use for the new tool, NM-State. And NM-State is
+
+02:04.720 --> 02:09.640
+a little bit special because it's declarative. So, the idea here is that as an user, you
+
+02:09.640 --> 02:14.740
+just need to define what do you want to configure. And you don't need to care about the whole.
+
+02:14.740 --> 02:19.840
+So you need to, you can define the state, you can define what IP address do you want,
+
+02:19.840 --> 02:26.280
+you can define what properties, if it's a bond, the bond properties, if it's a bridge,
+
+02:26.280 --> 02:32.240
+whatever you want. And NM-State will take care of it and will resolve all the interdependencies
+
+02:32.240 --> 02:37.000
+between the interfaces. We configure the routes, we configure everything that is needed to
+
+02:37.000 --> 02:43.960
+make it work. And we have, we use Network Manager as a backend, we communicate with Network Manager
+
+02:43.960 --> 02:49.160
+for applying the configuration, but we perform some operations that we are going to talk
+
+02:49.160 --> 02:56.240
+later, and we needed NISPOR to communicate with Kana. So, we had a problem, we, initially
+
+02:56.240 --> 03:01.280
+we were using CFS, and it was not working well, and we decided to create NISPOR, which
+
+03:01.280 --> 03:06.400
+is another library written in Rust that allowed you to communicate with Kana and get real
+
+03:06.400 --> 03:12.200
+time network configuration from Kana. So, well, the first question could be, why Nellink
+
+03:12.200 --> 03:18.640
+and why not CFS? So, CFS is not an API. You need to understand that, because I know that
+
+03:18.640 --> 03:26.000
+a lot of people build their tools parsing CFS, writing on CFS, using CFS everywhere,
+
+03:26.000 --> 03:31.600
+and this could be problematic, because CFS is not an API, and if you read the documentation,
+
+03:31.600 --> 03:40.760
+it's not a stable, it can break between releases. But Nellink is an API. Nellink is stable, it's
+
+03:40.760 --> 03:47.120
+not deprecated, because CFS is deprecated, so most of the new CFS options, sorry, most
+
+03:47.120 --> 03:53.600
+of the new network options that they are adding into Kana, they are not providing a CFS interface.
+
+03:53.600 --> 03:58.640
+And also, Nellink use sockets, and that's great, because you don't need to open a file,
+
+03:58.640 --> 04:04.320
+read it, parse it, and then get the proper value. Using sockets, you can get the attribute,
+
+04:04.320 --> 04:09.240
+you know the type, you communicate through the Nellink sockets, you get the value, and
+
+04:09.240 --> 04:18.400
+you get proper errors, so everything is better. Okay, so then let's go to the important part.
+
+04:18.400 --> 04:22.520
+So NMS state handles everything. You don't need to do anything, you just need to define
+
+04:22.520 --> 04:27.600
+what do you want, and ideally, you will apply that state, and everything will be configured
+
+04:27.600 --> 04:32.320
+after some operations. Sometimes it's not like that, so we have a lot of steps in the
+
+04:32.320 --> 04:38.640
+middle. We do, for example, validation, we do normalization, unverification, we are
+
+04:38.640 --> 04:45.160
+going to explain them later. And also, it will point you what is going wrong, so you
+
+04:45.160 --> 04:48.840
+can fix it. So for example, if you are configuring a MAC address, and this MAC address is not
+
+04:48.840 --> 04:53.880
+being configured correctly, it will point you which MAC address is configured on Kana,
+
+04:53.880 --> 04:59.240
+and what is the one that you wanted to configure, and right, you need to solve that. Also, if
+
+04:59.240 --> 05:05.520
+you put in valid IP address, it will tell you this IP address is not valid, please change
+
+05:05.520 --> 05:11.480
+it. Okay, for example, if you configure one, great thing is that if you configure an MTU
+
+05:11.480 --> 05:19.160
+that is bigger than the one supported by the driver, it will let you know about that. Okay,
+
+05:19.160 --> 05:25.120
+so one thing is that if you misconfigure something, good, we can do a rollback. Let's talk a
+
+05:25.120 --> 05:28.920
+little bit about rollbacks. So this is already supported in Neville Manager, this is not
+
+05:28.920 --> 05:34.520
+new from NMS state, but it's a little bit complex to use, and in NMS state, we simplify
+
+05:34.520 --> 05:42.840
+it. So basically, all the time that you do an operation, and NMS state do the verification,
+
+05:42.840 --> 05:49.120
+and if something goes wrong, it's rollback to the previous state. But we can also, maybe
+
+05:49.120 --> 05:56.840
+nothing goes wrong, but you lost connectivity, because you remove the IP address, and we
+
+05:56.840 --> 06:02.360
+cannot know if that is what you wanted or not, I mean, we as NMS state. So we allow
+
+06:02.360 --> 06:08.160
+you to define an option which is no commit. So you can say this simple command, NMS state
+
+06:08.160 --> 06:13.640
+CTL apply, the jammer file, we're going to see the format of the jammer file later, then
+
+06:13.640 --> 06:19.240
+no commit, and a timeout time. If you don't specify a timeout, it's going to be 60 seconds
+
+06:19.240 --> 06:26.360
+by default. So what happened if it went well? It's what you wanted, you have connectivity,
+
+06:26.360 --> 06:32.440
+everything's good. Okay, then NMS state CTL commit, and the configuration will be there
+
+06:32.440 --> 06:37.720
+permanently. But what happened if you notice that you mess up? All right, NMS state CTL
+
+06:37.720 --> 06:42.360
+rollback, and you're going to be on the previous state. This is really great, because it's
+
+06:42.360 --> 06:48.040
+really tiring when you misconfigure something, and then you need to undo it manually. So
+
+06:48.040 --> 06:55.200
+this time, you just do a rollback, and everything will be like before. And what happened when
+
+06:55.200 --> 07:00.880
+you are working remotely on a server, and you lose connectivity, and you end free travel
+
+07:00.880 --> 07:08.240
+to the data center. Right now, with this tool, you can, with a timeout, if you lose connectivity,
+
+07:08.240 --> 07:12.480
+you are not going to be able to do the commit. So at some point, it will rollback, and you
+
+07:12.480 --> 07:21.040
+will have your connectivity back, hopefully. All right, and well, verification is optional,
+
+07:21.040 --> 07:29.480
+but personally, I like it a lot, because what it does is NMS state gets the desired state
+
+07:29.480 --> 07:35.760
+from the user, then apply it, and then get the current state that is applied to the system,
+
+07:35.760 --> 07:41.040
+and compare them. And if they are not equal, then it's going to fail, and it's going to
+
+07:41.040 --> 07:45.560
+rollback to the previous state automatically. This is great, because sometimes you don't
+
+07:45.560 --> 07:51.920
+know about some options, and there are some requirements to set up these options on interface.
+
+07:51.920 --> 07:58.800
+So what you can do is apply this if it goes wrong, because kernel is not applying the option
+
+07:58.800 --> 08:03.920
+correctly, because they are incompatible, for example. So it does a rollback automatically,
+
+08:03.920 --> 08:09.640
+and you don't end up with a wrong configure interface. But you can skip this using dash
+
+08:09.640 --> 08:17.520
+dash no verify. Okay, so let's see some examples of YAML files. These are a little bit simple,
+
+08:17.520 --> 08:23.840
+but I think they are great examples. Here, for example, we have a bone interface, and
+
+08:23.840 --> 08:30.520
+you can just define the state, IPv4, the link aggregation options, you can define the mode,
+
+08:30.520 --> 08:35.160
+the options of that mode, and then define the board. And one thing that is really, really
+
+08:35.160 --> 08:39.560
+useful is that we have partial editing. So imagine that you want to change only the MAC
+
+08:39.560 --> 08:43.160
+address, but you don't want to change the IP address. You don't need to define the IP
+
+08:43.160 --> 08:50.160
+address, because you just define the interface and the type. So this is just enough. Then
+
+08:50.160 --> 08:54.920
+the MAC address, I'm going to apply the state. An NMS state, we get the current status of
+
+08:54.920 --> 09:01.880
+the interface, and we'll merge. So you won't lose any property. Alright, so then we have,
+
+09:01.880 --> 09:08.040
+for example, another example in the middle is the Abelian interface or the ATH1 interface.
+
+09:08.040 --> 09:14.400
+And another great thing here, as I say, is that NMS states resolve interdependencies automatically.
+
+09:14.400 --> 09:20.560
+So basically, you don't need to know if, in which state needs to be the ATH1 when creating
+
+09:20.560 --> 09:26.000
+the biland, it needs to be up or down. It doesn't matter. We are going to handle it. So you
+
+09:26.000 --> 09:31.280
+don't need to worry about it. And then, for example, we have a Linux bridge with the board
+
+09:31.280 --> 09:36.160
+and some options on the board. And also, one great thing here is that you don't need to
+
+09:36.160 --> 09:40.880
+care about the state of the board. NMS state will resolve the dependencies and will bring
+
+09:40.880 --> 09:48.280
+the board up if needed, or we configure as needed. Some more examples, because as I say,
+
+09:48.280 --> 09:57.400
+NMS state is not only focused on interfaces. It's also focused on DNS, root configuration,
+
+09:57.400 --> 10:05.160
+and also some other interfaces like OBS and OBS DPDK. So, okay, for example, here we have
+
+10:05.160 --> 10:12.080
+our interface with the ATH1 configure with static IP address, and then we have the AdRoot.
+
+10:12.080 --> 10:17.440
+So you can define the root and it will be applied to Kana. The same for routing policy.
+
+10:17.440 --> 10:24.760
+It's also supported. You can define from IP2 and IP4. It will be for one mask. It will
+
+10:24.760 --> 10:32.120
+be applied. The same thing for DNS. It's over. And as you can see there, the last example,
+
+10:32.120 --> 10:37.480
+it's an OBS interface with an OBS bridge. So you can define it. And then the great thing
+
+10:37.480 --> 10:42.040
+is that you don't need always to define the OBS interface. You can define only the OBS
+
+10:42.040 --> 10:48.240
+bridge and add ports or delete ports from it. So it's quite great.
+
+10:48.240 --> 10:54.600
+All right. So having seen these examples, I would like to do a demo. Sorry if it doesn't
+
+10:54.600 --> 11:04.920
+work. I hope it will. I have an environment. So let's try it out. All right. So is it big
+
+11:04.920 --> 11:12.280
+enough? I can make it bigger. Yeah? Okay. Right. So, okay, I'm using the main branch
+
+11:12.280 --> 11:22.120
+version, which is 2.2.6. And here we have, this is really great. We have an examples
+
+11:22.120 --> 11:29.040
+base. So you can, if you are learning how to use NMS stay, this is quite good. You can
+
+11:29.040 --> 11:39.880
+go here and see different examples of how you should do it. So one that is really simple
+
+11:39.880 --> 11:48.800
+is for example, this one. Right. So this one, one similar to what I showed before. So this
+
+11:48.800 --> 11:57.120
+is an ATH one. And then you have the config, a root config for the ATH one. So let's check
+
+11:57.120 --> 12:03.560
+before the state that we have already. Okay. This is the IP address that we have. And here
+
+12:03.560 --> 12:11.360
+we have ATH one. ATH one is a, it's a base, but it's defined as an Ethernet. So according
+
+12:11.360 --> 12:22.400
+to us, it will behave as an Ethernet. So let's apply the state. It's set ATH min and add
+
+12:22.400 --> 12:31.800
+root. That's it. It's done. If we go to IPA and we go to ATH one, we can see the IP address
+
+12:31.800 --> 12:42.040
+configure here. All right. Then if we do IPR, we are going to see the root here. One for
+
+12:42.040 --> 12:47.560
+the IP address and the other one, the root that we set. And also, if you are wanting to
+
+12:47.560 --> 12:57.640
+check what happened in the one manner here, you can do this. Oops. Okay. Sorry. All right.
+
+12:57.640 --> 13:03.640
+You can, you can do this. You will notice that the device is up and we could check the connection
+
+13:03.640 --> 13:15.760
+that we generated. But let's go to, sorry. Let's check a more complex sample. But we
+
+13:15.760 --> 13:20.160
+need first to clean up the state. So I'm going to show you how we clean up the states. We
+
+13:20.160 --> 13:29.200
+have ATH one, the old roots. All right. So here, for example, we just need to define
+
+13:29.200 --> 13:34.640
+the ATH one and then define the roots with the net hop interface and a state absent.
+
+13:34.640 --> 13:39.240
+And this will clear all the roots that are defined for that interface, which is great
+
+13:39.240 --> 13:42.760
+because when removing something, you don't need to define everything. You just need to
+
+13:42.760 --> 13:47.720
+define the properties that you want to match and then a state absent and it will clear
+
+13:47.720 --> 14:10.320
+them. All right. So it's applied. Let's check it. Okay. And then we can, oh, exactly. Right.
+
+14:10.320 --> 14:16.720
+Because we didn't bring down the ATH one interface. That's fine. But we drop the root. So let's
+
+14:16.720 --> 14:26.120
+create a more complex one, one that I especially like. It's this one. This is going to be the
+
+14:26.120 --> 14:33.400
+last one. So here we are going to define this. We have two ethernet interfaces that are
+
+14:33.400 --> 14:37.960
+connected to a point interface, which has also another port, which is going to be the
+
+14:37.960 --> 14:45.480
+other bridge and a villain over another bridge. So, all right. This is the state. We define
+
+14:45.480 --> 14:51.240
+the villain interfaces with the ID, the linux bridge, which the port is the villain, and
+
+14:51.240 --> 14:58.240
+then another linux bridge up and the port is going to be the bond. And then for the bond,
+
+14:58.240 --> 15:03.640
+we have the two ethernet interfaces, ATH one and ATH two, and we have ATH one and ATH
+
+15:03.640 --> 15:16.880
+two defined. So let's apply it. All right. This will do a little bit more. That's fine.
+
+15:16.880 --> 15:26.760
+Right. So in network manager, everything seems set. Then we can do IPA, plenty of things.
+
+15:26.760 --> 15:36.560
+Let me, this is the villain. Then we have here the bond with the others configure. No, sorry.
+
+15:36.560 --> 15:46.200
+We have the bond here and the bridge 29. And we can also move them as we did with the other
+
+15:46.200 --> 15:52.760
+example. And let me show you how it looks. Right. So this is quite simple. You just need
+
+15:52.760 --> 15:59.280
+to define ATH one, ATH two as down because ATH one is an ethernet. Well, it's emulating
+
+15:59.280 --> 16:05.040
+ethernet, but it's a physical device. So you cannot remove it completely. And then you
+
+16:05.040 --> 16:12.840
+have the bond, which can be dropped, the bridge, the villain, and the other bridge. So that's
+
+16:12.840 --> 16:27.760
+it. If you apply it, it will be gone. Check. All right. So it should be done. As you can
+
+16:27.760 --> 16:35.560
+see, they are not any more, you cannot see any more the link, not the routes and not
+
+16:35.560 --> 16:42.560
+the connections because we didn't, we removed also the network manager connection files.
+
+16:42.560 --> 16:49.120
+So I think that's it. It was a little bit, a little demo about how it works. I really
+
+16:49.120 --> 16:53.720
+encourage you to try it out. It's really simple. If you are really using network manager, you
+
+16:53.720 --> 17:01.680
+basically do not need to do anything else because installing NMS state will be enough.
+
+17:01.680 --> 17:09.560
+NMS state is packaged basically on Fedora, CentOS, Unreal. And well, it's, if you use
+
+17:09.560 --> 17:18.560
+the Rust library, you can also use the create to use it whenever you want. All right. So
+
+17:18.560 --> 17:27.000
+double bill. And now some questions. Thank you.
+
+17:27.000 --> 17:39.160
+You basically use network manager to do all the settings and everything, but do you also
+
+17:39.160 --> 17:45.520
+use net link? Why is it, why is it necessary? Don't you get all the information from network
+
+17:45.520 --> 17:51.280
+manager? No, because Nebo manager is not getting real time information from kernel all the
+
+17:51.280 --> 17:56.600
+time. It's not updating it directly. If you look to the devices, the devices doesn't have
+
+17:56.600 --> 18:03.120
+all the properties. And in NISPO we care about all the properties that are defined on kernel.
+
+18:03.120 --> 18:08.080
+So this is the main reason. Are there settings that you need to do the net link as well?
+
+18:08.080 --> 18:12.120
+No, no. We don't do the settings through net link. We just get them to compare. We found
+
+18:12.120 --> 18:18.680
+out the problem that as, our manager is a service and is listening on events of net
+
+18:18.680 --> 18:26.040
+link, sometimes takes sometimes to update their device cache. And that's a problem because
+
+18:26.040 --> 18:28.920
+when you do an operation, you want the result immediately.
+
+18:28.920 --> 18:33.680
+Isn't that the bug in the network manager? Well, it isn't. And in the end you have a
+
+18:33.680 --> 18:40.880
+very good cache and it's hard to keep everything updated. So they perform a lot of operations.
+
+18:40.880 --> 18:47.080
+Obviously it could be improved. But right now this is the solution that we thought about.
+
+18:47.080 --> 18:53.560
+Also, NISPO can apply settings to kernel, but we don't use it on NMSD. This is like an extra
+
+18:53.560 --> 18:57.760
+feature that we work on it from time to time.
+
+18:57.760 --> 19:03.680
+Hello. I would like to ask if dummy interfaces are supported and if not, are they planned
+
+19:03.680 --> 19:04.680
+to be supported?
+
+19:04.680 --> 19:11.680
+Dummy interfaces, yes. Dummy interfaces are supported. And that is, you can check recommendation.
+
+19:11.680 --> 19:16.040
+I think everything is supported for dummy. Thank you.
+
+19:16.040 --> 19:28.360
+Any more questions? All right.
+
+19:28.360 --> 19:29.360
+I think we're good.
+
+19:29.360 --> 19:30.360
+Yep, we're good. Thank you very much.
+
+19:30.360 --> 19:31.360
+Thank you very much for attending. Thank you.
+
+19:31.360 --> 19:47.360
+Thank you very much. Thank you very much.

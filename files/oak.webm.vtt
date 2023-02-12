@@ -1,0 +1,853 @@
+WEBVTT
+
+00:00.000 --> 00:25.440
+So, my name is Neil Coffey. I'm a Java developer. Of course, I'm a Java developer with that
+
+00:25.440 --> 00:32.240
+surname. And so, this is a talk about a little side project that I started a couple of years ago.
+
+00:33.600 --> 00:39.760
+It was kind of, I was just keen to see in Java how far I would get with developing an emulator.
+
+00:40.320 --> 00:47.040
+This is the first emulator that I've developed from scratch. And it kind of started, you know,
+
+00:47.040 --> 00:51.760
+I had a bit of time, you know, we've had a lockdown and I kind of thought, well,
+
+00:51.760 --> 00:56.720
+what do I need to write an emulator? Well, one of the things I might try and do to start with is
+
+00:56.720 --> 01:04.160
+get a ROM reader to kind of start from scratch. And then I found, I don't know if you've heard,
+
+01:04.160 --> 01:10.080
+but my country left the EU a couple of years ago. And I actually found it hard to source the ROM reader
+
+01:10.080 --> 01:15.680
+from Germany. So, the first thing I did, if there's any work, is I built my own, obviously,
+
+01:15.680 --> 01:21.120
+that's the first thing. And then, so by the time I'd done this, I was kind of committed at that
+
+01:21.120 --> 01:27.920
+point. Okay. So, what I'm going to go through, then, is my experiences of writing an emulator and
+
+01:27.920 --> 01:33.520
+kind of, as I say, first time I've ever written decisions, challenges. It's going to be a little
+
+01:33.520 --> 01:38.560
+bit of a tour through some of the APIs that there are now in the Java platform, this kind of thing.
+
+01:39.600 --> 01:45.120
+And in all honesty, some kind of, there are some pros and cons that I'll talk about. Yeah.
+
+01:45.120 --> 01:50.400
+And above all, some kind of little, little tricks in the APIs that aren't always very well documented
+
+01:50.400 --> 01:57.360
+that can kind of help us. So, why Java? So, I'll be completely honest. The main reason for me was,
+
+01:57.360 --> 02:02.400
+it's the language I'm most familiar with. Yeah. So, I've been using Java now for about 20 years,
+
+02:02.400 --> 02:07.120
+about the first JRE that I used came on floppy disk. Okay. So, that's how long.
+
+02:08.240 --> 02:13.040
+These days, I'm just obviously cross-platform. And these days, it's got quite a rich set of APIs,
+
+02:13.040 --> 02:20.720
+hopefully, everything we need to develop an emulator. It's got good longevity. So, you tend
+
+02:20.720 --> 02:27.200
+not to have this thing in Java that you sometimes get in Swift, for example, where you kind of come
+
+02:27.200 --> 02:32.480
+in one morning, try and recompile your code and find it won't compile anymore because Apple's changed
+
+02:32.480 --> 02:38.400
+something. Java tends not to have that. It's maintained good backwards compatibility over the
+
+02:38.400 --> 02:43.360
+years. And so, hopefully, anything I write, moving forward, will also run. I don't have to have an
+
+02:43.360 --> 02:48.640
+emulator in a few years' time to emulate the emulator. Okay. There are, as well, from a personal
+
+02:48.640 --> 02:54.880
+view, there's some APIs coming up that I was kind of keen to have a benchmark to see, well, in a
+
+02:54.880 --> 03:00.480
+couple of years' time, you know, things like the, you know, the foreign function and memory API that's
+
+03:00.480 --> 03:06.400
+kind of just about to kind of hit stability. I was kind of interested to see, well, you know,
+
+03:06.400 --> 03:13.200
+what will I be able to do with that when it comes out? Okay. So, I set myself some goals
+
+03:14.240 --> 03:18.560
+that I wanted to be, my emulator, to be accurate enough to allow most software to run on.
+
+03:19.120 --> 03:24.640
+In all honesty, for kind of version one of my first emulator, there were some things that I
+
+03:24.640 --> 03:31.600
+decided not to emulate, to things like memory contention issues. There are some weird things
+
+03:31.600 --> 03:37.520
+that you can get that I'll maybe have time to talk about in the spectrum with kind of glitches in the
+
+03:37.520 --> 03:45.680
+video display. So, essentially, my kind of overall goal was anything that software uses that isn't
+
+03:45.680 --> 03:51.520
+a kind of bug in the hardware that people might accidentally get around or use, I'll try and
+
+03:51.520 --> 03:57.200
+emulate that. As Roddy mentioned, one thing I was trying to do is get a baseline from the basic
+
+03:57.200 --> 04:04.880
+Java APIs and try not to bring in additional libraries as a kind of starting point and want
+
+04:04.880 --> 04:09.920
+to be a cooperative applications like not necessarily just full screen, perform enough,
+
+04:09.920 --> 04:15.440
+yeah, as I say, I'm not trying to write a one gigahertz Z84 for my kind of first projects.
+
+04:15.440 --> 04:20.480
+Which machines do I try to emulate? So, I went for the trusty old ZX Spectrum. So,
+
+04:20.480 --> 04:27.760
+apologies to Steve, I'm adding to the pile of emulators now available from ZX Spectrum. And
+
+04:27.760 --> 04:33.120
+I also thought that the Sega Mars system, so why these two together? A, these are the machines I
+
+04:33.120 --> 04:40.800
+had as a kid, okay? But B, if we look at the technical specs, there are actually some similarities
+
+04:40.800 --> 04:48.000
+that are going to help us. So, you can see the video resolution is similar, although the video
+
+04:48.000 --> 04:54.960
+chips and formats that they use are very different. The CPU essentially is a data around 3.5. So,
+
+04:54.960 --> 04:59.520
+around 3.5, actually, there are different models of the spectrum with different speeds and the
+
+04:59.520 --> 05:06.080
+Mars system, very slight. I think it was 3.58 for the Mars system. And you can see then here,
+
+05:06.080 --> 05:10.320
+for the, probably everybody in this room is kind of fell if middle of these machines, but for those
+
+05:10.320 --> 05:16.320
+who aren't. So, you can see that the Sinclair Spectrum in comparison was all about saving money.
+
+05:16.320 --> 05:23.840
+So, you had one custom ULA here that was handling the video and the sound and was also memory controller
+
+05:24.720 --> 05:29.280
+compared to the Mars system that had a bit more on-board hardware that we're going to have to
+
+05:30.080 --> 05:37.280
+try and emulate. So, just a little bit more detail of some of the difficulties, again, for people
+
+05:38.480 --> 05:45.760
+and may be familiar. So, the ZX Spectrum, it renders its video all from RAM, essentially with
+
+05:45.760 --> 05:54.640
+kind of no acceleration as such. And it's got this format that really kind of gives the ZX Spectrum
+
+05:54.640 --> 06:02.800
+its look and feel. Yes, you had essentially a one bit per pixel bitmap and then over the top of
+
+06:02.800 --> 06:09.360
+that, you're allowed two colors, essentially, per rate by itself. Yeah, and this kind of gave the
+
+06:09.360 --> 06:17.680
+Spectrum a bit of a unique look and feel as bright and flash as well per cell. Compare that to the
+
+06:17.680 --> 06:27.440
+Mars system where you've got an actual dedicated graphics chip, but this was all tile based. Yeah,
+
+06:27.440 --> 06:37.120
+so you have a 34 by 24 tile display. Each tile can be 8 by 8 pixels. Yeah, so the eagle eyed
+
+06:37.120 --> 06:45.520
+amongst you will notice that you can't actually define enough unique tiles to give each pixel in
+
+06:45.520 --> 06:53.120
+that display. It's kind of a unique pixel. So anything that looks like it does, you'll see you
+
+06:53.120 --> 07:00.800
+get these kind of almost like little manga cards for some games. Or here where we've tried to fill
+
+07:00.800 --> 07:07.600
+the screen, obviously secretly around the edges, we've actually got blank space. So there wasn't
+
+07:07.600 --> 07:16.720
+actually enough memory to have unique tiles for every space on the screen. But despite that,
+
+07:17.520 --> 07:26.800
+it did have features that were actively kind of advocated by Sega to its developers to make the
+
+07:26.800 --> 07:35.200
+most possible use of that of the video chip. So the way it worked, you have a series of registers
+
+07:35.200 --> 07:42.400
+to control things like the scrolling, the colors. And there was a mechanism via interrupt to actually
+
+07:42.400 --> 07:47.680
+on each scan line or on every nth scan line, depending on how you programmed it, you could
+
+07:47.680 --> 07:53.040
+actually change those registers. Yes, you could change the scroll position at different parts of
+
+07:53.040 --> 07:58.960
+the screen. You could switch off the screen. You could potentially change the color palette.
+
+07:58.960 --> 08:01.920
+And so that's something when we're doing our video rendering, we're going to have to have a
+
+08:01.920 --> 08:07.760
+little think about how we can kind of optimize that a little bit. I'll just give a very quick
+
+08:07.760 --> 08:12.720
+example. So we're going to see here, we've got some parallax scrolling, where you see how on
+
+08:12.720 --> 08:19.440
+different scan lines, we're setting a different X position. And then that's quite a nice fact,
+
+08:19.440 --> 08:24.800
+that's a game called Choplifter. On the next example, we're actually going to have a case where
+
+08:24.800 --> 08:33.440
+here we're actually, it's not literally turning off the screen, but it's changing the base address
+
+08:33.440 --> 08:39.440
+of the screen memory to effectively turn it off at that bottom part. And this is kind of probably
+
+08:39.440 --> 08:44.560
+the most one, an extreme example here, where literally on kind of every other scan line,
+
+08:44.560 --> 08:51.600
+we're changing the scroll position to kind of give that effect there. So very briefly,
+
+08:52.240 --> 08:55.760
+I'll just give a little bit of the kind of the overall organization of the emulators,
+
+08:55.760 --> 09:00.240
+kind of the first thing you really need to think about. So it's how we kind of turn this,
+
+09:00.240 --> 09:03.920
+this is very high level obviously, but this essentially what the hardware looks like, we've
+
+09:03.920 --> 09:09.360
+got an address bus at the top with the ROM and the RAM connector, we've got a data bus at the
+
+09:09.360 --> 09:14.960
+bottom with any peripherals, which on the spectrum were fairly minimal, there was a one to eight version
+
+09:14.960 --> 09:20.400
+with the sound chip. And then on the master system, you can see again, similar idea,
+
+09:21.200 --> 09:26.400
+but notice that the ROM essentially is the cartridge that you plug in. Yes, when you plug a
+
+09:26.400 --> 09:32.880
+cartridge in, you're kind of directly communicating with the Z80 and any logic for things like memory
+
+09:32.880 --> 09:38.400
+paging, you can have that on the cartridge. And then a few more peripherals going on the data bus,
+
+09:38.400 --> 09:43.520
+we've got the video processor there, the programmable sound generator, there's not an FM unit,
+
+09:43.520 --> 09:50.080
+which I'll touch on briefly, and the controllers. So then what I try to do, and so there was the
+
+09:50.080 --> 09:56.240
+emulator clock there as well. And what I try to do is to abstract that down, so that I'm going to
+
+09:56.240 --> 10:01.280
+organize the program this way, we've obviously got the Z80 implementation is obviously a kind of
+
+10:01.280 --> 10:06.800
+fairly fundamental part. But then we've, what I've actually done is in my implementation,
+
+10:06.800 --> 10:18.720
+I've separated out the Z80 decoder from the actual instruction loop. This is quite nice and we want
+
+10:18.720 --> 10:25.440
+to add a debugger as well, then you can go through the same code to decode the instructions
+
+10:25.440 --> 10:32.240
+for the debugger. And then we've got an abstract IO bus, from which again then on the master system,
+
+10:32.240 --> 10:40.080
+we'll have our master system IO bus on the spectrum IO, etc. A memory of similar ideas,
+
+10:40.080 --> 10:47.600
+we have subclasses of these overall base classes. And the clock, which is actually working the other
+
+10:47.600 --> 10:51.760
+way round to the way that the hardware, the clock is effectively going to be a kind of break
+
+10:51.760 --> 10:57.120
+on the CPU thread and is going to tell it when to pause to keep things at the right
+
+10:57.120 --> 11:04.720
+rate of instructions. And there'll be a little bit of feedback as well between the video thread
+
+11:05.680 --> 11:11.520
+so that it can interact with the CPU to do the things I've just mentioned about accurately timing
+
+11:11.520 --> 11:19.120
+the scroll registers and things. So just an example, I end up with interfaces like this
+
+11:20.160 --> 11:26.000
+and then to the Z80, it's effectively, it doesn't care whether it's a master system
+
+11:26.000 --> 11:31.680
+or a spectrum it's communicating with, it just goes through these abstract interfaces like this.
+
+11:32.640 --> 11:39.840
+A little bit of detail just on, I've just mentioned about the the CPU. The implementation that I went
+
+11:39.840 --> 11:45.520
+for, which isn't necessarily the most kind of popular of the traditional emulators, I tried to
+
+11:45.520 --> 11:52.560
+really break down the instruction set into more of an object-oriented form. So I've got instruction
+
+11:52.560 --> 11:59.200
+types you'll see there and then for each type the individual instruction is kind of returned as
+
+11:59.200 --> 12:03.680
+an object that says well it's this type and it's from this source, this destination. So I've tried
+
+12:03.680 --> 12:12.080
+to kind of not have to write 900 different routines for all the various combinations that the Z80 had
+
+12:13.520 --> 12:17.280
+and that gives quite nice code. There's a little bit of a performance trade-off obviously
+
+12:17.280 --> 12:24.880
+but it turns out not to be not to be too bad. Okay and then the other decision I made was well
+
+12:24.880 --> 12:34.240
+we're now writing in Java in 2023 now so I decided well I want to make the most of multi-threading.
+
+12:34.240 --> 12:40.160
+So the various of the components I've just mentioned will actually sit in their own thread.
+
+12:40.160 --> 12:47.440
+Okay and that's kind of nice organizationally and also in terms of monitoring the performance of the
+
+12:47.440 --> 12:52.720
+app it means we can break down a little bit more easily what resources are being used for each
+
+12:52.720 --> 12:59.840
+component. So just to give a little bit of an overview of this, so we'll have at the top kind
+
+12:59.840 --> 13:08.480
+of got our, well this work yeah, is that good? So we've got our the CPU thread at the top there
+
+13:08.480 --> 13:13.600
+and which is going to be interacting with the clock and is periodically going to say
+
+13:14.400 --> 13:21.360
+you know I've done this many instruction cycles. How am I doing? Do I need to pause to kind of
+
+13:21.360 --> 13:30.720
+maintain the correct instruction rate? Then we've got the video controller which is going to be
+
+13:30.720 --> 13:38.560
+sending periodically sending V blank instructions every frame to the CPU to notify it.
+
+13:39.520 --> 13:47.200
+We've got then also a separate rendering thread which is going to do any of the kind of heavy
+
+13:47.200 --> 13:54.800
+lifting rendering that we need to do. So anything like scaling, calculating what the actual pixels
+
+13:54.800 --> 14:00.720
+are and then the idea is that here in the event dispatch thread which is a single threaded at
+
+14:00.720 --> 14:06.160
+that point we have to kind of have our ducks in a row and know what we're actually going to render.
+
+14:08.000 --> 14:13.040
+Then additional complication is it was going to be an audio service in its own thread as well.
+
+14:15.920 --> 14:22.960
+So different APIs that we're going to use. There's a standard Java Swing API so there's no
+
+14:22.960 --> 14:29.840
+additional open GL plug-ins here. A couple of the Java sounds I mentioned monitoring
+
+14:30.640 --> 14:36.640
+Neo kind of a little hidden one but when we're writing data, when we're emulating kind of
+
+14:36.640 --> 14:41.760
+cartridge saves and we want to write data actually open a mapped file for that to save the data
+
+14:42.480 --> 14:46.080
+and their threading is often important. I'm not going to really mention too much but there are
+
+14:46.080 --> 14:53.280
+also desktop and taskbar and integration APIs that help with integrating into the desktop with
+
+14:53.280 --> 14:59.920
+the system menus and things. So we'll start with the graphics. The standard Swing and Java 2D APIs
+
+14:59.920 --> 15:06.160
+people may be familiar with, the idea is that you override the the jcomponent class and you
+
+15:06.160 --> 15:14.880
+implement a paint component method and here in principle we can set various options to
+
+15:14.880 --> 15:22.720
+hint with whether we want quality speed etc and then finally we can render an image and it will
+
+15:22.720 --> 15:29.120
+be rendered with the with these different settings. But some caveats with that. Unfortunately it turns
+
+15:29.120 --> 15:37.520
+out that some of those options effectively end up turning off GPU acceleration and they can be quite
+
+15:37.520 --> 15:46.800
+CPU hungry and efficient. It's not clearly documented which ones actually run on the CPU and the GPU
+
+15:48.240 --> 15:56.400
+but effectively ends up that the fast options without any quality interpolation are the ones that
+
+15:56.400 --> 16:03.200
+run that just go straight to the GPU. So we're going to have to be a little bit careful
+
+16:03.200 --> 16:11.040
+not to use too much CPU time for each frame render. And then there's also an additional problem
+
+16:11.040 --> 16:15.200
+that the standard API to set and get pixels from buffered images
+
+16:17.600 --> 16:22.320
+actually it's quite inefficient for setting individual pixels but we have a workaround. So
+
+16:22.320 --> 16:28.480
+this will be the standard API that we'd use. We create our image like this, lovely, we set
+
+16:28.480 --> 16:34.880
+different types about 15 different types that we could use and then we can set RGB and whether that
+
+16:34.880 --> 16:41.200
+backing star is an input pixel or bytes per pixel or whatever it will work out how to set the RGB
+
+16:41.200 --> 16:48.000
+lovely. But in practice we're probably never going to have anything other than an input pixel.
+
+16:48.960 --> 16:54.400
+So this is the least efficient way we could possibly imagine to set the pixel data.
+
+16:54.400 --> 17:03.920
+Luckily we can actually with a little bit of jigglypokery we can ask Java 2D for the underlying
+
+17:03.920 --> 17:09.680
+interay and then we can just directly write to that. The advantage being then things like array
+
+17:09.680 --> 17:15.680
+fill, array copy, array dot fill sorry they then become available. There's a caveat that normally
+
+17:16.720 --> 17:21.040
+wouldn't do this because if you've got static images that you're rendering lots of times
+
+17:21.040 --> 17:27.840
+the what would normally happen is that Java 2D sends that to the GPU once then subsequent
+
+17:27.840 --> 17:33.280
+renders are effectively free but we don't really need that for our purposes. We're going to be
+
+17:33.280 --> 17:38.080
+rendering a different image on each frame effectively so that's not such a problem for us.
+
+17:39.840 --> 17:44.960
+So then just to come back to us I'm showing you earlier with the different scroll per
+
+17:44.960 --> 17:52.640
+frame on different raster lines. We kind of want to get the best of both worlds with how we then
+
+17:52.640 --> 18:01.360
+end up structuring things. So what I do is I basically I kind of break down the image
+
+18:01.360 --> 18:08.960
+and say well for this frame where are the points where the things like the scroll registers
+
+18:08.960 --> 18:15.120
+actually change. On some games that will they will just have one setting per frame and I can then
+
+18:15.120 --> 18:21.520
+just efficiently render the the the entire frame without without having to you know worry about
+
+18:22.160 --> 18:28.640
+clips per section etc. So I don't kind of literally go through pixel by pixel kind of
+
+18:28.640 --> 18:35.600
+chasing the beam. Just yes there's just a kind of brief example here so I'll split into sections
+
+18:35.600 --> 18:41.920
+and then I can say for that section get me the relevant settings and then go through and fetch
+
+18:41.920 --> 18:47.360
+from the from the the tile map data and render it kind of almost as you expect.
+
+18:50.080 --> 18:56.400
+So by doing that and by using this trick of getting the raw kind of interay
+
+18:57.600 --> 19:02.880
+this does allow us to get quite a good speed up on on the rendering. So if there's kind of one
+
+19:02.880 --> 19:09.360
+one thing you're doing in Java the kind of the one kind of speed up to think about is probably this.
+
+19:10.960 --> 19:16.640
+Mention so having having none about that trick there's some little little tricks that we can do
+
+19:16.640 --> 19:23.440
+obviously people familiar with with with CRTs where they were actually the way these systems
+
+19:23.440 --> 19:29.600
+work they kind of render every other scan line and we can if you've got a really good quality
+
+19:29.600 --> 19:33.280
+monitor a little like that most people's minds a little bit more that you kind of had bleed in
+
+19:33.280 --> 19:39.040
+between the scan lines and you also kind of get ghosting effects this kind of thing. So we can
+
+19:39.040 --> 19:46.400
+try and give a little bit of the that look and feel yeah so I'm literally going to do here in
+
+19:46.400 --> 19:52.640
+the Java is I'm going to render things that every other kind of scan line I'm going to render the
+
+19:52.640 --> 19:57.360
+kind of darkened version of that scan line so I can kind of produce something like this
+
+19:57.360 --> 20:03.200
+and then just have to be a little bit careful with the scaling because you can get more effects if
+
+20:03.200 --> 20:08.960
+if you've you've got a kind of odd scale factor so do a little bit of extra interpolation to try
+
+20:08.960 --> 20:16.080
+and get around that. Then another effect that we can do in Java is to like these kind of ghosting
+
+20:16.080 --> 20:23.760
+effects if we can define our effect in terms of a convolution matrix which you may have seen
+
+20:23.760 --> 20:30.080
+then we get native library built in that will allow us to render that efficiently and that will
+
+20:30.080 --> 20:36.640
+also access the integer data under the hood it won't go through that set RGB every time.
+
+20:38.080 --> 20:44.160
+So we can get effects like this again we're kind of at low rendering time
+
+20:46.640 --> 20:49.440
+and then this is for my favorite spectrum games from a child
+
+20:49.440 --> 20:57.440
+to do something like this combining the kind of CRT effect. Another issue we just have is there
+
+20:57.440 --> 21:03.520
+are multiple ways to scale images in Java and depending on which one we pick we kind of get
+
+21:03.520 --> 21:10.240
+different different performance characteristics so the thing I'm actually looking at which is kind
+
+21:10.240 --> 21:18.080
+of most stable is to actually just hard code just hard code the scaling myself because then I can go
+
+21:18.080 --> 21:24.640
+through this you know access the interay directly some of these other built-in APIs unfortunately
+
+21:24.640 --> 21:31.600
+you know they go through that get RGB set RGB to be you know support different formats but we don't
+
+21:31.600 --> 21:41.760
+really we don't really need that. Okay let's talk about sound so the the mass system and the spectrum
+
+21:41.760 --> 21:46.720
+had quite different ways of producing sound the spectrum obviously was this kind of very simple
+
+21:46.720 --> 21:53.120
+speaker it could effectively be a one or a zero and you kind of control a square wave literally from
+
+21:53.120 --> 21:59.200
+the CPU to produce your sound but then something like the master system that had an actual sound
+
+21:59.200 --> 22:04.800
+chip you would control the sound by setting register to say I want tone one to be this frequency
+
+22:04.800 --> 22:12.720
+etc so we want to abstract those two ways of producing sound so that we can we can just have
+
+22:12.720 --> 22:21.280
+one generate sample data method and then our audio service is going to call into that and so
+
+22:21.280 --> 22:27.120
+it's just a brief slip here of what I do so I've got it that'll be the subclass for example for the
+
+22:27.120 --> 22:33.600
+spectrum type sound there and then here a bit more complicated but we effectively you know do a
+
+22:33.600 --> 22:39.360
+similar thing we're going to be whenever we're asked for some sample data we're going to calculate
+
+22:39.360 --> 22:45.200
+that sample data and split it back yeah and then and then the question becomes well given that sample
+
+22:45.200 --> 22:53.600
+data production how do we actually pipe it down to the audio output and Java has this slightly
+
+22:53.600 --> 23:02.720
+quirky model where you have a notional mixer that's got inputs and outputs and the slightly perverse
+
+23:02.720 --> 23:09.280
+thing is that everything is seen in terms of this notional mixer so when you want to output sound
+
+23:09.280 --> 23:19.600
+you're actually sending it to an input of the mixer yeah so we call it a source line yeah
+
+23:19.600 --> 23:26.880
+whereas to us it's not really a source it's a target but that's the reason for that so if I
+
+23:27.520 --> 23:32.640
+you see here they're also tied to particular drivers and I can enumerate the different
+
+23:32.640 --> 23:38.720
+drivers on my machine I find that I found out for example that my Mac can listen through my iPhone
+
+23:38.720 --> 23:44.960
+microphone that was the first time I found that out so yeah so we we're clearly available mixers
+
+23:44.960 --> 23:52.480
+and then we query them for their available source lines okay and then we can we can write the data
+
+23:52.480 --> 23:59.040
+and to the source line we open it with a format that we want we write the data and so this is
+
+23:59.040 --> 24:06.080
+now where I can call my generate sample data method when there's some frames to send I send them
+
+24:06.080 --> 24:12.320
+okay people might have spotted a slight flaw with that I've got a nice infinite loop there
+
+24:12.320 --> 24:17.520
+on something like the spectrum I need to be able to tell the difference between there's no audio
+
+24:18.240 --> 24:22.880
+and there's no audio yet but but there's some on the way and I don't want to sit in an infinite
+
+24:22.880 --> 24:30.240
+loop in the meantime okay so this is where so yeah this was just code examples how I get
+
+24:30.240 --> 24:37.360
+we output those ones and zeros and then we translate them but so I'll just skip quickly
+
+24:38.080 --> 24:42.640
+we so we get those ones and zeros and then what we're actually going to do is we're going to use
+
+24:42.640 --> 24:50.000
+a condition object which is part of the Java concurrency API so that we can basically in our
+
+24:50.000 --> 24:57.440
+audio in our audio service thread we can wait for a notification that there's actually some audio
+
+24:57.440 --> 25:07.280
+that that we want to send okay there we go okay yeah there's also a little bit that we can do with
+
+25:08.480 --> 25:15.200
+yeah hybrid buffering is basically where we we want we want to ideally have a small buffer to
+
+25:15.200 --> 25:23.600
+fill to send but that then ensures the problem of we might we run the risk that if we can't
+
+25:23.600 --> 25:28.800
+fill our buffer in time we end up with choppy audio and so in practice what we can actually do is
+
+25:28.800 --> 25:33.760
+have a larger buffer and detect when it's half full and kind of keep topping it up and so that's
+
+25:33.760 --> 25:38.960
+basically how I do it okay and the FM synth which I'll mention briefly I never had one of these
+
+25:38.960 --> 25:42.880
+I think they're quite rake and I'll get them in Japan but the master system this was an option
+
+25:42.880 --> 25:51.920
+for the master system okay and I'm what I actually do for this I cheat slightly I use javas built in
+
+25:51.920 --> 25:59.920
+midi software synthesizer so I translate the instructions to that FM synth into midi commands
+
+25:59.920 --> 26:05.120
+and I send these to the soft synth and I don't know if this is going to play on the projector
+
+26:05.120 --> 26:09.760
+but I'll turn up the audio here and just see so you'll hear difference you'll hear the the normal
+
+26:09.760 --> 26:24.480
+PSG sound chip and then you will hear the FM kind of synth oh I don't hear that it's probably too
+
+26:24.480 --> 26:37.120
+quiet and you see there we can then start playing about with things like the the voices that we
+
+26:37.120 --> 26:45.040
+we assign to those okay so I'll just touch on very briefly because time is getting to the end
+
+26:45.040 --> 26:51.280
+and so I'll just touch very briefly on the timing and concurrency so the CP obviously we need to
+
+26:51.840 --> 26:59.920
+maintain it at a kind of our desired instruction rate so the way I do this is I introduce pauses
+
+26:59.920 --> 27:07.040
+and but then we want to be able to accurately measure those pauses and we also need to accurately
+
+27:07.040 --> 27:12.400
+measure the timings between the frames that were that we're sending and there are there's
+
+27:12.400 --> 27:20.000
+obviously standard APIs in in Java to do this a little issue that I did come across the standard
+
+27:20.000 --> 27:24.080
+executor framework that we'd normally use for doing this so here we say right okay I want to
+
+27:24.080 --> 27:30.720
+frame every every 60th of the second depending on your platform you can actually in practice get
+
+27:30.720 --> 27:40.000
+quite erratic intervals between between between the the events so you can see in particular on
+
+27:40.000 --> 27:46.560
+macOS I find you could get this kind of 20 error so this is just just one experiment for example
+
+27:46.560 --> 27:55.600
+if we and what I luckily found was that if we request low low sleep interval with the accuracy
+
+27:55.600 --> 28:03.200
+is actually better for low sleep intervals than the higher sleep intervals and it seems to it
+
+28:03.200 --> 28:08.880
+seems to max out a particular amount I'm not exactly sure of the underlying reason for that
+
+28:08.880 --> 28:12.880
+it was to meet in Darwin but then what this leads to is we can kind of come with depending on the
+
+28:12.880 --> 28:19.440
+platform we can come up with a different strategy for maintaining accurate timing and a challenge
+
+28:20.000 --> 28:25.120
+you know it's a perpetual challenge with Java really is then that the the the best strategy
+
+28:25.120 --> 28:32.800
+will will depend on the depend on the platform very briefly data manipulation which sometimes
+
+28:32.800 --> 28:39.920
+something a bit scared of in Java we all of the types are right well they're generally signed
+
+28:39.920 --> 28:45.360
+char is unsigned but they're generally fixed width and signed we can't do what we can in
+
+28:45.360 --> 28:50.000
+seeing other languages and defining our own types and so one way to work around this one
+
+28:50.000 --> 28:54.960
+want to do things like register access and the audio data is the byte buffer is generally
+
+28:55.600 --> 29:02.320
+the kind of the easiest way to do that and you'll notice that when we want when we want bytes
+
+29:02.320 --> 29:07.120
+because byte the byte type is signed so if on an unsigned byte then we would normally
+
+29:07.120 --> 29:14.400
+and promote it to an int and then we can basically undo the ff and lock lock off the lock lock off
+
+29:14.400 --> 29:21.520
+the the lowest bytes and then so there's just a I'll just skip further and there's just a question
+
+29:21.520 --> 29:27.360
+with that about well how do we check that the jit compiler is doing what we need to do and so I'll
+
+29:27.360 --> 29:33.920
+just let step forward slightly and what we can actually do we can ask it yeah so we can we can
+
+29:33.920 --> 29:38.640
+ask it to dump out the the the jit compiled assembler and then we can check if some of those
+
+29:38.640 --> 29:46.080
+optimizations are actually going in so this was very simple test I set up it's basically
+
+29:46.080 --> 29:52.240
+it's iterating through repeatedly effectively writing a word and then reading it from from a
+
+29:52.240 --> 29:56.720
+byte buffer yeah this obviously is slightly contrived this is you know really the kind of the
+
+29:56.720 --> 30:01.040
+contrived corner case example but it kind of illustrates the the kind of thing that's possible
+
+30:01.040 --> 30:06.800
+yeah so I'm effectively that bts effectively writing a two byte unsigned value into there
+
+30:06.800 --> 30:12.240
+via a byte buffer so it looks like I'm creating a byte buffer setting values on it calling a method
+
+30:12.240 --> 30:19.760
+on it but by the time we get down to the actual jit compiled assembly code in the best case we're
+
+30:19.760 --> 30:25.760
+actually not that just compiles down into a we are storing a half word in there and so that's the
+
+30:25.760 --> 30:31.280
+kind of thing that we can that we can do to kind of check for those things okay and I think we're
+
+30:31.920 --> 30:37.040
+skipped to the there we go yeah so mentions yeah the method those method calls are completely
+
+30:37.040 --> 30:43.200
+optimized out okay so so there you go so in conclusion using those various APIs together
+
+30:43.200 --> 30:49.760
+we can write them in Java a few pros and cons caveats around the different platform behavior
+
+30:49.760 --> 30:54.880
+a few things that still to add in here this is this is very much kind of version one
+
+30:56.560 --> 31:03.440
+however it was at the point where it will actually run quite a lot of the spectrum
+
+31:03.440 --> 31:09.360
+master system software if anyone's curious I've got initially released there on github
+
+31:09.360 --> 31:13.680
+there's going to be source code and further improvements on the way so watch that repo as
+
+31:13.680 --> 31:19.120
+they say a few references there that people may or may not have come across this book here by
+
+31:19.120 --> 31:25.600
+Chris Smith is I think kind of a remarkable piece of work about the kind of the very kind of low
+
+31:25.600 --> 31:31.280
+level details of how the spectrum works and the usual you know kind of reference guides that over
+
+31:31.280 --> 31:49.760
+the years have surfaced on the web and so with that I think I'll hand back

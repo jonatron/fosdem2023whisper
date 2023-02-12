@@ -1,0 +1,1000 @@
+WEBVTT
+
+00:00.000 --> 00:12.800
+I'll just yell. But yeah, so this is effectively my talk. It started out as a really big thing
+
+00:12.800 --> 00:18.040
+and then I realised 40 minutes wasn't actually that much time and so we sort of had to compress
+
+00:18.040 --> 00:24.080
+it down into a bit of a slightly smaller talk but hopefully covering the most interesting
+
+00:24.080 --> 00:30.120
+points in my opinion. So a bit about me. I'm Harrison. I come from London. I live in London
+
+00:30.120 --> 00:35.720
+and I work for QuickWit where as Paul has said we build basically a distributed search
+
+00:35.720 --> 00:45.200
+engine for logs. I am the creator of LNX which is a slightly different design of search engine
+
+00:45.200 --> 00:51.480
+probably more akin to something like Elasticsearch or Algolia for all your lovely e-commerce
+
+00:51.480 --> 01:00.160
+websites. And you can contact me at Harrison at QuickWit.io. A little bit about LNX since
+
+01:00.160 --> 01:05.400
+this is basically the origin story of this talk really. It's a search engine built on
+
+01:05.400 --> 01:10.400
+top of Tantrave. It's akin to Elasticsearch or Algolia as I've said. It's aimed at user
+
+01:10.400 --> 01:16.120
+facing search. That's things like your e-commerce websites, your Netflix streaming platforms,
+
+01:16.120 --> 01:22.280
+things like that. It's not aimed to be your cost effective log search engine. It doesn't
+
+01:22.280 --> 01:27.040
+really handle those hundreds of terabytes a day type workloads but it will handle thousands
+
+01:27.040 --> 01:32.080
+of queries a second per core. It's very easily configurable. It's designed to be really
+
+01:32.080 --> 01:37.200
+fast out of the box because it uses Tantrave and it has an indexing throughput of about
+
+01:37.200 --> 01:43.480
+30 to 60 megabytes a second on reasonable hardware. With high availability coming soon
+
+01:43.480 --> 01:50.720
+which is the presence of this talk. So what is user facing search? I've stolen Crunchy
+
+01:50.720 --> 01:55.800
+Well's website and I've typed some bad spelling in there and you see that a lot of the top
+
+01:55.800 --> 02:00.460
+results actually account for the fact that I can't spell. That's basically the biggest
+
+02:00.460 --> 02:06.880
+principle with these user facing search engines is you have this concept of typo tolerance.
+
+02:06.880 --> 02:13.440
+This is a really good thing for users because users can't spell. The downside of this is
+
+02:13.440 --> 02:18.680
+that it has a lot of CPU time when we're checking those additional words and it makes things
+
+02:18.680 --> 02:24.640
+a lot more complicated and often documents are mutable and a lot of other things but
+
+02:24.640 --> 02:31.320
+also when you have these nice search experiences and you want no latency something called search
+
+02:31.320 --> 02:36.800
+as you type has become more popular now and that means your amount of search as you're
+
+02:36.800 --> 02:41.920
+doing for a single user is increasing several times over because now every key stroke you
+
+02:41.920 --> 02:48.000
+press is a search versus typing it all in one go hitting enter user gets a bunch of
+
+02:48.000 --> 02:53.320
+results back goes oh no I've spelt something wrong or I can't see what I want on here
+
+02:53.320 --> 02:58.680
+so I'm going to type it again. And so that is effectively the principle of these search
+
+02:58.680 --> 03:03.600
+engines. You see we have Algolia at the bottom which is a very common one which I think most
+
+03:03.600 --> 03:10.240
+people know very popular for document searching. But you know we decided hey we don't want
+
+03:10.240 --> 03:13.920
+to use one of these pre-built systems we don't want to use Elasticsearch that's big that's
+
+03:13.920 --> 03:18.960
+scary I don't like it. We don't want to use Algolia because I don't have that much money
+
+03:18.960 --> 03:24.440
+I'm just a lonely paid software developer I can't be spending thousands of pounds on
+
+03:24.440 --> 03:27.680
+that. And we look at some of the others but we're going there we're just going to write
+
+03:27.680 --> 03:32.240
+it ourselves and that's where we have a little look because we hear something about Tantavi
+
+03:32.240 --> 03:38.360
+we hear something about Rust that being blazingly fast as all things must be and so we go okay
+
+03:38.360 --> 03:43.320
+I like this I like what it says it says yeah Apache Lucene I think I've heard that before
+
+03:43.320 --> 03:48.320
+somewhere written in Rust I think I've definitely heard that before. And so we take a little
+
+03:48.320 --> 03:53.600
+look at what it is and it is effectively akin to Lucene which if you don't know what that
+
+03:53.600 --> 03:59.000
+is it's a full text search engine as it's called. Tantavi in particular supports things
+
+03:59.000 --> 04:04.120
+like BM25 scoring which is just a fancy way of saying what words are relevant to this
+
+04:04.120 --> 04:08.720
+query it supports something called incremental indexing which basically just means you don't
+
+04:08.720 --> 04:14.080
+have to re-index all of your documents every time you change one thing. You have fasted
+
+04:14.080 --> 04:19.080
+search you have range queries and we have things like JSON fields which allow for a
+
+04:19.080 --> 04:26.320
+schemeless indexing as such. You can do aggregations which have some limitations in particular around
+
+04:26.320 --> 04:32.080
+JSON fields being a little bit limited but in the biggest thing is it has a cheesy logo
+
+04:32.080 --> 04:38.040
+with a horse which I believe Paul drew himself so I think that needs a clap on its own. But
+
+04:38.040 --> 04:46.760
+there are other features which I just haven't yes. But there are more features which I couldn't
+
+04:46.760 --> 04:52.560
+fit on this slide and timers of the essence. So you might be wondering what the basic
+
+04:52.560 --> 04:56.440
+implementation of Tantavi looks like and because it's a library it's actually really quite
+
+04:56.440 --> 05:01.400
+simple to do. So we have a couple of core things starting at the top is we define what's
+
+05:01.400 --> 05:08.880
+called a schema. Since Tantavi was originally a schema based system still is we need some
+
+05:08.880 --> 05:14.760
+way of telling Tantavi what the structure of our documents are and defining what properties
+
+05:14.760 --> 05:18.760
+they have. We can use something like a JSON field to give the impression of a schemeless
+
+05:18.760 --> 05:25.600
+index but you know schemas are good we should use them. They come with lots of nice bells
+
+05:25.600 --> 05:32.440
+and whistles so in this case we've created a schema with the title field and you can
+
+05:32.440 --> 05:38.200
+see there we've added the text and stored flag which all that really says is I'm going
+
+05:38.200 --> 05:43.280
+to tokenize this field and then I'm going to store it so we can retrieve it later on
+
+05:43.280 --> 05:49.280
+once we've done the search. The second thing we do once we've done that is we create our
+
+05:49.280 --> 05:55.360
+index writer and in this case we're just letting Tantavi select the number of threads so by
+
+05:55.360 --> 06:00.560
+default sorry when you create this index writer and we give it a memory buffer in this case
+
+06:00.560 --> 06:08.480
+about 50 megabytes. Tantavi will allocate n number of threads I think up to eight threads
+
+06:08.480 --> 06:12.720
+depending on what your system is using so you don't really have to put much thought
+
+06:12.720 --> 06:17.000
+into the multi-threaded indexing and then we're just adding a document really so we've
+
+06:17.000 --> 06:21.760
+created our document we've added the text field we've given it in this case the old
+
+06:21.760 --> 06:27.400
+man of the sea and we're going to put it to our indexer which is essentially just adding
+
+06:27.400 --> 06:32.640
+it to a queue for the threads to pull off process spit out onto disk and then if we
+
+06:32.640 --> 06:38.440
+want to actually have that be visible to our users for searching and things like that we
+
+06:38.440 --> 06:43.560
+need to commit the index so in Tantavi you can either commit or you can roll back and
+
+06:43.560 --> 06:48.960
+if you have a power failure midway through indexing when you reload from disk it will
+
+06:48.960 --> 06:53.800
+be at the point of that last commit which is very very useful so you don't leave with
+
+06:53.800 --> 06:58.760
+partial state and all that all that nasty things and then once we've done that we can
+
+06:58.760 --> 07:03.440
+actually search and in this case you can either build queries using traits which are very
+
+07:03.440 --> 07:08.160
+nice and you can mash them all together with lots of boxing and things or you can use
+
+07:08.160 --> 07:13.560
+the query parser which basically parses a nice little query language in this case we've
+
+07:13.560 --> 07:20.040
+got a very simple phrase query as it's called trouble that up and it spits out a query for
+
+07:20.040 --> 07:26.200
+us we then pass that into our search executor which in this case we're executing the query
+
+07:26.200 --> 07:30.400
+and then we're passing what called collectors and they are effectively just a simple thing
+
+07:30.400 --> 07:36.560
+to process the documents which are matched so in this case I believe we've got the count
+
+07:36.560 --> 07:43.680
+collector and the top docs collector and the count collector does well it counts a big
+
+07:43.680 --> 07:48.960
+surprise there and we have the top docs which collects the top k documents up to a given
+
+07:48.960 --> 07:53.720
+limit so in this case we've selected 10 we only have one document to match so this doesn't
+
+07:53.720 --> 07:59.080
+matter that much but if you have more you can limit your results you can adjust how things
+
+07:59.080 --> 08:06.800
+are scored etc. Now that's all well and good in this example but this doesn't actually
+
+08:06.800 --> 08:11.760
+really account for spelling and as we discussed earlier users aren't very good at spelling
+
+08:11.760 --> 08:16.920
+or at least I'm not so we maybe we want a bit of typo tolerance and in this case Tanturi
+
+08:16.920 --> 08:21.680
+does provide us with some additional way of doing this in the form of the fuzzy term query
+
+08:21.680 --> 08:28.080
+it uses something called lever science distance it's a very common form of effectively working
+
+08:28.080 --> 08:35.800
+out how much modification you need to do to a word in order to actually get it to match
+
+08:35.800 --> 08:41.560
+and we call that the edit distance as such typically you're between one and two edits
+
+08:41.560 --> 08:46.680
+so you're swapping a word around you're removing it you're adding a new word a bit of magic
+
+08:46.680 --> 08:52.240
+there really and as you can see at the bottom this is effectively if we use just the regular
+
+08:52.240 --> 08:58.320
+full text search well if we enter the term hello we'll only match with the word hello
+
+08:58.320 --> 09:05.440
+if we go with the term hell we'll only match with the word hell if we use some fuzzy term
+
+09:05.440 --> 09:10.240
+query here we can actually match hell and hello which is very useful especially for
+
+09:10.240 --> 09:17.400
+the prefix search this is built upon Tanturi's inverted index which uses something called
+
+09:17.400 --> 09:23.920
+a FST which is effectively a fancy word for saying we threw state machines at it and then
+
+09:23.920 --> 09:29.320
+made them return results that's as much as I can describe how they work the person who
+
+09:29.320 --> 09:36.320
+originally wrote the FST library in Rust burnt sushi he has a blog on this goes into a lot
+
+09:36.320 --> 09:41.120
+of depth really really useful for that sort of thing but I can't elaborate any more on
+
+09:41.120 --> 09:48.000
+that but all of this additional walking through our index and matching these additional words
+
+09:48.000 --> 09:55.120
+does come at the cost of some additional CPU and once we've sort of got that what we're
+
+09:55.120 --> 10:00.440
+left with is this nice block of data on our disks really so we have some metadata files
+
+10:00.440 --> 10:06.840
+here in particular meta meta.json that contains your schema along with a couple other things
+
+10:06.840 --> 10:11.400
+and we have our sort of core files which look very similar if they look very similar to
+
+10:11.400 --> 10:17.080
+these scenes that's because they are in particular we have our field norms our terms our store
+
+10:17.080 --> 10:26.160
+which is effectively a row level store log file our positions our IDs and our fast fields
+
+10:26.160 --> 10:36.120
+and fast fields are effectively fast because we cut somewhat simple and equally vague name
+
+10:36.120 --> 10:42.280
+but now that we've got all this stuff on disk if we wrap it up in an API we sort of we've
+
+10:42.280 --> 10:47.400
+got that we've mostly we've got everything in this case we've got a demo of LNX working
+
+10:47.400 --> 10:53.400
+here and we've got about I think 27 million documents and we're searching it with about
+
+10:53.400 --> 10:59.640
+millisecond latency I think in total it's about 20 gigabytes on disk compressed which
+
+10:59.640 --> 11:06.880
+is pretty nice but there's sort of a bit of an issue here which is if we deploy this production
+
+11:06.880 --> 11:13.520
+and our site is very nice we get lots of traffic things increase we go hmm well search traffic
+
+11:13.520 --> 11:17.520
+is increased our server is not coping let's just scale up the server and we can repeat
+
+11:17.520 --> 11:24.520
+this for quite a lot and in fact things like AWS allow you a stupid amount of cores and
+
+11:24.520 --> 11:29.240
+things like that which you can scale up very easily but you keep going along with this
+
+11:29.240 --> 11:34.680
+and eventually something happens and in this case your data centers burnt down if anyone
+
+11:34.680 --> 11:41.720
+remembers this this happened in 2021 OVH basically caught fire and that was an end of I think
+
+11:41.720 --> 11:48.400
+a lot of sleeping people and so yeah your data centers on fire search isn't able to do anything
+
+11:48.400 --> 11:52.480
+you're losing losing money no one's buying anything management's breathing down your
+
+11:52.480 --> 11:57.480
+neck for a fix you're having to load from a backup what are you gonna do and well you
+
+11:57.480 --> 12:04.040
+think ah I should have made some replicas I should have done something called high availability
+
+12:04.040 --> 12:08.200
+and in this case what this means is we have instead of having one node on one server ready
+
+12:08.200 --> 12:14.320
+to burn down we have three nodes available to burn down at any point in time and in this
+
+12:14.320 --> 12:18.000
+case we hope that we put them in different what are called availability zones which
+
+12:18.000 --> 12:22.560
+mean hey if one data center burns down there's a very small likelihood or at least as it
+
+12:22.560 --> 12:28.520
+possible for another data center to burn down in the meantime and this allows us to effectively
+
+12:28.520 --> 12:33.800
+operate even though one server is currently on fire or lost to the ether or I don't know
+
+12:33.800 --> 12:40.160
+network has torn itself to pieces and this does also mean we can upgrade if we want to
+
+12:40.160 --> 12:43.680
+tear a server down and we want to restart it with some newer hardware we can do that
+
+12:43.680 --> 12:49.640
+without interrupting our existing system but this is sort of a hard thing to do because
+
+12:49.640 --> 12:54.400
+now we've got to work out a way of getting the same documents across all of our nodes
+
+12:54.400 --> 12:59.000
+in this case it's sort of a share nothing architecture this is done by elastic search
+
+12:59.000 --> 13:05.200
+and basically most most systems so we're just replicating the documents we're not replicating
+
+13:05.200 --> 13:11.200
+all of that process data we've just done we need to apply them to each node and doing
+
+13:11.200 --> 13:15.840
+this approach makes it a bit simpler in reality LNX and QuickWit do something a little bit
+
+13:15.840 --> 13:22.040
+different but this is this is easier I say this is easier because the initial solution
+
+13:22.040 --> 13:26.800
+would be you know just just spin up more nodes you know what can add some RPC in there what
+
+13:26.800 --> 13:32.200
+can go wrong and then deep down you work out it's like oh do you mean networks are reliable
+
+13:32.200 --> 13:37.960
+what's a raft and things like that and so at that point you go okay this is this is harder
+
+13:37.960 --> 13:42.560
+than I thought and you realize the world is in fact a scary place outside your happy little
+
+13:42.560 --> 13:50.000
+data center and you need some way of organizing states independent on things catching on fire
+
+13:50.000 --> 13:55.320
+and this is this is a hard problem to solve and so you have a little look around and you
+
+13:55.320 --> 14:00.920
+go well Rust is quite a new system it's quite a young ecosystem we're quite limited so we
+
+14:00.920 --> 14:06.160
+can't necessarily pick a Paxos implementation off the shelf we maybe have something called
+
+14:06.160 --> 14:12.400
+raft so that's a leader-based approach and that means we elect a leader and we say okay
+
+14:12.400 --> 14:18.360
+leader tell us what to do and it will say okay you you handle these documents go go do things
+
+14:18.360 --> 14:23.400
+with them it's a very well-known algorithm very easy to understand it's probably the
+
+14:23.400 --> 14:28.240
+only algorithm which is really implemented widely in Rust so there's two implementations
+
+14:28.240 --> 14:33.880
+one of them by the pink cap group called raft RS and the other by data fuse labs called
+
+14:33.880 --> 14:43.440
+open raft varying levels of completion or pre-made so in this case you think okay I don't really
+
+14:43.440 --> 14:49.720
+know what I'm doing here so maybe I shouldn't be managing my own raft cluster and you hear
+
+14:49.720 --> 14:54.640
+something about eventual consistency and you hear oh it's it's leaderless any any node can
+
+14:54.640 --> 14:58.200
+handle the rights and then ship off to the other nodes as long as the operations are
+
+14:58.200 --> 15:03.000
+idempotent and that's a very key point which means you can basically ship the same document
+
+15:03.000 --> 15:07.960
+over and over and over again and they're not going to duplicate themselves or at least
+
+15:07.960 --> 15:14.080
+they don't act like they duplicate and this gives us realistically a bit more freedom
+
+15:14.080 --> 15:20.800
+if we want to change we can change and so we decide let's go with eventual consistency
+
+15:20.800 --> 15:29.480
+because yeah I like an easy life and it seemed easier yes people laughing will agree that
+
+15:29.480 --> 15:35.760
+yes things that seem easier probably aren't and so our diagram sort of looks something
+
+15:35.760 --> 15:39.720
+like this and I'm scared to cross the white line so I'll try and point but we have step
+
+15:39.720 --> 15:46.440
+one a client sends the documents to a any node it doesn't really care which one that
+
+15:46.440 --> 15:50.680
+client then goes okay I'm going to send it to some of my peers and then wait for them
+
+15:50.680 --> 15:54.960
+to tell me that they've got the document it's safe and then once we've got the majority
+
+15:54.960 --> 16:00.240
+which is a very common approach in these systems we can tell the client okay your document
+
+16:00.240 --> 16:05.680
+is safe even if OHV burns down again we're probably going to be okay it doesn't need
+
+16:05.680 --> 16:10.080
+to wait for all of the nodes to respond because otherwise you're not really highly available
+
+16:10.080 --> 16:15.840
+because if one node goes down you can't progress and so this system is this system is pretty
+
+16:15.840 --> 16:23.080
+good there's just one small problem which is how in God's name do you do this many questions
+
+16:23.080 --> 16:27.400
+need to be answered many things how do you test this or who's going to have the time
+
+16:27.400 --> 16:32.960
+to do this and well luckily someone aka me spent the better part of six months of their
+
+16:32.960 --> 16:40.160
+free time dealing with this and so I made a library and in this case it's called data
+
+16:40.160 --> 16:45.680
+cake whoo yes in this case this is called data cake I originally was going to call it
+
+16:45.680 --> 16:50.320
+data lake but unfortunately that already exists so we added cake at the end and called it
+
+16:50.320 --> 16:56.960
+a day it is effectively a tooling to create your own distributed systems it doesn't have
+
+16:56.960 --> 17:02.800
+to be eventually consistent but it just is designed to make your life a lot easier and
+
+17:02.800 --> 17:08.640
+it only took about six rewrites to get it to the stage that it is because yeah things
+
+17:08.640 --> 17:13.720
+are hard and trying to work out what you want to do with something like that is awkward
+
+17:13.720 --> 17:18.560
+but some of the features it includes is it includes the zero copy RPC framework and this
+
+17:18.560 --> 17:23.520
+is built upon the popular archive framework which is really really useful if you're shipping
+
+17:23.520 --> 17:27.240
+a lot of data because you don't actually have to deserialize and allocate everything all
+
+17:27.240 --> 17:32.440
+over again you can just treat an initial buffer as if it's the data which if that sounds wildly
+
+17:32.440 --> 17:41.680
+and safe it is but there's a lot of tests and I didn't write it so you're safe.
+
+17:41.680 --> 17:47.560
+We also add the membership and failure detection and this is done using chit chat which is a
+
+17:47.560 --> 17:52.040
+library we made at quick quit it uses the same algorithm as something like Cassandra
+
+17:52.040 --> 17:57.240
+or DynamoDB and this allows the system to essentially work out what nodes are actually
+
+17:57.240 --> 18:05.520
+its friends and what it can do and in this case we've also implemented an eventually
+
+18:05.520 --> 18:13.000
+consistent store in the form of a key value system which only requires one trait to implement
+
+18:13.000 --> 18:16.640
+and the reason why I went with this is because if you implement anything more than one trait
+
+18:16.640 --> 18:22.400
+people seem to turn off and frankly I did when I looked at the raft implementations.
+
+18:22.400 --> 18:26.600
+So we went with one storage trait that's all you need to get this to work.
+
+18:26.600 --> 18:31.440
+We also have some pre-built implementations I particularly like abusing SQLite so there
+
+18:31.440 --> 18:37.400
+is an SQLite implementation and a memory version and it also gives you some CRDTs which
+
+18:37.400 --> 18:44.720
+are conflict-free replicated data types I should say and also something called a hybrid
+
+18:44.720 --> 18:48.720
+logical clock which means it's a clock which you can have across your cluster where the
+
+18:48.720 --> 18:54.000
+nodes will stabilize themselves and prevent you from effectively having to deal with this
+
+18:54.000 --> 19:00.720
+concept of causality and causality is definitely the biggest issue you will ever run into with
+
+19:00.720 --> 19:06.160
+distributed systems because time is suddenly not reliable.
+
+19:06.160 --> 19:10.720
+And so we go back to our original thing of well first we actually need a cluster and
+
+19:10.720 --> 19:16.640
+this case it's really simple to do all we need to do is we just create our node builder
+
+19:16.640 --> 19:22.320
+we tell data cake okay we've got your address is this your peers are this or you can start
+
+19:22.320 --> 19:27.520
+with one peer and they'll discover themselves who their neighbors are and you give them
+
+19:27.520 --> 19:28.520
+a node ID.
+
+19:28.520 --> 19:32.400
+They're integers they're not strings and the reason for that is because there's a lot
+
+19:32.400 --> 19:37.640
+of bit packing of certain data types going on and strings do not do well.
+
+19:37.640 --> 19:42.680
+And here we can also effectively wait for nodes to come onto the system so our cluster
+
+19:42.680 --> 19:46.840
+is stable and ready to go before we actually do anything else.
+
+19:46.840 --> 19:51.000
+And by the time we get to this point our RPC systems are working nodes are communicating
+
+19:51.000 --> 19:55.720
+your clocks have synchronized themselves mostly and you can actually start adding something
+
+19:55.720 --> 19:58.120
+called extensions.
+
+19:58.120 --> 20:05.440
+Now extensions essentially allow you to extend your existing cluster you don't you can do
+
+20:05.440 --> 20:10.480
+this at runtime they can be added and they can be unloaded all at runtime without any
+
+20:10.480 --> 20:16.000
+with state cleanup and everything else which makes life a lot easier especially for testing.
+
+20:16.000 --> 20:20.480
+They have access to the running node on this local system which allows you to access things
+
+20:20.480 --> 20:25.680
+like the cluster clock the RPC network as it's called which is the pre-established RPC
+
+20:25.680 --> 20:31.920
+connections and you can essentially make this as simple or as complex as possible which
+
+20:31.920 --> 20:37.200
+is essentially what I've done here so I've created this nice little extension which is
+
+20:37.200 --> 20:40.720
+absolutely nothing other than print what the current time is which realistically I could
+
+20:40.720 --> 20:45.200
+do without but nonetheless I went with it.
+
+20:45.200 --> 20:49.480
+And this is what the eventual consistency store actually does under the hood is it's
+
+20:49.480 --> 20:55.040
+just an extension and here we can see that we're passing in a I can't point that far
+
+20:55.040 --> 21:03.680
+but we pass in a mem store which is our storage trait we pass in our create our eventual consistency
+
+21:03.680 --> 21:11.040
+extension using this and we pass it to the data cake node and say okay go add this extension
+
+21:11.040 --> 21:16.040
+give me the result back when you're ready and in this case our eventual consistency cluster
+
+21:16.040 --> 21:21.000
+actually returns us a storage handle which allows us to do basically all of our lovely
+
+21:21.000 --> 21:28.240
+key value operations should we wish including delete, put, get that's about all there is
+
+21:28.240 --> 21:33.680
+on the key value store but there are also some bulk operations which allow for much
+
+21:33.680 --> 21:37.760
+more efficient replication of data.
+
+21:37.760 --> 21:42.080
+The only problem with this approach is it's not suitable for billion scale databases so
+
+21:42.080 --> 21:46.880
+if you're trying to make the next Cassandra or Silla don't use this particular extension
+
+21:46.880 --> 21:53.440
+because it keeps the key value or the keys sorry in memory which it uses to work out
+
+21:53.440 --> 21:59.040
+what keys have and have not been processed and the reason for this is effectively because
+
+21:59.040 --> 22:04.240
+I didn't really trust users implementing this on the storage site correctly which turned
+
+22:04.240 --> 22:07.560
+out to be a good choice because the amount of unit tests that this failed initially
+
+22:07.560 --> 22:13.880
+was a lot and so now we've sort of got this ability to replicate our key values our life
+
+22:13.880 --> 22:20.720
+is a lot easier in particular we can actually go as far as essentially saying okay we've
+
+22:20.720 --> 22:25.840
+established our data connection our key values let's just use Tantive as our persistence
+
+22:25.840 --> 22:32.400
+store and this is effectively the simplest way to do it and I've made a little demo here
+
+22:32.400 --> 22:38.440
+which you can go to that link I basically abused and slightly ignored certain things
+
+22:38.440 --> 22:44.960
+in particular correctness but this will replicate your data you may end up with duplicate documents
+
+22:44.960 --> 22:49.840
+because I didn't handle de-duping but in this case we can fetch we can delete and we can
+
+22:49.840 --> 22:53.840
+index documents with Tantive and that's our persistence store and here you can see we're
+
+22:53.840 --> 23:04.440
+doing about 20,000 documents in 400 milliseconds in the local cluster yes and that is effectively
+
+23:04.440 --> 23:26.720
+the end so are there any questions how long do we have left how long do we have left 15
+
+23:26.720 --> 23:49.000
+minutes so actually kind of so in there do you have like a way to provide from outside
+
+23:49.000 --> 23:56.600
+to the Tantive transaction or links transaction an external ID that I can use to integrate
+
+23:56.600 --> 24:03.080
+with the standard storage so change the question would be an easier way do you have a way to
+
+24:03.080 --> 24:10.440
+say which which level of data has been indexed yes in this case I've sort of glossed over
+
+24:10.440 --> 24:14.920
+it a little bit because in reality it's a little bit more complicated when you implement
+
+24:14.920 --> 24:20.800
+it so in reality when you actually implement this you would probably have a essentially
+
+24:20.800 --> 24:25.200
+use the replication to replicate the initial documents and then you would have a check
+
+24:25.200 --> 24:29.520
+mark to essentially work out what documents have and have not been indexed yet or you
+
+24:29.520 --> 24:35.000
+would add some additional step like a right ahead log so that way you know that as long
+
+24:35.000 --> 24:40.040
+as the documents are there you can make sure that your check your commit point is always
+
+24:40.040 --> 24:47.240
+updated to the latest thing in the next it's actually a little bit different again because
+
+24:47.240 --> 24:52.960
+the way it creates indexes is they are per check point so in a new index is created every
+
+24:52.960 --> 25:00.760
+commit effectively but you don't have to do that and in this method I didn't so you could
+
+25:00.760 --> 25:06.040
+you can it doesn't do it here but you can add a right ahead log and do you can do basically
+
+25:06.040 --> 25:22.720
+do anything as long as the trait is implemented hello hello hi yeah all right so congratulations
+
+25:22.720 --> 25:52.640
+for the presentation sorry I think I can see you yes hello so let me see if I can
+
+25:52.640 --> 25:57.880
+got that question right so you was is that about it sending time to me so if you want
+
+25:57.880 --> 26:12.640
+to go beyond something like bm25 or leave a size distance and things like that things
+
+26:12.640 --> 26:17.960
+like I think things like vector search or word embedding search is still something which
+
+26:17.960 --> 26:23.760
+is quite far away and we need quite a big push to do with time to be specifically but
+
+26:23.760 --> 26:27.600
+if you want to add additional queries or additional functionality it's quite easy to add with
+
+26:27.600 --> 26:32.840
+time to be so it's actually just a query trait so one of the things that and the next does
+
+26:32.840 --> 26:39.240
+it actually has another a query mode called fast fuzzy which actually uses another algorithm
+
+26:39.240 --> 26:44.800
+for pre-computing dictionaries in order to do the edit distance lookup and that basically
+
+26:44.800 --> 26:50.760
+is just involves creating another query and you can customize effectively all of your query
+
+26:50.760 --> 26:55.800
+logic all of your collecting logic and things like that so providing your within the scope
+
+26:55.800 --> 27:01.320
+of the API time to be will allow you to implement it yourself otherwise things like the word
+
+27:01.320 --> 27:05.400
+embeddings which are a little bit more complicated and require a bit more on the storage side
+
+27:05.400 --> 27:10.240
+would need to an issue and a very motivated individual to probably implement that which
+
+27:10.240 --> 27:31.320
+currently we we don't really have so it's pretty little question on all your sketches
+
+27:31.320 --> 27:38.760
+the network the subject network was fully connected is that important let me see if
+
+27:38.760 --> 27:46.320
+I can find which one that was was it was it this one or was it this one well on this one
+
+27:46.320 --> 27:52.120
+it's it does not look fully connected but I'm not sure if these diagram depicts kind
+
+27:52.120 --> 28:00.400
+of connectivity connect home or just which messages has actually been dispatched so I'm
+
+28:00.400 --> 28:06.240
+going to cross the forbidden white line here because we're doing questions and effectively
+
+28:06.240 --> 28:12.320
+these are just indicating sending responses and getting things back so these notes don't
+
+28:12.320 --> 28:17.920
+actually in a real system that you could have a network petition here and your node one
+
+28:17.920 --> 28:22.480
+can no longer talk to no three it's effectively lost to the ether and maybe no two can also
+
+28:22.480 --> 28:28.720
+not do it and in this case it doesn't actually really care all that you need to do is you
+
+28:28.720 --> 28:34.560
+need to achieve what's called a consistency level so which means that if you want to progress
+
+28:34.560 --> 28:40.120
+you have to reach that level otherwise things are counted as not happening and so in this
+
+28:40.120 --> 28:46.400
+case if no three is down or can't be contacted as long as node one can contact node two and
+
+28:46.400 --> 28:50.920
+no two acknowledges the messages things can still progress this is the same with raft
+
+28:50.920 --> 28:57.080
+as well so raft operates on what's called a quorum which yeah but effectively any node
+
+28:57.080 --> 29:01.840
+any one node can go down in a three node group and the other two nodes can still progress
+
+29:01.840 --> 29:06.520
+providing they have what's called what's the majority so I understand full connection
+
+29:06.520 --> 29:22.080
+of the network is not an important factor here well it's nice to know thank you thank
+
+29:22.080 --> 29:28.720
+you for our talk I see here that there is basically a consistency mechanism for indexing
+
+29:28.720 --> 29:34.520
+do you check as well for that on over nodes when there is a search request as well say
+
+29:34.520 --> 29:38.760
+that again sorry I didn't quite pick that up do you check the data on over nodes when
+
+29:38.760 --> 29:44.480
+there is a search request not an indexing request in this case we have relaxed reads
+
+29:44.480 --> 29:49.960
+essentially so we don't do we're not it's searching across several nodes and getting
+
+29:49.960 --> 29:54.240
+the most updated version from that which is part of the trade-off you make with the eventual
+
+29:54.240 --> 29:59.120
+consistency you will have that with raft as well effectively unless you contact the leader
+
+29:59.120 --> 30:04.760
+you won't have the most update data when searching but one of the things you do have to do if
+
+30:04.760 --> 30:13.680
+you go with the eventual consistency eventual consistency approach like we do here is you
+
+30:13.680 --> 30:18.320
+would need to effectively handle the idea that maybe you will have duplicate documents
+
+30:18.320 --> 30:24.200
+because something's been recent in the meantime and so you'll need to be able to deduplicate
+
+30:24.200 --> 30:28.880
+that when you're searching or have some other method of handling it and deleting it from
+
+30:28.880 --> 30:34.200
+the index so that means that effectively every node must have a copy of the data like I cannot
+
+30:34.200 --> 30:39.240
+have five nodes unlike a free with the car system or something about yeah so as long
+
+30:39.240 --> 30:44.840
+as if you've got like a five node cluster and three nodes respond you can immediately
+
+30:44.840 --> 30:48.360
+search from if those three nodes have got the data they can immediately be searched from
+
+30:48.360 --> 30:53.160
+effectively if you want but the other nodes may take a little bit of time to catch up
+
+30:53.160 --> 30:57.600
+which is the principle with eventual consistency they'll eventually align themselves but they're
+
+30:57.600 --> 31:08.680
+not all immediately immediately able to reflect changes hello just simple one in hindsight
+
+31:08.680 --> 31:16.600
+would you take the raft part in hindsight probably not still and the reason for that
+
+31:16.600 --> 31:25.800
+is because the current state of the rust ecosystem with it means that there's a lot of black
+
+31:25.800 --> 31:31.480
+holes effectively around it and so you either going with an implementation which is very
+
+31:31.480 --> 31:35.600
+very stripped down just the state machine part or going with an implementation which
+
+31:35.600 --> 31:41.240
+is very very trait heavy and is a little bit opaque around what you need to test what you
+
+31:41.240 --> 31:46.440
+don't need to test and how it behaves under failure so in this case it's I like this
+
+31:46.440 --> 31:51.800
+approach more because it may allow me to implement things like network simulation which the RPC
+
+31:51.800 --> 31:57.520
+program supports so we can actually simulate network fit networks failing locally in tests
+
+31:57.520 --> 32:03.640
+and things like that which makes me feel a little bit more confident than trying to just
+
+32:03.640 --> 32:09.080
+have the state machine and implement everything and all the handling correctly but I think
+
+32:09.080 --> 32:17.360
+in future yeah you could you could use it but it's just not not quite at that state
+
+32:17.360 --> 32:41.160
+so I'm not sure I quite got how how if the engine actually does any data sharding or
+
+32:41.160 --> 32:49.520
+there's a hatchery yeah in this so in this approach it's simplicity of time really we're
+
+32:49.520 --> 32:55.640
+not actually doing any data sharding servers are really quite big nowadays so you can even
+
+32:55.640 --> 33:00.760
+for your e-commerce website you can get a pretty huge server and the biggest issue tends
+
+33:00.760 --> 33:07.120
+to be replication and the high availability the data sharding is something that some quick
+
+33:07.120 --> 33:11.600
+wits is something that would be concerned about because you've got so much data you
+
+33:11.600 --> 33:16.720
+need to spread it across machines and things like that when you're searching but in e-commerce
+
+33:16.720 --> 33:20.760
+at the point in which you're searching across multiple machines you're probably going to
+
+33:20.760 --> 33:24.960
+be looking at the higher latencies so you would you'd be better off dedicating one
+
+33:24.960 --> 33:41.600
+machine per search rather than several machines per per search really.

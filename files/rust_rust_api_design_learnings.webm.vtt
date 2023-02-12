@@ -1,0 +1,1741 @@
+WEBVTT
+
+00:00.000 --> 00:12.840
+So, hello everyone, I'm happy to share some experience of mine with building Rust libraries.
+
+00:12.840 --> 00:18.560
+There's a lot that I went over to come up with like the lessons that I actually feel
+
+00:18.560 --> 00:22.680
+like are worth sharing and is much more than can fit into a talk, so I tried to sort of
+
+00:22.680 --> 00:29.800
+get it down to the things that are most important to me, but if we have some space at the end
+
+00:29.800 --> 00:34.840
+then we can sort of dive deeper into some of the things that I will only cover very briefly.
+
+00:34.840 --> 00:36.080
+So who am I?
+
+00:36.080 --> 00:41.640
+My name is Amin Roneha and I have been creating open source libraries for quite a while.
+
+00:41.640 --> 00:46.360
+I have originally written a lot of Python code, I wrote the Flask Microphone work for
+
+00:46.360 --> 00:52.960
+Python and I have been doing open source libraries probably since I'm 17 or something, so this
+
+00:52.960 --> 00:59.600
+is many years of experience in some sense and I started using Rust in one form or another
+
+00:59.600 --> 01:04.960
+almost exactly 10 years ago, so I have played with this language for really long at this
+
+01:04.960 --> 01:10.680
+point and so I went through some iterations of what works and what doesn't work.
+
+01:10.680 --> 01:14.320
+Commercially now I work for a company called Sentry, we are doing application monitoring
+
+01:14.320 --> 01:20.760
+and crash reporting and so we use Rust there and so I'm going to share the learnings of
+
+01:20.760 --> 01:22.120
+this in sort of two ways.
+
+01:22.120 --> 01:25.440
+One is open source libraries that are there for other people to use and the other one
+
+01:25.440 --> 01:30.040
+is libraries that are to be used within the context of one specific company because some
+
+01:30.040 --> 01:35.760
+of the things that we create, the only users really are us ourselves.
+
+01:35.760 --> 01:39.880
+And so in terms of open source libraries that sort of feed some into this talk, I'm taking
+
+01:39.880 --> 01:44.200
+a little bit of code from my Insta snapshot in testing library, my mini-changer template
+
+01:44.200 --> 01:49.240
+engine and a few others like my console library.
+
+01:49.240 --> 01:55.040
+Okay, so this is a quote that I read a couple of months ago and it's not so important but
+
+01:55.040 --> 01:57.400
+it really bothered me.
+
+01:57.400 --> 02:03.120
+It was a comment to an open source library written in Rust that more or less made a
+
+02:03.120 --> 02:10.360
+statement that defaults shouldn't exist and people should think really, really hard to
+
+02:10.360 --> 02:14.680
+spend the mental capacity of understanding what they should be doing, picking defaults
+
+02:14.680 --> 02:20.000
+blindly is a mistake and I don't subscribe to this at all because I believe that it's
+
+02:20.000 --> 02:23.520
+the responsibility of a library author to make sure that the defaults are the best that
+
+02:23.520 --> 02:30.080
+you can possibly take and the way I would think of this is you can think of creating
+
+02:30.080 --> 02:33.680
+a library or an API as if you're building a business.
+
+02:33.680 --> 02:38.120
+You have some sort of success criteria and you can measure yourself against this success
+
+02:38.120 --> 02:43.640
+criteria and I don't think the success criteria should ever be to confuse your user as much
+
+02:43.640 --> 02:45.640
+as possible.
+
+02:45.640 --> 02:50.960
+It should be that you measure how successful your customers are in using the API as you
+
+02:50.960 --> 02:57.240
+designed it, so if they do something that is not ideal, there's something you can fix
+
+02:57.240 --> 03:01.840
+and the second thing is then they will typically use your API to build a product themselves,
+
+03:01.840 --> 03:05.920
+to solve a problem themselves and the quality of the output that the user then produces
+
+03:05.920 --> 03:10.040
+in some way is also something that you have an impact on.
+
+03:10.040 --> 03:13.200
+So you can kind of think of it like the percentage of users that are making the wrong or right
+
+03:13.200 --> 03:19.560
+choices is the dial that you can sort of try to dial.
+
+03:19.560 --> 03:23.480
+The problem obviously is how the hell do you measure this?
+
+03:23.480 --> 03:28.600
+And it's really, really hard because most of the things that you can actually measure,
+
+03:28.600 --> 03:34.880
+they don't really show up in useful things, so you can define the success criteria and
+
+03:34.880 --> 03:40.880
+I think a lot of people do this in some way subconsciously, but they absolutely have no
+
+03:40.880 --> 03:41.880
+way to measure it.
+
+03:41.880 --> 03:44.240
+I don't have a way to measure most of those things.
+
+03:44.240 --> 03:47.040
+So the only thing you can do in the beginning is measure yourself, so you treat yourself
+
+03:47.040 --> 03:53.800
+as the first user, horrible sample size, but you can sort of figure out like as you are
+
+03:53.800 --> 03:59.560
+using your own stuff, does it do what you think it does?
+
+03:59.560 --> 04:04.360
+And then every time you sort of hate the experience, at least write down like it didn't like this.
+
+04:04.360 --> 04:08.480
+So it's a good start, but the problem is you're really flying blind, there's no good way to
+
+04:08.480 --> 04:16.080
+measure this and this is not unique to Rust, this is the fact most of the time it works
+
+04:16.080 --> 04:18.600
+like this.
+
+04:18.600 --> 04:22.440
+But in terms of API design, I think we have learned in other environments that there's
+
+04:22.440 --> 04:27.280
+actually a lot of stuff to measure, so if you were to create an HTTP library, a lot
+
+04:27.280 --> 04:33.240
+of companies are trying to figure out how often do the users that hit the APIs do the
+
+04:33.240 --> 04:37.400
+things that they don't want them to do, for instance, because they create bad load patterns
+
+04:37.400 --> 04:42.360
+or because they just generally hit the API in ways that is not efficient and they're
+
+04:42.360 --> 04:45.200
+trying to figure out like how do we optimize so that the user actually does the thing that
+
+04:45.200 --> 04:46.200
+you want.
+
+04:46.200 --> 04:49.960
+And this works if you run a service because you can see what everybody is doing.
+
+04:49.960 --> 04:54.400
+You can't really see anything that the developer is doing in your Rust library.
+
+04:54.400 --> 04:58.120
+The only numbers that we have for download statistics which are really pointless because
+
+04:58.120 --> 05:03.000
+they're heavily skewed towards libraries that are used by other libraries, so you can build
+
+05:03.000 --> 05:08.040
+the most amazing library ever to build an application, but if there's only ever application
+
+05:08.040 --> 05:10.760
+developers that are going to download this library, you're never going to accumulate
+
+05:10.760 --> 05:15.520
+a lot of download statistics because most of the download statistics come from either
+
+05:15.520 --> 05:18.680
+CI and very few people actually download the code to run on a desktop.
+
+05:18.680 --> 05:23.040
+So if you have 100 developers, they're going to pull this once each usually and then it's
+
+05:23.040 --> 05:24.240
+cached on the machine.
+
+05:24.240 --> 05:28.120
+The download numbers come from CI, so it's only this dependencies of dependencies that
+
+05:28.120 --> 05:31.920
+are actually ending up driving those numbers, and so they can be demotivating in some sense
+
+05:31.920 --> 05:36.480
+and they're definitely not that useful, so you can't really track anything sensible in
+
+05:36.480 --> 05:39.560
+terms of adoption just by the download numbers.
+
+05:39.560 --> 05:43.920
+So the first feedback you're probably going to get is some form of frustration, so it's
+
+05:43.920 --> 05:47.960
+usually bug reports or it's someone internally telling you that this thing is really inconvenient
+
+05:47.960 --> 05:48.960
+to use.
+
+05:48.960 --> 05:53.400
+In some ways, you have to prompt them to actually tell you that, but you can kind of do it like
+
+05:53.400 --> 05:59.560
+use a service in interviews to figure out like, do people like this, and you kind of
+
+05:59.560 --> 06:03.200
+usually don't get people to reply to service, so one other way to sort of solicit feedback
+
+06:03.200 --> 06:08.280
+out of people is you take this issue request, ignore it entirely almost, and you go back
+
+06:08.280 --> 06:13.120
+to why did they submit this in the first place, and they try to ask that question, because
+
+06:13.120 --> 06:19.960
+quite often when they submit a bug report, they're already down a really weird path anyways.
+
+06:19.960 --> 06:22.560
+Maybe you can take them on a higher level and figure out why did they even try to do
+
+06:22.560 --> 06:23.560
+this.
+
+06:23.560 --> 06:28.120
+I mean, when they do a feature request, bug report is less so.
+
+06:28.120 --> 06:32.840
+So as mentioned, it's really hard to measure, and so because it's really hard to measure,
+
+06:32.840 --> 06:38.320
+a second thing that you can sort of use is trying to figure out like, okay, if you think
+
+06:38.320 --> 06:42.320
+this is worth measuring, what is it that this number actually represents?
+
+06:42.320 --> 06:47.040
+This is typically some sort of values, and so these are the ones that I find are important
+
+06:47.040 --> 06:48.040
+to me.
+
+06:48.040 --> 06:51.920
+They're probably not necessarily important for everybody else, but I felt like over
+
+06:51.920 --> 06:54.080
+the years I can get behind those.
+
+06:54.080 --> 06:58.760
+So the first one is I think the hello world of your library should be relatively concise,
+
+06:58.760 --> 07:03.720
+so it should be easy enough to get started, to some degree this is simplifying onboarding,
+
+07:03.720 --> 07:12.600
+but to another one it's also that the less stuff there is, the easier it is to maintain
+
+07:12.600 --> 07:16.400
+the whole thing overall, or gotten to this a little bit.
+
+07:16.400 --> 07:20.000
+This also leads towards good defaults, ideally you don't have to copy paste five lines of
+
+07:20.000 --> 07:22.960
+code in if a single line of code does.
+
+07:22.960 --> 07:26.800
+The smaller the surface area of a library actually is at the end of the day, the easier
+
+07:26.800 --> 07:31.840
+you have in terms of maintenance and also in the ability to do modifications over time.
+
+07:31.840 --> 07:35.520
+Because the more API you expose, the higher the chance that you're going to break something,
+
+07:35.520 --> 07:37.640
+and I don't like breaking things.
+
+07:37.640 --> 07:40.400
+I think backwards compatibility is really important.
+
+07:40.400 --> 07:43.480
+I hate the idea of unnecessary churn.
+
+07:43.480 --> 07:49.120
+I've been part of the Python 2 to Python 3 migration thing, and it was horrible, and
+
+07:49.120 --> 07:52.240
+it was particularly horrible because a lot of people that really liked the language,
+
+07:52.240 --> 07:57.320
+as I've included, got stuck on Python 2 for a really long time because we used it in a
+
+07:57.320 --> 08:01.840
+commercial context, we used it for large projects, and those were the ones that moved the slowest.
+
+08:01.840 --> 08:08.360
+You had a lot of power users stuck on an old version that actually used it in a quite
+
+08:08.360 --> 08:14.240
+extensive context, and it took us a couple of years to move, and while we couldn't move
+
+08:14.240 --> 08:19.080
+or we could only play with it in small experiments, the language kept innovating, and all those
+
+08:19.080 --> 08:23.800
+innovations were unable to be used by the people that previously were really engaged
+
+08:23.800 --> 08:25.800
+in their thing.
+
+08:25.800 --> 08:30.600
+I don't like the idea of letting people behind, so the easier the migration path is forward,
+
+08:30.600 --> 08:35.360
+the fewer people are going to leave behind on all the versions.
+
+08:35.360 --> 08:39.520
+In a way, my goal is to keep people on the golden path.
+
+08:39.520 --> 08:40.520
+What's the golden path?
+
+08:40.520 --> 08:45.000
+It's the idea that you have an idea of how people should be building stuff.
+
+08:45.000 --> 08:52.240
+Typically, this is a thing that you do in system design, and you plot an idea for someone
+
+08:52.240 --> 08:56.640
+to execute along, and this is the blessed way to doing things, and you try to get as
+
+08:56.640 --> 09:01.240
+many people as possible on this golden path, but libraries have the same thing.
+
+09:01.240 --> 09:07.320
+If you want to build a security library, for instance, like an encryption standard library,
+
+09:07.320 --> 09:10.560
+there are many ways to build the wrong one, where you give people so many choices that
+
+09:10.560 --> 09:15.480
+they have no sensible way to being sure that they are on the one that actually does the
+
+09:15.480 --> 09:17.680
+right thing.
+
+09:17.680 --> 09:20.800
+But the problem with the golden path is that it will change over time.
+
+09:20.800 --> 09:23.920
+What is correct today might not necessarily be correct in two years.
+
+09:23.920 --> 09:29.280
+To go back to the security thing, at one point, we recommended everybody MD5, and then that
+
+09:29.280 --> 09:33.120
+was not a good idea anymore, so at the very least, it should be SHA-1 hashes, and now obviously
+
+09:33.120 --> 09:35.200
+we don't want that anymore.
+
+09:35.200 --> 09:39.280
+The problem with this is that a lot of things change over time, and so if you create, for
+
+09:39.280 --> 09:45.440
+instance, a library that wants to make a choice for a user, but it's designed in a way that
+
+09:45.440 --> 09:51.560
+that choice can never be changed on the fear of breaking code to some degree, and then
+
+09:51.560 --> 09:55.400
+you did something wrong in the sign origin already.
+
+09:55.400 --> 10:00.720
+Some change requires adjustment by users, and that's really hard to do, so if you have
+
+10:00.720 --> 10:04.920
+some sort of golden path, you can figure out how many people are on that, versus the thing
+
+10:04.920 --> 10:09.120
+that you don't want them to do anymore, and again, measuring is almost impossible, but
+
+10:09.120 --> 10:14.960
+one way you can do that is if you are building a library where you think other libraries are
+
+10:14.960 --> 10:18.880
+going to use that, you can use something like a GitHub code search to figure out how many
+
+10:18.880 --> 10:21.360
+people still use the deprecated pattern.
+
+10:21.360 --> 10:26.640
+You can also leverage dependabot quite a bit to figure out how many people that actually
+
+10:26.640 --> 10:31.680
+are getting a dependabot update are going through with the update versus not.
+
+10:31.680 --> 10:37.280
+Okay, so defaults matter.
+
+10:37.280 --> 10:42.040
+As mentioned earlier, I'm a strong believer in there should be good defaults, and I think
+
+10:42.040 --> 10:43.680
+defaults really come in two choices.
+
+10:43.680 --> 10:47.600
+One default is the absolute default.
+
+10:47.600 --> 10:51.600
+You're never going to change the default of a U32 integer to be anything other than zero
+
+10:51.600 --> 10:52.600
+and rust.
+
+10:52.600 --> 10:55.800
+There wouldn't even be a discussion about it to change it to one, right?
+
+10:55.800 --> 11:00.920
+There's an obvious default, and it's so dependent on that you just will never be able to change
+
+11:00.920 --> 11:02.920
+it.
+
+11:02.920 --> 11:08.920
+But then there are sort of defaults that are intentionally designed so that they can change
+
+11:08.920 --> 11:09.920
+over time.
+
+11:09.920 --> 11:17.640
+For me, a good example here is the hash table in Rust or any hashing function in Rust doesn't
+
+11:17.640 --> 11:19.920
+say what hashing algorithm uses.
+
+11:19.920 --> 11:24.080
+It defines some sort of properties around it within the boundaries of which it probably
+
+11:24.080 --> 11:28.800
+doesn't change, but the Rust developers could come in from one day to another and switch
+
+11:28.800 --> 11:33.960
+from SIP hash to FX hash, and most of us wouldn't notice, right?
+
+11:33.960 --> 11:38.120
+So to enable these sort of defaults, you have to design the system around it so that these
+
+11:38.120 --> 11:42.560
+can be changed, and you have to communicate to user how you're going to change them.
+
+11:42.560 --> 11:47.000
+There have to be some rules and expectations around what the stability here means, but
+
+11:47.000 --> 11:50.960
+you should try to aim that you can actually enable this change, because otherwise you end
+
+11:50.960 --> 11:56.080
+up in a situation where you have created an API and now you need to make a second one
+
+11:56.080 --> 11:59.040
+because the old one just doesn't work anymore, and you either have to take it away, it's
+
+11:59.040 --> 12:01.920
+going to be frustrating for user, or you have to lie about what it does.
+
+12:01.920 --> 12:05.800
+There are a lot of liars out there that say, hey, my function does SIP hash, and then in
+
+12:05.800 --> 12:11.160
+reality it just doesn't do that anymore because they wanted people to move up, but they were
+
+12:11.160 --> 12:14.440
+afraid of breaking it.
+
+12:14.440 --> 12:17.080
+So why does this work in Rust, for instance, with the hasher?
+
+12:17.080 --> 12:21.800
+Because they said, okay, this is never going to be portable, and I think this is a really
+
+12:21.800 --> 12:29.040
+interesting part because it also enforces without saying what it is, how good it is.
+
+12:29.040 --> 12:33.520
+What I mean with this is that the hasher in Rust randomizes all the time.
+
+12:33.520 --> 12:37.800
+If you even try to use it in a portable way, you're going to quickly figure out that every
+
+12:37.800 --> 12:43.280
+time you re-run your program, the hash is different, so you cannot even get into this
+
+12:43.280 --> 12:49.440
+mood of trying to use it for something that's portable, and there's a really good analog
+
+12:49.440 --> 12:54.480
+of something like this, which is every once in a while people build programming languages,
+
+12:54.480 --> 12:58.000
+and I think Go went down this very same path where they said, we're going to build a garbage
+
+12:58.000 --> 13:02.200
+collector, and it doesn't compact right away, but it's eventually going to be a compacting
+
+13:02.200 --> 13:03.200
+garbage collector.
+
+13:03.200 --> 13:06.800
+And the problem is if you don't start out with actually writing a compacting garbage
+
+13:06.800 --> 13:11.040
+collector, a compacting garbage collector takes a pointer and moves it somewhere else,
+
+13:11.040 --> 13:14.040
+so to compress down the heap space.
+
+13:14.040 --> 13:17.960
+But if you never compact to begin with, people get used to this idea that the point is really
+
+13:17.960 --> 13:24.480
+stable, and they will stash the pointer somewhere, and they rely on the fact that it never moves.
+
+13:24.480 --> 13:28.240
+And so at a later point, three years in, someone says, oh, now we built this awesome
+
+13:28.240 --> 13:31.400
+compacting garbage collector, but they can never turn it on because people took advantage
+
+13:31.400 --> 13:36.600
+of the fact that there was actually a conveyance in the API that they used that wasn't supposed
+
+13:36.600 --> 13:38.600
+to be there, but it wasn't enforced.
+
+13:38.600 --> 13:44.120
+And so what the Rust hasher does in this sense is it always randomizes, so it already makes
+
+13:44.120 --> 13:47.640
+it so uncomfortable to use for the wrong thing that you wouldn't use it.
+
+13:47.640 --> 13:53.120
+And so if you were, for instance, to build another language with a desire to eventually
+
+13:53.120 --> 13:57.240
+build a compacting garbage collector into it, you would probably try to make it so uncomfortable
+
+13:57.240 --> 14:01.840
+to use these pointers for stashing away that it already wouldn't work in the absence of
+
+14:01.840 --> 14:02.840
+one.
+
+14:02.840 --> 14:08.120
+So I think it's a really important part to make sure that if you want to be able to create
+
+14:08.120 --> 14:13.800
+this, change the defaults, that it start from the beginning thinking, OK, how do I build
+
+14:13.800 --> 14:17.400
+it so that I actually remain, keep this freedom.
+
+14:17.400 --> 14:19.320
+And so why do I even want to change this?
+
+14:19.320 --> 14:24.240
+Well, because you have this problem of cargo-culting.
+
+14:24.240 --> 14:29.720
+I have created things in the past myself where I discovered that people copy-paste the first
+
+14:29.720 --> 14:32.480
+example from documentation over and over and over again.
+
+14:32.480 --> 14:38.080
+And then you have this first example from documentation in millions of repositories.
+
+14:38.080 --> 14:43.680
+And for me, the weirdest one is that one of my frameworks that I built actually ended
+
+14:43.680 --> 14:48.120
+up in a university course as a programming 101.
+
+14:48.120 --> 14:53.480
+And universities are sort of an amazing catalyst for this because you end up with all of those
+
+14:53.480 --> 14:58.120
+students putting their GitHub repositories of the first courses on GitHub.
+
+14:58.120 --> 15:02.880
+And then you see the madness you have created, multiplied through like every single student
+
+15:02.880 --> 15:03.880
+that on boards.
+
+15:03.880 --> 15:07.000
+And it's a real lesson.
+
+15:07.000 --> 15:14.400
+So I really respond really negatively to this idea of this code example, which I know it's
+
+15:14.400 --> 15:18.280
+hard to read, but it basically is sort of the, that would be the equivalent of not picking
+
+15:18.280 --> 15:19.280
+a default hash.
+
+15:19.280 --> 15:22.360
+It would be like, well, we think that Rust is a hard programming language.
+
+15:22.360 --> 15:25.080
+It's supposed to be like C++, you should think.
+
+15:25.080 --> 15:28.280
+So you pick the hasher yourself, and then you just put it in there.
+
+15:28.280 --> 15:31.400
+And then I swear to you, this would be the first code example, even if the documentation
+
+15:31.400 --> 15:36.680
+says you should pick FX hasher for this type of hash map, and you should use SIP hasher
+
+15:36.680 --> 15:39.040
+for this other hash map.
+
+15:39.040 --> 15:40.040
+Nobody would read it.
+
+15:40.040 --> 15:42.840
+They take the first code example and copy paste it in, right?
+
+15:42.840 --> 15:47.640
+But now we discover maybe SIP hasher actually is better than FX hasher, but we cannot change
+
+15:47.640 --> 15:52.240
+everybody's code all at once because everybody has copy pasted the wrong thing over there.
+
+15:52.240 --> 15:55.960
+And what I know happens is that every once in a while, someone comes and is like, okay,
+
+15:55.960 --> 16:00.400
+we know that FX hasher is really popular, so we're going behind the scenes, change it
+
+16:00.400 --> 16:05.280
+to actually be a different hasher because everybody copy pasted this thing everywhere.
+
+16:05.280 --> 16:10.040
+It's incredibly common that you find an API that says, like, I'm named really misleadingly
+
+16:10.040 --> 16:13.920
+because this used to be my implementation, but now I'm something else entirely, right?
+
+16:13.920 --> 16:20.280
+So it doesn't, like this card-culting I hate, and I don't think it's good, but I understand
+
+16:20.280 --> 16:25.040
+it's really appealing because it's flexibility.
+
+16:25.040 --> 16:29.040
+This I think, I actually made the wrong code example here on the slide, but I was too lazy
+
+16:29.040 --> 16:34.280
+to change it afterwards, but just imagine for a second that this code example wouldn't
+
+16:34.280 --> 16:40.720
+return a string, but actually returns an enum with a variant called char256, but the idea
+
+16:40.720 --> 16:42.040
+here is more or less this.
+
+16:42.040 --> 16:47.200
+If you do create a library that does something of which in the future there might be different
+
+16:47.200 --> 16:52.920
+implementation coming along, what you probably want to do is not just return the output,
+
+16:52.920 --> 16:55.600
+but you want to annotate the output with what kind of thing it is.
+
+16:55.600 --> 17:01.320
+So if you create a, if you have a library that sort of is supposed to validate files
+
+17:01.320 --> 17:07.040
+on the file system, and it does it by calculating a checksum, it's much better for that library
+
+17:07.040 --> 17:11.600
+not to return the bytes of the checksum, but to return the bytes of the checksum and the
+
+17:11.600 --> 17:14.320
+information by the way I'm char256.
+
+17:14.320 --> 17:15.320
+Why?
+
+17:15.320 --> 17:19.320
+Mostly because it forces the developer to recognize that this thing might change, right?
+
+17:19.320 --> 17:23.440
+It might not be char256 forever.
+
+17:23.440 --> 17:27.600
+And this sort of explicit, like even if you never plan on actually changing this at all,
+
+17:27.600 --> 17:32.800
+it still forces something in the mind of the developer to recognize that this is probably
+
+17:32.800 --> 17:33.800
+going to change.
+
+17:33.800 --> 17:41.000
+And I know of a version control system that very famously picked one shahesh and is completely
+
+17:41.000 --> 17:44.800
+incapable of changing it now, not because it's technically impossible, they've changed
+
+17:44.800 --> 17:51.000
+everything, but because there's an ecosystem of stuff that assumed that it will never change,
+
+17:51.000 --> 17:52.760
+this change cannot be pushed through, right?
+
+17:52.760 --> 17:58.520
+They have the one version, the other version, the incompatible of each other as an example
+
+17:58.520 --> 17:59.520
+of this, right?
+
+17:59.520 --> 18:04.920
+I know this is very security heavy right now, but the idea is the same, like you, every
+
+18:04.920 --> 18:10.480
+once in a while there's a reason for you to move up to a different algorithm or something
+
+18:10.480 --> 18:16.120
+of that nature, and if you haven't created an API in the beginning that sort of hammers
+
+18:16.120 --> 18:23.840
+down this point that it might change, people will not necessarily think about this.
+
+18:23.840 --> 18:29.640
+Less is more, I think it's pretty obvious, the larger the API surface, the more stuff
+
+18:29.640 --> 18:34.520
+you will have to make sure doesn't break if you change internals.
+
+18:34.520 --> 18:41.400
+Particularly internal APIs are incredibly leaky accidentally or intentionally, and whenever
+
+18:41.400 --> 18:45.120
+you want to change it, you have to ask yourself the question if someone actually using this.
+
+18:45.120 --> 18:48.720
+A lot of people start out building libraries where every single module, every single function
+
+18:48.720 --> 18:56.040
+is just pop, and every version breaks everything ever, because you just don't have the time
+
+18:56.040 --> 19:02.400
+and, at least you don't have the time usually, and the capabilities to figure out if someone
+
+19:02.400 --> 19:06.040
+actually uses all of those functions, so you just break them all.
+
+19:06.040 --> 19:12.040
+Or you just spend all this extra time on making sure that they never break because it's impossible.
+
+19:12.040 --> 19:17.720
+So goal is small API surface, but then if you go to a small API surface, then there's
+
+19:17.720 --> 19:26.200
+some tricks in Rust you can use to reduce API surface, but not really.
+
+19:26.200 --> 19:33.200
+So for instance, we have some really common abstractions like Intot or SRFT, which can
+
+19:33.200 --> 19:35.360
+be used to be generic over something.
+
+19:35.360 --> 19:40.760
+So it saves you the necessity to build a function four times.
+
+19:40.760 --> 19:45.160
+You might want to open a file by string or you might want to open a file by path.
+
+19:45.160 --> 19:49.400
+Just write one function, you can do SRFT path, and it's possible to pass at any of those
+
+19:49.400 --> 19:50.400
+compatible types.
+
+19:50.400 --> 19:54.480
+Now, it's kind of cheating because it's really still four different APIs, but they're hidden
+
+19:54.480 --> 19:58.960
+behind a standard constructor that the developer understands.
+
+19:58.960 --> 20:03.760
+So this is an example from Minigenger.
+
+20:03.760 --> 20:06.640
+Both name and value are generic.
+
+20:06.640 --> 20:12.760
+One is converting into a copy and write string thing.
+
+20:12.760 --> 20:16.520
+So you can either pass it an own string or you can pass a static string reference.
+
+20:16.520 --> 20:17.640
+Both of those will be fine.
+
+20:17.640 --> 20:21.960
+So from an API point of view, it behaves as you would expect.
+
+20:21.960 --> 20:24.880
+The first thing is a string argument, like you cannot get it wrong.
+
+20:24.880 --> 20:28.160
+And the second thing is whatever converts into my internal value type of which there
+
+20:28.160 --> 20:30.440
+are a bunch of conversions.
+
+20:30.440 --> 20:37.160
+I could also have made seven different at whatever functions for every single data type
+
+20:37.160 --> 20:41.120
+that exists, but this is a simpler way to do it.
+
+20:41.120 --> 20:45.800
+And I could also have said, like, hey, you're going to pass the value directly already,
+
+20:45.800 --> 20:49.320
+but since I already need to provide a way for the user anyways to convert it into this
+
+20:49.320 --> 20:51.360
+value type, might as well use this.
+
+20:51.360 --> 20:55.160
+So it's very consistently throughout the API now using int of value.
+
+20:55.160 --> 20:59.440
+So there's only one function and it hides all of those different variations of actual
+
+20:59.440 --> 21:03.520
+API that still exists behind this int of thing.
+
+21:03.520 --> 21:04.720
+SRF is sort of the same.
+
+21:04.720 --> 21:09.000
+I actually hate SRF because it makes it really unreadable.
+
+21:09.000 --> 21:16.040
+So instead of your function taking a path by reference, it takes a p and then the p is
+
+21:16.040 --> 21:17.760
+hidden behind SRF path.
+
+21:17.760 --> 21:23.920
+And then before to use it, very often I use SRF.toPathPath, which is just weird, but this
+
+21:23.920 --> 21:26.520
+is a really common pattern.
+
+21:26.520 --> 21:30.200
+So I don't like it, but it's so standardized in the ecosystem that people get to expect
+
+21:30.200 --> 21:31.200
+it.
+
+21:31.200 --> 21:36.640
+And so because we all have been willing to live with it, I guess this is sort of enough
+
+21:36.640 --> 21:40.960
+of a reason to keep doing it.
+
+21:40.960 --> 21:46.440
+If you have this sort of APIs that use a lot of generics to do type conversions, you will
+
+21:46.440 --> 21:48.760
+immediately blow up your compile times.
+
+21:48.760 --> 21:53.520
+This is the standard trick to not do that, which is you keep the generic part into a
+
+21:53.520 --> 21:56.480
+tiny, tiny function and then call it the non-generic part.
+
+21:56.480 --> 21:59.520
+So in this case, the conversion goes to this value type.
+
+21:59.520 --> 22:03.760
+I know it's really hard to see in this projector, but basically the function render takes an
+
+22:03.760 --> 22:09.720
+object that can serialize with 30, and then it calls value from serializable, which takes
+
+22:09.720 --> 22:13.320
+this value, converts it into a value type, which is the non-generic, which I use all
+
+22:13.320 --> 22:14.600
+over the thing.
+
+22:14.600 --> 22:19.400
+And then all the function underscore, render, underscore, eval, they will not be generic.
+
+22:19.400 --> 22:24.800
+And so they have one instance, whereas the other one will be one instance per type actually
+
+22:24.800 --> 22:26.040
+passed.
+
+22:26.040 --> 22:27.560
+What does it mean?
+
+22:27.560 --> 22:34.320
+If you don't do this, if this was all one function, last time I checked this, the mini-changer
+
+22:34.320 --> 22:39.240
+compile times are exploding to more than double or three times just because of this one function.
+
+22:39.240 --> 22:40.240
+Why?
+
+22:40.240 --> 22:44.840
+Because it's very common that you pass different types of it, and the Rust compiler thinks that
+
+22:44.840 --> 22:49.600
+inlining is awesome, and it inlines this VM eval function there, which is, I think,
+
+22:49.600 --> 22:54.120
+like 15 kilobytes or something, and so it makes a duplication of those 16 kilobytes for
+
+22:54.120 --> 22:56.120
+every single type that you put in.
+
+22:56.120 --> 22:58.160
+In this case, I only have 16 kilobytes once, right?
+
+22:58.160 --> 23:03.080
+So it's a serious amount of code that you save with this, and it's probably the best
+
+23:03.080 --> 23:05.320
+way to save compile times for a lot of code.
+
+23:05.320 --> 23:08.800
+There are actually some tools that you can use these days to figure out, like, why these
+
+23:08.800 --> 23:11.200
+functions blow up that much.
+
+23:11.200 --> 23:19.400
+But if you use generics, particularly with SRF and into, it's worth looking for.
+
+23:19.400 --> 23:22.800
+So I mentioned earlier, I like to keep the API service as small as possible.
+
+23:22.800 --> 23:27.640
+That doesn't mean that I don't build actually an onion of API behind the scenes.
+
+23:27.640 --> 23:30.960
+So I like this onion concept, like, APIs are layered.
+
+23:30.960 --> 23:37.140
+But the user only gets the outermost layer, the inner layers are for own enjoyment.
+
+23:37.140 --> 23:41.200
+And then you keep these inner layers, and you have this flexibility of change remaining,
+
+23:41.200 --> 23:42.960
+but it's still kind of clean.
+
+23:42.960 --> 23:46.840
+And then over time, if that library becomes like the most stable thing ever, you can actually
+
+23:46.840 --> 23:49.360
+start exposing the next layers of the onion.
+
+23:49.360 --> 23:53.400
+A good example for this, I think, is Rust compiler plugins.
+
+23:53.400 --> 23:57.560
+Rust compiler, like many other systems, want you to be able to write a custom plugin for
+
+23:57.560 --> 23:59.080
+it, like the proc macros.
+
+23:59.080 --> 24:02.480
+But the problem is that that exposes a lot of the internal machinery of the compiler,
+
+24:02.480 --> 24:05.800
+which the compiler authors don't want to be stable.
+
+24:05.800 --> 24:10.280
+So what they did is they actually took the internals of that thing, they exposed it through
+
+24:10.280 --> 24:16.800
+a secondary library, which I think was soon, and I think soon is the one on top, but maybe
+
+24:16.800 --> 24:20.240
+it was proc macros too, but in any case, it was exposed as a secondary library.
+
+24:20.240 --> 24:24.720
+It actually used the same code, but they had different stability guarantees, and then
+
+24:24.720 --> 24:28.560
+they used a conversion system, which was basically serialized to string and deserialized from
+
+24:28.560 --> 24:31.280
+string to bridge between the two.
+
+24:31.280 --> 24:35.080
+And so if you do feel like, okay, I actually want to eventually expose this other library,
+
+24:35.080 --> 24:40.160
+and I want this inner most functionality to be available for customer, you can think
+
+24:40.160 --> 24:45.200
+of exposing it as a completely independent library for experimentation, and then eventually
+
+24:45.200 --> 24:51.240
+when it stabilizes, you can give it another onion layer to the customer.
+
+24:51.240 --> 24:55.680
+But again, once you have exposed that, your stability guarantees are going to be much
+
+24:55.680 --> 24:58.160
+harder to uphold.
+
+24:58.160 --> 25:03.160
+So just a simple example, internally in my templating engine, I have a lot of abstractions
+
+25:03.160 --> 25:07.720
+like compile template, which is something that I know would be awesome to use externally,
+
+25:07.720 --> 25:11.480
+but I don't want to give it to you, and then the code generator and the parser that have
+
+25:11.480 --> 25:16.160
+already been people asking how to get access to it, you're not going to get it for now.
+
+25:16.160 --> 25:22.080
+But I keep the abstraction internally because it's much more fun this way.
+
+25:22.080 --> 25:27.880
+As I mentioned, I like to have as little API service as possible, and by the way, I fail
+
+25:27.880 --> 25:28.880
+at this.
+
+25:28.880 --> 25:32.920
+You will notice that when I start a library, usually it has way more API than after three
+
+25:32.920 --> 25:35.560
+iterations when I take it away.
+
+25:35.560 --> 25:39.920
+But I basically try to keep it flat, so I expose all of the things I want you to use
+
+25:39.920 --> 25:46.720
+to the top level, and then all of my internal create structure is whatever, however I feel
+
+25:46.720 --> 25:49.280
+like to actually lay out those things.
+
+25:49.280 --> 25:55.200
+If I do have so much code in the library that I feel like there need to be sub-modules,
+
+25:55.200 --> 26:02.400
+make them up on the spot, so in the Insta Snapshot testing library that I wrote, I have a lot
+
+26:02.400 --> 26:06.800
+of internal types that you actually want to use as a user every once in a while, and they
+
+26:06.800 --> 26:08.880
+come from all different locations in the code base.
+
+26:08.880 --> 26:13.400
+So what I did is in my librs, I have a pop-mod internals, which is documented, those are
+
+26:13.400 --> 26:17.280
+internals you're allowed to use, but I just pull them from wherever they're defined.
+
+26:17.280 --> 26:20.360
+So this module doesn't exist as an internals.rs file.
+
+26:20.360 --> 26:25.120
+It's purely a thing that sits in my librs to organize the structure.
+
+26:25.120 --> 26:31.440
+And that way, I have the freedom to move these things around as I want.
+
+26:31.440 --> 26:35.600
+Related, every once in a while, you have to export an API that has to be public for reasons
+
+26:35.600 --> 26:39.600
+that mostly sit in the restrictions of the language.
+
+26:39.600 --> 26:42.280
+But I really don't want it to use it, so I just hide it.
+
+26:42.280 --> 26:47.080
+So dock hidden, you will find a lot of Rust libraries which have a lot more public API,
+
+26:47.080 --> 26:48.080
+but you're not supposed to use it.
+
+26:48.080 --> 26:52.000
+It's usually hidden behind underscore underscore, and it's just hidden.
+
+26:52.000 --> 26:53.000
+Why does it exist?
+
+26:53.000 --> 26:58.800
+On the one hand, because Microsoft needs to access functionality.
+
+26:58.800 --> 27:02.280
+The other reason is also that you might have to create dependencies.
+
+27:02.280 --> 27:10.480
+So Insta, for instance, has to expose internals out of itself into the test runner called
+
+27:10.480 --> 27:12.280
+Cargo Insta.
+
+27:12.280 --> 27:16.960
+And the way I do this, I have a hidden feature flag which says if you're Cargo Insta, you
+
+27:16.960 --> 27:17.960
+can use this feature flag.
+
+27:17.960 --> 27:20.240
+Everybody else, just please don't.
+
+27:20.240 --> 27:23.400
+But if you do still use that feature flag, you're still not going to see all of this
+
+27:23.400 --> 27:26.120
+API because it's kind of hidden away.
+
+27:26.120 --> 27:32.480
+This also helps when you use, for instance, DocsRS is an awesome tool to document your
+
+27:32.480 --> 27:33.800
+crates.
+
+27:33.800 --> 27:40.000
+A lot of people run DocsRS with all feature flags so that it's fully documented everything.
+
+27:40.000 --> 27:44.120
+If I wouldn't hide all of those things, then this internal feature flag that would turn
+
+27:44.120 --> 27:46.480
+on this API would accidentally document it.
+
+27:46.480 --> 27:48.160
+I don't want that.
+
+27:48.160 --> 27:53.680
+So even the APIs that sort of are there for me, I will still hide from documentation.
+
+27:53.680 --> 27:59.360
+Cool, traits.
+
+27:59.360 --> 28:02.760
+I have a really complicated relationship with them because I think they're awesome, but
+
+28:02.760 --> 28:07.160
+I also kind of don't want them to be in APIs.
+
+28:07.160 --> 28:09.280
+I think they fall into two categories.
+
+28:09.280 --> 28:14.520
+Some of them are, well, maybe the other way around, open traits are most common one.
+
+28:14.520 --> 28:17.240
+Asref into, everybody can implement them.
+
+28:17.240 --> 28:20.960
+And then there are a lot of cases where you might have traits that only exist as an internal
+
+28:20.960 --> 28:21.960
+abstraction.
+
+28:21.960 --> 28:23.560
+Let's call them sealed traits.
+
+28:23.560 --> 28:28.280
+They come from a crate and they're only implemented in the crate and nobody ever should implement
+
+28:28.280 --> 28:29.280
+those.
+
+28:29.280 --> 28:30.680
+Why do they exist?
+
+28:30.680 --> 28:34.560
+Because, for instance, you want to box something up or because you want to have really nice
+
+28:34.560 --> 28:38.200
+documentation where you can select, my crate accepts these types of things.
+
+28:38.200 --> 28:45.520
+So I wrote a Rust Redis library a couple of years ago where I made the conversion trait
+
+28:45.520 --> 28:52.440
+so that you can pass any Rust type that is compatible with Redis in all of those functions.
+
+28:52.440 --> 28:53.840
+And I didn't seal it off.
+
+28:53.840 --> 28:57.640
+And now it's public interface and people have been sealing off their own types, have been
+
+28:57.640 --> 28:59.800
+implementing for their own types.
+
+28:59.800 --> 29:01.720
+And so now it's just there.
+
+29:01.720 --> 29:04.280
+You can't take it away anymore.
+
+29:04.280 --> 29:09.360
+Which is fine for that library, but I didn't want to do it in other cases because, to me,
+
+29:09.360 --> 29:13.440
+that trait actually mostly only existed so that it's there for documentation purposes.
+
+29:13.440 --> 29:16.000
+So you can seal them in two ways.
+
+29:16.000 --> 29:21.040
+One is sort of the soft seal, which is just hide the functions that you're supposed to
+
+29:21.040 --> 29:22.040
+implement.
+
+29:22.040 --> 29:28.120
+And then it's unclear how you're actually going to implement it.
+
+29:28.120 --> 29:31.440
+In this case, it's soft sealed, so you can actually call it still and you can actually
+
+29:31.440 --> 29:33.160
+implement it.
+
+29:33.160 --> 29:36.160
+I'm not sure if I like it or not, but there are actually some use cases of why you might
+
+29:36.160 --> 29:37.160
+want to do this.
+
+29:37.160 --> 29:39.440
+Mostly you have to do it with code generation.
+
+29:39.440 --> 29:43.640
+But there's also the way of doing a full seal where you put a private serial size type
+
+29:43.640 --> 29:48.080
+into an argument and because it cannot name the type because it's never exposed, you can
+
+29:48.080 --> 29:51.520
+absolutely not call this ever.
+
+29:51.520 --> 29:56.320
+And the funny thing is Rust actually depends in the standard library of this pattern a lot.
+
+29:56.320 --> 30:03.400
+If you use any type and the generated downcasting feature, it uses an internal system called
+
+30:03.400 --> 30:06.880
+type ID to return a unique number for a type.
+
+30:06.880 --> 30:11.160
+If you were to be able to override this and lie about your own type, you could cause unsafe
+
+30:11.160 --> 30:12.680
+memory access, right?
+
+30:12.680 --> 30:17.640
+And so they have a seal marker in there that you can't implement and only the default implementation
+
+30:17.640 --> 30:21.440
+is only the valid only implementation.
+
+30:21.440 --> 30:22.440
+So it's a pattern.
+
+30:22.440 --> 30:24.840
+It's just not a pattern that has syntax support.
+
+30:24.840 --> 30:27.120
+It's just used that way.
+
+30:27.120 --> 30:31.080
+For now, maybe it will eventually get one.
+
+30:31.080 --> 30:32.880
+So why do I not like traits that much?
+
+30:32.880 --> 30:35.200
+Because I find them incredibly hard to discover.
+
+30:35.200 --> 30:39.440
+It's very annoying if you import a type from your library and then you want to call a method
+
+30:39.440 --> 30:43.600
+on it and the method is not there until you bring the traits into scope.
+
+30:43.600 --> 30:47.480
+And I know that a lot of people write this awesome preludes where like import this from
+
+30:47.480 --> 30:53.120
+my library and now, by the way, you have 20 types sitting around in your scope.
+
+30:53.120 --> 30:55.160
+It works, but it has a whole bunch of problems.
+
+30:55.160 --> 30:59.840
+One of which is that it makes your error messages a lot more confusing because there are traits
+
+30:59.840 --> 31:04.240
+in a standard library that if they are in scope, types with the inherent implementations
+
+31:04.240 --> 31:05.840
+will no longer function the same.
+
+31:05.840 --> 31:10.520
+There's a type called, I think it's called borough, a trait called borough.
+
+31:10.520 --> 31:15.240
+If you bring borough into your scope, you can no longer borrow from, I think, a ref cell.
+
+31:15.240 --> 31:20.280
+It will error because the trait overwrites the inherent implementation.
+
+31:20.280 --> 31:24.640
+So that's not great and there's a bug report from like seven years ago, I think, and there's
+
+31:24.640 --> 31:26.680
+already, but how do you change it now?
+
+31:26.680 --> 31:29.840
+It's like that's the behavior, but that's the problem that you have with preludes because
+
+31:29.840 --> 31:34.440
+they are just based by name and it will say like, well, there is no implementation by
+
+31:34.440 --> 31:38.040
+that name or it doesn't help you that there's an inherent method on this thing.
+
+31:38.040 --> 31:39.240
+I'm not going to let you call it.
+
+31:39.240 --> 31:41.680
+You have to disambigate your call.
+
+31:41.680 --> 31:48.360
+So there is some problem coming with the trait stuff and they're really useful, but you shouldn't
+
+31:48.360 --> 31:50.560
+maybe overdo them, I think, to some degree.
+
+31:50.560 --> 31:54.480
+It's really nice if the type out of the box already has a neat little behavior.
+
+31:54.480 --> 31:59.880
+And if you want to abstract to a multiple stuff, you can add the traits later anyways.
+
+31:59.880 --> 32:02.600
+There are however traits you should probably implement all the time.
+
+32:02.600 --> 32:04.600
+My favorite one is debug.
+
+32:04.600 --> 32:06.280
+It should be on all your public types.
+
+32:06.280 --> 32:11.600
+If you feel like it's blowing up your code generation times too much, you can hide it
+
+32:11.600 --> 32:16.480
+behind an external and extra flag you can turn on demand.
+
+32:16.480 --> 32:20.360
+I give you a very good reason why debug should be on all your types.
+
+32:20.360 --> 32:23.560
+Every once in a while, you have to be generic over something and then you will usually say
+
+32:23.560 --> 32:27.520
+like, I'm generic over serialize or I'm generic over my really cool thing that you should
+
+32:27.520 --> 32:28.520
+be calling.
+
+32:28.520 --> 32:34.840
+And the problem is when you're generic over serialize only and you're deep down in nested
+
+32:34.840 --> 32:39.720
+generic over serialize type and you want to debug print, you can no longer do that because
+
+32:39.720 --> 32:42.440
+serialize does not imply debug.
+
+32:42.440 --> 32:49.160
+So even if a type is capable of debug serializing because it's not a trade bound on the thing,
+
+32:49.160 --> 32:53.800
+you cannot call it there, which is very, very annoying in a lot of code setups.
+
+32:53.800 --> 32:58.640
+And so what I do these days, I will make debug and implied bound on a lot of, so like a super
+
+32:58.640 --> 33:07.720
+trade on a lot of the things that I actually expect to be very deep in code calls so that
+
+33:07.720 --> 33:09.120
+I can actually debug the whole thing.
+
+33:09.120 --> 33:13.880
+And the problem is that that requires that the ecosystem embraces the idea that almost
+
+33:13.880 --> 33:15.800
+everything is debuggable.
+
+33:15.800 --> 33:18.200
+So just make it debug.
+
+33:18.200 --> 33:22.920
+And if you really think it's blowing up a compile time, just put a second flag in that
+
+33:22.920 --> 33:25.840
+it can turn on when you need it.
+
+33:25.840 --> 33:32.960
+But not being able to debug very deep down in generic code land is just an unnecessary
+
+33:32.960 --> 33:35.280
+frustration you can avoid.
+
+33:35.280 --> 33:39.200
+This trade is almost like debug, it just converts this thing to string.
+
+33:39.200 --> 33:43.840
+It's obviously useful for a bunch of cases, but I can definitely overdo it.
+
+33:43.840 --> 33:49.640
+I much rather have the compiler yell at me that I should be telling it how to format
+
+33:49.640 --> 33:54.480
+rather than the string, that the type in itself just being formatable.
+
+33:54.480 --> 33:56.640
+But there are obviously like a lot of types for which it's necessary.
+
+33:56.640 --> 33:59.600
+Like if you have a UIA IDE, you would expect that the stringifies.
+
+33:59.600 --> 34:05.240
+If you have an error, errors have to be stringified so you can't really opt out of it anyways.
+
+34:05.240 --> 34:15.720
+But I feel like that a lot of types, actual way to convert it into a string is the debug
+
+34:15.720 --> 34:19.480
+thing is really hard to discover API.
+
+34:19.480 --> 34:23.800
+Like yes, of course, then I get two string methods appears, but you don't know if this
+
+34:23.800 --> 34:27.400
+is a thing that you're supposed to look at or if it's just a debug format with a different
+
+34:27.400 --> 34:29.520
+output.
+
+34:29.520 --> 34:30.520
+I've seen both.
+
+34:30.520 --> 34:34.000
+There are some types where you can call two string on it, but it's really not the real
+
+34:34.000 --> 34:38.640
+string form, you have to pick a different one, and it's just an alias for debug print,
+
+34:38.640 --> 34:40.440
+and sometimes it's the real deal.
+
+34:40.440 --> 34:45.200
+So this is a very confusing trait, I think.
+
+34:45.200 --> 34:52.320
+Copy and clone are obviously the most common traits that you have to deal with.
+
+34:52.320 --> 34:56.960
+Once granted, impossible to take away, I would say, because people start expecting that they
+
+34:56.960 --> 34:57.960
+can clone it.
+
+34:57.960 --> 35:03.480
+And so copy is a really tricky one because you can only uphold it for as long as it looks
+
+35:03.480 --> 35:05.960
+like a certain type of structure.
+
+35:05.960 --> 35:10.160
+Once you put something in there that's not copied, there is no way to fake the copy.
+
+35:10.160 --> 35:14.200
+And so if you make your type copy and then you later discover that that was a mistake,
+
+35:14.200 --> 35:19.920
+you now need to hold an arc, it's a breaking change, and I don't like breaking changes.
+
+35:19.920 --> 35:25.720
+So about copy, you have to think, will you uphold this forever?
+
+35:25.720 --> 35:30.560
+Clone, I think, is actually relatively fine to backport.
+
+35:30.560 --> 35:34.360
+If you discover over time that you really can't clone the thing anymore, you just put
+
+35:34.360 --> 35:35.800
+an arc over it.
+
+35:35.800 --> 35:40.400
+So a very common reason in the past, I've noticed that I have a type, it has cloned,
+
+35:40.400 --> 35:44.200
+and now it can no longer be cloned because it holds a boxed-in function.
+
+35:44.200 --> 35:45.200
+Doesn't actually matter.
+
+35:45.200 --> 35:49.640
+Instead of a boxed-in function, make an arced-in function, and it works again.
+
+35:49.640 --> 35:53.200
+So a lot of these sort of classic cases of, hey, I can't clone this anymore because of
+
+35:53.200 --> 35:59.200
+a reason, you just arc it, it's fine.
+
+35:59.200 --> 36:03.560
+And then the problem with copy is also that the inverse, you don't put copy on something
+
+36:03.560 --> 36:06.520
+and then people get really angry because they expect it to copy.
+
+36:06.520 --> 36:08.400
+Classic case is the range type in Rust.
+
+36:08.400 --> 36:13.200
+It doesn't copy, everybody is like, it doesn't understand why does it not copy.
+
+36:13.200 --> 36:15.840
+There's a good reason why it doesn't copy, but it's really annoying, and I think it's
+
+36:15.840 --> 36:22.040
+one of the most common frustrations in Rust that the range type is not copy, and that you
+
+36:22.040 --> 36:29.080
+have to clone it all the time, like this by response on GitHub, I think.
+
+36:29.080 --> 36:32.760
+This is one of our only briefly cover, but I don't have recommendations on if something
+
+36:32.760 --> 36:40.560
+should be sent or synced, but I do think that it's actually totally fine not to have objects
+
+36:40.560 --> 36:42.840
+that are thread safe.
+
+36:42.840 --> 36:47.480
+And the reason for that is that you can often just tell a user, they can create an API where
+
+36:47.480 --> 36:49.240
+the user doesn't really have to do this.
+
+36:49.240 --> 36:53.360
+They can just put this locally and they're done.
+
+36:53.360 --> 36:54.360
+Why?
+
+36:54.360 --> 36:57.560
+Because, for instance, one of the things that I love to do is create this sort of session
+
+36:57.560 --> 36:58.560
+abstraction.
+
+36:58.560 --> 37:03.240
+The session abstraction is I want to deal with a bunch of objects for the scope of one
+
+37:03.240 --> 37:04.880
+function only.
+
+37:04.880 --> 37:08.280
+So I load everything into some sort of environment where I do some stuff with it, I have an object
+
+37:08.280 --> 37:11.840
+called the session, it tracks a whole bunch of data modifications, it gives me access
+
+37:11.840 --> 37:15.360
+to something, it's the only thing that ever needs to hold this thing, and then when I'm
+
+37:15.360 --> 37:19.240
+done with it, I tear down the session and my lifetime problem goes away.
+
+37:19.240 --> 37:24.960
+So for as long as you don't have to pass this over really complicated boundaries, just
+
+37:24.960 --> 37:30.400
+have this thing, make a session abstraction, hold all the data in there that borrows temporarily
+
+37:30.400 --> 37:33.320
+and then disregard it.
+
+37:33.320 --> 37:37.600
+So this is from our Symbolication Library, it holds, when you want to deal with a debug
+
+37:37.600 --> 37:41.720
+file, you open up this debug session, you do a bunch of stuff, you tear it down.
+
+37:41.720 --> 37:46.280
+And we have never, I think, had a case where we need to hold on to this, where the lifetime
+
+37:46.280 --> 37:47.520
+was actually a problem.
+
+37:47.520 --> 37:51.720
+But you will notice here there's a self-cell in there, which I think is probably one of
+
+37:51.720 --> 37:53.840
+the best things you can have.
+
+37:53.840 --> 37:58.800
+Then you create an API, and then you discover I need to borrow into myself, and Russ doesn't
+
+37:58.800 --> 38:01.720
+do that, but self-cell lets you do that.
+
+38:01.720 --> 38:04.440
+So there are a lot of crates that have been created over the years that you can borrow
+
+38:04.440 --> 38:07.840
+into yourself, this is my favorite.
+
+38:07.840 --> 38:14.360
+It basically gives you almost like, it gives you a type that says here I hold some data
+
+38:14.360 --> 38:19.320
+and by the way I also hold a reference into myself, and it doesn't really convenient way.
+
+38:19.320 --> 38:25.000
+So if you have created yourself into a whole, where you feel like lifetimes are your enemy,
+
+38:25.000 --> 38:27.640
+this might dig you out of this.
+
+38:27.640 --> 38:35.000
+Yeah, last part, errors, I think they're important, they're talked by themselves.
+
+38:35.000 --> 38:37.560
+You have to consider if you panic or error.
+
+38:37.560 --> 38:42.720
+My strong recommendation is not panic, but if you do panic, use track caller, you probably
+
+38:42.720 --> 38:49.240
+know what this is, but it basically removes this one function from the cost of the call
+
+38:49.240 --> 39:01.520
+stack, and it removes this one function from the call stack, and then the panic message
+
+39:01.520 --> 39:07.120
+says, hey, your problem was where you called, in this case, pop on an empty stack, and not
+
+39:07.120 --> 39:10.840
+the completely pointless unwrap in there, because you want to know where you're fucked
+
+39:10.840 --> 39:16.280
+up and not here, obviously.
+
+39:16.280 --> 39:23.360
+Errors are really important, again, they would be a talk by themselves, but my ask to everybody
+
+39:23.360 --> 39:27.600
+is please implement STD error on those thingies, because then you can sort of compose them,
+
+39:27.600 --> 39:33.280
+a lot of people still don't do, it's very, very annoying if they don't.
+
+39:33.280 --> 39:34.280
+Thank you.
+
+39:34.280 --> 40:00.280
+So otherwise, we can also do it in the hallway, but might have one or two questions.
+
+40:00.280 --> 40:16.960
+Thank you very much for the talk.

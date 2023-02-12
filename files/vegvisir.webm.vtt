@@ -1,0 +1,826 @@
+WEBVTT
+
+00:00.000 --> 00:11.360
+Alright, so good morning everybody, my name is Joris and I'm a PhD student over at Hasselt
+
+00:11.360 --> 00:17.000
+University here in Belgium and I'm doing a PhD on multimedia streaming and network
+
+00:17.000 --> 00:20.840
+transport layer protocols or even better the intersection of those two.
+
+00:20.840 --> 00:25.880
+Today I'm here to talk a little bit about a project we did called Vagvizir which is
+
+00:25.880 --> 00:32.240
+an automated testing framework for orchestrating client and server setups using the quick transport
+
+00:32.240 --> 00:37.560
+layer protocols but before we jump into that maybe let's talk a little bit about what quick
+
+00:37.560 --> 00:42.320
+actually is because I assume not everybody has heard about it. Well quick is a general
+
+00:42.320 --> 00:47.480
+purpose transport layer protocol that was standardized by the ITF in May 2021 and if
+
+00:47.480 --> 00:53.080
+you have any updated like applications on your phone or have been using the latest releases
+
+00:53.080 --> 00:57.400
+of browsers such as Firefox, Chrome or whatever you're using you've probably been already
+
+00:57.400 --> 01:02.600
+using quick as it has been deployed to a lot of many different applications and websites
+
+01:02.600 --> 01:06.480
+already. For example Facebook, Instagram they are using it, if you're streaming videos
+
+01:06.480 --> 01:12.240
+over YouTube you have probably been already using quick. Quick is a name, it's not an
+
+01:12.240 --> 01:17.400
+acronym, it used to stand for quick UDP internet connections but it has actually not been called
+
+01:17.400 --> 01:24.600
+that for quite some time already now. Some of its features, the biggest feature is encryption
+
+01:24.600 --> 01:29.160
+so the protocol actually encrypts everything by default which is great because that's the
+
+01:29.160 --> 01:33.840
+main driver against ossification also it's reason that it was created because TCP is
+
+01:33.840 --> 01:38.360
+actually an ossified protocol when we compare the two. It's also great for preventing third
+
+01:38.360 --> 01:42.560
+parties from actually interfering with the data you are transmitting over the network.
+
+01:42.560 --> 01:45.800
+It's less great for research and development as you have to actually account for that in
+
+01:45.800 --> 01:51.120
+your test setups which we are going to talk about a little bit further ahead. It's currently
+
+01:51.120 --> 01:56.480
+most implementations implemented on top of UDP in user space. Some implementations are
+
+01:56.480 --> 02:02.160
+actually looking at implementing it more towards the kernel but those steps have not been taken
+
+02:02.160 --> 02:08.800
+by many of the implementations. At present at least as far as I know 25 implementations
+
+02:08.800 --> 02:14.200
+exist most of them also being open source written in multiple programming languages.
+
+02:14.200 --> 02:19.440
+They also provide libraries which you can directly use to actually use quick in your
+
+02:19.440 --> 02:27.000
+applications. Another benefit of quick or another new thing with quick is HTTP 3 which
+
+02:27.000 --> 02:33.080
+you might have heard of. The reason for the introduction of H3 is that H1 and H2 actually
+
+02:33.080 --> 02:39.400
+only run over TCP that's why they created a new version of HTTP called HTTP 3. There's
+
+02:39.400 --> 02:44.640
+not that big of a difference between H2 and H3 in practice but just for sake of naming
+
+02:44.640 --> 02:51.760
+it it's HTTP 3. Right so now that you know what quick is that's at least a requirement
+
+02:51.760 --> 02:57.880
+for understanding the stock. Let's talk about how we can actually use this in like experiments
+
+02:57.880 --> 03:03.800
+and stuff. Maybe let's try doing something very simple. I just told you that most browsers
+
+03:03.800 --> 03:09.000
+implement quick. Maybe let's try connecting to a website that only implements an HTTP
+
+03:09.000 --> 03:14.560
+3 server. Should be simple right but as you can see on the screenshot it is not in practice.
+
+03:14.560 --> 03:19.160
+And the reason for that is really simple that's because browsers decided early on that HTTP
+
+03:19.160 --> 03:28.120
+3 server should be discoverable through the old SVC header provided by an H1 or H2 deployment
+
+03:28.120 --> 03:31.440
+which really sucks if you want to do some automated testing because that means you also
+
+03:31.440 --> 03:37.440
+have to put up like or spin up an H1 or H2 server and actually account for this. Luckily
+
+03:37.440 --> 03:42.960
+we have some options like for example within Chrome and Firefox to enable force quick on
+
+03:42.960 --> 03:49.280
+certain domains which we can automate through or by means of for example parameters supplied
+
+03:49.280 --> 03:56.560
+in the command line or by configurations in the browser itself. Right so we can connect
+
+03:56.560 --> 04:00.520
+to a web server at this point. How do we actually know what's happening under the hood should
+
+04:00.520 --> 04:04.600
+also be simple right. Remember everything is encrypted so actually seeing what's happening
+
+04:04.600 --> 04:11.280
+is a little bit is not that trivial actually. Luckily most implementations nowadays use
+
+04:11.280 --> 04:18.440
+like standard of the shelf TLS libraries and these TLS back ends actually support an environment
+
+04:18.440 --> 04:22.760
+variable called SSL key lock file and the idea behind the SSL key lock file is that you can
+
+04:22.760 --> 04:28.040
+like point it towards a file which then gets used by these TLS back ends to like output
+
+04:28.040 --> 04:32.920
+all the secrets used for encryption during a whatever the application is actually doing.
+
+04:32.920 --> 04:37.000
+If you load those SSL key lock files into programs like wire shark you can actually
+
+04:37.000 --> 04:42.440
+decrypt the traffic which is nice if you want to see what happened. Unfortunately tools
+
+04:42.440 --> 04:47.520
+like wire shark at least as far as I know don't actually have any visualizations about
+
+04:47.520 --> 04:52.640
+stuff that's happening at like the congestion or flow control layer. You have that for TCP
+
+04:52.640 --> 04:59.280
+but quick those things don't exist yet. But luckily we have other stuff for that. Q lock
+
+04:59.280 --> 05:03.160
+is one of them. There has been a nice talk about this by its inventor a couple of years
+
+05:03.160 --> 05:07.360
+ago at FOSDOM. I really invite you to look at it. But basically in a nutshell what Q
+
+05:07.360 --> 05:13.720
+lock is is like a structured way of logging and a unified way of logging that can be implemented
+
+05:13.720 --> 05:21.560
+by any endpoint implementation using quick. In a nutshell this is basically a file for
+
+05:21.560 --> 05:27.440
+example a JSON file that just locks everything that's happening and if you have some scripts
+
+05:27.440 --> 05:31.880
+or tools that can parse this you can actually do a lot of fun stuff with it. For example
+
+05:31.880 --> 05:36.440
+the QVIS visualization tool which is also by the same creator is a tool that allows
+
+05:36.440 --> 05:40.880
+you to load these files and like actually visualize similar to what wire shark can do
+
+05:40.880 --> 05:45.240
+for TCP but then for quick what's happening on the congestion layers. For example on the
+
+05:45.240 --> 05:51.640
+left you see a flow control and congestion flow graph and on the right you see a plot
+
+05:51.640 --> 05:56.800
+of the home trip time that was experienced by the application. So we can look at what's
+
+05:56.800 --> 06:02.760
+happening under the hood maybe let's try something more advanced setting up like your own quick
+
+06:02.760 --> 06:07.520
+client and quick server to do some local experiments maybe change something to the implementations
+
+06:07.520 --> 06:11.840
+it doesn't matter really what you want to do. Even that is not that trivial simply because
+
+06:11.840 --> 06:15.440
+there are many implementations written in many languages meaning that they have their
+
+06:15.440 --> 06:22.360
+own requirements their own installation procedures. Another distinction is that different implementations
+
+06:22.360 --> 06:26.960
+actually have different performance characteristics meaning that some are more tuned towards certain
+
+06:26.960 --> 06:34.520
+scenarios some only support a certain feature set so you also have to account for that.
+
+06:34.520 --> 06:39.960
+An additional requirement is that you also have to set up like self-signed certificates
+
+06:39.960 --> 06:44.800
+and for some reason some implementations accept all kinds of certificates and then for some
+
+06:44.800 --> 06:50.800
+reason others fail we have never really figured out why we just use a common way that works
+
+06:50.800 --> 06:56.080
+for them all now anyway. Another query that you can experience is within the code bases
+
+06:56.080 --> 07:01.160
+themselves a fun one I always show to my students is this one this is from the quick
+
+07:01.160 --> 07:07.000
+code base which uses the cubic congestion control algorithm if you know something about
+
+07:07.000 --> 07:11.920
+congestion control and makes sense like the file is called new cubic sander the function
+
+07:11.920 --> 07:15.800
+is called new cubic new cubic sander it even specifies in documentation that it makes a
+
+07:15.800 --> 07:21.120
+new cubic sander unless you actually put a Renault ball on true then it behaves like
+
+07:21.120 --> 07:27.080
+a totally different beast actually new Renault in that case so some some weird quirks that
+
+07:27.080 --> 07:32.760
+you actually have to account for too. So the point I'm trying to make it is is that there
+
+07:32.760 --> 07:36.120
+are a lot of different implementations testing the mall takes time it's not that easy to
+
+07:36.120 --> 07:41.040
+set it up you experience a lot of these small issues it's cumbersome to like test multiple
+
+07:41.040 --> 07:47.040
+implementations which is the reason why I am presenting Vagvizir today. The idea behind
+
+07:47.040 --> 07:50.720
+Vagvizir is to actually aid with this kind of development so if you're doing research
+
+07:50.720 --> 07:54.960
+or even development within quick the idea is that Vagvizir can automatically set up
+
+07:54.960 --> 08:00.200
+these kinds of interactions between clients and servers but also using simulated networks
+
+08:00.200 --> 08:05.680
+such that you can have actual repeatable and shareable experiments. The way you do it this
+
+08:05.680 --> 08:11.600
+is by defining experiments with configuration files and a single experiment can consist
+
+08:11.600 --> 08:15.480
+out of multiple test cases and the idea is that a single test case looks something like
+
+08:15.480 --> 08:22.200
+this. So you have the two entities the server and the client which just assume their prototypical
+
+08:22.200 --> 08:27.200
+roles as known within the server client model and in between them sits a network component
+
+08:27.200 --> 08:30.600
+that we call the shaper and the idea of the shaper is that it actually applies some kind
+
+08:30.600 --> 08:36.200
+of scenario on the traffic passing between the server and client for example it can introduce
+
+08:36.200 --> 08:41.120
+some latency or it could limit the throughput doesn't really matter what you want to do
+
+08:41.120 --> 08:46.000
+the idea is that you can do it in a repeatable way. You also see the docker container stuff
+
+08:46.000 --> 08:52.040
+on top the idea of using or actually deploying these test cases within docker containers
+
+08:52.040 --> 08:57.240
+is that we can easily share them with other people which is a really nice benefit within
+
+08:57.240 --> 09:02.560
+the academic community but also we can free certain implementations like we can actually
+
+09:02.560 --> 09:07.080
+save a docker container and reuse it at a later point so say for example something changes
+
+09:07.080 --> 09:11.120
+and we want to try an older version that's totally possible with this setup. Additionally
+
+09:11.120 --> 09:16.600
+within the quick community there have been some other efforts if you are part of the
+
+09:16.600 --> 09:22.320
+quick community you might actually recognize this setup it's pretty much the same as one
+
+09:22.320 --> 09:28.120
+used by an interoperability project called the quick interoperability runner. They also
+
+09:28.120 --> 09:32.480
+provide containers for their setup that are more tuned towards testing the actual interoperability
+
+09:32.480 --> 09:37.800
+between quick implementations but the benefit of using the same architecture is that we
+
+09:37.800 --> 09:44.040
+are actually completely compatible with their setups so that means that even though Vegvizir
+
+09:44.040 --> 09:48.600
+is relatively new at this point in time we are already compatible with 15 out of the
+
+09:48.600 --> 09:54.920
+25 quick implementations right out of the box. You also see on the right side that we
+
+09:54.920 --> 10:00.360
+have a client that can be defined as a CLI command that's because early on we realized
+
+10:00.360 --> 10:06.320
+that if we want to test applications not everything is not every kind of test is suitable to be
+
+10:06.320 --> 10:11.960
+placed in a docker container which is why we also allow to define test by just spinning
+
+10:11.960 --> 10:18.080
+up local programs as you are used to from a terminal. A good example of this is a browser
+
+10:18.080 --> 10:22.040
+if you're doing some kind of media streaming experiments you actually want hardware acceleration
+
+10:22.040 --> 10:26.560
+as such to be enabled which I guess you can do this in docker containers but it's really
+
+10:26.560 --> 10:32.520
+cumbersome to actually do this in a good way. Right okay so how are these experiments
+
+10:32.520 --> 10:39.600
+actually defined? Well we decided to not use one single configuration file simply because
+
+10:39.600 --> 10:45.320
+that would mean we had to be very verbose. We actually split it up in two types of configurations.
+
+10:45.320 --> 10:50.080
+On the left you can see the implementation configuration which is actually what defines
+
+10:50.080 --> 10:55.040
+what is available within an experiment. So the idea is that an implementation configuration
+
+10:55.040 --> 10:59.400
+is similar to like your list of installed software on your computer. You simply have
+
+10:59.400 --> 11:03.880
+a list of entities that you can pick from. We also introduced a parametric system to
+
+11:03.880 --> 11:08.040
+make it actually really dynamic steerable from within an experiment configuration and
+
+11:08.040 --> 11:13.160
+we will see some examples on that in a second. On the right you see the experiment configuration
+
+11:13.160 --> 11:17.480
+that's the actual definition of what needs to happen within one experiment so what defines
+
+11:17.480 --> 11:23.280
+the test cases. The idea is that you define how the entities from the implementation configuration
+
+11:23.280 --> 11:31.560
+should behave and what parameters should actually contain as values through arguments.
+
+11:31.560 --> 11:35.520
+Also configure sensors I'm going to talk about that in a second but the biggest benefit
+
+11:35.520 --> 11:42.080
+of splitting these two up is actually that the experiment configuration automatically
+
+11:42.080 --> 11:48.920
+produces this permutation or rather a total of combinations from all these entities. So
+
+11:48.920 --> 11:53.080
+say for example you define two servers, two clients and two shapers. The total amount
+
+11:53.080 --> 11:59.760
+of tests within this experiment will actually be eight because it just compiles a complete
+
+11:59.760 --> 12:04.840
+combination of all these configurations. Another benefit is loose coupling so you might wonder
+
+12:04.840 --> 12:09.240
+yeah I still don't see the reason why you split these two up. Well a big thing with
+
+12:09.240 --> 12:13.720
+an academic research is that we actually want to test different versions. So if we have
+
+12:13.720 --> 12:18.320
+an implementation configuration that for example defines a client called Chrome which
+
+12:18.320 --> 12:23.600
+then refers to a Chrome browser we can actually have one implementation configuration that
+
+12:23.600 --> 12:28.240
+refers to version for example 99 and we can have another implementation configuration
+
+12:28.240 --> 12:32.880
+that refers to for example version 100. The benefit of that is that if we simply swap
+
+12:32.880 --> 12:37.120
+these implementation configurations we don't need to change the experiment configurations
+
+12:37.120 --> 12:41.560
+meaning that we can without having to verbose rewrite all these stats really easily test
+
+12:41.560 --> 12:47.840
+multiple setups. Some examples this is an example of an implementation configuration.
+
+12:47.840 --> 12:52.440
+I do invite you to go to the GitHub repository where everything is really nicely explained
+
+12:52.440 --> 13:00.280
+and we provide some more examples unfortunately limited by the screen size. You see that we
+
+13:00.280 --> 13:04.080
+always have to define in the implementation configuration three types of entities like
+
+13:04.080 --> 13:09.080
+we talked about earlier the clients the servers and the shapers and these three are examples
+
+13:09.080 --> 13:14.280
+using Docker system. So in the top two you see that we actually refer to Docker Hub images.
+
+13:14.280 --> 13:18.120
+These are actual examples that come from the quick interop runner project which we are
+
+13:18.120 --> 13:23.800
+compatible with. The bottom one is a locally built Docker image. The reason I highlight
+
+13:23.800 --> 13:28.880
+this difference is because the framework automatically pulls the latest Docker Hub images if these
+
+13:28.880 --> 13:34.680
+are available. But if you are using some kind of local implementation that you build as
+
+13:34.680 --> 13:39.880
+a Docker image you actually have to build it locally and then refer to it locally. Another
+
+13:39.880 --> 13:45.600
+thing you can see here is the parametric system. So for example the top client defines a request
+
+13:45.600 --> 13:51.600
+parameter that is then used within an experiment. The idea is that an experiment configuration
+
+13:51.600 --> 13:57.840
+then contains a value of it and that you can access this value within a Docker image simply
+
+13:57.840 --> 14:04.000
+by using requests then in this case as a environment variable. So all the parameters are passed
+
+14:04.000 --> 14:09.680
+as environment variables if you are using Docker images. Or in the case that you are
+
+14:09.680 --> 14:14.640
+using CLI commands or even in a more specific case of shapers because shapers are a little
+
+14:14.640 --> 14:19.240
+bit more complicated. You can also use them directly in the commands you specify within
+
+14:19.240 --> 14:23.680
+the implementation and experiment configurations. These are directly substituted and you can
+
+14:23.680 --> 14:34.040
+actually reference other parameters within arguments which is nice. A simple example
+
+14:34.040 --> 14:39.600
+of a CLI client, so one that is not using a Docker image in other words, you can see
+
+14:39.600 --> 14:44.920
+that the command is rather long. That is because we cannot, well compared to a Docker container
+
+14:44.920 --> 14:51.520
+we actually have to specify everything that needs to happen in CLI command. This example
+
+14:51.520 --> 14:57.320
+provides three or rather four system parameters which are highlighted here. The reason I did
+
+14:57.320 --> 15:02.120
+this is because the framework automatically generates all these details for you such that
+
+15:02.120 --> 15:07.120
+the experiments can be even more dynamically steered. This is especially handy for future
+
+15:07.120 --> 15:11.800
+use cases where we for example want to expand upon multiple client setups and stuff like
+
+15:11.800 --> 15:17.600
+that. On the bottom you see a construct key. We actually have two special mechanisms for
+
+15:17.600 --> 15:22.720
+CLI commands. In Docker images, the benefit of Docker images is that they can actually
+
+15:22.720 --> 15:28.240
+have scripts on board that actually prime the environment. That is the downside of using
+
+15:28.240 --> 15:35.320
+CLI commands unless you want to put everything on one single line which is rather also cumbersome.
+
+15:35.320 --> 15:39.400
+Instead we provide two mechanisms called construct and destruct which are run before and after
+
+15:39.400 --> 15:45.920
+a command is executed. These can be used to prime an environment and clean it up afterwards.
+
+15:45.920 --> 15:52.680
+This example sets like the changes or manipulates actually the Google Chrome preferences to
+
+15:52.680 --> 15:58.520
+set like the standard download folder output towards one generated by the framework.
+
+15:58.520 --> 16:05.920
+Then we come to the experiment configurations examples. These are the actual configurations
+
+16:05.920 --> 16:09.840
+that define how a test should behave. You see here once again we have client shapers
+
+16:09.840 --> 16:14.880
+and servers which we picked from the implementation that we just showed. We simply filled them
+
+16:14.880 --> 16:23.040
+in with the arguments required for the test to work. A special thing to notice here is
+
+16:23.040 --> 16:27.440
+the shapers scenarios. Clients and servers are really simple. You just mentioned which
+
+16:27.440 --> 16:32.080
+one you want to use. But for shapers we have a more complicated setup. The idea behind
+
+16:32.080 --> 16:35.600
+the shapers is that it actually entails one kind of shaping. For example, you can use
+
+16:35.600 --> 16:41.760
+a TC-netum shaper within one container. But this one container does not only do one kind
+
+16:41.760 --> 16:45.600
+of shaping. The idea is that you can define multiple scenarios within this container and
+
+16:45.600 --> 16:52.240
+by passing through the scenario key you can actually pick which one is used during a test.
+
+16:52.240 --> 16:56.680
+In this use case we have one client, two shapers and three servers which means that we will
+
+16:56.680 --> 17:02.080
+have a total of six test cases that will get generated and compiled by the framework and
+
+17:02.080 --> 17:08.680
+run sequentially one after the other. I mentioned sensors earlier. That is also a configuration
+
+17:08.680 --> 17:13.120
+you can do with the experiment configuration files. The idea is normally that the framework
+
+17:13.120 --> 17:17.640
+just automates all these tests and that when a client exits this should signal like the
+
+17:17.640 --> 17:23.640
+end of the test. However, in certain circumstances it is not possible. For example, if you use
+
+17:23.640 --> 17:29.000
+a browser, well, it is obvious that browsers do not have the ability to shut down from
+
+17:29.000 --> 17:34.560
+within a web page which would pose some security risks. Which is why we built a sensor system
+
+17:34.560 --> 17:41.240
+which can actually govern what happens within a client. For example, we provide two simple
+
+17:41.240 --> 17:46.320
+sensor setups, time mode, which simply checks if a certain amount of time has passed and
+
+17:46.320 --> 17:51.480
+then closes the client and signals that the test case has ended. Another one that we built
+
+17:51.480 --> 17:58.280
+is the browser file watchdog sensor which enables us to check if certain files were downloaded
+
+17:58.280 --> 18:02.880
+by a browser context. This enables us to pull metrics from the browser and also signify
+
+18:02.880 --> 18:09.240
+the end of a test. If you provide these two configuration files to the framework, the
+
+18:09.240 --> 18:13.040
+framework will spin up a nice story. On the bottom you can see which tests are happening,
+
+18:13.040 --> 18:16.680
+how much time has passed. You can see a little bit of packet spossing between them, signaling
+
+18:16.680 --> 18:21.600
+that some kind of traffic is happening. You can actually increase the verbosity, but this
+
+18:21.600 --> 18:26.640
+is not necessarily needed from within the terminal as the framework automatically saves
+
+18:26.640 --> 18:31.000
+everything that happens as output in a file within the test case folders that we will
+
+18:31.000 --> 18:37.360
+now discuss. The experiment output is always saved under the label that is provided with
+
+18:37.360 --> 18:43.120
+an experiment configuration because we can have multiple runs of an experiment. The first
+
+18:43.120 --> 18:48.120
+entries that you will find within such a folder are actually time stamped to signify multiple
+
+18:48.120 --> 18:53.920
+runs. If you enter that, you will actually find the different folders that contain the
+
+18:53.920 --> 18:58.200
+data of the multiple test cases that were compiled by the framework. If you take a dive
+
+18:58.200 --> 19:03.280
+into one of these folders, you can see what output we are collecting in these cases. By
+
+19:03.280 --> 19:10.680
+default, the framework will always create a server, client and shaper folder which get
+
+19:10.680 --> 19:16.280
+automatically mounted on the Docker volumes under the slash logs directory. Anything the
+
+19:16.280 --> 19:20.240
+implementations want to save, they can just write files to this directory and the framework
+
+19:20.240 --> 19:25.120
+will capture this and save this to in the log files. Additionally, clients also have
+
+19:25.120 --> 19:29.680
+a downloads folder mounted simply because we want to differentiate and not come into
+
+19:29.680 --> 19:36.960
+a situation where downloads accidentally override output logs generated by a client. You can
+
+19:36.960 --> 19:42.480
+also see that we have, especially under the server and client entries, you can see keys.log
+
+19:42.480 --> 19:49.440
+and a Qlog folder. The framework is automatically primed to save these encryption details and
+
+19:49.440 --> 19:54.320
+what's happening at the quick and HTTP tree layers by setting the SSL Qlog file which we
+
+19:54.320 --> 20:00.600
+discussed in the beginning but also by setting a Qlog environment variable which gets recognized
+
+20:00.600 --> 20:07.680
+by most quick implementations out there nowadays. Finally, we come to extensibility. At this
+
+20:07.680 --> 20:13.640
+point in time, we have a framework that is great at aggregating a lot of data. We did
+
+20:13.640 --> 20:20.640
+some tests that ran for two or three days straight containing more than 8,000 test cases
+
+20:20.640 --> 20:24.880
+which were great if you want to gather a lot of data. But what makes a testing framework,
+
+20:24.880 --> 20:30.160
+a testing framework, is the actual ability to infer something from the output generated
+
+20:30.160 --> 20:35.280
+by a test which is why we provide these two programmable interfaces called sensors and
+
+20:35.280 --> 20:39.880
+hooks. I explain sensors a little bit. We provide some basic sensors but you actually
+
+20:39.880 --> 20:45.960
+also have the ability to program custom sensors. This makes a lot of sense if you want to do
+
+20:45.960 --> 20:51.920
+very specific or test for very specific behavior within your experiment. For example, if you
+
+20:51.920 --> 20:57.080
+are doing a video stream in the browser, you can actually send the decoding metrics of
+
+20:57.080 --> 21:02.800
+the video out of band to an HTTP endpoint, for example, that you set up in a custom sensor.
+
+21:02.800 --> 21:07.640
+If the sensor, for example, detects that some frames are being dropped or decoded in a wrong
+
+21:07.640 --> 21:12.680
+way, it could prematurely hold a test signaling that something went wrong. If you have lots
+
+21:12.680 --> 21:17.440
+of test cases like we do, we actually have test cases like I just said, running 48 hours,
+
+21:17.440 --> 21:21.760
+this is really beneficial because it holds the test in an early phase, saving us a lot
+
+21:21.760 --> 21:26.780
+of time. On the other hand, we have the hook system. So the framework currently is very
+
+21:26.780 --> 21:31.800
+broadly applicable. The downside of that is that we don't really know what's happening
+
+21:31.800 --> 21:36.840
+inside the test. But you can actually program some custom behavior through the pre-run hook
+
+21:36.840 --> 21:42.360
+and post-run hook system. As the name suggests, the pre-run hook runs before an actual test
+
+21:42.360 --> 21:48.520
+is run. So you can prime environments by, for example, generating some dynamic files
+
+21:48.520 --> 21:53.560
+that you will need during the experiment. It doesn't really matter what you want to do
+
+21:53.560 --> 21:57.840
+there. The post-run hook is really nice because you can use it to analyze whatever happened
+
+21:57.840 --> 22:02.560
+during a test. For example, you could, if queue logs are being generated, look at the
+
+22:02.560 --> 22:07.320
+queue logs and maybe even generate some nice graphs that you can immediately check after
+
+22:07.320 --> 22:14.160
+a test case has ended. Right. Another thing I need to mention with the pre-run hook and
+
+22:14.160 --> 22:17.960
+the post-run hook, if you don't like programming in Python, it's not really a problem. Python
+
+22:17.960 --> 22:24.680
+has this really great submodule called subprocesses. If you have some existing scripts that are
+
+22:24.680 --> 22:28.680
+made to work with the output produced by your experiment, you can simply call them also from
+
+22:28.680 --> 22:33.240
+this hook, meaning that you get exactly the same results without having to actually translate
+
+22:33.240 --> 22:41.400
+your existing code within these provided hooks. Right. That's in a nutshell what Vekvizir
+
+22:41.400 --> 22:45.400
+does. Thank you for your attention. And I think we have a couple of minutes left for
+
+22:45.400 --> 22:46.400
+questions.
+
+22:46.400 --> 23:05.760
+Yeah. So, a test case can be anything you want. If you have, like, if you're programming
+
+23:05.760 --> 23:09.880
+right now, you're developing something locally. The thing you need to do is actually wrap
+
+23:09.880 --> 23:14.400
+it within a Docker container. That's one way. Or run it as a CLI command. You simply need
+
+23:14.400 --> 23:17.840
+to provide it to the framework, and the framework will just spin it up. So, the framework doesn't
+
+23:17.840 --> 23:22.560
+actually check what your test case is doing. If you want to, like, spin up a simple, let's
+
+23:22.560 --> 23:27.560
+say, CLI command, like, echo, and you want to print something to the terminal, you simply
+
+23:27.560 --> 23:30.560
+put it in the JSON, it will run.
+
+23:30.560 --> 23:50.560
+So, more questions, please. We have a couple of minutes. Okay. I have a question. I see
+
+23:50.560 --> 23:55.560
+you're from university. What does university have to do with testing, like, what's the
+
+23:55.560 --> 24:02.280
+question? Okay. So, good question, actually. I'm not sure if there is a direct relationship
+
+24:02.280 --> 24:09.840
+with testing in the university. It's just that, like, during my PhD, and also the PhD
+
+24:09.840 --> 24:16.760
+of some of my colleagues here in front of me, we actually encountered that we had a need
+
+24:16.760 --> 24:21.640
+of such a framework, right? We had an actual need of spinning up multiple test cases and
+
+24:21.640 --> 24:27.920
+like, helping us with setting up these experiments, which is why we designed this. Early on, we
+
+24:27.920 --> 24:35.360
+just had a very minimal thing that just worked for us. And then, as time progressed, it actually
+
+24:35.360 --> 24:39.200
+became more and more mature, and we decided, well, this is actually a very good idea. So,
+
+24:39.200 --> 24:44.920
+we created an open source project for it, and we actually also submitted it to a open source
+
+24:44.920 --> 24:51.920
+and data set track for the MMSIS conference, which is happening in June in Vancouver. So,
+
+24:51.920 --> 25:06.920
+okay. I think we have time for one more question. The last question. No thankers. So, thank
+
+25:06.920 --> 25:16.920
+you very much.

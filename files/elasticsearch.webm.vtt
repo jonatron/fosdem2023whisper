@@ -1,0 +1,1282 @@
+WEBVTT
+
+00:00.000 --> 00:10.000
+So, before we go on with the next security or later topic, we're going to talk about
+
+00:10.000 --> 00:15.440
+something completely different, and that is about elastic search internals by Martin
+
+00:15.440 --> 00:32.440
+from the Bulgaria jug, and maybe also about security in this context.
+
+00:32.440 --> 00:50.440
+So, we're going to talk about something completely different, and maybe also about security in
+
+00:50.440 --> 01:13.440
+this context.
+
+01:13.440 --> 01:22.440
+Test, test, test.
+
+01:22.440 --> 01:48.440
+Thank you.
+
+01:48.440 --> 01:53.440
+So, people coming in, please move to the middle of your row so that there's space on the side
+
+01:53.440 --> 02:06.440
+so people can sit.
+
+02:06.440 --> 02:18.440
+We're working in Cisco together, so a lot of people coming, so we can start.
+
+02:18.440 --> 02:45.440
+If you're standing along the side, please take a seat.
+
+02:45.440 --> 02:50.440
+So, hello, everyone.
+
+02:50.440 --> 02:56.440
+My name is Martin, and I'm a consulting architect at the European Patient Office.
+
+02:56.440 --> 03:02.440
+I've been also doing a lot of consultancy on elastic search in the past two to three years.
+
+03:02.440 --> 03:06.440
+So, just before we start with this session, how many of you are using or have used elastic
+
+03:06.440 --> 03:08.440
+search in a project?
+
+03:08.440 --> 03:11.440
+Okay, more than half of the people.
+
+03:11.440 --> 03:15.440
+So, why this talk at FOSDEM?
+
+03:15.440 --> 03:16.440
+So, multiple reasons, in fact.
+
+03:16.440 --> 03:21.440
+When I've worked with elastic search, I realized that even though it has quite a good documentation,
+
+03:21.440 --> 03:26.440
+in many cases, you need to go into the public code base and see what's in there, and to
+
+03:26.440 --> 03:28.440
+understand how it works.
+
+03:28.440 --> 03:32.440
+I've had questions from many people, how this functionality works, or how can I achieve
+
+03:32.440 --> 03:34.440
+something with elastic search.
+
+03:34.440 --> 03:39.440
+And not always it's clear from documentation or blocks over the Internet what you can achieve
+
+03:39.440 --> 03:40.440
+with elastic search.
+
+03:40.440 --> 03:46.440
+So, in this short session, I'll try to show you how this elastic search works internally,
+
+03:46.440 --> 03:50.440
+and I'll talk about the elastic search architecture.
+
+03:50.440 --> 03:56.440
+So, first of all, we'll do a 360-degree overview of the elastic search stack, which I believe
+
+03:56.440 --> 03:58.440
+most of you are familiar with.
+
+03:58.440 --> 04:02.440
+Then I'll go into the elastic search architecture, and at the end of this short session, I'll
+
+04:02.440 --> 04:06.440
+show you how you can write a very simple elastic search plugin.
+
+04:06.440 --> 04:10.440
+In most cases, you won't need to write an elastic search plugin because there is quite
+
+04:10.440 --> 04:13.440
+a rich ecosystem of elastic search plugins that you can use.
+
+04:13.440 --> 04:16.440
+But many companies find that that's not always the case.
+
+04:16.440 --> 04:20.440
+So, sometimes you need to either customize something in elastic search or write your
+
+04:20.440 --> 04:23.440
+own plugin to achieve something.
+
+04:23.440 --> 04:24.440
+All right.
+
+04:24.440 --> 04:27.440
+So, let's talk briefly about the elastic search stack.
+
+04:27.440 --> 04:31.440
+In the middle, we have elastic search, which is a Java application.
+
+04:31.440 --> 04:34.440
+It's being updated quite oftenly.
+
+04:34.440 --> 04:38.440
+There are a lot of features being implemented in elastic search, especially in the latest
+
+04:38.440 --> 04:39.440
+few releases.
+
+04:39.440 --> 04:44.440
+And around the elastic search server application, there are different applications that are
+
+04:44.440 --> 04:48.440
+being built to allow you to work more easily with elastic search, such as Kibana.
+
+04:48.440 --> 04:53.440
+Kibana is a user-rich user interface for elastic search that allows you to achieve multiple
+
+04:53.440 --> 04:58.440
+things, so not only querying elastic search, but Kibana allows you to also visualize data
+
+04:58.440 --> 05:03.440
+that's already in elastic search or build different dashboards that are quite nice,
+
+05:03.440 --> 05:05.440
+especially for management.
+
+05:05.440 --> 05:09.440
+Also, if you want to put different data from a variety of sources in elastic search, you
+
+05:09.440 --> 05:11.440
+can use LogStash.
+
+05:11.440 --> 05:16.440
+So, originally, LogStash was implemented to provide a way to aggregate logs into elastic
+
+05:16.440 --> 05:17.440
+search.
+
+05:17.440 --> 05:22.440
+But over time, LogStash evolves to an application that is used to integrate data in elastic
+
+05:22.440 --> 05:25.440
+search, not only log data, but any kind of data.
+
+05:25.440 --> 05:31.440
+So, you can think of LogStash as a log aggregation pipeline that allows you to put data in elastic
+
+05:31.440 --> 05:32.440
+search.
+
+05:32.440 --> 05:37.440
+And on top of that, we also have a different set of so-called bits applications that are
+
+05:37.440 --> 05:43.440
+lightweight log shippers that allow you to collect data and put it either directly into
+
+05:43.440 --> 05:50.440
+an elastic search or through LogStash into elastic search or different other data sources.
+
+05:50.440 --> 05:54.440
+The specific thing about the bit applications is that they are lightweight in nature, so
+
+05:54.440 --> 05:59.440
+they are supposed to not consume a lot of resources such as CPU and memory.
+
+05:59.440 --> 06:06.440
+And in that reason, they allow you to collect log data or other data and put it into elastic
+
+06:06.440 --> 06:07.440
+search.
+
+06:07.440 --> 06:12.440
+Now, you can think of elastic search as a web server built on top of the Apache Lucene
+
+06:12.440 --> 06:13.440
+library.
+
+06:13.440 --> 06:20.440
+So, the Apache Lucene library is an actively developed Java library that is used by different
+
+06:20.440 --> 06:25.440
+applications that want to implement some kind of search functionality.
+
+06:25.440 --> 06:27.440
+And elastic search is one of them.
+
+06:27.440 --> 06:31.440
+So, I'll show briefly in a few slides how elastic search interacts with the Apache Lucene
+
+06:31.440 --> 06:32.440
+library.
+
+06:32.440 --> 06:36.440
+And another way to describe elastic search is a document-oriented database.
+
+06:36.440 --> 06:43.440
+So, elastic search is used by different projects not only for searching, but also as a NoSQL
+
+06:43.440 --> 06:44.440
+database.
+
+06:44.440 --> 06:49.440
+So, I had a few projects where elastic search was used purely as a NoSQL database, not as
+
+06:49.440 --> 06:50.440
+a search engine.
+
+06:50.440 --> 06:54.440
+And one can think, okay, elastic search is a Java application.
+
+06:54.440 --> 06:57.440
+Why I cannot use Apache Lucene directly?
+
+06:57.440 --> 07:02.440
+And the reason is that elastic search provides a number of features that are missing in the
+
+07:02.440 --> 07:09.440
+Apache Lucene library that allow you to implement search in your project way more easily than
+
+07:09.440 --> 07:10.440
+using directly Apache Lucene.
+
+07:10.440 --> 07:16.440
+Some of these features are, for example, JSON-based REST API, which is quite easy to use, quite
+
+07:16.440 --> 07:20.440
+easy to write search queries, to index data into elastic search, and so on.
+
+07:20.440 --> 07:25.440
+There is also a really nice clustering mechanism implemented in elastic search that allows
+
+07:25.440 --> 07:30.440
+you to bring and scale your elastic search cluster quite easily, something that's not
+
+07:30.440 --> 07:35.440
+possible if you use directly Apache Lucene in your project directly.
+
+07:35.440 --> 07:39.440
+And also, it has a number of other features, such as, for example, caching, that allow
+
+07:39.440 --> 07:44.440
+you to improve the performance of your search queries, and so on.
+
+07:44.440 --> 07:50.440
+Now, the basic data structure used by elastic search is the so-called inverted index, and
+
+07:50.440 --> 07:55.440
+indexes are stored on disk in separate files or Lucene segments.
+
+07:55.440 --> 07:58.440
+Search can be performed on multiple indexes at a time.
+
+07:58.440 --> 08:01.440
+That's one of the capabilities of elastic search.
+
+08:01.440 --> 08:06.440
+And in earlier versions of elastic search, documents were logically grouped by types.
+
+08:06.440 --> 08:12.440
+That was effectively deprecated as a version 7 of elastic search, and it's expected to be
+
+08:12.440 --> 08:15.440
+dropped.
+
+08:15.440 --> 08:20.440
+In order to ensure score relevancy when you search for some data in elastic search,
+
+08:20.440 --> 08:28.440
+elastic search uses a set of different algorithms to score results relevance.
+
+08:28.440 --> 08:32.440
+In the later versions of elastic search, this algorithm is BM25.
+
+08:32.440 --> 08:38.440
+In earlier versions of elastic search, this was a simpler algorithm which is called TFIDF.
+
+08:38.440 --> 08:44.440
+And the base of those algorithms is the fact how many times does a term occur in a document,
+
+08:44.440 --> 08:48.440
+and how many times does this term occur across all documents that are currently indexed in
+
+08:48.440 --> 08:49.440
+elastic search.
+
+08:49.440 --> 08:55.440
+Based on that, by default, elastic search scores every result that gets returned by your search
+
+08:55.440 --> 09:02.440
+query, and by default, it returns results sorted by relevant score.
+
+09:02.440 --> 09:07.440
+Now, why would you use elastic search in favor, for example, of a relational database?
+
+09:07.440 --> 09:13.440
+Well, it provides faster retrieval for documents in way more scenarios than a traditional
+
+09:13.440 --> 09:15.440
+relational database can do.
+
+09:15.440 --> 09:22.440
+So, as you know, traditional relational databases provide faster searches through indexes.
+
+09:22.440 --> 09:26.440
+However, indexes in relational databases have many limitations based on the type of
+
+09:26.440 --> 09:28.440
+SQL queries that you write.
+
+09:28.440 --> 09:34.440
+In elastic search, the inverted index data structure provides with the capability to cover
+
+09:34.440 --> 09:38.440
+way more scenarios for searching using more complex queries.
+
+09:38.440 --> 09:45.440
+And for that reason, many projects choose to use elastic search as a search engine.
+
+09:45.440 --> 09:51.440
+Now, documents also in elastic search might not have an explicit schema, as you have in
+
+09:51.440 --> 09:55.440
+a relational database, and that's typical for many no-SQL databases.
+
+09:55.440 --> 10:00.440
+An explicit schema, however, can be defined on the fields, and certain fields can even
+
+10:00.440 --> 10:04.440
+have different types mapped to them.
+
+10:04.440 --> 10:10.440
+This is needed because sometimes you need to use different kinds of search queries based
+
+10:10.440 --> 10:14.440
+on the field type, and some field types pose limitations.
+
+10:14.440 --> 10:19.440
+So, that's why you might need to have multiple types on a single field in elastic search.
+
+10:19.440 --> 10:23.440
+Now, this was brief about what is elastic search and how it works.
+
+10:23.440 --> 10:26.440
+Now, let's see what the architecture of elastic search.
+
+10:26.440 --> 10:31.440
+Elastic search, as I mentioned to you, is designed with clustering in mind.
+
+10:31.440 --> 10:37.440
+By default, in later versions of elastic search, if you start, if you create an index, it has
+
+10:37.440 --> 10:41.440
+one primary chart and one replica chart.
+
+10:41.440 --> 10:43.440
+So, what is a chart?
+
+10:43.440 --> 10:49.440
+Now, an elastic search index contains one or more primary charts that distribute the data in the
+
+10:49.440 --> 10:51.440
+elastic search cluster.
+
+10:51.440 --> 10:57.440
+Below that, an elastic search chart is, in fact, a Lucene index, and a Lucene index is,
+
+10:57.440 --> 11:02.440
+in fact, the data structure that stores the data on disk in terms of Lucene segments.
+
+11:02.440 --> 11:07.440
+Lucene segments are the physical files that store data on the disk.
+
+11:07.440 --> 11:12.440
+Now, when you index data in elastic search, you might have also replica charts.
+
+11:12.440 --> 11:17.440
+Replica charts provide you with the possibility to enable high availability and data replication
+
+11:17.440 --> 11:20.440
+at the level of the elastic search cluster.
+
+11:20.440 --> 11:27.440
+So, two types of charts, primary and replica charts.
+
+11:27.440 --> 11:32.440
+The more notes you add to the elastic search cluster, the more data gets distributed among
+
+11:32.440 --> 11:33.440
+charts.
+
+11:33.440 --> 11:38.440
+Now, it's very important that up front you plan the number of primary charts based on
+
+11:38.440 --> 11:40.440
+the data growth that you have.
+
+11:40.440 --> 11:45.440
+It's very difficult to change later in your project lifecycle the number of primary charts
+
+11:45.440 --> 11:48.440
+you would need to re-index data.
+
+11:48.440 --> 11:52.440
+However, if you want to change the number of replica charts, that's more easy to do later
+
+11:52.440 --> 11:53.440
+in time.
+
+11:53.440 --> 11:56.440
+So, it's very important that you plan up front what's the number of primary charts on an
+
+11:56.440 --> 11:58.440
+index that you create.
+
+11:58.440 --> 12:02.440
+Now, by default, elastic search tries to balance the number of charts across the notes that
+
+12:02.440 --> 12:04.440
+you have.
+
+12:04.440 --> 12:08.440
+And one of the other capabilities that elastic search provides you is that if a note fails,
+
+12:08.440 --> 12:14.440
+you still can get search results, or so-called partial results can be returned, even if some
+
+12:14.440 --> 12:17.440
+of the notes in the cluster are not available.
+
+12:17.440 --> 12:23.440
+Now, by default, elastic search determines the chart where a document is indexed based
+
+12:23.440 --> 12:25.440
+on a relatively simple formula.
+
+12:25.440 --> 12:29.440
+You get the hash key of the routing key of the document.
+
+12:29.440 --> 12:33.440
+This is the document ID, which can be generated in different ways.
+
+12:33.440 --> 12:35.440
+You can generate it from elastic search.
+
+12:35.440 --> 12:39.440
+If you don't specify your application, you can supply the document ID, and so on and so
+
+12:39.440 --> 12:40.440
+forth.
+
+12:40.440 --> 12:44.440
+And you'll take the modules, the number of primary charts that you have defined on the
+
+12:44.440 --> 12:46.440
+index, where you index the document.
+
+12:46.440 --> 12:50.440
+Now, as I mentioned, by default, the routing key is the document ID, but you can also
+
+12:50.440 --> 12:53.440
+use a different routing key.
+
+12:53.440 --> 13:02.440
+And one interesting technique that some people use to enable distribution of data in the
+
+13:02.440 --> 13:09.440
+elastic search cluster is by specifying a custom routing key that allows you to enable
+
+13:09.440 --> 13:11.440
+so-called chart routing.
+
+13:11.440 --> 13:15.440
+This is a technique that allows you to specify at which particular chart you want to send
+
+13:15.440 --> 13:17.440
+the document to be indexed.
+
+13:17.440 --> 13:20.440
+But that's a case that's used in some specific scenarios.
+
+13:20.440 --> 13:27.440
+In most cases, people rely on the default mechanism that elastic search uses to distribute
+
+13:27.440 --> 13:30.440
+data in the cluster.
+
+13:30.440 --> 13:35.440
+Now, by default, new nodes are discovered via multicast.
+
+13:35.440 --> 13:41.440
+If a cluster is discovered, a new node joins the cluster if it has the same cluster name.
+
+13:41.440 --> 13:46.440
+If a node on the same instance already runs on a specified port, and if you try to run
+
+13:46.440 --> 13:50.440
+another node on that instance, elastic search automatically gives you the next available
+
+13:50.440 --> 13:52.440
+port.
+
+13:52.440 --> 13:59.440
+Now, however, in some cases, in some companies, multicast addresses are disabled for security
+
+13:59.440 --> 14:00.440
+reasons.
+
+14:00.440 --> 14:04.440
+And that's why the preferred mechanism to join new nodes in an elastic search cluster is
+
+14:04.440 --> 14:06.440
+by using unicast addresses.
+
+14:06.440 --> 14:11.440
+In the elastic search YAML configuration, you just need to specify one or more existing
+
+14:11.440 --> 14:17.440
+nodes from the elastic search cluster so that they can join that existing cluster.
+
+14:17.440 --> 14:22.440
+And in that list of unicast nodes, you don't need to specify all the nodes in the elastic
+
+14:22.440 --> 14:23.440
+search cluster.
+
+14:23.440 --> 14:31.440
+You just need to specify at least one node that has already joined the cluster.
+
+14:31.440 --> 14:36.440
+Now, when you bring up an elastic search cluster, there are some considerations that you need
+
+14:36.440 --> 14:37.440
+to take.
+
+14:37.440 --> 14:42.440
+First of all, as I mentioned, sharding, it's very important for you to consider what should
+
+14:42.440 --> 14:46.440
+be the number of primary shards that you define on the elastic search index, and the number
+
+14:46.440 --> 14:50.440
+of replica shards, which is more easy to change over time.
+
+14:50.440 --> 14:55.440
+You also need to consider how much data you store in an elastic search index.
+
+14:55.440 --> 15:00.440
+Indexes with too small amount of data are not good, because that implies a lot of management
+
+15:00.440 --> 15:01.440
+overhead.
+
+15:01.440 --> 15:04.440
+And the same is for indexes with too many amounts of data.
+
+15:04.440 --> 15:08.440
+I've seen some cases where people store, let's say, more than two, three hundred gigabytes
+
+15:08.440 --> 15:10.440
+of data in an elastic search index.
+
+15:10.440 --> 15:15.440
+And that really slows down search operations and other operations of that index.
+
+15:15.440 --> 15:18.440
+And people start wondering, okay, why is my indexing slow?
+
+15:18.440 --> 15:20.440
+Why are my search queries slow?
+
+15:20.440 --> 15:24.440
+And in many cases, the reason is that because data is not distributed properly in the elastic
+
+15:24.440 --> 15:26.440
+search index.
+
+15:26.440 --> 15:32.440
+The preferred amount of data that you should keep in an elastic search shard is between
+
+15:32.440 --> 15:34.440
+five and ten gigabytes, roughly speaking.
+
+15:34.440 --> 15:39.440
+So if you have more data that you want to put on a shard, you should consider splitting
+
+15:39.440 --> 15:40.440
+that data.
+
+15:40.440 --> 15:47.440
+So you either use more shards in the cluster, or you split the data into so-called sequential
+
+15:47.440 --> 15:48.440
+indexes.
+
+15:48.440 --> 15:56.440
+So for example, you might have daily, weekly, or monthly indexes.
+
+15:56.440 --> 15:58.440
+Now, this is what I mentioned.
+
+15:58.440 --> 16:02.440
+So you should avoid putting too less data in the elastic search cluster.
+
+16:02.440 --> 16:08.440
+Also, if you have too many shards defined on an index, that also introduces performance
+
+16:08.440 --> 16:10.440
+and management overhead.
+
+16:10.440 --> 16:14.440
+So you should consider rather splitting the data in the index rather than bringing too
+
+16:14.440 --> 16:17.440
+many shards on a single index.
+
+16:17.440 --> 16:23.440
+And determining the number of shards should be a matter of upfront planning.
+
+16:23.440 --> 16:28.440
+Now, apart from putting the fact that you need to avoid putting large amounts of data
+
+16:28.440 --> 16:35.440
+in a single index, the main strategy that people use is to use, for example, prefix
+
+16:35.440 --> 16:37.440
+when they split data into indexes.
+
+16:37.440 --> 16:41.440
+For example, you can put prefix for daily, weekly, or yearly indexes.
+
+16:41.440 --> 16:45.440
+And if you do that, it's a good practice that also you use aliases to reference data,
+
+16:45.440 --> 16:52.440
+directly reference a particular index in your application, but rather use aliases.
+
+16:52.440 --> 16:57.440
+In terms of concurrency control, elastic search does not provide pessimistic locking,
+
+16:57.440 --> 17:00.440
+like, for example, you have in relational databases.
+
+17:00.440 --> 17:04.440
+If you want to establish some form of concurrency control in elastic search in order to make
+
+17:04.440 --> 17:10.440
+sure that you don't have unexpected race conditions, so elastic search uses optimistic
+
+17:10.440 --> 17:13.440
+locking for concurrency control.
+
+17:13.440 --> 17:18.440
+The way this works is when you index a document, there is a version attribute that can be
+
+17:18.440 --> 17:19.440
+specified.
+
+17:19.440 --> 17:24.440
+And if there is already a document indexed with that version, then the operation is
+
+17:24.440 --> 17:26.440
+rejected from elastic search.
+
+17:26.440 --> 17:31.440
+Concurrency control can also be achieved with the two fields that can be specified
+
+17:31.440 --> 17:33.440
+when you index the document.
+
+17:33.440 --> 17:38.440
+If sequence number and if primary term parameters, if they already match the document
+
+17:38.440 --> 17:40.440
+that's indexed, then this operation gets rejected.
+
+17:40.440 --> 17:44.440
+So if you want to establish some form of concurrency control in elastic search, you can
+
+17:44.440 --> 17:49.440
+use this optimistic locking provided by elastic search.
+
+17:49.440 --> 17:54.440
+In terms of high availability, you can create one or more copies, or so-called replicas
+
+17:54.440 --> 17:56.440
+of an existing index.
+
+17:56.440 --> 18:01.440
+The number of primary charts is specified when you define the index mapping, or you
+
+18:01.440 --> 18:03.440
+can change it later.
+
+18:03.440 --> 18:07.440
+Once an index request is sent to a particular chart, determined based on the hash of the
+
+18:07.440 --> 18:09.440
+document ID.
+
+18:09.440 --> 18:11.440
+The document is also sent to the chart replicas.
+
+18:11.440 --> 18:16.440
+And one interesting property in elastic search is that the replicas are not used only for
+
+18:16.440 --> 18:20.440
+high availability, but also used for searching purposes to improve performance.
+
+18:20.440 --> 18:25.440
+So when you have replica charts, they also participate in the search requests that you
+
+18:25.440 --> 18:30.440
+have for elastic search.
+
+18:30.440 --> 18:36.440
+Now, this mechanism for improving performance is really nice, but this doesn't mean that
+
+18:36.440 --> 18:41.440
+you need to supply to increase the number of replicas because, of course, that increases
+
+18:41.440 --> 18:42.440
+management overhead.
+
+18:42.440 --> 18:46.440
+So it's also a matter of determining how many replicas up front you would need.
+
+18:46.440 --> 18:51.440
+And later on, if you plan to scale your cluster, you can also increase the amount of replicas.
+
+18:51.440 --> 18:56.440
+So you should not put a lot of replica charts also at the beginning when you define your
+
+18:56.440 --> 18:57.440
+indexes.
+
+18:57.440 --> 19:00.440
+Now, how is a chart request processed?
+
+19:00.440 --> 19:03.440
+Now, if we want to index a document in elastic search, what happens?
+
+19:03.440 --> 19:06.440
+We send the request to a coordinating node.
+
+19:06.440 --> 19:09.440
+This is one of the nodes in the elastic search cluster.
+
+19:09.440 --> 19:14.440
+And this coordinating node sends the request to the chart, to the node in the cluster where
+
+19:14.440 --> 19:18.440
+the document needs to be indexed and stored in Lucene segments.
+
+19:18.440 --> 19:24.440
+When the document reaches the elastic search node in the cluster, the particular chart,
+
+19:24.440 --> 19:28.440
+it gets sent not directly to the disk, but to two in-memory areas.
+
+19:28.440 --> 19:31.440
+This is the memory buffer and the transaction lock.
+
+19:31.440 --> 19:35.440
+Now, the memory buffer gets flushed every second to the disk.
+
+19:35.440 --> 19:39.440
+So when you index a document in elastic search, you cannot expect it to be available right
+
+19:39.440 --> 19:41.440
+way for searching purposes.
+
+19:41.440 --> 19:45.440
+But there is also a parameter that you can use to enforce it to be written to disk right
+
+19:45.440 --> 19:48.440
+away before waiting for this one second to be flushed on disk.
+
+19:48.440 --> 19:53.440
+There is also another area, which is called the transaction lock, where it gets flushed
+
+19:53.440 --> 19:54.440
+not so often.
+
+19:54.440 --> 19:58.440
+It gets flushed every 30 minutes or when it gets full.
+
+19:58.440 --> 20:03.440
+So the important takeover from this is that when you index a document, you should not
+
+20:03.440 --> 20:09.440
+expect it to be available right way for searching, but you can enforce it too.
+
+20:09.440 --> 20:15.440
+What happens if you send the search query to elastic search?
+
+20:15.440 --> 20:19.440
+First, the search request gets sent to one of the nodes in the elastic search cluster,
+
+20:19.440 --> 20:21.440
+the so-called coordinating node.
+
+20:21.440 --> 20:23.440
+Then we have two phases.
+
+20:23.440 --> 20:24.440
+First is the query phase.
+
+20:24.440 --> 20:29.440
+It asks all the shots, primary and replica shots, hey, do you contain some data for that
+
+20:29.440 --> 20:30.440
+search query?
+
+20:30.440 --> 20:33.440
+And this information gets returned to the coordinating node.
+
+20:33.440 --> 20:38.440
+Based on that information, the coordinating node determines which nodes it needs to query.
+
+20:38.440 --> 20:42.440
+And on the second fetch phase, it sends the request to the shots that have some data for
+
+20:42.440 --> 20:47.440
+that search query and return it back to the client.
+
+20:47.440 --> 20:53.440
+Now, in terms of how is the elastic search called base structured, this is a snapshot
+
+20:53.440 --> 20:57.440
+from the GitHub code base of elastic search from the public code base.
+
+20:57.440 --> 21:01.440
+Now, what I'm speaking about in this presentation applies for the public code base in elastic
+
+21:01.440 --> 21:05.440
+search because of version 7.16, there was a licensing change, and there is a lot of
+
+21:05.440 --> 21:10.440
+controversy in the open source communities whether elastic search is still open source
+
+21:10.440 --> 21:11.440
+or not.
+
+21:11.440 --> 21:13.440
+So we can have a discussion about that after the session.
+
+21:13.440 --> 21:17.440
+I'm not going to go into the details, but the main thing about this licensing change
+
+21:17.440 --> 21:22.440
+is to protect elastic search from other vendors willing to provide elastic search as a service,
+
+21:22.440 --> 21:27.440
+not from people willing to customize elastic search or to use it for their in-house projects
+
+21:27.440 --> 21:28.440
+and so on.
+
+21:28.440 --> 21:33.440
+So this is the structure of the elastic search code base that has been like this since the
+
+21:33.440 --> 21:35.440
+Apache license code base.
+
+21:35.440 --> 21:39.440
+So elastic search gets built with GitHub actions.
+
+21:39.440 --> 21:43.440
+You can see also the definition in the.github folder.
+
+21:43.440 --> 21:46.440
+The main server application is in the server folder.
+
+21:46.440 --> 21:50.440
+The documentation that gets generated on the official elastic search website is in the docs
+
+21:50.440 --> 21:51.440
+folder.
+
+21:51.440 --> 21:55.440
+We have the main modules for the elastic search server application in the modules folder and
+
+21:55.440 --> 21:58.440
+the internal plugins in the plugins folder.
+
+21:58.440 --> 22:03.440
+An implementation of the REST based Java client for elastic search, the high level and the
+
+22:03.440 --> 22:07.440
+low level REST funds are in the client folder, and the distribution folder, you can find
+
+22:07.440 --> 22:11.440
+the gradle scripts that allow you to build different distributions of elastic search
+
+22:11.440 --> 22:14.440
+for Linux, Windows, and so on.
+
+22:14.440 --> 22:18.440
+Now, I would say the structure of the code repository is very logical.
+
+22:18.440 --> 22:20.440
+It's easy to navigate.
+
+22:20.440 --> 22:25.440
+So you can just go into GitHub, and if you need to see, for example, how is a particular
+
+22:25.440 --> 22:30.440
+plugin or module implemented, you can just go to GitHub and check it out.
+
+22:30.440 --> 22:34.440
+Now, internally elastic search is comprised of different modules.
+
+22:34.440 --> 22:39.440
+And in earlier versions, elastic search used the modified version of Google GIS for module
+
+22:39.440 --> 22:44.440
+binding, but they're slowly shifting away from Google GIS in favor of their own internal
+
+22:44.440 --> 22:46.440
+module system.
+
+22:46.440 --> 22:51.440
+So modules are loaded on startup when the elastic search server starts up.
+
+22:51.440 --> 22:57.440
+And in this simple example, I've shown an example of how modules were bound internally
+
+22:57.440 --> 22:59.440
+when the node starts up.
+
+22:59.440 --> 23:01.440
+So we use a module binder.
+
+23:01.440 --> 23:03.440
+The earlier versions, B was a Google GIS binder.
+
+23:03.440 --> 23:08.440
+And then we bind particular module classes to their implementation.
+
+23:08.440 --> 23:13.440
+And then wherever you need them, you can reference them in the elastic search code base.
+
+23:13.440 --> 23:17.440
+It's a very simple dependency injection mechanism.
+
+23:17.440 --> 23:22.440
+Now, when elastic search starts up, you can imagine it's a simple Java application.
+
+23:22.440 --> 23:26.440
+The main class is Orc elastic search, bootstrap elastic search.
+
+23:26.440 --> 23:30.440
+It boils down to calling the start method of the node class.
+
+23:30.440 --> 23:36.440
+And the start method, in fact, loads up all the modules of the elastic search node.
+
+23:36.440 --> 23:47.440
+Now, some of these core modules are, for example, modules that provide the REST API of elastic
+
+23:47.440 --> 23:52.440
+search module that allows you to establish clustering and elastic search, or so-called
+
+23:52.440 --> 23:54.440
+transport module.
+
+23:54.440 --> 24:02.440
+There is a module that allows you to build plugins for elastic search, and so on and so forth.
+
+24:02.440 --> 24:06.440
+Now, how does elastic search internally interact with loosing?
+
+24:06.440 --> 24:11.440
+When you start up the node, the node also exposes, provides different services that are
+
+24:11.440 --> 24:14.440
+used by the modules of elastic search.
+
+24:14.440 --> 24:21.440
+And, for example, if you want to, when you start up a node, there is a createChart method
+
+24:21.440 --> 24:27.440
+that gets called, indexServiceCreateChart, to create and initialize the chart that is
+
+24:27.440 --> 24:29.440
+part of this elastic search node.
+
+24:29.440 --> 24:36.440
+And then, if you want to index a new document, it boils down to calling indexChartApplyIndexOperation
+
+24:36.440 --> 24:38.440
+on primary.
+
+24:38.440 --> 24:43.440
+Then, this boils down to calling the index method on the indexChart class.
+
+24:43.440 --> 24:50.440
+And the indexChart class goes down to an internal engine class that calls index into loosing.
+
+24:50.440 --> 24:53.440
+Then, that calls internal engine at docs.
+
+24:53.440 --> 24:57.440
+And at the end, we just call indexWriter, which is a class from the Apache Loosing Library,
+
+24:57.440 --> 24:58.440
+at documents.
+
+24:58.440 --> 25:02.440
+So, it boils down to calling different methods from the Loosing API.
+
+25:02.440 --> 25:07.440
+And on top of that, we have a lot of initialization and services happening.
+
+25:07.440 --> 25:12.440
+So, in a way, you can think that apart from all the functionality that elastic search
+
+25:12.440 --> 25:16.440
+provides, the integration with the Apache Loosing Library just boils down to calling the
+
+25:16.440 --> 25:22.440
+different APIs that Apache Loosing provides.
+
+25:22.440 --> 25:28.440
+And last but not least, I'll show how you can build a very simple elastic search plugin.
+
+25:28.440 --> 25:33.440
+Now, if you see the elastic search code base, it already has some building plugins that
+
+25:33.440 --> 25:34.440
+you can use.
+
+25:34.440 --> 25:38.440
+And there is a very nice elastic search plugin utility that you can use to manage plugins,
+
+25:38.440 --> 25:41.440
+to install them, remove them, and so on and so forth.
+
+25:41.440 --> 25:45.440
+If you build your own plugin, you can use the same utility to install the plugin, and
+
+25:45.440 --> 25:48.440
+it gets placed in a folder in your node installation.
+
+25:48.440 --> 25:52.440
+So, if you install a plugin, you need to make sure that it's installed on all the nodes in
+
+25:52.440 --> 25:54.440
+your cluster.
+
+25:54.440 --> 25:58.440
+Because many plugins are cluster aware, it needs to be installed on every node in the
+
+25:58.440 --> 26:01.440
+cluster.
+
+26:01.440 --> 26:05.440
+Elastic search plugins are bundled in ZIP archives, along with their dependencies, and
+
+26:05.440 --> 26:10.440
+all of them must have a class that implements our elastic search plugin's plugin class.
+
+26:10.440 --> 26:16.440
+There is a plugin service which is responsible to load the plugins in elastic search.
+
+26:16.440 --> 26:22.440
+Now, let's see how we can create a very simple ingest plugin that allows you to filter words
+
+26:22.440 --> 26:24.440
+from a field of an index document.
+
+26:24.440 --> 26:28.440
+So, if you index a document, you can specify from which field, which words you want to
+
+26:28.440 --> 26:29.440
+filter out.
+
+26:29.440 --> 26:33.440
+This is a very common scenario, for example, if you want, for example, to implement that
+
+26:33.440 --> 26:38.440
+allows you to clear contents from documents and so on and so forth.
+
+26:38.440 --> 26:41.440
+It's probably one of the simplest plugins you might have.
+
+26:41.440 --> 26:45.440
+So, first we have a filter ingest plugin class that extends the plugin class and implements
+
+26:45.440 --> 26:46.440
+ingest plugin.
+
+26:46.440 --> 26:50.440
+We have different interfaces for the different types of plugins you might have for elastic
+
+26:50.440 --> 26:54.440
+search, and ingest plugin is one of these types of interfaces.
+
+26:54.440 --> 27:01.440
+Then you specify you implement the get processors method because an ingest plugin needs to have
+
+27:01.440 --> 27:06.440
+processors that you can define that do something on the documents before their index.
+
+27:06.440 --> 27:13.440
+And the get processors method, what we do, we get a filter word from the parameters that
+
+27:13.440 --> 27:17.440
+we supply on the ingest processor that we define in elastic search.
+
+27:17.440 --> 27:19.440
+And then we get the filter field.
+
+27:19.440 --> 27:23.440
+So, we have two parameters, the word that we want to filter out, and from which field
+
+27:23.440 --> 27:26.440
+of the document we want to filter it out.
+
+27:26.440 --> 27:33.440
+Then we create a map of processors, and in that map we put the filter word processor
+
+27:33.440 --> 27:36.440
+that we create from this class and return it.
+
+27:36.440 --> 27:40.440
+You can also have multiple processors defined in that plugin.
+
+27:40.440 --> 27:44.440
+Now, what does the filter word processor look like?
+
+27:44.440 --> 27:48.440
+The filter word processor extends abstract processor from elastic search.
+
+27:48.440 --> 27:51.440
+It, again, comes from the core class of elastic search.
+
+27:51.440 --> 27:53.440
+And we have an execute method.
+
+27:53.440 --> 27:57.440
+In the execute method, we get the document that we want to index.
+
+27:57.440 --> 27:58.440
+This is the ingest document.
+
+27:58.440 --> 28:03.440
+We get the value from the particular field that we want to filter out, and then we replace
+
+28:03.440 --> 28:05.440
+that value with the empty string.
+
+28:05.440 --> 28:10.440
+And then we set back the value on top of that field and return the document.
+
+28:10.440 --> 28:14.440
+This, when you index a document and you specify that ingest processor,
+
+28:14.440 --> 28:18.440
+applies the filtering on that document before it gets indexed into elastic search.
+
+28:18.440 --> 28:22.440
+Now, those two classes, if you want to build a plugin, you also need to supply some simple
+
+28:22.440 --> 28:28.440
+plugin metadata, then build it, for example, with Maven or with Gradle,
+
+28:28.440 --> 28:31.440
+and then you can install it with the elastic search plugin utility.
+
+28:31.440 --> 28:37.440
+And in that manner, you can build any plugin you would like for elastic search.
+
+28:37.440 --> 28:41.440
+And since we are running out of time, I'm not sure if we have some time for one
+
+28:41.440 --> 28:42.440
+or two questions, maybe.
+
+28:42.440 --> 28:50.440
+Do you have time for?
+
+28:50.440 --> 28:51.440
+Yes, of course.
+
+28:51.440 --> 28:52.440
+Okay, so if anybody?
+
+28:52.440 --> 28:53.440
+Yeah?
+
+28:53.440 --> 28:55.440
+Hey, thanks for your insights.
+
+28:55.440 --> 28:59.440
+We saw how too many cats can go out and fall into the pool.
+
+28:59.440 --> 29:00.440
+Yeah.
+
+29:00.440 --> 29:01.440
+Yes?
+
+29:01.440 --> 29:06.440
+I was curious, how does one know how many cars are going to be in charge?
+
+29:06.440 --> 29:12.440
+Well, I would say it depends on upfront estimation of how much data do you expect to put in that
+
+29:12.440 --> 29:13.440
+index.
+
+29:13.440 --> 29:17.440
+So we need to do an upfront finding, okay, in the first phase of my project,
+
+29:17.440 --> 29:21.440
+how many, let's say, gigabytes of data I would have.
+
+29:21.440 --> 29:25.440
+And based on that, you determine how many initial set of shots do you put,
+
+29:25.440 --> 29:29.440
+and if those shots still have a lot of data, then you consider partitioning the index.
+
+29:29.440 --> 29:34.440
+And it's a matter of upfront planning to determine that.
+
+29:34.440 --> 29:35.440
+Okay?
+
+29:35.440 --> 29:36.440
+Yeah?
+
+29:36.440 --> 29:41.440
+What is the structure used for store indexes and data?
+
+29:41.440 --> 29:42.440
+It's inverted index.
+
+29:42.440 --> 29:43.440
+This is the data structure.
+
+29:43.440 --> 29:44.440
+Yeah?
+
+29:44.440 --> 29:45.440
+Inverted index.
+
+29:45.440 --> 29:46.440
+Inverted index.
+
+29:46.440 --> 29:51.440
+It's just called an inverted index because it's an app between terms,
+
+29:51.440 --> 29:56.440
+and if for each term you have a pointer to the document that contains that term.
+
+29:56.440 --> 29:59.440
+So it's called inverted index.

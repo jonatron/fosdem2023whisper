@@ -1,0 +1,1306 @@
+WEBVTT
+
+00:00.000 --> 00:10.680
+All right, so yeah, we have Daniel, how did I pronounce your last name?
+
+00:10.680 --> 00:11.680
+Daniel Welcher.
+
+00:11.680 --> 00:12.680
+Daniel Welcher.
+
+00:12.680 --> 00:13.680
+Okay.
+
+00:13.680 --> 00:21.480
+So Daniel Welcher, he did some very interesting work that is, I guess, unusual, because most
+
+00:21.480 --> 00:26.400
+of the emulation we see is on PC, so this is different, and me personally, I'm very
+
+00:26.400 --> 00:30.320
+excited to see this start, which is starting 10 minutes late, but we're going to figure
+
+00:30.320 --> 00:35.400
+it out, so right now, I'm going to go there, take it away.
+
+00:35.400 --> 00:40.960
+Okay, so my talk today is called Pushing the PSP, and it's about writing two emulators
+
+00:40.960 --> 00:42.920
+for the PSP.
+
+00:42.920 --> 00:47.240
+So I wrote this with the help of one of the other main developers on this project, Zero,
+
+00:47.240 --> 00:52.480
+or Lorenzo, but he can't be with us here today, so I'm presenting on his behalf.
+
+00:52.480 --> 00:54.920
+So a bit of background on this talk.
+
+00:54.920 --> 00:59.880
+It is mainly about Dreamcast and DS emulation on the PSP, like I said, and this was first
+
+00:59.880 --> 01:02.800
+attempted about a decade ago, around 2009.
+
+01:02.800 --> 01:07.880
+There were proof of concepts made for both consoles on the PSP, but due to the small
+
+01:07.880 --> 01:11.720
+power gap, it was quite difficult to emulate them at any good speed, and they remained
+
+01:11.720 --> 01:13.640
+proof of concepts.
+
+01:13.640 --> 01:18.040
+But today, much better tools are available, and much better understandings of all platforms
+
+01:18.040 --> 01:25.360
+involved are available as well, so we'll see how a newer team gets on.
+
+01:25.360 --> 01:28.080
+So a quick primer on what the PSP has to work with.
+
+01:28.080 --> 01:33.000
+The main CPU is called Allegrex, and it's a MIPS CPU at 333 MHz.
+
+01:33.000 --> 01:37.160
+The GPU is a custom Sony graphics card at 166 MHz.
+
+01:37.160 --> 01:43.080
+The resolution is about a little less than 480p, and we have 32 MB of RAM as our baseline,
+
+01:43.080 --> 01:45.680
+although most models are 64.
+
+01:45.680 --> 01:49.880
+We have another chip of interest called the MediaEngine, which is exactly the same as
+
+01:49.880 --> 01:53.800
+the main CPU, but lacking a vector unit.
+
+01:53.800 --> 01:58.000
+That chip will become a big talking point later, because developers officially couldn't
+
+01:58.000 --> 02:02.840
+write arbitrary codes to this chip, but we can.
+
+02:02.840 --> 02:10.520
+So we'll start with the DS, because this one is the lighter, easier machine, hopefully.
+
+02:10.520 --> 02:14.560
+So the DS is, as I said, a much lighter machine than the PSP.
+
+02:14.560 --> 02:20.880
+We're looking at an ARM chip at around 66 MHz, and a secondary ARM chip at 33 MHz.
+
+02:20.880 --> 02:26.520
+There's no modern-looking GPU in it, so we just have about 656 kilobytes of VRAM and
+
+02:26.520 --> 02:32.120
+4 MB of RAM, so in theory this looks quite doable.
+
+02:32.120 --> 02:37.320
+The first efforts trying to emulate the DS on PSP were by a developer called Yoshihiro
+
+02:37.320 --> 02:41.760
+back in 2009, who ported an old build of Desmume, which many of you may know as a popular
+
+02:41.760 --> 02:45.160
+Nintendo DS emulator to the PSP.
+
+02:45.160 --> 02:48.400
+It booted a lot of games, but as you can see from the frames per second counter in the
+
+02:48.400 --> 02:50.560
+top, it did not run very well.
+
+02:50.560 --> 02:54.720
+For those who can't see at home, that says about four, okay, out of 60.
+
+02:54.720 --> 02:56.880
+So we've a bit of work to do.
+
+02:56.880 --> 03:00.840
+It's a very basic proof of concept, but it's an exciting effort, because as you might
+
+03:00.840 --> 03:05.040
+realize, both of these systems released in 2004, they were still receiving games at this
+
+03:05.040 --> 03:10.480
+time, so we were effectively playing games on the rival platform.
+
+03:10.480 --> 03:14.960
+But today the code is quite outdated, Desmume has come quite far along, and it was never
+
+03:14.960 --> 03:18.680
+very well optimized in the first place.
+
+03:18.680 --> 03:23.160
+So the challenge is with emulating the DS on the PSP specifically.
+
+03:23.160 --> 03:26.840
+First of all, we're probably going to rely on an interpreter, at least for the beginning,
+
+03:26.840 --> 03:29.280
+which is quite slow, more on that later.
+
+03:29.280 --> 03:32.760
+The touchscreen, of course, the PSP does not have a touchscreen, so we'll have to find
+
+03:32.760 --> 03:34.800
+a way to work around this.
+
+03:34.800 --> 03:39.200
+The unique graphics architecture, we have a 2D and 3D engine as opposed to a more modern
+
+03:39.200 --> 03:44.520
+graphic solution, and of course we have the two-screen problem, of course.
+
+03:44.520 --> 03:48.360
+How do we present two screens on one is one thing, but the resolution doesn't quite seem
+
+03:48.360 --> 03:54.320
+to fit either, so we'll need a unique solution to try and scale things as well as we can.
+
+03:54.320 --> 03:58.040
+And then the last question is, what DS emulator can we use as a base?
+
+03:58.040 --> 04:02.440
+Because while Desmume was the obvious choice back in 2009, many other options have popped
+
+04:02.440 --> 04:05.280
+up since.
+
+04:05.280 --> 04:09.240
+So these were the three emulators we mainly considered.
+
+04:09.240 --> 04:13.600
+On the left we had Desmume, we just use a newer build of Desmume.
+
+04:13.600 --> 04:19.520
+It's the most complete, it has high compatibility overall, it is a bit slow, it has a lot of
+
+04:19.520 --> 04:25.480
+old code and it's missing some extra features, and the developers won't give us much support.
+
+04:25.480 --> 04:30.320
+MelonDS is a newer emulator released many years after the original proof of concept.
+
+04:30.320 --> 04:33.960
+It's mostly complete and it's faster, but it's a work in progress.
+
+04:33.960 --> 04:36.880
+NewDS is exactly the same situation.
+
+04:36.880 --> 04:39.960
+The developer is quite helpful and we did actually get in contact with him to help us
+
+04:39.960 --> 04:45.600
+building it, and it is underactive development, but it is the least complete.
+
+04:45.600 --> 04:51.540
+Though it is portable, so all of these three emulators are worth a look.
+
+04:51.540 --> 04:55.840
+So we started with a more modern build of Desmume, around 2020.
+
+04:55.840 --> 05:00.880
+Zero led the charge on this one, and he began porting the most recent stable build of Desmume
+
+05:00.880 --> 05:04.440
+to PSP, and there's some success.
+
+05:04.440 --> 05:09.520
+Many games boot and 3D does work, but because we're only using an interpreter as opposed
+
+05:09.520 --> 05:15.040
+to a more efficient means of translating the code, we're still not seeing great speeds.
+
+05:15.040 --> 05:19.000
+For those of you who can't see, we're looking at about 5 frames a second on Super Mario
+
+05:19.000 --> 05:25.720
+and about 17 on Yoshi's Island, so about a quarter of the speed maximum right now.
+
+05:25.720 --> 05:28.960
+So we'll see how we can improve.
+
+05:28.960 --> 05:30.160
+So what can we do?
+
+05:30.160 --> 05:33.200
+Well, first of all, we can use the PSP's GPU.
+
+05:33.200 --> 05:38.960
+We can accelerate drawing with the inbuilt graphics hardware, at least 3D drawing.
+
+05:38.960 --> 05:43.560
+We can use the PSP's VFPU to optimise maths and similar functions.
+
+05:43.560 --> 05:48.480
+We can underclock the emulated system, hoping that we can skip some cycles and games and
+
+05:48.480 --> 05:53.640
+performance, and like I mentioned earlier, we can use the media engine.
+
+05:53.640 --> 05:58.160
+So just to explain a little bit about this chip, this originally could only be accessed
+
+05:58.160 --> 06:01.440
+through a Sony API by official developers.
+
+06:01.440 --> 06:06.760
+That meant it was pretty much limited to tasks such as audio and media decoding.
+
+06:06.760 --> 06:12.000
+But for us, we can take advantage of this to do whatever we really want.
+
+06:12.000 --> 06:17.600
+And so now the question pops up, could we even emulate the second DS CPU on our second
+
+06:17.600 --> 06:18.600
+CPU?
+
+06:18.600 --> 06:21.080
+Could we offload some functions to it?
+
+06:21.080 --> 06:24.680
+We have a lot of options here, but we'll have to do a little bit of thinking to figure
+
+06:24.680 --> 06:27.280
+out how to use it.
+
+06:27.280 --> 06:36.000
+So the first steps are hardware rendering, moving our 3D rendering to the PSP's GPU.
+
+06:36.000 --> 06:43.000
+And in fact, this demo runs at 71 frames a second from 20, using software or CPU-driven
+
+06:43.000 --> 06:44.160
+rendering.
+
+06:44.160 --> 06:46.400
+Of course, there are newer issues introduced.
+
+06:46.400 --> 06:52.840
+You can see the dice is now missing its face texture, a little issue, but we fix it eventually.
+
+06:52.840 --> 06:58.080
+And it also saves some CPU resources, so it will hopefully have even more knock-on benefits
+
+06:58.080 --> 07:00.680
+for the emulator.
+
+07:00.680 --> 07:05.920
+So the big step is a dynamic REC compiler or a Dynarec, and just-in-time emulation.
+
+07:05.920 --> 07:12.400
+So I'm sure many people here know about what a Dynarec is, but just to recap, it is compared
+
+07:12.400 --> 07:13.400
+to an interpreter.
+
+07:13.400 --> 07:17.960
+An interpreter fetches and executes instructions one by one, and it would never be fast enough
+
+07:17.960 --> 07:20.880
+to emulate the DS on PSP.
+
+07:20.880 --> 07:26.800
+But a dynamic REC compiler translates to native code and caches it, so we can run much more
+
+07:26.800 --> 07:31.440
+of the code as if it was natively for the PSP.
+
+07:31.440 --> 07:32.960
+So far, so good.
+
+07:32.960 --> 07:36.880
+So the Dynarec at this point was less than half finished, but we are getting some big
+
+07:36.880 --> 07:38.760
+speed gains.
+
+07:38.760 --> 07:41.640
+Basic 2D scenes reach or even exceed full speed.
+
+07:41.640 --> 07:46.320
+That Zookeeper demo earlier is now running at over 50 frames per second.
+
+07:46.320 --> 07:50.800
+In fact, just for comparison, the PS Vita build, which was not optimized, runs this same scene
+
+07:50.800 --> 07:54.240
+at 22 on much newer hardware.
+
+07:54.240 --> 07:58.880
+So we were off to a great start, doubling the performance on a newer console.
+
+07:58.880 --> 08:03.760
+But 3D is still very slow because that's quite a complicated thing, so very little gain.
+
+08:03.760 --> 08:05.760
+It's difficult to see here.
+
+08:05.760 --> 08:10.200
+Professor Layton at the top is actually reaching an exceeding full speed, but the 3D drawing
+
+08:10.200 --> 08:15.520
+is still at about 13 frames a second in a real game situation.
+
+08:15.520 --> 08:20.200
+So the question is, does Moomi is too slow?
+
+08:20.200 --> 08:24.560
+Does Moomi's convolutional RK code is a big factor in the performance here?
+
+08:24.560 --> 08:26.920
+Because the emulator is about 20 years old now.
+
+08:26.920 --> 08:31.920
+It was one of the first efforts to ever emulate the DS on PC, let alone on PSP.
+
+08:31.920 --> 08:33.360
+So we ran a little test.
+
+08:33.360 --> 08:37.920
+Zero compiled Moomi on his computer without any optimizations, turning off everything
+
+08:37.920 --> 08:43.800
+from the compiler and seeing how the emulator ran with pretty much no optimization.
+
+08:43.800 --> 08:48.880
+And even on a modern computer, Pokémon was barely reaching full speed.
+
+08:48.880 --> 08:53.640
+So resolving some of these speed issues would require a major refactoring of already a large
+
+08:53.640 --> 08:56.360
+old emulator.
+
+08:56.360 --> 08:59.320
+So time to explore our other options.
+
+08:59.320 --> 09:02.880
+Does Moomi would require a lot of reworking to get optimal speeds?
+
+09:02.880 --> 09:05.000
+So what about the other emulators?
+
+09:05.000 --> 09:07.840
+Well, new DS shows the most promise.
+
+09:07.840 --> 09:12.000
+It's clean, simple and portable, even if it's early in development.
+
+09:12.000 --> 09:17.600
+So can we use new DS to better utilize the PSP?
+
+09:17.600 --> 09:20.680
+Well, at first there were signs of promise.
+
+09:20.680 --> 09:22.200
+It has a very good start.
+
+09:22.200 --> 09:24.880
+And initial results seemed quite promising.
+
+09:24.880 --> 09:29.560
+Even in the very early build where we hadn't even fixed RGB color issues, we were seeing
+
+09:29.560 --> 09:35.720
+over 50% speed on Yoshi's Island, that same game that was running at 17 earlier.
+
+09:35.720 --> 09:36.720
+It's neater.
+
+09:36.720 --> 09:39.000
+So each loop calls function distinctly.
+
+09:39.000 --> 09:44.040
+So drawing, rendering, DMA, all these things are called as individual parts of the function,
+
+09:44.040 --> 09:48.320
+meaning it is easier for us to split it up between both chips.
+
+09:48.320 --> 09:51.680
+And it means we might be able to parallelize the code a bit better as well.
+
+09:51.680 --> 09:56.160
+So we can use that media engine for a bit of extra performance.
+
+09:56.160 --> 09:58.480
+But it's harder than it looks in the end.
+
+09:58.480 --> 10:00.880
+So some cash problems emerge here.
+
+10:00.880 --> 10:05.280
+As some of you may know, having developed for dual core systems, it's a bit different
+
+10:05.280 --> 10:07.560
+when you move to dual CPU.
+
+10:07.560 --> 10:16.400
+See, when you try to access the same code on both CPUs, you need to flush the cash.
+
+10:16.400 --> 10:18.920
+And this wastes a lot of time.
+
+10:18.920 --> 10:22.760
+This on top of things like scheduling issues and trying to balance between both CPUs led
+
+10:22.760 --> 10:27.400
+this to be a bit more difficult than we'd initially imagined.
+
+10:27.400 --> 10:31.120
+On top of that, NUDES was a very different code base, and we would need to re-implement
+
+10:31.120 --> 10:35.480
+our work on hardware acceleration and our dynamic recompiler.
+
+10:35.480 --> 10:39.120
+So that itself is a lot of additional work.
+
+10:39.120 --> 10:41.600
+And like I said, it's still a work in progress as well.
+
+10:41.600 --> 10:48.520
+So this emulator would still need more time, even if we finished porting it ourselves.
+
+10:48.520 --> 10:50.800
+So back to the drawing board.
+
+10:50.800 --> 10:54.400
+Despite its flaws, this movement still seems like the best option.
+
+10:54.400 --> 10:57.800
+NUDES would need a lot of work, both from ourselves and from the developer before we
+
+10:57.800 --> 11:00.000
+was in a complete state.
+
+11:00.000 --> 11:03.640
+And optimization is also not there either.
+
+11:03.640 --> 11:06.240
+So the other alternatives also turned out lacking.
+
+11:06.240 --> 11:09.840
+Any of you with an Android phone trying to play Nintendo DS games may know of Drastic.
+
+11:09.840 --> 11:14.840
+This is a very popular, very fast emulator, but it's closed source, and that kind of rules
+
+11:14.840 --> 11:16.680
+that one out pretty quickly.
+
+11:16.680 --> 11:20.720
+Meland DS is also an option, but it's very threaded, and that doesn't really work well
+
+11:20.720 --> 11:28.040
+on our single CPU machines, or in our case, dual CPU, for the reasons I mentioned earlier.
+
+11:28.040 --> 11:30.240
+So where are we now?
+
+11:30.240 --> 11:36.040
+Well, we've stuck with it as the main DS emulator for PSP, and it's at a pretty good state.
+
+11:36.040 --> 11:38.040
+Many games do boot.
+
+11:38.040 --> 11:43.200
+Some 2D games are indeed playable with Frameskip, and of course sound disabled on that note
+
+11:43.200 --> 11:47.080
+as well, because that is a whole different beast to emulate right now.
+
+11:47.080 --> 11:51.240
+The JIT or the Dynarec is implemented, but it's very inefficient, and it could be much
+
+11:51.240 --> 11:53.360
+faster.
+
+11:53.360 --> 11:57.040
+And I'll return to this later, but we can use knowledge learned from our Dreamcast
+
+11:57.040 --> 12:00.000
+JIT to improve our DS1.
+
+12:00.000 --> 12:05.360
+In other words, we learn a bit more about the PSP through various different emulation
+
+12:05.360 --> 12:09.160
+projects, and we can use it to improve all of them.
+
+12:09.160 --> 12:10.160
+So what's next?
+
+12:10.160 --> 12:12.480
+Well, first of all, complete the JIT.
+
+12:12.480 --> 12:16.720
+It could be hard as the PSP is short on RAM, and we can't cache that much code, but work
+
+12:16.720 --> 12:18.440
+can still be done.
+
+12:18.440 --> 12:22.720
+We can optimize the emulator for new compilers, so we don't actually use the latest toolchain.
+
+12:22.720 --> 12:27.240
+That introduces new issues, new bugs, new crashes, but that could in theory get us some
+
+12:27.240 --> 12:29.160
+extra performance.
+
+12:29.160 --> 12:33.720
+We could try to use HLE or higher level emulation for the ARM7, which is the second CPU on the
+
+12:33.720 --> 12:39.160
+DS, which as opposed to lower level emulation, which would be emulating the chip more directly,
+
+12:39.160 --> 12:44.480
+this would only emulate the necessary commands and functions that the DS would have used.
+
+12:44.480 --> 12:49.080
+This would save us some performance, but again, a whole different beast right now.
+
+12:49.080 --> 12:54.560
+And the final thing is PSP1000 support, which is support for the 32 megabyte RAM models.
+
+12:54.560 --> 12:59.720
+As I mentioned, we're already short on RAM, but we might get there one day.
+
+12:59.720 --> 13:03.200
+So the second half of this presentation is about the Dreamcast.
+
+13:03.200 --> 13:07.480
+And this is a much bigger challenge, Germany, than the DS.
+
+13:07.480 --> 13:09.480
+Let's have a little comparison here.
+
+13:09.480 --> 13:13.680
+So the Dreamcast is a few years older than both of these systems, but its CPU is a Hitachi
+
+13:13.680 --> 13:16.680
+SH4 at 200 megahertz.
+
+13:16.680 --> 13:24.000
+Moreover, the GPU is actually a bit slower, but has more memory than we actually have.
+
+13:24.000 --> 13:27.520
+We're looking at 16 megabytes of RAM and 2 megabytes of sound memory as well compared
+
+13:27.520 --> 13:29.720
+to the DS's 4.
+
+13:29.720 --> 13:31.840
+As you can see, we're kind of up against it here.
+
+13:31.840 --> 13:35.720
+If we go by the rule of thumb, the emulation requires several times more power than the
+
+13:35.720 --> 13:37.320
+original system.
+
+13:37.320 --> 13:42.800
+This could get difficult, but we'll see where this goes, at least as a proof of concept.
+
+13:42.800 --> 13:46.000
+So the first four port for a bit of backstory.
+
+13:46.000 --> 13:52.680
+In 2008, Dirk Rasil, who's now known as Skimp, ported his emulator, NullDLC, to the PSP as
+
+13:52.680 --> 13:58.640
+a little proof of concept, basically for a bit of fun, and it booted commercial games.
+
+13:58.640 --> 14:04.000
+This here is the Dreamcast BIOS running on the PSP, and it's pretty much feature complete.
+
+14:04.000 --> 14:07.480
+It's slow, but it works, and that is a big start.
+
+14:07.480 --> 14:09.280
+But there are some glitches and issues.
+
+14:09.280 --> 14:14.520
+So I have here some footage from the original emulator.
+
+14:14.520 --> 14:18.680
+Now bear in mind, this build, the binary and the code, was lost for a long time, so this
+
+14:18.680 --> 14:24.040
+is drawn from YouTube from the time, so I apologize in advance for the quality.
+
+14:24.040 --> 14:31.160
+This is footage of Shenmue from the Dreamcast running on the PSP in 2008.
+
+14:31.160 --> 14:36.240
+It's a little problematic, shall we say.
+
+14:36.240 --> 14:39.840
+But the fact that this is booting at all is a big step.
+
+14:39.840 --> 14:43.200
+And we're looking maybe at about 20% speed here.
+
+14:43.200 --> 14:47.440
+This was a big budget title perhaps around the year 1999, so the fact that we are emulating
+
+14:47.440 --> 14:50.400
+this at all is quite a big achievement.
+
+14:50.400 --> 14:54.240
+I think we peak at around 25% speed here, but there are clearly issues with hardware
+
+14:54.240 --> 14:59.480
+culling, transform, texturing, pretty much the whole boat of graphical issues is on display
+
+14:59.480 --> 15:00.480
+here.
+
+15:00.480 --> 15:05.200
+Crazy Taxi, we thought would fare better being an arcade game, but this is more interesting.
+
+15:05.200 --> 15:08.600
+It is so slow that it practically doesn't appear as a video here, right?
+
+15:08.600 --> 15:12.720
+We're looking at literally about three frames a second.
+
+15:12.720 --> 15:16.560
+But this is interesting because we thought Shenmue being one of the most expensive games
+
+15:16.560 --> 15:18.800
+of the time would be more difficult.
+
+15:18.800 --> 15:19.800
+Is the footage still running?
+
+15:19.800 --> 15:20.800
+Yes, it is.
+
+15:20.800 --> 15:23.000
+It's that slow.
+
+15:23.000 --> 15:28.640
+So we thought Crazy Taxi would be easier to emulate, but as it turns out, it looks like
+
+15:28.640 --> 15:33.040
+this has some unique quirks for our emulator.
+
+15:33.040 --> 15:36.840
+So a few years later, the source code actually returns.
+
+15:36.840 --> 15:42.200
+Our friend Skimp finds the source code again somewhere, and he puts it on GitHub around
+
+15:42.200 --> 15:44.720
+2017, almost 10 years later.
+
+15:44.720 --> 15:49.280
+So it was added to the PSP archive, which is a GitHub repository in 2021 after it's
+
+15:49.280 --> 15:52.080
+cleaned up and confirmed to compile.
+
+15:52.080 --> 15:54.160
+This is where we come in.
+
+15:54.160 --> 15:57.560
+So we began to compile the emulator again and make some adjustments.
+
+15:57.560 --> 16:01.680
+Games do boot, albeit with some issues, but there is some promise.
+
+16:01.680 --> 16:05.280
+For example, the game here, I believe it's Powerstone or one of these fighting games,
+
+16:05.280 --> 16:10.920
+is actually hitting up to 38 frames a second, despite some obvious graphical issues.
+
+16:10.920 --> 16:14.600
+So it's a pretty good start, I'm sure you'll agree.
+
+16:14.600 --> 16:19.160
+Turn of the King, original developer Skimp actually returns to help us out on this project
+
+16:19.160 --> 16:23.040
+and helps us to plan out how we should use the PSP hardware.
+
+16:23.040 --> 16:27.360
+Obviously, he has been developing a Dreamcast emulator for many years, so his expertise
+
+16:27.360 --> 16:29.280
+has been invaluable.
+
+16:29.280 --> 16:33.120
+He helps us with parallelization, hardware expertise, and he actually believes that full
+
+16:33.120 --> 16:38.640
+speed emulation for the Dreamcast is possible on the PSP, which is definitely not what people
+
+16:38.640 --> 16:40.840
+would have thought 10 years ago.
+
+16:40.840 --> 16:45.520
+To work on the jit begins, it's early, but it's a work in progress.
+
+16:45.520 --> 16:48.040
+The first full speed milestone.
+
+16:48.040 --> 16:50.280
+Big titles are getting better too.
+
+16:50.280 --> 16:54.920
+Here the game Mr. Driller becomes the first Dreamcast game to run at full speed on the
+
+16:54.920 --> 16:57.920
+PSP, something we never even thought possible.
+
+16:57.920 --> 17:01.640
+Though there are of course a few caveats, there seem to be some texture corruptions going
+
+17:01.640 --> 17:07.920
+on and the performance does not stay above 60, but this is a big milestone for the emulator.
+
+17:07.920 --> 17:11.000
+Like Adventure on the other hand is a much more complicated game, it's running at about
+
+17:11.000 --> 17:15.280
+25% speed for comparison, but it's a good start.
+
+17:15.280 --> 17:19.080
+Audio is still too big a performance here right now to reliably implement, but we might
+
+17:19.080 --> 17:20.960
+get there.
+
+17:20.960 --> 17:24.280
+So this brings us to another new chip.
+
+17:24.280 --> 17:29.480
+I mentioned the media engine earlier, but it actually has a chip related to it called
+
+17:29.480 --> 17:32.440
+the VME or the Virtual Mobile Engine.
+
+17:32.440 --> 17:37.880
+This is a reconfigurable chip that was designed for media decoding, but we still don't understand
+
+17:37.880 --> 17:42.720
+much about it to this very day, almost 20 years after the PSP released.
+
+17:42.720 --> 17:46.560
+It's a bit like an FPGA in the sense that we can reconfigure it in software and it's
+
+17:46.560 --> 17:52.160
+capable of 5 giga operations a second, so if we figure out how to use this chip we could
+
+17:52.160 --> 17:57.400
+see big emulation gains, but at the moment we are still a little short on knowledge,
+
+17:57.400 --> 18:01.240
+so this is more of an area for the future.
+
+18:01.240 --> 18:06.120
+In terms of optimization and what can still be done, first of all audio, like I mentioned,
+
+18:06.120 --> 18:10.560
+in theory we could offload this to the VME once we figure it out, but if not the media
+
+18:10.560 --> 18:12.960
+engine might still do the job.
+
+18:12.960 --> 18:16.680
+Texture optimizations, textures are currently stored in RAM, meaning that there is a speed
+
+18:16.680 --> 18:20.640
+penalty in transferring them to video memory and then rendering them.
+
+18:20.640 --> 18:23.880
+Once we find out how to move things around more efficiently we'll find some performance
+
+18:23.880 --> 18:25.120
+there.
+
+18:25.120 --> 18:31.840
+Rendering bugs, as you saw earlier, are still there due to some problematic implementations.
+
+18:31.840 --> 18:40.000
+So here's some footage from 2023 of the latest build, same scenes recorded more recently.
+
+18:40.000 --> 18:43.360
+As you can see Shenmue is still struggling for performance and there are actually new
+
+18:43.360 --> 18:44.520
+issues altogether.
+
+18:44.520 --> 18:50.080
+The main character is now running in a completely different direction, but we are seeing much
+
+18:50.080 --> 18:51.080
+better performance.
+
+18:51.080 --> 18:56.840
+In fact this hits up to 70% speed and sure there are still hardware culling issues on
+
+18:56.840 --> 19:02.520
+display here, but the fact of the matter is we're looking at nearly full speed already.
+
+19:02.520 --> 19:06.160
+And finally we have crazy taxi here.
+
+19:06.160 --> 19:10.240
+It's finally looking like a motion video, which is fantastic.
+
+19:10.240 --> 19:14.840
+It still requires a lot of work, but you know what, considering what you saw earlier I think
+
+19:14.840 --> 19:16.920
+we will take it.
+
+19:16.920 --> 19:21.520
+So the state of play, just to recap, there's a long way to go, but there is a lot of progress.
+
+19:21.520 --> 19:25.120
+The early jitter implementation gets us some speed at the cost of some instability right
+
+19:25.120 --> 19:26.120
+now.
+
+19:26.120 --> 19:29.640
+It's already up to three times as fast as the original build, perhaps more, and we're
+
+19:29.640 --> 19:31.560
+seeing full speed in some games.
+
+19:31.560 --> 19:36.880
+3D graphics are completely hardware accelerated right now, but the implementation is not yet
+
+19:36.880 --> 19:38.720
+finished.
+
+19:38.720 --> 19:40.360
+So the future is bright.
+
+19:40.360 --> 19:41.880
+This is the note I will end on.
+
+19:41.880 --> 19:46.320
+Despite key areas of the emulator in early stages, progress is very good.
+
+19:46.320 --> 19:50.920
+We're seeing full speed in some cases, which is more than anyone may ever have expected.
+
+19:50.920 --> 19:54.760
+Big budget games like Shenmue are heading up to 75, and once stability improves and
+
+19:54.760 --> 19:59.720
+our JIT comes along a bit further, who knows where the future could take us.
+
+19:59.720 --> 20:02.680
+That's the end of the presentation, but before I go to question, I'd just like to thank
+
+20:02.680 --> 20:06.080
+Zero, as he was the main developer on both of these projects, unfortunately he cannot
+
+20:06.080 --> 20:08.000
+be here today.
+
+20:08.000 --> 20:12.640
+And additional thanks here to Skimp and HLiD, who provided us help with our implementations
+
+20:12.640 --> 20:15.480
+of the JITs on both machines.
+
+20:15.480 --> 20:17.440
+So that's the end of that presentation.
+
+20:17.440 --> 20:18.440
+Do we have any questions?
+
+20:18.440 --> 20:30.160
+Thank you.
+
+20:30.160 --> 20:32.160
+So do we have any questions?
+
+20:32.160 --> 20:33.160
+Yes?
+
+20:33.160 --> 20:37.720
+Is the dolphin in the next project?
+
+20:37.720 --> 20:39.640
+Is the dolphin emulator our next project?
+
+20:39.640 --> 20:41.640
+Yeah, in the next project.
+
+20:41.640 --> 20:42.640
+One more time?
+
+20:42.640 --> 20:43.640
+The dolphin in your slide.
+
+20:43.640 --> 20:44.640
+Oh.
+
+20:44.640 --> 20:50.520
+We will see, that was actually from a Dreamcast game called Echo the Dolphin, which is why
+
+20:50.520 --> 20:56.360
+I used it as an image there, but we'll see, maybe I'll use the dolphin next time.
+
+20:56.360 --> 20:57.360
+Any other questions?
+
+20:57.360 --> 20:58.360
+Yes?
+
+20:58.360 --> 21:04.000
+In this new version of this movie, what is the impact on the battery of the PSP?
+
+21:04.000 --> 21:05.000
+This is a good question.
+
+21:05.000 --> 21:11.480
+Okay, so originally the PSP, oh sorry, so in the modern version of this movie, what is
+
+21:11.480 --> 21:13.480
+the battery impact, is the question.
+
+21:13.480 --> 21:18.520
+So this is a very good question because battery was always a concern for the PSP, especially
+
+21:18.520 --> 21:19.520
+at launch.
+
+21:19.520 --> 21:24.720
+In fact, Sony limited the PSP to 222 megahertz at launch to prevent battery loss.
+
+21:24.720 --> 21:28.400
+The battery is actually the same in terms of battery usage compared to the original
+
+21:28.400 --> 21:32.640
+build because we've been running at 333 megahertz the entire time.
+
+21:32.640 --> 21:37.520
+So in the end, there is little to no change in battery consumption.
+
+21:37.520 --> 21:38.520
+Anything else?
+
+21:38.520 --> 21:39.520
+Yes?
+
+21:39.520 --> 21:52.160
+Okay, good question.
+
+21:52.160 --> 21:54.920
+So this is about underclocking the emulated CPU.
+
+21:54.920 --> 22:00.680
+So if we say here that the DSH CPU is running at 66 megahertz, I think that is what I said
+
+22:00.680 --> 22:06.560
+earlier anyway, and then we could potentially save some performance by emulating the CPU
+
+22:06.560 --> 22:07.720
+at a lower clock speed.
+
+22:07.720 --> 22:10.720
+So we could emulate, say, a 50 megahertz DS.
+
+22:10.720 --> 22:15.000
+This might come at the cost of some in-game performance but would lead to some more stability
+
+22:15.000 --> 22:17.520
+and some more performance consistency, if that makes sense.
+
+22:17.520 --> 22:21.240
+Or some games that do not fully utilize the DS might actually just see some free performance
+
+22:21.240 --> 22:22.240
+altogether.
+
+22:22.240 --> 22:24.040
+Does that answer your question?
+
+22:24.040 --> 22:25.040
+Thank you very much.
+
+22:25.040 --> 22:26.040
+Yes?
+
+22:26.040 --> 22:33.640
+You mentioned one possible optimization to skip code that's basically not, you know, only
+
+22:33.640 --> 22:36.560
+when the, only emulate the essential parts.
+
+22:36.560 --> 22:38.440
+Yes, do you mean higher level emulation?
+
+22:38.440 --> 22:39.440
+Yes.
+
+22:39.440 --> 22:42.480
+So being a little bit like, first of all, is that static, like you just know beforehand
+
+22:42.480 --> 22:44.560
+which command or which code you can skip?
+
+22:44.560 --> 22:47.800
+Exactly, like how much improvement can you get from that?
+
+22:47.800 --> 22:52.240
+Okay, so the question is about HLE, so emulating some, only the necessary functions on the
+
+22:52.240 --> 22:53.960
+DS's second CPU.
+
+22:53.960 --> 22:57.400
+To be honest, I'm still a little bit in the dark on the specifics of HLE, but I will
+
+22:57.400 --> 22:58.400
+say this.
+
+22:58.400 --> 23:03.280
+The idea is instead of emulating the chip in a traditional low level sense, we know
+
+23:03.280 --> 23:06.760
+that this chip can only use a handful of functions, right?
+
+23:06.760 --> 23:11.480
+So this chip was dedicated just to a few sound or auxiliary functions.
+
+23:11.480 --> 23:15.800
+So we try to emulate these, how do I put this?
+
+23:15.800 --> 23:20.320
+We try to, we know that there are only a few functions to emulate, so we focus on those
+
+23:20.320 --> 23:21.320
+if that makes sense.
+
+23:21.320 --> 23:25.440
+That is the concept of higher level emulation, although I can't unfortunately answer all
+
+23:25.440 --> 23:27.000
+the details about it right now.
+
+23:27.000 --> 23:28.600
+Thanks for the question.
+
+23:28.600 --> 23:29.600
+Yes?
+
+23:29.600 --> 23:33.480
+I'm just wondering if you can say a little bit more about the JIT, like, is it very naive?
+
+23:33.480 --> 23:38.400
+Is it just getting rid of the overhead interpreter, or does it actually do some sort of a registration
+
+23:38.400 --> 23:40.920
+or local optimizations that translate?
+
+23:40.920 --> 23:44.680
+So is your question about the JIT for the DS or the Dreamcast, or both?
+
+23:44.680 --> 23:45.680
+Both, okay.
+
+23:45.680 --> 23:49.480
+So like I said, Xero was the main driving force on both JITs, and he had some help from
+
+23:49.480 --> 23:53.960
+outside, so I'm not fully aware of the current state, but I can say that from what he's told
+
+23:53.960 --> 23:59.200
+me, the DS JIT right now is complete, as in all the op codes are implemented.
+
+23:59.200 --> 24:03.040
+But the implementation is naive, so it's quite inefficient right now.
+
+24:03.040 --> 24:06.560
+He didn't quite elaborate on what parts were inefficient, but that was the gist.
+
+24:06.560 --> 24:11.760
+As for Dreamcast, it's actually not fully implemented yet, but he says it's a more efficient
+
+24:11.760 --> 24:13.760
+implementation as per the PSP's hardware.
+
+24:13.760 --> 24:15.440
+Is that answer your question?
+
+24:15.440 --> 24:16.440
+Thank you very much.
+
+24:16.440 --> 24:17.440
+Yes?
+
+24:17.440 --> 24:19.440
+What's the compiler tool transport for PSP?
+
+24:19.440 --> 24:22.040
+Can you just use upstream GCC or back?
+
+24:22.040 --> 24:23.040
+Yes.
+
+24:23.040 --> 24:25.760
+So, sorry, the question is about GCC and modern compiler tools.
+
+24:25.760 --> 24:30.000
+Yes, we actually do keep the PSP quite up-to-date in terms of the tool chain.
+
+24:30.000 --> 24:36.760
+We tend to use GCC 11, if I recall, or quite a modern version of these upstream compilers,
+
+24:36.760 --> 24:39.920
+but this one is actually built on a tool chain that's a few years old because the newer ones
+
+24:39.920 --> 24:41.520
+introduced some instability.
+
+24:41.520 --> 24:45.520
+But to answer your question, yes, it's mostly upstream compilers.
+
+24:45.520 --> 24:46.520
+Anything else?
+
+24:46.520 --> 24:47.520
+No?
+
+24:47.520 --> 24:48.520
+I think that's good.
+
+24:48.520 --> 24:49.520
+Oh.
+
+24:49.520 --> 24:50.520
+What's the question?
+
+24:50.520 --> 25:01.840
+So, you showed some triple A games and some smaller games, had you tried homebrew or custom
+
+25:01.840 --> 25:06.040
+built stuff just to maybe even unit tests, so unit tests, you were having a lot of sound
+
+25:06.040 --> 25:13.040
+issues just to narrow that part of the emulation down in a custom built software, had you thought
+
+25:13.040 --> 25:16.840
+of that, or is it all just kind of pre-built, whatever you get?
+
+25:16.840 --> 25:20.120
+Okay, so your question is have we tried homebrew programs on either of these emulators?
+
+25:20.120 --> 25:23.480
+Well, actually, there was one or two homebrew pieces featured here.
+
+25:23.480 --> 25:26.880
+You might remember there was a dice demo displayed for the hardware acceleration.
+
+25:26.880 --> 25:30.560
+We used that as a simple way to test whether the 3D rendering worked, but the problem with
+
+25:30.560 --> 25:36.680
+homebrew is that often this uses code that's, shall we say, a little bit unofficial, and
+
+25:36.680 --> 25:39.640
+this can cause whole new issues that wouldn't really apply to commercial games.
+
+25:39.640 --> 25:43.160
+So we tried to avoid it, but we do use it sometimes to test particular things.
+
+25:43.160 --> 25:44.880
+Does that answer your question?
+
+25:44.880 --> 25:45.880
+Thank you very much.
+
+25:45.880 --> 25:46.880
+I do ask a question.
+
+25:46.880 --> 25:47.880
+Yes, go on.
+
+25:47.880 --> 25:48.880
+What do you ask a question?
+
+25:48.880 --> 25:51.120
+How do we debug this?
+
+25:51.120 --> 25:52.120
+How do we debug this?
+
+25:52.120 --> 25:53.120
+On the PSP?
+
+25:53.120 --> 25:54.120
+Yeah.
+
+25:54.120 --> 25:55.120
+Okay, so how do we debug?
+
+25:55.120 --> 25:56.240
+This is a pretty good question.
+
+25:56.240 --> 26:01.920
+So with the PSP, we can plug it straight into the computer, obviously, using a USB connection.
+
+26:01.920 --> 26:03.880
+There is a tool, what is it called?
+
+26:03.880 --> 26:08.440
+I forget the actual name of the tool now, that's how long it's been, but basically there
+
+26:08.440 --> 26:14.520
+is a way of, you can send the PRX, which is the binary, to the PSP, and it is connected
+
+26:14.520 --> 26:19.160
+to the computer still, so you can log what's going on in the memory, on the computer side.
+
+26:19.160 --> 26:20.920
+Okay, but no breakpoints.
+
+26:20.920 --> 26:25.120
+No, no, no, nothing too fancy that I know of, anyway.
+
+26:25.120 --> 26:29.120
+If someone does know more about that, and I'm not using it, then that's great.
+
+26:29.120 --> 26:30.120
+Last one?
+
+26:30.120 --> 26:31.120
+Yep.
+
+26:31.120 --> 26:32.120
+All right.
+
+26:32.120 --> 26:33.120
+Thank you very much.
+
+26:33.120 --> 26:34.120
+Okay.
+
+26:34.120 --> 26:35.120
+Thank you very much.
+
+26:35.120 --> 26:36.120
+Thank you.
+
+26:36.120 --> 26:46.120
+Thank you very much.

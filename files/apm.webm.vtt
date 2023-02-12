@@ -1,0 +1,961 @@
+WEBVTT
+
+00:00.000 --> 00:15.000
+Okay. Hello, everyone. Welcome to the talk on open telemetry with Grafana. Microphone
+
+00:15.000 --> 00:19.120
+broke, so I need to do it with this microphone now. Let's see how it goes with typing and
+
+00:19.120 --> 00:26.840
+live demo. Few words about me, so who am I, why am I here talking about Grafana and open
+
+00:26.840 --> 00:32.720
+telemetry, so I work at Grafana Labs, I'm an engineering manager, I'm also a manager
+
+00:32.720 --> 00:37.840
+for our open telemetry squad, and I'm also active in open source, so I'm a member of
+
+00:37.840 --> 00:44.020
+the Prometheus team where I maintain the Java metrics library. So what are we going to do
+
+00:44.020 --> 00:50.320
+in this talk in the next 25 minutes or so, so it will almost exclusively be a live demo,
+
+00:50.320 --> 00:55.480
+so basically the idea is I have a little example application running on my laptop, and it is
+
+00:55.480 --> 01:00.640
+instrumented with open telemetry, I will show you in a minute what it does and how I instrumented
+
+01:00.640 --> 01:06.560
+it, and I also have an open source monitoring back and running, right, it consists of three
+
+01:06.560 --> 01:13.920
+databases, one is Loki, which is a open source logs database, one is Temple, which is an
+
+01:13.920 --> 01:19.880
+open source trace database, and one is Mimir, which is an open source metrics database, so
+
+01:19.880 --> 01:25.680
+Mimir is compatible with Prometheus, so I could have shown the exact same demo using
+
+01:25.680 --> 01:30.920
+Prometheus instead of Mimir, so it doesn't really matter for now. And of course I also
+
+01:30.920 --> 01:35.840
+have Grafana, I have those databases configured as data sources, and what we are going to
+
+01:35.840 --> 01:40.200
+do, we are going to start up Grafana, you know, have a look at metrics, have a look
+
+01:40.200 --> 01:45.400
+at traces, have a look at logs, and basically the idea is that at the end of the talk you
+
+01:45.400 --> 01:50.000
+kind of have seen all the signals that come out of open telemetry, you know, explore a
+
+01:50.000 --> 01:54.400
+bit what you can do with this type of data, and so you should have a good overview how
+
+01:54.400 --> 02:01.400
+open source monitoring with open telemetry looks like, right? So last slide before we
+
+02:01.400 --> 02:06.320
+jump into the live demo, so this is just a quick overview of what the example application
+
+02:06.320 --> 02:12.400
+does so that you know what we are going to look at. It's a simple hello world rest service
+
+02:12.400 --> 02:19.600
+written in Java using Spring Boot, and so basically you can send a request to port 8080
+
+02:19.600 --> 02:24.560
+and it will respond with hello world, and in order to make it a bit more interesting,
+
+02:24.560 --> 02:28.920
+I made it a distributed hello world service, so it doesn't respond directly, but when it
+
+02:28.920 --> 02:34.600
+receives a request, it reaches out to a greeting service running on port 8081, the greeting
+
+02:34.600 --> 02:39.080
+service responds with the greeting, which is hello world, and then the response is forwarded
+
+02:39.080 --> 02:45.200
+to the client, right? And there are random errors to have some error rates as well, so
+
+02:45.200 --> 02:51.320
+basically a hello world microservice architecture or whatever, right? And in order to instrument
+
+02:51.320 --> 02:57.880
+this with open telemetry, I use the Java instrumentation agent that's provided by the open telemetry
+
+02:57.880 --> 03:02.760
+community, that's something you can download on GitHub, and the thing is this thing, you
+
+03:02.760 --> 03:07.680
+basically attach it to the Java virtual machine at start up time with a special command line
+
+03:07.680 --> 03:13.560
+parameter, so I didn't modify any source code, I didn't use any SDK or introduce any custom
+
+03:13.560 --> 03:19.680
+stuff, all we are going to look at in this demo is just data produced by attaching the
+
+03:19.680 --> 03:27.160
+open telemetry instrumentation to a standard Spring Boot application, right? Cool. So let's
+
+03:27.160 --> 03:33.880
+get started. As said, I have my data sources configured here, so Prometheus and Mimera are
+
+03:33.880 --> 03:40.280
+compatible, so it doesn't really matter which one we choose. There are a lot of, so I want
+
+03:40.280 --> 03:54.480
+to start with metrics, and yeah, so... Yeah? Can we turn the lights down a bit? I don't
+
+03:54.480 --> 04:14.880
+know. Okay. Maybe the other way around. Okay. I will just continue, come on. So there are
+
+04:14.880 --> 04:20.760
+lots of metrics that you get from the open telemetry instrumentation, so kind of JVM-related
+
+04:20.760 --> 04:27.960
+stuff like garbage collection activity and so forth, but the one I want to look at, oh,
+
+04:27.960 --> 04:46.400
+no, it's getting brighter and brighter. Yeah. Okay. Great. I think there is also a light
+
+04:46.400 --> 04:53.320
+mode in Grafana. Maybe that would have been a better choice. But no, I'm not going to
+
+04:53.320 --> 05:00.480
+use light mode. So let's figure out how to do the demo while I have a microphone that
+
+05:00.480 --> 05:14.480
+I should hold in my hands. Let's just put it here. Okay. Thank you. Cool. So the metric
+
+05:14.480 --> 05:20.000
+that we are going to look at for the demo, it's a metric named HTTP server duration.
+
+05:20.000 --> 05:24.880
+This is a metric of type histogram. So histograms have a couple of different numbers attached
+
+05:24.880 --> 05:30.920
+to them, so there are histogram buckets with the distribution data and so forth, and there's
+
+05:30.920 --> 05:37.840
+also a count. The count is the most simple one, so we are going to use this in our example.
+
+05:37.840 --> 05:41.800
+I actually got it two times. I got it once for my greeting service here and once for
+
+05:41.800 --> 05:49.840
+the hello world application. And if we are just, you know, running this query, maybe
+
+05:49.840 --> 05:55.320
+take a little bit of a shorter time window here, then we basically see two request counters,
+
+05:55.320 --> 06:01.440
+right? One is the green line, which is counting the request resulting in HTTP such as 200.
+
+06:01.440 --> 06:05.960
+So the successful requests, and basically we see that since I started the application
+
+06:05.960 --> 06:11.520
+on my laptop, I got about a little more than 400 successful requests, and the yellow line
+
+06:11.520 --> 06:18.400
+is, you know, requests resulting in HTTP status 500, and we got around 50 of them, right?
+
+06:18.400 --> 06:24.760
+And obviously, raw counter values are not very useful, right? Nobody is interested in
+
+06:24.760 --> 06:30.160
+how often was my service called since I started the application, and the way, you know, metric
+
+06:30.160 --> 06:36.000
+monitoring works with Prometheus, as probably most of you know, is that you use the Prometheus
+
+06:36.000 --> 06:42.280
+query language to get some useful information out of that kind of data, right? And I guess
+
+06:42.280 --> 06:47.200
+most of you have run some Prometheus queries, but they're still going to show maybe a couple
+
+06:47.200 --> 06:53.320
+of examples. So for those of you who are not very familiar with that, does this one work
+
+06:53.320 --> 07:00.320
+again? Hey, nice. It's even better. The lights work, the microphone works. Wow. Now let's
+
+07:00.320 --> 07:07.760
+hope the demo works. So I'm going to run just a couple of quick, you know, Prometheus queries
+
+07:07.760 --> 07:11.320
+so that for those of you who are not very familiar with it, so that you get an idea
+
+07:11.320 --> 07:16.960
+of what it is, right? And the most important function in the Prometheus query language
+
+07:16.960 --> 07:21.400
+is called the rate function. And what the rate function does, it takes a counter like
+
+07:21.400 --> 07:26.720
+this and a time interval like five minutes, and then it calculates a per second rate,
+
+07:26.720 --> 07:32.920
+right? So based on a five minute time interval, we now see that we have about 0.6 requests
+
+07:32.920 --> 07:39.720
+per second resulting in HTTP status 200, and we have about 0.1 requests per second resulting
+
+07:39.720 --> 07:46.200
+in HTTP status 500. And this is already quite some useful information, right? So typically
+
+07:46.200 --> 07:52.040
+you want to know the total load on your system, not buy status code or something. So you basically
+
+07:52.040 --> 07:58.240
+want to sum these two values up, and obviously there's also a sum function to sum values
+
+07:58.240 --> 08:03.000
+up, and if you call that, you get the total load on your system, which is just one line
+
+08:03.000 --> 08:09.680
+now and it's just, you know, around 0.7 requests per second, right? And this is, yeah, this
+
+08:09.680 --> 08:14.320
+is basically how Prometheus queries work. If you're not familiar with the syntax, there's
+
+08:14.320 --> 08:18.840
+also kind of a graphical query builder where you can, you know, use a bit drag and drop
+
+08:18.840 --> 08:23.680
+and get a bit more help and so forth, right? And so eventually, you know, when you got
+
+08:23.680 --> 08:28.480
+your queries and got your metrics, so what you want to do is you create a metrics dashboard
+
+08:28.480 --> 08:34.160
+and for monitoring HTTP services, there is, there are a couple of best practices, what
+
+08:34.160 --> 08:40.080
+type of data you want to visualize on a dashboard for monitoring HTTP services. And the most
+
+08:40.080 --> 08:47.720
+simple and straightforward thing is to visualize three things. One is the request rate, so
+
+08:47.720 --> 08:52.560
+for the current load on the system, which is exactly the query that we are seeing here.
+
+08:52.560 --> 08:57.000
+The next thing you want to see is the error rate, so the percentage of calls that fail.
+
+08:57.000 --> 09:02.720
+And the third thing is duration. How long does it take, right? And I created a simple
+
+09:02.720 --> 09:08.040
+example dashboard just to show you how this looks like. So I put the name of the service
+
+09:08.040 --> 09:14.760
+as a parameter up here so we can reuse the same dashboard for both services. Maybe let's
+
+09:14.760 --> 09:19.600
+use a 15 minute time window, so here I started the application. The first is the request
+
+09:19.600 --> 09:24.520
+rate, that's the exact same query that we just saw. Second thing here is the error rate,
+
+09:24.520 --> 09:30.560
+so we have about, I don't know, around 10% errors in my example application. And then
+
+09:30.560 --> 09:35.720
+for duration, there are a couple of different ways how to visualize that. So what we see
+
+09:35.720 --> 09:41.520
+here is basically the raw histogram, right? The histogram buckets. And this representation
+
+09:41.520 --> 09:46.560
+is actually quite useful because it shows you the shape of the distribution. So what
+
+09:46.560 --> 09:54.200
+we see here is two spikes, one around 600 milliseconds and one around 1.8 seconds. And
+
+09:54.200 --> 09:59.800
+this is a typical shape that you would see if your application uses a cache, right? Because
+
+09:59.800 --> 10:03.760
+then you have a couple of requests that are responded quite quickly. Those are the cache
+
+10:03.760 --> 10:09.760
+hits. A couple of requests are slow that are the cache misses. And visualizing the shape
+
+10:09.760 --> 10:14.600
+of the histogram helps you understand kind of the latency behavior of your application,
+
+10:14.600 --> 10:20.840
+right? The other and most popular way to visualize durations is this one here. These
+
+10:20.840 --> 10:27.640
+are percentiles. So the green line is the 95th percentile, so it tells us 95% of the
+
+10:27.640 --> 10:33.280
+calls have been faster than 1.7 seconds and 5% slower than that. The yellow line is the
+
+10:33.280 --> 10:38.360
+50th, so half of the calls faster than that, half of the calls slower than that. And this
+
+10:38.360 --> 10:43.480
+doesn't really tell you the shape of the distribution, but it shows you a development over time,
+
+10:43.480 --> 10:48.400
+which is useful as well. So if your service becomes slower, those lines will go up, right?
+
+10:48.400 --> 10:53.480
+And it's also a good indicator if you want to do alerting and so forth. You can define
+
+10:53.480 --> 10:57.920
+a threshold and say it's above, if it's above a certain threshold, I want to be notified
+
+10:57.920 --> 11:03.720
+and stuff like that. And there are other more, you know, experimental things like this heat
+
+11:03.720 --> 11:09.320
+map showing basically development of histograms over time and stuff like that. So it's pretty
+
+11:09.320 --> 11:14.440
+cool to play with all the different visualizations in Grafana and, you know, see what you can
+
+11:14.440 --> 11:21.920
+get. So this is a, you know, quick example of a so-called red dashboard, Request Rates,
+
+11:21.920 --> 11:27.880
+Error Rates duration based on open telemetry data. And the cool thing about this, about
+
+11:27.880 --> 11:34.400
+it, is that it actually, all that we are seeing here is just based on that single histogram
+
+11:34.400 --> 11:41.720
+metric HDP server duration. And the fact that this metric is there is not a coincidence.
+
+11:41.720 --> 11:46.760
+The metric HDP server duration is actually defined in the open telemetry standard as
+
+11:46.760 --> 11:55.000
+part of the semantic conventions for HDP services. So whenever you monitor an HDP server with
+
+11:55.000 --> 12:01.440
+open telemetry, then you will find a histogram named HDP server duration. It will have the
+
+12:01.440 --> 12:07.800
+HDP status as an attribute. It will contain the latencies in milliseconds. That's all
+
+12:07.800 --> 12:13.800
+part of the standard. So it doesn't matter what programming language your services uses,
+
+12:13.800 --> 12:19.000
+what framework, whatever. If it's being monitored with open telemetry and it's compatible, you
+
+12:19.000 --> 12:23.720
+will find that metric and you can create a similar dashboard like that. And this is kind
+
+12:23.720 --> 12:29.000
+of one of the things that make application monitoring with open telemetry a lot easier
+
+12:29.000 --> 12:37.920
+than it used to be before these standardization. Cool. So that was a quick look at metrics,
+
+12:37.920 --> 12:42.660
+but of course we want to look at the other signals as well. So let's switch data sources
+
+12:42.660 --> 12:52.040
+for now and have a look at traces. So tracing, again, there's a kind of search, like graphical
+
+12:52.040 --> 12:57.000
+search where you can create your search criteria with drag and drop. There's a relatively new
+
+12:57.000 --> 13:03.000
+feature which is a query language for traces. So I'm going to use that for now. And one
+
+13:03.000 --> 13:08.840
+thing you can do is to just search by labels. So I can, for example, say I'm interested
+
+13:08.840 --> 13:17.080
+in the service name greeting service and then I could basically just open a random trace
+
+13:17.080 --> 13:25.560
+here. Let's take this as an example. Can I, I need to zoom out a little bit to be able
+
+13:25.560 --> 13:33.440
+to close the search window here. Okay. So this is how a distributed trace looks like.
+
+13:33.440 --> 13:38.160
+And if you see it for the first time, it might be a bit hard to understand, but it's actually
+
+13:38.160 --> 13:42.840
+fairly easy. So you just need like two minutes of introduction and then you will understand
+
+13:42.840 --> 13:48.640
+traces forever. And to give you that introduction, I actually have one more slide. So just to
+
+13:48.640 --> 13:55.080
+help you understand what we are seeing here. And the thing is distributed traces consist
+
+13:55.080 --> 13:59.880
+of spans, right? And spans are time spans. So a span is something that has a point in
+
+13:59.880 --> 14:05.440
+time where it starts and a point in time where it ends, right? And in open telemetry, there
+
+14:05.440 --> 14:11.600
+are three different kinds of spans. One are server spans. The second is internal spans
+
+14:11.600 --> 14:18.000
+and the third is client spans. Okay. So what happens when my Hello World application receives
+
+14:18.000 --> 14:23.200
+a request? So the first thing that happens if a server receives a request, a server span
+
+14:23.200 --> 14:28.800
+is created. So that's the first line here. It's started as soon as the request is received.
+
+14:28.800 --> 14:36.240
+It remains open until the request is responded, right? Then I said in the introduction that
+
+14:36.240 --> 14:41.800
+I used spring boot for implementing the example application. And the way spring boot works
+
+14:41.800 --> 14:46.480
+is that it takes the request and passes it to the corresponding spring controller that
+
+14:46.480 --> 14:53.240
+would handle the request. And open telemetries Java instrumentation agent is nice for Java
+
+14:53.240 --> 14:57.920
+developers because it just creates internal spans for each spring controller that is involved,
+
+14:57.920 --> 15:02.600
+right? And that is the second line that we are seeing here. It's basically opened as
+
+15:02.600 --> 15:07.520
+soon as the spring controller takes over and remains open until the spring controller
+
+15:07.520 --> 15:13.120
+is done handling the request, which might seem not too useful if I have just a single
+
+15:13.120 --> 15:18.040
+spring controller anyway, but if you have kind of a larger, you know, application and
+
+15:18.040 --> 15:22.200
+if you have multiple controllers involved, it gives you quite some interesting insights
+
+15:22.200 --> 15:26.440
+into what's happening inside your application. Like you would see immediately, like which
+
+15:26.440 --> 15:32.000
+controller do I spend most time in and so forth, right? And then eventually my Hello
+
+15:32.000 --> 15:37.440
+Word application reaches out to the greeting service and outgoing requests are represented
+
+15:37.440 --> 15:43.360
+by client spans. So the client span is basically opened as soon as my HTTP request goes out
+
+15:43.360 --> 15:47.600
+and remains open until the response is received. And then in the greeting service, the same
+
+15:47.600 --> 15:52.800
+thing starts again, you know, request is received, which creates a server span and then I have
+
+15:52.800 --> 15:57.400
+a spring controller as well, which is an internal span and that's the end of my distributed
+
+15:57.400 --> 16:02.680
+application here. And this is exactly what we are seeing here. And each of those span
+
+16:02.680 --> 16:08.120
+types has a corresponding metadata attached to it. So if you look at one of the internal
+
+16:08.120 --> 16:12.560
+spans here, we see the name of the spring controller and the name of the controller
+
+16:12.560 --> 16:19.120
+method and a couple of JVM-related attributes, whatever. And if we look at an HTTP span,
+
+16:19.120 --> 16:24.360
+for example, we see, of course, HTTP attributes like the status code, method and so forth,
+
+16:24.360 --> 16:32.320
+right? So of course, you do not want to just look at random spans. So usually you're looking
+
+16:32.320 --> 16:37.560
+for something. There are standard attributes in open telemetry that you can use for searching.
+
+16:37.560 --> 16:44.760
+So we already had the service name greeting service, for example. But the most important
+
+16:44.760 --> 16:53.400
+or one of the most important attributes is HTTP.status, no,.status code, this one here.
+
+16:53.400 --> 16:59.240
+And if we, for example, search for spans with HTTP status code 500, then we should find
+
+16:59.240 --> 17:05.040
+an example of a request that failed. So let's close the search window again. Yes, that's
+
+17:05.040 --> 17:10.300
+an example of a failed request. You see it with the indicated by those red exclamation
+
+17:10.300 --> 17:15.960
+marks at the bottom here. So this is where the thing failed, right? So the root cause
+
+17:15.960 --> 17:21.520
+of the error is the internal span, something in my spring controller in the greeting service.
+
+17:21.520 --> 17:27.120
+If I look at the metadata attached to that, I actually see that the instrumentation attached
+
+17:27.120 --> 17:32.920
+the event that caused the error, and this even includes the stack trace. So you can
+
+17:32.920 --> 17:38.280
+basically immediately navigate to the exact line of code that is the root cause of this
+
+17:38.280 --> 17:43.880
+error, right? And this is quite cool. So if you have a distributed application and you
+
+17:43.880 --> 17:50.160
+get an unexpected response from your Hello World application, without distributed tracing,
+
+17:50.160 --> 17:55.640
+it's pretty hard to find that actually there's an exception in the greeting service that,
+
+17:55.640 --> 18:00.840
+you know, propagated through your distributed landscape and then eventually caused the unexpected
+
+18:00.840 --> 18:06.680
+response. And with distributed tracing, finding these kind of things becomes pretty easy because
+
+18:06.680 --> 18:12.440
+you get all the related calls grouped together, you get the failed ones marked with an exclamation
+
+18:12.440 --> 18:18.920
+mark, and you can pretty easily navigate to what's the root cause of your error, okay?
+
+18:18.920 --> 18:25.120
+Cool. So that was a quick look at traces. There are a lot of interesting things about
+
+18:25.120 --> 18:30.240
+tracing. Maybe one thing I would like to show you, because I find it particularly cool,
+
+18:30.240 --> 18:36.320
+so if you have all your services instrumented with tracing in your back end, then basically
+
+18:36.320 --> 18:41.800
+those traces give you metadata about all the network calls happening in your system,
+
+18:41.800 --> 18:46.680
+and you can do something with that type of data, right? So for example, you can calculate
+
+18:46.680 --> 18:53.360
+something that we call the service graph. So it looks like this. It's maybe not too impressive
+
+18:53.360 --> 18:58.160
+if you just have two services calling each other, right? So, but if you imagine, you
+
+18:58.160 --> 19:02.600
+know, a more larger, you know, dozens or hundreds of services, so it will generate a map of
+
+19:02.600 --> 19:08.280
+all the services and indicate which service calls which other service, and this is quite
+
+19:08.280 --> 19:13.440
+useful. For example, if you intend to deploy a breaking change in your greeting service
+
+19:13.440 --> 19:17.680
+and you want to know who's using the greeting service, what would I break? Then looking
+
+19:17.680 --> 19:22.520
+at the service graph, you basically get this information right away. Traditionally, if
+
+19:22.520 --> 19:27.120
+you don't have that, you basically have a PDF with your architecture diagram, and then
+
+19:27.120 --> 19:32.960
+you look it up there, and also traditionally, there's at least one team that deployed something
+
+19:32.960 --> 19:37.120
+and forgot to update the diagram, and then you missed that, and there's a service graph
+
+19:37.120 --> 19:41.640
+that won't happen, right? This is the actual truth. This is based on what's actually happening
+
+19:41.640 --> 19:46.880
+in your backend, and this is pretty useful in these situations, right? And you can do
+
+19:46.880 --> 19:52.520
+other things as well, like, you know, have some statistics like the most frequently called
+
+19:52.520 --> 19:59.280
+endpoint or the endpoint with the most errors and stuff like that. So, that was a quick,
+
+19:59.280 --> 20:05.000
+quick look at traces. So we covered metrics, we covered traces. One thing I want to show
+
+20:05.000 --> 20:10.880
+you is that metrics and traces are actually related to each other, right? And so in order
+
+20:10.880 --> 20:16.520
+to show that, I'm going to go back to our dashboard, because if you, let's take a 15
+
+20:16.520 --> 20:22.200
+minute window, then we get a bit more examples. So if you look at the latency data here,
+
+20:22.200 --> 20:27.000
+you notice these little green dots. These are called exemplars, and this is something
+
+20:27.000 --> 20:32.920
+that's provided by the auto instrumentation of open telemetry. So whenever it generates
+
+20:32.920 --> 20:40.480
+latency data, it basically attaches trace IDs of example traces to the latency data,
+
+20:40.480 --> 20:44.840
+and this is visualized by these little green dots, right? And so you see some examples
+
+20:44.840 --> 20:49.440
+of particularly fast calls, some examples of particularly slow calls and so forth.
+
+20:49.440 --> 20:54.720
+And if you, for example, take this dot up here, which is kind of slower than anything
+
+20:54.720 --> 20:59.880
+else, it's almost two seconds, right? Then you have the trace ID here, and you can navigate
+
+20:59.880 --> 21:05.200
+to tempo and have a look at the trace and start figuring out why did I have an example
+
+21:05.200 --> 21:11.000
+of such a slow call in my system, right? And in that case, you would immediately see that
+
+21:11.000 --> 21:15.720
+most of the time spent in the greeting service. So if you're looking for the performance bottleneck,
+
+21:15.720 --> 21:22.400
+then this is the most likely thing. Yeah, four minutes, that's fine. Cool. So if I have
+
+21:22.400 --> 21:29.000
+four minutes, it's high time to jump to logs, the third signal that we didn't look at yet.
+
+21:29.000 --> 21:37.680
+So let's select Loki, our open source logs database as a data source. So again, there's
+
+21:37.680 --> 21:42.880
+a query language, there's a graphical query builder and so forth. So let's just open random
+
+21:42.880 --> 21:49.440
+logs coming from the greeting service. It looks a bit like this. So it's even, I don't
+
+21:49.440 --> 21:53.800
+know, I didn't even log anything explicitly. I just turned on some whatever spring request
+
+21:53.800 --> 21:58.520
+logging so that I get some log data. And from time to time, I throw an exception, which
+
+21:58.520 --> 22:03.880
+is an IO exception to simulate these errors. Looks a bit broken, but that's just because
+
+22:03.880 --> 22:10.560
+of the resolution that I have here. Yeah, so what you can do, of course, you can do some
+
+22:10.560 --> 22:19.120
+full text search, for example, can say, I'm interested in these IO exception. And then
+
+22:19.120 --> 22:28.800
+you would basically get, well, if you spell it correctly, like that, then you would get
+
+22:28.800 --> 22:33.080
+the list of all IO exceptions, which in my case are just the random errors I'm throwing
+
+22:33.080 --> 22:37.440
+here. And this query language is actually quite powerful. So you can, this is kind of
+
+22:37.440 --> 22:41.600
+filtering by a label and filtering by full text search, but you can do totally different
+
+22:41.600 --> 22:46.400
+things as well. For example, you can have queries that, you know, derive metrics based
+
+22:46.400 --> 22:52.280
+on log data. There's a function pretty similar to what we have seen in the metrics demo,
+
+22:52.280 --> 22:58.640
+which is called the rate function. So the rate function, again, takes a time interval
+
+22:58.640 --> 23:03.680
+and then calculates the per second increase rate. So it basically tells you that we have
+
+23:03.680 --> 23:11.280
+almost 0.1 of these IO exceptions per second in our log data, which is also kind of useful
+
+23:11.280 --> 23:18.760
+for information to have. And the last thing to show you, because that's particularly interesting,
+
+23:18.760 --> 23:25.960
+so it is that these logs and traces and metrics are, again, not independent of each other.
+
+23:25.960 --> 23:31.160
+They are related to each other. And so if we look at an example here, just let's open
+
+23:31.160 --> 23:37.440
+a random log line. So what we see here, there's a trace ID. And this is interesting. So how
+
+23:37.440 --> 23:44.680
+does a trace ID end up in my log line? So this is actually also a feature of the Java
+
+23:44.680 --> 23:50.240
+instrumentation that's provided by the OpenTelemetry community. So the way logging in general works
+
+23:50.240 --> 23:56.720
+in Java is that there's a global thing with key value pairs called the log context. And
+
+23:56.720 --> 24:01.120
+applications can put arbitrary key value pairs into that context. And when you configure
+
+24:01.120 --> 24:06.600
+your log format, you can define which of those values you want to include in your log data.
+
+24:06.600 --> 24:12.560
+And if you have this OpenTelemetry agent attached, then as soon as a log line is written in the
+
+24:12.560 --> 24:17.800
+context of serving an HTTP request, then the corresponding trace ID is put into that log
+
+24:17.800 --> 24:23.200
+context. And you can configure your log format to include the trace ID in your log data.
+
+24:23.200 --> 24:28.040
+And that's what I did. And so each of my log lines actually has a trace ID. And so if I
+
+24:28.040 --> 24:32.560
+see something fancy and I want to know maybe somewhere down my distributed stack something
+
+24:32.560 --> 24:38.800
+went wrong, I can just query that in tempo, navigate to the corresponding trace, close
+
+24:38.800 --> 24:43.920
+that here, yeah, and then basically maybe get some information what happened. And then
+
+24:43.920 --> 24:48.280
+the same navigation works the other way around as well. So of course, there's a little, you
+
+24:48.280 --> 24:53.680
+know, log button here. So if I see something fancy going on in my greeting service thing
+
+24:53.680 --> 24:59.960
+here, and maybe the logs have more information, I can click on that, navigate to the logs.
+
+24:59.960 --> 25:05.080
+And then it basically just generates a query, right? I click on the greeting service with
+
+25:05.080 --> 25:10.000
+that trace ID. So it's basically just a full text search for that trace ID. And so I will
+
+25:10.000 --> 25:15.280
+find all my corresponding log lines. In that case, just one line. But if you have a bit
+
+25:15.280 --> 25:20.360
+better logging, then maybe it would give you some indication what happened there. Okay.
+
+25:20.360 --> 25:27.800
+So that was a very quick 25 minutes overview of, you know, looking a bit into metrics,
+
+25:27.800 --> 25:33.280
+looking a bit into tracing, looking a bit into logs. I hope it gave you some impression,
+
+25:33.280 --> 25:38.680
+you know, what's the type of data that you get out of open telemetry looks like. All
+
+25:38.680 --> 25:43.360
+of what we did is really, you know, without even modifying the application. I didn't,
+
+25:43.360 --> 25:48.400
+you know, even start with custom metrics, custom traces and so forth. So but it's already
+
+25:48.400 --> 25:53.680
+quite some useful data that we get out of that. If you like the demo, if you want to
+
+25:53.680 --> 25:58.840
+explore it a more, a bit more, want to try it at home, I pushed it on my GitHub and there's
+
+25:58.840 --> 26:06.560
+a readme telling you how to run it. So you can do that. And yeah, next up, we have a
+
+26:06.560 --> 26:12.040
+talk that goes a bit more in detail into the tracing part of this. And then after that,
+
+26:12.040 --> 26:17.920
+we have a talk that goes a bit more into detail how to run open telemetry in Kubernetes. So
+
+26:17.920 --> 26:28.040
+stay here and thanks for listening. Please remain seated during Q&A. Otherwise, we can't
+
+26:28.040 --> 26:36.600
+do a real Q&A. So please remain seated. Order any questions. Yes.
+
+26:36.600 --> 26:49.120
+Hi. Thank you for this. One quick question. You mentioned you just need to add some parameters
+
+26:49.120 --> 26:56.400
+to the Java virtual machine to run the telemetry. What happens to my application if, for example,
+
+26:56.400 --> 27:02.560
+the back end of the telemetry is down? Is my application failing or impacted in any way?
+
+27:02.560 --> 27:08.240
+If the monitoring back end is down. Yes. Say the monitoring is down, but I started my application
+
+27:08.240 --> 27:15.280
+with these parameters. Is it impacting the application? No. I mean, you won't see metrics,
+
+27:15.280 --> 27:19.080
+of course, if you're monitoring back end is down, but the application would just continue
+
+27:19.080 --> 27:26.360
+running. So typically, in like production setups, the applications wouldn't send telemetry
+
+27:26.360 --> 27:31.160
+data directly to the monitoring back end. But what you usually have is something in
+
+27:31.160 --> 27:36.440
+the middle. There's alternatives. There's the Grafana agent that you can use for that.
+
+27:36.440 --> 27:39.960
+There's the open telemetry collector that you can use for that. And it's basically a
+
+27:39.960 --> 27:46.480
+thing that runs close to the application, takes the telemetry data off the application
+
+27:46.480 --> 27:52.520
+very quickly, and then, you know, can buffer stuff and process stuff and send it over to
+
+27:52.520 --> 27:56.920
+the monitoring back end. And that's used for decoupling that a little bit, right? And if
+
+27:56.920 --> 28:02.200
+you have such an architecture, the application shouldn't be affected at all by that.
+
+28:02.200 --> 28:05.640
+Two more. Two more.
+
+28:05.640 --> 28:14.200
+So I really like being able to link from your metrics to traces. But what I'm actually
+
+28:14.200 --> 28:20.040
+really curious to be able to do, and as far as I know, doesn't exist, or I guess that's
+
+28:20.040 --> 28:24.080
+my question, is like, is there any thought towards doing this, is being able to go the
+
+28:24.080 --> 28:32.520
+other direction, where what I'd like to be able to answer is, here's all my trace data,
+
+28:32.520 --> 28:37.200
+and this node of the trace incremented these counters by this much. So I could ask things
+
+28:37.200 --> 28:45.280
+like how much network IO or disk IOPS did this complete request do, and where in the
+
+28:45.280 --> 28:47.320
+tree would that occur?
+
+28:47.320 --> 28:57.800
+Yeah, that's a good question. I mean, linking from traces to metrics, it's not so straightforward,
+
+28:57.800 --> 29:03.480
+because I think the things you can do to relate this is to use the service name. So if you
+
+29:03.480 --> 29:08.880
+have the service name part of your resource attributes of the metrics, and consistently
+
+29:08.880 --> 29:13.480
+you have the same service name in your trace data, then you can at least, you know, navigate
+
+29:13.480 --> 29:19.000
+to all traces coming, to all metrics coming from the same service. Maybe you have some
+
+29:19.000 --> 29:24.400
+more, you know, related attributes, like in whatever instance ID and so forth. But it's
+
+29:24.400 --> 29:26.960
+not like really a one-to-one relationship, so.
+
+29:26.960 --> 29:32.640
+That's specific. What request, how much did this request come from the IOPS?
+
+29:32.640 --> 29:36.960
+Yeah, no, I don't think that's possible.
+
+29:36.960 --> 29:43.680
+So in this example, you've shown that Grafana World and Prometheus works great with server-side
+
+29:43.680 --> 29:52.040
+applications. Have you had examples of client-side applications, mobile desktop applications that
+
+29:52.040 --> 30:00.640
+use Prometheus metrics and then ship their trace, their metrics and traces to the metric
+
+30:00.640 --> 30:01.640
+backend?
+
+30:01.640 --> 30:07.960
+Did I hear it correctly? You're asking about starting your traces on the client-side and
+
+30:07.960 --> 30:10.320
+the web browser and stuff?
+
+30:10.320 --> 30:15.480
+You have tracing on the server-side, but what about having traces and metrics on the client-side
+
+30:15.480 --> 30:20.480
+and, for example, for an embedded or mobile application so that you could actually see
+
+30:20.480 --> 30:27.360
+the trace from when the customer clicked a thing and see the full customer journey?
+
+30:27.360 --> 30:32.680
+Yeah, that's a great question. That's actually an area where there's currently a lot of research
+
+30:32.680 --> 30:38.360
+and new projects and so forth. So there is a group called real-user monitoring, RUM,
+
+30:38.360 --> 30:45.240
+in open telemetry that deal with client-side applications. There's also a project by Grafana.
+
+30:45.240 --> 30:50.840
+It's called Faro. It's kind of, you know, JavaScript that you can include in your front
+
+30:50.840 --> 30:57.320
+end, in your HTML page, and then it gives you traces and metrics from in the web browser
+
+30:57.320 --> 31:04.280
+coming from the web browser. And this is currently a pretty active area, so lots of, you know,
+
+31:04.280 --> 31:05.280
+movement there.
+
+31:05.280 --> 31:11.560
+And so there are things to explore. So if you like, check out Faro. It's a nice new project
+
+31:11.560 --> 31:18.320
+and standardization is also currently being discussed, but it's newer than the rest of
+
+31:18.320 --> 31:23.320
+what I showed you, right? So it's not as, so there's no, you know, clear standard yet
+
+31:23.320 --> 31:25.320
+or nothing decided yet.
+
+31:25.320 --> 31:28.320
+Cool. Okay. Thanks, everyone, again.

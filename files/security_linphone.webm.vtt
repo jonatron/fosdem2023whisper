@@ -1,0 +1,925 @@
+WEBVTT
+
+00:00.000 --> 00:11.280
+My name is Johan Pascal, I've been contributing on the LinFON project for the past 10 years,
+
+00:11.280 --> 00:14.960
+more or less, and going to talk about the introduction of post-contempt cryptography
+
+00:14.960 --> 00:18.680
+in the voice of our IP soft phone.
+
+00:18.680 --> 00:25.120
+So quickly the agenda for some context, then we'll dive into the RTP protocol, and then
+
+00:25.120 --> 00:31.560
+how we had to modify it to use post-contempt cryptography, and then a few words about
+
+00:31.560 --> 00:38.520
+hybrid post-quantum and classic key exchange, and some conclusions.
+
+00:38.520 --> 00:44.600
+So first some context for advertising for LinFON first, it's a project which is around
+
+00:44.600 --> 00:51.000
+for now more than 20 years, it's available on lots of platforms, the idea that we have
+
+00:51.000 --> 00:58.120
+like a common library, and then on top of that different application for different platforms.
+
+00:58.120 --> 01:03.200
+It's tried to use at most SIP standards and everything standardized, IFC and so on, for
+
+01:03.200 --> 01:08.440
+audio, video, instant messaging, we also provide secure group messaging, it's based on a derivative
+
+01:08.440 --> 01:13.600
+of Signal Protocols that we presented years ago.
+
+01:13.600 --> 01:19.440
+We also provide a SIP proxy, which is called Flexi SIP, also open source, everything is
+
+01:19.440 --> 01:30.200
+open source, and encourage you to use our free service on SIP, which is SIP.linfon.org.
+
+01:30.200 --> 01:37.000
+So basically I don't know if you are familiar with voice, but basically you have two streams
+
+01:37.000 --> 01:42.440
+of data, first stream is a signaling path, which connects the endpoints together, and
+
+01:42.440 --> 01:47.840
+then you have the media stream, which actually send data, video, audio encrypted, and this
+
+01:47.840 --> 01:49.680
+one we enter into it.
+
+01:49.680 --> 01:56.000
+So how it works, there is an IFC for that, and a protocol which is called SRTP, and SRTP
+
+01:56.000 --> 02:02.880
+is Symmetric Encryption, so far we are not very concerned by quantum computers.
+
+02:02.880 --> 02:07.120
+Main problem with that is that it requires an external command engine, so we have to
+
+02:07.120 --> 02:09.760
+exchange our symmetric keys.
+
+02:09.760 --> 02:16.880
+So for that we have three choices, the historical one is called SDS, so on this one the keys
+
+02:16.880 --> 02:21.680
+are transmitted in the signaling path, which if the signaling path is protected, which
+
+02:21.680 --> 02:28.160
+is normally the case by TLS, is okay, the only weakness is that the SIP proxy gets
+
+02:28.160 --> 02:33.720
+access to the symmetric keys, so we are not actually end to end encrypted.
+
+02:33.720 --> 02:39.480
+So basically the people running the service would decrypt your media stream.
+
+02:39.480 --> 02:44.760
+So there is another one, which also gets an RFC, which is called DTLS SRTP, basically
+
+02:44.760 --> 02:51.600
+on this one, on the media stream you perform a TLSN check, actually a DTLSN check because
+
+02:51.600 --> 02:58.720
+it's over UDP, and this one works well, but you have to deploy a PKI and you have to
+
+02:58.720 --> 03:05.600
+manage certificates for all of your clients and everything, so it's a bit heavy, and also
+
+03:05.600 --> 03:10.120
+you still have to trust someone, you trust certificates, sure, but still.
+
+03:10.120 --> 03:14.840
+And then there is another one that we favor, well all of three are available in the info,
+
+03:14.840 --> 03:20.240
+but the last one is called the RTP, which is one we'll focus on this one today.
+
+03:20.240 --> 03:25.920
+And this one on the media pass, you perform the RTP protocol, which is based on Diffie
+
+03:25.920 --> 03:30.640
+Elman, which using electric curve or a simple Diffie Elman.
+
+03:30.640 --> 03:36.960
+This one has no third party required, so which is good, the only small thing is that you
+
+03:36.960 --> 03:42.440
+have to confirm, make some kind of spy thing that you have, tell secrets on the phone,
+
+03:42.440 --> 03:47.760
+but as you are talking one with each other, it for the user and user is a bit an annoyance,
+
+03:47.760 --> 03:53.600
+but you have to do it once in the call list, the world call history with your other endpoint.
+
+03:53.600 --> 04:00.680
+So we think it's acceptable for users, obviously one has to get involved in security, but normally
+
+04:00.680 --> 04:07.520
+it works, and the experience tells that people focus on security tends to not be driven away
+
+04:07.520 --> 04:13.240
+by this small drawback on the protocol.
+
+04:13.240 --> 04:19.280
+So it's an RTP which is now more than 10 years old, it has been mainly written by Filsie
+
+04:19.280 --> 04:26.040
+Elman, the guy behind PGP, which are always focused on avoiding third parties.
+
+04:26.040 --> 04:33.480
+And it's probably different properties, I won't explain the key continuity and stuff
+
+04:33.480 --> 04:41.200
+because this one is unchanged, and I will focus on managing the middle attack detection.
+
+04:41.200 --> 04:47.520
+So first a small reminder of what is Diffie Elman, so basically it's a protocol where
+
+04:47.520 --> 04:52.080
+it's completely symmetric, one part, both parts will generate key pair, and then they
+
+04:52.080 --> 04:57.320
+exchange public keys, and with this secret key and other side public keys will get to
+
+04:57.320 --> 04:58.320
+share secret.
+
+04:58.320 --> 05:04.960
+So far so good, it's kind of easy, on a drawback it's obviously vulnerable as many key exchange
+
+05:04.960 --> 05:07.600
+protocol to manage middle attack.
+
+05:07.600 --> 05:13.720
+So managing middle attack, what it is, it's basically someone putting ourself in the middle
+
+05:13.720 --> 05:23.400
+and exchanging keys with both sides, so the side cannot know, basically Alice cannot
+
+05:23.400 --> 05:28.560
+know that Eve is sending her key, she thinks that Bob is sending the key, and she performs
+
+05:28.560 --> 05:33.040
+the exchange, and at the end what you get is that Alice gets a shared secret with Eve,
+
+05:33.040 --> 05:37.560
+and Eve gets another shared secret with Bob, but Alice is convinced that she exchanged keys
+
+05:37.560 --> 05:43.680
+with Bob, and she has no ways to actually detect this, well she has actually some ways,
+
+05:43.680 --> 05:44.680
+no?
+
+05:44.680 --> 05:45.680
+Yeah?
+
+05:45.680 --> 05:46.680
+Okay.
+
+05:46.680 --> 05:47.680
+No?
+
+05:47.680 --> 05:48.680
+Yeah?
+
+05:48.680 --> 05:49.680
+Sorry.
+
+05:49.680 --> 06:06.640
+So the DRTPN check is, there is first phase of discovery, so what is happening is both
+
+06:06.640 --> 06:11.000
+endpoints will exchange their capabilities, their choice of preferred algorithms, stuff
+
+06:11.000 --> 06:15.720
+like this, and then start the actual DRTPN check.
+
+06:15.720 --> 06:21.200
+So first you have one packet of commits, I will go into detail now, and then you actually
+
+06:21.200 --> 06:27.480
+perform the DH, Diffie-Ellman exchange, so Alice is sending a public key, Bob is sending
+
+06:27.480 --> 06:35.800
+his, and they both compute from this, they will compute the shared secret, and adding
+
+06:35.800 --> 06:41.720
+all the transcripts of the communication, they will generate S0, which is the base secret,
+
+06:41.720 --> 06:43.800
+the output of the DRTPN check.
+
+06:43.800 --> 06:50.080
+From the S0, they will derive the SRTP keys, which is what we are trying to do now here,
+
+06:50.080 --> 06:55.200
+and they also derive something called SAS, short authentication string, that will be
+
+06:55.200 --> 06:59.960
+vocally compared over the phone, because we are, Alice and Bob are talking, actually talking
+
+06:59.960 --> 07:01.760
+to each other.
+
+07:01.760 --> 07:07.480
+So the end of the protocol is just some updates and writing in cash for key continuities mechanisms
+
+07:07.480 --> 07:12.840
+and stuff, so it's not really interesting now, and then after that, the SRTP strings
+
+07:12.840 --> 07:18.720
+start, actually, and they can talk, and once they start to talk, once in the call history,
+
+07:18.720 --> 07:24.320
+they will do this vocally sus comparison, what it's for, this sus comparison is basically
+
+07:24.320 --> 07:28.720
+if they want to detect a man in the middle attacks, they have to ensure that Alice is
+
+07:28.720 --> 07:35.120
+using the keys that Bob has sent, and also Bob wants to know that the key that was sent
+
+07:35.120 --> 07:37.720
+by Alice is the one he actually got.
+
+07:37.720 --> 07:42.000
+So what they could do, as they are talking, is they could basically read their own keys
+
+07:42.000 --> 07:47.440
+to the other, but the key is something which is a few hundred bytes, so it's a bit long
+
+07:47.440 --> 07:53.120
+to read a few hundred bytes of the decimal chain over the phone, no one would do that.
+
+07:53.120 --> 07:59.440
+So what they do instead, we derive this short authentication string which is only four digits
+
+07:59.440 --> 08:05.160
+and has 20 bits, actually derived from 20 bits, and this sus is also derived from the
+
+08:05.160 --> 08:09.360
+secret zero, which is the output of the protocol.
+
+08:09.360 --> 08:13.360
+The only problem with that is that you can actually perform a sus collision with that
+
+08:13.360 --> 08:19.400
+because the sus is very short, how it will work, so actually the beginning of the protocol,
+
+08:19.400 --> 08:25.840
+as soon as Alice sent a public key to Bob, Bob is able to compute s zero because he has
+
+08:25.840 --> 08:31.480
+his own secret key, and he is able to compute the sus then.
+
+08:31.480 --> 08:37.240
+So what one could do is that if you perform first the RTP exchange with Alice, she got
+
+08:37.240 --> 08:41.520
+the sus one, and then she received Bob's public key.
+
+08:41.520 --> 08:47.640
+When she got Bob's public key, she can generate a huge set of key pairs until she finds a sus
+
+08:47.640 --> 08:49.640
+that collides.
+
+08:49.640 --> 08:54.520
+Basically she will try to generate a lot of pairs, sus is only 20 bits, so if you generate
+
+08:54.520 --> 08:59.840
+one million keys and try to hold them, you will for sure find a collision on the sus.
+
+08:59.840 --> 09:05.160
+So to prevent this, Eve is forced to send a commit packet.
+
+09:05.160 --> 09:09.680
+In the commit packet what we have, we do not have our public key, but we have hash of the
+
+09:09.680 --> 09:17.160
+public key, and so when you receive the hash of the public key, Alice will say for example
+
+09:17.160 --> 09:22.360
+Bob's hash public key, she will store it, and then when Bob sends the public key, she
+
+09:22.360 --> 09:27.680
+will compare, she will just hash Bob's public key, and she will compare, so that way she
+
+09:27.680 --> 09:34.720
+is sure that Bob did not wait for receiving a public key and cannot generate millions
+
+09:34.720 --> 09:38.520
+of key pairs to find a collision on the sus.
+
+09:38.520 --> 09:41.720
+So this is quite effective, and so far so good.
+
+09:41.720 --> 09:46.320
+Now we want to switch to using, to use post quantum cryptography.
+
+09:46.320 --> 09:51.880
+The problem with post quantum is that on the next call for standardization, they required
+
+09:51.880 --> 09:56.960
+all the algorithm to use key encapsulation mechanism, and not deferment.
+
+09:56.960 --> 10:02.920
+So key encapsulation mechanism is a bit different, because the two sides are not the same.
+
+10:02.920 --> 10:05.600
+In deferment, the two sides were exactly doing the same thing.
+
+10:05.600 --> 10:10.600
+They are both generating keys, exchanging public keys, and then computing secrets.
+
+10:10.600 --> 10:15.720
+There we have one side generating keys, one side encapsulating a key, a secret, and the
+
+10:15.720 --> 10:19.680
+other side will be able to decapsulate the secrets that was encapsulated by the first
+
+10:19.680 --> 10:21.080
+one.
+
+10:21.080 --> 10:30.680
+So it's not symmetric, so we cannot switch directly from deferment to KM form of key exchange.
+
+10:30.680 --> 10:36.560
+Obviously, KM is still vulnerable to man's middle attack, because nothing is changed.
+
+10:36.560 --> 10:41.120
+You can still put someone in the middle and perform the exchange with the other side without
+
+10:41.120 --> 10:44.240
+them knowing.
+
+10:44.240 --> 10:50.800
+So what we have to do is adapt the RTP and change a little bit the actual handshake,
+
+10:50.800 --> 10:53.560
+the central part of the protocol.
+
+10:53.560 --> 11:02.440
+So S0 is still derived from the exchange secret and transcript of all the conversations.
+
+11:02.440 --> 11:06.880
+I've got only commits and two packets, but you have also yellow packets and stuff.
+
+11:06.880 --> 11:12.480
+So in the commit packet, the one which used to hold only the hash of the second packet
+
+11:12.480 --> 11:16.520
+from Bob, Bob will now insert his public key.
+
+11:16.520 --> 11:17.520
+Why would he do that?
+
+11:17.520 --> 11:19.800
+So Alice can encapsulate the secret.
+
+11:19.800 --> 11:24.440
+So at this point Alice receives the public key from Bob, she encapsulates the secret,
+
+11:24.440 --> 11:28.320
+but at this point she's not able to compute S0 because she's missing the second packet
+
+11:28.320 --> 11:30.160
+from Bob.
+
+11:30.160 --> 11:38.480
+So she'll send back the ciphertext, so the output of the encapsulation, and at this point
+
+11:38.480 --> 11:43.840
+she has the share secret from the key encapsulation, but she cannot compute S0.
+
+11:43.840 --> 11:49.320
+Bob now retrieves the share secret, and he can compute S0, but he already committed on
+
+11:49.320 --> 11:53.560
+DH part 2 that he has to send to Alice, so still he cannot manipulate the secret, the
+
+11:53.560 --> 11:55.200
+final secret in S0.
+
+11:55.200 --> 11:57.600
+And what's in this packet?
+
+11:57.600 --> 12:04.080
+It's just a random number that is used once.
+
+12:04.080 --> 12:11.360
+So now another problem is that we don't want to use, to focus only, of using only post
+
+12:11.360 --> 12:16.440
+quantum algorithm, because we know that sometimes they got broken, like for example Psyche,
+
+12:16.440 --> 12:20.440
+which was broken a bit late in the standardization process.
+
+12:20.440 --> 12:27.480
+So it might happen or not in the future, so to protect against this weakness, its possible
+
+12:27.480 --> 12:34.360
+weakness, we still want to use a mix of post quantum and a classic algorithm.
+
+12:34.360 --> 12:40.600
+So we use both at the same time, and in order to not complexify the protocol too much, the
+
+12:40.600 --> 12:45.920
+idea is to have one version of the protocol which is doing DFIRMAN, and the other one
+
+12:45.920 --> 12:47.880
+key encapsulation mechanism.
+
+12:47.880 --> 12:54.440
+And the protocol won't know exactly if it's using a mix or not, because probably in the
+
+12:54.440 --> 12:59.640
+future, at some point we'll be confident in us with some post quantum algorithm, and
+
+12:59.640 --> 13:03.120
+then we'll stop using the classical one, maybe or not.
+
+13:03.120 --> 13:05.800
+But still the protocol should not be modified at this point.
+
+13:05.800 --> 13:12.840
+So the protocol is done to use a carry a mental fast without even knowing if it is a mix of
+
+13:12.840 --> 13:17.360
+classical and post quantum or just post quantum or several post quantum.
+
+13:17.360 --> 13:25.960
+So we made, first we have to make a carry interface from DFIRMAN, this is quite a standard
+
+13:25.960 --> 13:33.840
+construction, you generate, instead of, you can directly use the DFIRMAN construction
+
+13:33.840 --> 13:39.800
+to generate a keeper, then you can send your public key to the other side, the other side
+
+13:39.800 --> 13:42.680
+will encapsulate, how would the other side do that?
+
+13:42.680 --> 13:51.880
+It would just generate a keeper for DFIRMAN, compute the DFIRMAN, and then hash it with
+
+13:51.880 --> 13:58.920
+the transcript of the exchange, and send back its public key to the other side.
+
+13:58.920 --> 14:04.240
+So the encapsulation is quite obvious, same thing on the other side.
+
+14:04.240 --> 14:08.280
+And then we combine two or more occurrences together, so one we just built from a classical
+
+14:08.280 --> 14:13.120
+DFIRMAN or electrical DFIRMAN, with a post quantum one.
+
+14:13.120 --> 14:24.000
+So this way of doing it has been published by Nina Binder, a few years ago, so it's
+
+14:24.000 --> 14:27.960
+a bit convoluted, but if you want more details on why we are doing this, I encourage you
+
+14:27.960 --> 14:30.760
+to read the paper, it's quite interesting.
+
+14:30.760 --> 14:35.960
+So basically what you do, you generate the keeper, you generate keeper for sets of algorithm,
+
+14:35.960 --> 14:41.840
+in my example there, it's only two, but you can do more of that, and send concatenated
+
+14:41.840 --> 14:46.200
+both public keys or all the public keys to the other side.
+
+14:46.200 --> 14:52.720
+The encapsulation would just split your public keys to retrieve the individual ones, and
+
+14:52.720 --> 14:58.040
+perform the encapsulations on all the components.
+
+14:58.040 --> 15:04.320
+Then you use HMAC to combine your results, chaining it, so first you combine key one and
+
+15:04.320 --> 15:10.600
+then key two, and you can add several layers there, and the final step is to use the transcript
+
+15:10.600 --> 15:17.880
+of all the public keys you received, and the encapsulation is obviously completely symmetric.
+
+15:17.880 --> 15:23.040
+The paper from Nina Binder is quite clear on why these steps are needed, I have no time
+
+15:23.040 --> 15:27.240
+to explain it here.
+
+15:27.240 --> 15:36.920
+Two more words, we also tweak the protocol packets, because in the D-Filman form, the
+
+15:36.920 --> 15:43.240
+maximum size you can get is around a few hundred bytes, but if you start using Kyber, for example,
+
+15:43.240 --> 15:49.600
+or HQC, the one you will use, you'll reach several kilobytes, and several kilobytes you
+
+15:49.600 --> 15:55.680
+cannot send in one datagram over UDP, it's not possible, you probably won't arrive.
+
+15:55.680 --> 16:03.920
+So what we have to add is a way of fragment the RTP packet, so it's kind of classical
+
+16:03.920 --> 16:12.840
+way, just as DTLS is doing it, or other protocols using UDP, the only thing is that we made
+
+16:12.840 --> 16:19.160
+it in a way that packets are not fragmented, and the header is modified, but if it's not
+
+16:19.160 --> 16:23.840
+needed, the packet remains exactly the same as the old packet.
+
+16:23.840 --> 16:28.880
+The objective in this was to be able to start deploying the new ration of the RTP, but still
+
+16:28.880 --> 16:33.000
+keep compatibility with the old one, old deployment.
+
+16:33.000 --> 16:40.200
+So how it's done, in the end, we use crypto libraries LibOQS, which is from the open quantum
+
+16:40.200 --> 16:45.920
+safe project, which basically collects all the NIST candidates, and Kyber also, which
+
+16:45.920 --> 16:54.760
+is a normal candidate, in a convenient way, and we use LibDecaf and embed TLS for the
+
+16:54.760 --> 16:59.200
+ECDH and HASHMAC functions that we need.
+
+16:59.200 --> 17:08.560
+So we packed it all in an independent module, so our RTP library will use this module, but
+
+17:08.560 --> 17:14.040
+it's completely independent actually from it, so if anyone wants to directly use this
+
+17:14.040 --> 17:23.160
+hybrid KM, mixing varieties of fast quantum and classic exchange, it's fully available.
+
+17:23.160 --> 17:29.240
+You can combine it with more than two KMs, as it was printed, it's written in C++.
+
+17:29.240 --> 17:35.960
+And in our RTP implementation, we deployed it with some already preset combination, so
+
+17:35.960 --> 17:43.360
+we have X, well, we can see them, and we try to mix algorithms with more or less the same
+
+17:43.360 --> 17:54.720
+level of security, so mixing the Kyber 5012 with X250, this one.
+
+17:54.720 --> 17:59.200
+And it is, as I said before, fully compatible with the order version, so the deployment
+
+17:59.200 --> 18:00.200
+is progressive.
+
+18:00.200 --> 18:07.560
+It's basically in the agreement phase at the beginning, if most parties support this
+
+18:07.560 --> 18:14.040
+version of the RTP with this algorithm, they will use it, if one is old and don't support
+
+18:14.040 --> 18:21.760
+it, they will just fall back on classical Diffilman or electrical Diffilman.
+
+18:21.760 --> 18:25.560
+So just how it looks like.
+
+18:25.560 --> 18:32.440
+So first, you have the RTP and shake going, and the call is starting.
+
+18:32.440 --> 18:38.000
+And once the call is started, if it's the first one, the two endpoints are calling each
+
+18:38.000 --> 18:44.920
+other, you will get a pop-up that asks you to confirm the security string, so most parties
+
+18:44.920 --> 18:50.040
+will just confirm it, if, well, they just say it on the phone, it's written like you
+
+18:50.040 --> 18:55.280
+have to say this, the other one confirms, you said what it's expecting to say, and you
+
+18:55.280 --> 19:01.840
+confirm it, then this will be saved in the RTP cage, and you will never be asked again
+
+19:01.840 --> 19:02.840
+to do that.
+
+19:02.840 --> 19:08.040
+During, at any time during the call, you can check on the call start and see what kind
+
+19:08.040 --> 19:10.320
+of algorithm you use to perform the exchange.
+
+19:10.320 --> 19:16.800
+So on this screenshot, you see that it was using Kiber 512 and X225519.
+
+19:16.800 --> 19:23.360
+Here are some links, just if some of you download the presentation, so once a live
+
+19:23.360 --> 19:28.680
+in-phone website, directly pointing to the GitLab where you can find the source code
+
+19:28.680 --> 19:37.000
+of both the RTP and our post-quantum crypto module, and to the publication from Niana
+
+19:37.000 --> 19:41.400
+Bindel explaining how to hybrid server curves.
+
+19:41.400 --> 19:52.720
+Here we are, thank you for your attention.
+
+19:52.720 --> 19:56.720
+So we've got time for questions, and I've got one question on metrics, and there is
+
+19:56.720 --> 20:01.720
+a question, why post-quantum encryption is not enabled in the pre-compiled LinFone SDK?
+
+20:01.720 --> 20:03.520
+Sorry, I didn't.
+
+20:03.520 --> 20:10.080
+If, why the post-quantum encryption is not enabled in the pre-compiled LinFone SDK?
+
+20:10.080 --> 20:11.080
+It is now.
+
+20:11.080 --> 20:12.080
+It is now?
+
+20:12.080 --> 20:13.080
+It is now.
+
+20:13.080 --> 20:14.080
+Okay.
+
+20:14.080 --> 20:15.080
+It is now.
+
+20:15.080 --> 20:16.080
+Yeah.
+
+20:16.080 --> 20:17.080
+Yes, sorry.
+
+20:17.080 --> 20:29.040
+Hi, given that we're dealing with threat actors that might be capable of, you know, cracking
+
+20:29.040 --> 20:34.960
+quantum cryptography, okay, given that we're dealing with threat actors that might have
+
+20:34.960 --> 20:41.280
+a lot of resources, it seems like one particular attack vector might be to essentially use
+
+20:41.280 --> 20:46.360
+real-time deep-pick technology to intercept the vocal assay-ass comparison.
+
+20:46.360 --> 20:50.280
+Do you see any particular mitigation for an attack like that?
+
+20:50.280 --> 20:56.040
+Well, some kind of attack like this has been already studied and published, so basically
+
+20:56.040 --> 21:00.920
+what came out of what I found is that it's kind of easy to synthesize, to use speech
+
+21:00.920 --> 21:03.480
+synthesizer to synthesize the voice of someone else.
+
+21:03.480 --> 21:08.320
+The main problem there would be to insert the ass at the right moment in conversation
+
+21:08.320 --> 21:13.120
+without adding a huge daily in the conversation so that people won't be able to talk, basically,
+
+21:13.120 --> 21:18.000
+if you had like two to three second delays because you have to analyze the signal and
+
+21:18.000 --> 21:22.440
+like buffer it to be able to insert back your ass.
+
+21:22.440 --> 21:25.320
+People won't talk with three seconds, three to four second delays, there is no way people
+
+21:25.320 --> 21:26.320
+will be able to keep talking.
+
+21:26.320 --> 21:27.320
+I agree.
+
+21:27.320 --> 21:30.760
+I think it's going to be very difficult to do something like that in real-time, but
+
+21:30.760 --> 21:35.880
+I think that's probably, you know, because your solution looks really, really solid in
+
+21:35.880 --> 21:39.520
+terms of being able to fix it like that, so it looks like that might be one of the weaker
+
+21:39.520 --> 21:40.520
+aspects of it.
+
+21:40.520 --> 21:41.520
+Yeah.
+
+21:41.520 --> 21:45.520
+But since now I've been trying to monitor the publication on the subject and I never
+
+21:45.520 --> 21:51.760
+found someone able to publish an actual attack on the RTP working really, so it might depend
+
+21:51.760 --> 21:52.760
+on some point.
+
+21:52.760 --> 21:53.760
+That's great.
+
+21:53.760 --> 21:54.760
+Thank you.
+
+21:54.760 --> 22:02.600
+Can we be quiet to a question, please?
+
+22:02.600 --> 22:03.600
+Thank you.
+
+22:03.600 --> 22:10.840
+I think I missed it, but then in this particular method that you are doing, is it actually
+
+22:10.840 --> 22:16.920
+trusting the middle server that you're using, or is it using keys from another like a phone
+
+22:16.920 --> 22:23.560
+or something, SIP, assuming, is this running with the SIP protocol you said?
+
+22:23.560 --> 22:24.560
+I'm sorry.
+
+22:24.560 --> 22:25.560
+I cannot.
+
+22:25.560 --> 22:26.560
+Hello.
+
+22:26.560 --> 22:27.560
+The sound is very low.
+
+22:27.560 --> 22:28.560
+Hello.
+
+22:28.560 --> 22:29.560
+Better has.
+
+22:29.560 --> 22:30.560
+Yeah.
+
+22:30.560 --> 22:38.160
+So I wanted to ask if this was being used with a mobile phone to connect to the SIP server
+
+22:38.160 --> 22:41.360
+and then use post-quantum cryptography as you demonstrate.
+
+22:41.360 --> 22:44.320
+Can you go back to the two slides before, please?
+
+22:44.320 --> 22:45.320
+Yeah.
+
+22:45.320 --> 22:46.320
+Yeah.
+
+22:46.320 --> 22:54.160
+So the phone, is it actually trusting the server, which is running, or is it like the
+
+22:54.160 --> 22:59.080
+end-to-end, the actual key is being checked with the other host?
+
+22:59.080 --> 23:00.080
+Yeah.
+
+23:00.080 --> 23:04.240
+This is the main point of the RTP, that basically the idea is to not trust anyone, not your
+
+23:04.240 --> 23:05.240
+server.
+
+23:05.240 --> 23:09.760
+The server will be in charge just of connecting the two phones, and then the media will go
+
+23:09.760 --> 23:12.080
+directly from one to the other one.
+
+23:12.080 --> 23:16.760
+The media pass will go straight from one phone to another one, and it won't go through the
+
+23:16.760 --> 23:17.760
+server.
+
+23:17.760 --> 23:23.840
+And that's why the RTP exchange is performed on the media pass and not on the SIP signaling
+
+23:23.840 --> 23:25.840
+pass.
+
+23:25.840 --> 23:29.600
+When you establish your connection, actually, you'll go through ICE protocol, I don't know
+
+23:29.600 --> 23:35.520
+if you're familiar with that, which basically find a way to connect directly, because at
+
+23:35.520 --> 23:40.200
+the end, you don't want the media to be relayed, because you lose too much time, you have to
+
+23:40.200 --> 23:45.160
+send media packets directly from one endpoint to the other endpoint.
+
+23:45.160 --> 23:46.320
+Hi.
+
+23:46.320 --> 23:51.600
+You said that you have to compare the SAS only once.
+
+23:51.600 --> 23:52.600
+Yeah.
+
+23:52.600 --> 23:55.160
+Is it once per phone or once per user?
+
+23:55.160 --> 24:04.120
+It's one endpoint, basically, in each endpoint, you have a cache of previous, each time you
+
+24:04.120 --> 24:10.120
+end the RTP exchange, you'll keep some shared secret that you'll use the next time.
+
+24:10.120 --> 24:15.360
+And so during the exchange, at some point, you will compare these shared secrets, and
+
+24:15.360 --> 24:20.200
+if they're the same, you'll use them to compute a SAS, which is always a verb, and you can
+
+24:20.200 --> 24:26.120
+always ask to compare the SAS, but it won't pop, because the protocol will know that you
+
+24:26.120 --> 24:29.480
+performed the exchange before, but it's just one phone to another phone, this cache is
+
+24:29.480 --> 24:30.480
+not shared.
+
+24:30.480 --> 24:31.480
+Okay.
+
+24:31.480 --> 24:35.160
+So in practical terms, if I buy a new phone and then install the same app with the same
+
+24:35.160 --> 24:36.160
+account, I have to do it.
+
+24:36.160 --> 24:37.160
+You have to do it again.
+
+24:37.160 --> 24:38.720
+You have to do it again with all your correspondence.
+
+24:38.720 --> 24:39.720
+Okay.
+
+24:39.720 --> 24:40.720
+Thanks.
+
+24:40.720 --> 24:44.400
+We've got time for our last question.
+
+24:44.400 --> 24:47.040
+Is there any other last question?
+
+24:47.040 --> 24:49.440
+If not, thank you for your call.
+
+24:49.440 --> 24:50.440
+Thank you.
+
+24:50.440 --> 25:19.440
+Thank you.

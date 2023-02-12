@@ -1,0 +1,715 @@
+WEBVTT
+
+00:00.000 --> 00:09.880
+Yeah, welcome to this talk about how we build and maintain Kairis.
+
+00:09.880 --> 00:11.360
+Let me just quickly introduce myself.
+
+00:11.360 --> 00:12.560
+My name is Mauro Morales.
+
+00:12.560 --> 00:17.320
+I'm originally from Guatemala, but now living in Belgium, really like it here.
+
+00:17.320 --> 00:25.280
+My just some random thing about me, the first destroyer I used was Memphis.
+
+00:25.280 --> 00:31.480
+I really liked it when I was going to university and never went away from Linux.
+
+00:31.480 --> 00:35.080
+My current daily driver is open Susie Tumbleweed.
+
+00:35.080 --> 00:40.760
+I am a Ruby and Go developer and there's some places you can reach out if you have questions
+
+00:40.760 --> 00:44.040
+about the talk or anything afterwards.
+
+00:44.040 --> 00:49.240
+I want to talk how we build Kairis, but for that I need to tell you what Kairis is first.
+
+00:49.240 --> 00:54.640
+If you go to our website, you will see that we sell or advertise ourselves as the immutable
+
+00:54.640 --> 00:58.480
+Linux meta-distribution for edge communities.
+
+00:58.480 --> 01:03.640
+That sounds like a handful, so let me dive a little bit deeper into that.
+
+01:03.640 --> 01:06.720
+What is edge computing?
+
+01:06.720 --> 01:15.760
+There is a trend right now into moving the operational aspects from the data center outside.
+
+01:15.760 --> 01:16.760
+What does that mean?
+
+01:16.760 --> 01:22.120
+That you might have nodes in certain places, let's say that you have a grocery store producing
+
+01:22.120 --> 01:27.000
+a lot of information about all the sales that are happening, all the different products,
+
+01:27.000 --> 01:34.280
+and instead of sending all the bulk of data up to the server and do some processing just
+
+01:34.280 --> 01:39.360
+to send it back to all those nodes, what you do is that you do the heavy processing already
+
+01:39.360 --> 01:44.560
+at the node and the only thing that you send all the way to the server is the summary or
+
+01:44.560 --> 01:48.920
+the calculations that you are producing in these nodes.
+
+01:48.920 --> 01:58.120
+This is useful for doing some machine learning, some artificial intelligence, stuff like this.
+
+01:58.120 --> 02:03.880
+The thing is, if you don't pass all the raw data, first of all, you reduce a lot the latency
+
+02:03.880 --> 02:09.640
+of the end result because you don't have to pass through the wire all this information.
+
+02:09.640 --> 02:17.440
+Second, it's a lot more private because you are not putting all your eggs in one basket.
+
+02:17.440 --> 02:22.760
+If for some reason the main data center gets attacked, they don't have access to all the
+
+02:22.760 --> 02:24.120
+raw information.
+
+02:24.120 --> 02:29.680
+Instead, the data is distributed across the different nodes and the only thing that they
+
+02:29.680 --> 02:34.360
+might have access to is the resulting calculations, for example.
+
+02:34.360 --> 02:39.160
+Or even if a certain specific node gets attacked, then that doesn't mean they can access the
+
+02:39.160 --> 02:42.280
+rest of the network.
+
+02:42.280 --> 02:50.680
+It's a very interesting concept that is being formulated right now and Kairos wants to be
+
+02:50.680 --> 02:55.880
+a solution for those nodes that are being run there.
+
+02:55.880 --> 02:57.240
+How does Kairos do that?
+
+02:57.240 --> 03:03.480
+First of all, Kairos is immutable and that means that the operating system is read-only.
+
+03:03.480 --> 03:10.040
+The user data, of course, can be written, but if for some reason someone takes a hold
+
+03:10.040 --> 03:16.400
+of the machine, they cannot install any packages, they cannot change any configuration.
+
+03:16.400 --> 03:21.240
+Even if they manage to do it, as soon as the machine gets rebooted, you still get the same
+
+03:21.240 --> 03:25.600
+original image that you used to have.
+
+03:25.600 --> 03:31.920
+If we go even a little bit deeper into that, what does it mean that the OS is immutable?
+
+03:31.920 --> 03:39.080
+Because there are, for example, some cases where the root partition is immutable, but
+
+03:39.080 --> 03:41.840
+some other areas are not.
+
+03:41.840 --> 03:46.760
+Kairos in this case is an image, we distribute it as an image as a whole.
+
+03:46.760 --> 03:52.640
+That means that all the OS components, including the kernel and the init-rd, they are all immutable.
+
+03:52.640 --> 03:53.640
+You cannot change it.
+
+03:53.640 --> 04:00.720
+init-rd is not built at the moment of installation, but it's already there when we ship it in
+
+04:00.720 --> 04:04.040
+the image.
+
+04:04.040 --> 04:09.280
+Let's see another interesting goodie of Kairos is that it's distribution agnostic, or I guess
+
+04:09.280 --> 04:14.600
+better said, we are friendly to every other distribution.
+
+04:14.600 --> 04:20.960
+We don't want you to lose the distribution that you already like and love for some reason.
+
+04:20.960 --> 04:25.800
+It could be that you already have a big know-how that you have built onto your distribution,
+
+04:25.800 --> 04:29.240
+so you don't want to change to a different distribution.
+
+04:29.240 --> 04:34.440
+It could be that you already have a licensing that you're paying for a center company and
+
+04:34.440 --> 04:40.360
+you don't want to switch that because of costs or something else, or it might just be that
+
+04:40.360 --> 04:47.240
+your operational team has decided on working on certain golden images, and we don't want
+
+04:47.240 --> 04:52.920
+you to have to go away from any of these just because you want the goodies that Kairos can
+
+04:52.920 --> 04:55.120
+offer you.
+
+04:55.120 --> 05:01.960
+Right now, Kairos can play well with OpenSUSE, Alpine, Fedora, Debian, Rocky Linux, and Ubuntu,
+
+05:01.960 --> 05:06.800
+and we're trying to add more different distributions on top of that.
+
+05:06.800 --> 05:11.000
+Another interesting thing that Kairos does is it tries to be really easy to configure
+
+05:11.000 --> 05:13.240
+and maintain.
+
+05:13.240 --> 05:19.960
+For that, what we do is that we have YAML, where you can define the way you want your
+
+05:19.960 --> 05:21.760
+system to look.
+
+05:21.760 --> 05:27.320
+In this case, for example, I am creating a user called Kairos with the password Kairos.
+
+05:27.320 --> 05:30.160
+I want SSH keys.
+
+05:30.160 --> 05:36.600
+I want to go and grab from the user modeler his public SSH key, and I also want to put
+
+05:36.600 --> 05:41.640
+this particular SSH key in text that I want inside of the system.
+
+05:41.640 --> 05:45.280
+I also want, for example, in this case, K3S enabled.
+
+05:45.280 --> 05:51.600
+As you can see, it's very easy to use, it's very easy to keep versions inside your Git
+
+05:51.600 --> 05:58.200
+repositories, so you don't have to break the current flow that you already have if you're
+
+05:58.200 --> 06:01.720
+already doing DevOps.
+
+06:01.720 --> 06:07.120
+We want to, like I'm saying, we want to make it really easy to configure and maintain.
+
+06:07.120 --> 06:13.440
+We provide a new web UI that was just introduced in version 1.5 for Kairos, where you can take
+
+06:13.440 --> 06:18.960
+that configuration that I was showing you, you go to a certain node, so you look for
+
+06:18.960 --> 06:21.560
+the IP of the node.
+
+06:21.560 --> 06:23.160
+The node has just been booted.
+
+06:23.160 --> 06:26.400
+There's nothing else running in it, there's no installation yet in it.
+
+06:26.400 --> 06:30.560
+You just go to the IP of the node, you paste that configuration that you want, you say
+
+06:30.560 --> 06:37.240
+install, and the node gets installed the way you requested.
+
+06:37.240 --> 06:42.280
+We want to make Kairos easy to configure and maintain, but when you have a machine at the
+
+06:42.280 --> 06:48.720
+edge, that might sometimes mean that you don't have the person that is in charge of doing
+
+06:48.720 --> 06:52.160
+the configuration there physically.
+
+06:52.160 --> 06:59.160
+Sometimes you have someone who is maybe not technically that savvy to do the work, or
+
+06:59.160 --> 07:01.960
+that for some reason you don't have the trust of that.
+
+07:01.960 --> 07:05.640
+It could be in this case the manager of the store, let's say.
+
+07:05.640 --> 07:11.000
+For that, what we provide is that Kairos will present itself on installation with a QR code,
+
+07:11.000 --> 07:15.960
+and then all they need to do is send a picture of that QR code, and then whoever is doing
+
+07:15.960 --> 07:22.720
+the installation or the configuration can use a command line and then take the configuration
+
+07:22.720 --> 07:29.760
+in YAML and also pass the image with the QR code, and Kairos will be doing the configuration
+
+07:29.760 --> 07:32.640
+itself.
+
+07:32.640 --> 07:33.640
+What else?
+
+07:33.640 --> 07:36.360
+So, Kairos also performs AB upgrades.
+
+07:36.360 --> 07:37.360
+What does this mean?
+
+07:37.360 --> 07:40.800
+Like I was telling you, Kairos is distributed as a full image.
+
+07:40.800 --> 07:45.200
+So whenever we are doing an upgrade, we switch the image completely.
+
+07:45.200 --> 07:49.840
+So whatever image you have on active mode that is being run on the system right now,
+
+07:49.840 --> 07:55.880
+we download the new image for the upgrade, and then after reboot, we do a transition
+
+07:55.880 --> 07:59.440
+in which the new image becomes the active one.
+
+07:59.440 --> 08:04.240
+That is helpful because if for some reason we cannot really start that new image, there
+
+08:04.240 --> 08:08.960
+is still your old version of the OS that can still run, right?
+
+08:08.960 --> 08:15.800
+So it's a little bit more reliable, we could say.
+
+08:15.800 --> 08:22.480
+Of course things can go bad, and even if you have your two versions of the OS, you could
+
+08:22.480 --> 08:29.080
+still screw things up, and for that we also provide a recovery partition, also in this
+
+08:29.080 --> 08:34.720
+OS part which is immutable, that you can access to so that you can do manually whatever fixes
+
+08:34.720 --> 08:39.840
+you might need to do to one of those two partitions.
+
+08:39.840 --> 08:47.240
+Another goodie that Kairos provides is it has TPM encryption, so nowadays a lot of machines
+
+08:47.240 --> 08:53.560
+or IoT devices come with another chip, generally, which can do TPM encryption.
+
+08:53.560 --> 09:01.920
+This is useful because you can imagine it's just like having a UB key or I don't know,
+
+09:01.920 --> 09:07.320
+there are other providers right now inside of your system, and that way you can trust
+
+09:07.320 --> 09:13.960
+that only this machine, for example, is the one that is going to be able to unencrypt
+
+09:13.960 --> 09:16.080
+the data of the user.
+
+09:16.080 --> 09:20.000
+This is useful because, like I was saying, if you're at the edge of the network, if for
+
+09:20.000 --> 09:25.000
+some reason someone steals your hard drive and they put it into some other machine, they
+
+09:25.000 --> 09:30.720
+are not able to unencrypt it because they don't have that chip on their machine.
+
+09:30.720 --> 09:35.040
+There are multiple facets in which TPM encryption can work.
+
+09:35.040 --> 09:37.400
+I'm not going to detail all of them.
+
+09:37.400 --> 09:41.800
+I think if you're interested into that, you should check there was a talk yesterday by
+
+09:41.800 --> 09:48.920
+Leonard Pottering about the TPM encryption was very interesting.
+
+09:48.920 --> 09:52.760
+But it can get a lot more complex, we could say.
+
+09:52.760 --> 09:58.520
+You could even say, for example, that not only you need the machine, so the chip, with
+
+09:58.520 --> 10:04.360
+your data, but you also need a Kubernetes approval in order to do that.
+
+10:04.360 --> 10:10.440
+It will really depend on your model of security that you want to have, of course.
+
+10:10.440 --> 10:16.280
+If you put all of these things together, we believe that Kairos makes it a great distribution
+
+10:16.280 --> 10:20.360
+to be run at the edge.
+
+10:20.360 --> 10:29.200
+What I wanted to tell you about is now how do we build that kind of distribution ourselves.
+
+10:29.200 --> 10:32.880
+For that, we use something that we call the Kairos factory.
+
+10:32.880 --> 10:38.120
+Just to give you an idea of how this works, we start by having Linux container images
+
+10:38.120 --> 10:41.240
+that are provided by the distributions.
+
+10:41.240 --> 10:46.920
+We base our work on the amazing work that the distributions are doing, of course.
+
+10:46.920 --> 10:48.760
+We don't want to reinvent the wheel.
+
+10:48.760 --> 10:54.720
+When we take that container image, we pass it through the Kairos factory, and as a result,
+
+10:54.720 --> 10:57.800
+what is at the end is what we call the Kairos images.
+
+10:57.800 --> 11:00.680
+Right now, we offer two different types.
+
+11:00.680 --> 11:04.680
+One is the Kairos core, which provides the immutability.
+
+11:04.680 --> 11:10.360
+It has an agent, which can be used for upgrades, for installation, and many other things.
+
+11:10.360 --> 11:14.880
+It comes with the kernel and the init.rd, like I was mentioning.
+
+11:14.880 --> 11:19.160
+We also provide what is called the Kairos standard, which brings everything from the
+
+11:19.160 --> 11:28.640
+Kairos core, but on top, we also add K3S Kubernetes flavor, and also HBPN users for peer-to-peer
+
+11:28.640 --> 11:33.320
+networking and VPN and other things.
+
+11:33.320 --> 11:36.240
+The way you consume these ones is we have releases.
+
+11:36.240 --> 11:41.320
+If you go to our GitHub page, you can download, for example, an ISO, and you can install this
+
+11:41.320 --> 11:47.640
+in bare metal, or we also have, in our docs, we have all the different distributions that
+
+11:47.640 --> 11:55.960
+we support and links to the OCI images, the container images, which you can use for upgrades.
+
+11:55.960 --> 12:01.240
+Not only you can use those for upgrades, but you can also use them for customization.
+
+12:01.240 --> 12:05.840
+This is where I guess it gets most interesting to the people who are going to be using Kairos
+
+12:05.840 --> 12:12.960
+at the edge, because it's very simple to extend the image that we provide you.
+
+12:12.960 --> 12:19.200
+If you're already using Docker, which is probably the case, if you're used to using Docker files,
+
+12:19.200 --> 12:24.920
+which is probably the case, if you're using Kubernetes, well, you don't have to learn
+
+12:24.920 --> 12:26.040
+anything new.
+
+12:26.040 --> 12:33.520
+All you have to do is, say, the front part, you use our image, and then you do whatever
+
+12:33.520 --> 12:34.520
+you want to do.
+
+12:34.520 --> 12:40.480
+For example, I'm installing the application figlet, and then I just have to tag the version
+
+12:40.480 --> 12:42.600
+of the OS that I want to distribute.
+
+12:42.600 --> 12:53.000
+Then you can have whatever release cadence of your own that you might want to have.
+
+12:53.000 --> 12:57.680
+Now you might tell me, okay, that sounds good, but maybe I want something a lot more complex.
+
+12:57.680 --> 13:02.120
+Maybe I want to do a release like the way you guys do Kairos standard.
+
+13:02.120 --> 13:03.120
+No problem.
+
+13:03.120 --> 13:09.320
+We also have this thing called providers, in which we allow you to do a lot more complex
+
+13:09.320 --> 13:12.560
+things on the Kairos machine that you're building.
+
+13:12.560 --> 13:14.800
+That's exactly how we do the Kairos standard.
+
+13:14.800 --> 13:17.880
+That's how we put K3S and HBPN in it.
+
+13:17.880 --> 13:25.600
+You can basically just start from any of the ones that we have and build your own.
+
+13:25.600 --> 13:29.520
+That's pretty much the process that I was explaining.
+
+13:29.520 --> 13:37.040
+Let me talk a little bit about the challenges of starting with the different distributions
+
+13:37.040 --> 13:38.040
+all over.
+
+13:38.040 --> 13:43.880
+First of all, it's not so easy with the packages because some distributions come with certain
+
+13:43.880 --> 13:45.880
+packages, some with others.
+
+13:45.880 --> 13:49.720
+Sometimes they are named differently, sometimes they come in different versions.
+
+13:49.720 --> 13:55.520
+Another problem is that the base configuration is not the same in all the distributions.
+
+13:55.520 --> 14:03.720
+For example, we recently had a bug related to QR codes not being easily displayed because
+
+14:03.720 --> 14:07.200
+the configuration in Ubuntu was a little bit different.
+
+14:07.200 --> 14:10.560
+Another thing that is quite different is the init system.
+
+14:10.560 --> 14:17.240
+Right now we only support system D because it's basically the most mainstream one, I
+
+14:17.240 --> 14:22.200
+would say, on the mainstream distributions, and open RC.
+
+14:22.200 --> 14:27.760
+That's problematic because we have to maintain two different flows of code just for these
+
+14:27.760 --> 14:32.160
+two systems, but it is what it is.
+
+14:32.160 --> 14:36.560
+We also have issues with the C standard library.
+
+14:36.560 --> 14:43.760
+For most distributions that we consume right now, they come with the Glib C, but there
+
+14:43.760 --> 14:49.080
+are distributions like Alpine that comes with Muscle, and that makes it a little bit challenging.
+
+14:49.080 --> 14:58.040
+For those distributions, we cannot provide a kernel or init.rd from that particular
+
+14:58.040 --> 14:59.040
+distribution.
+
+14:59.040 --> 15:04.360
+If you check, for example, the image that we put out there for Alpine, it will have open
+
+15:04.360 --> 15:15.000
+Susa kernel or an Ubuntu kernel because we need to be able to build it somehow.
+
+15:15.000 --> 15:18.800
+Let's dig a little bit deeper now that we know the challenges that we have.
+
+15:18.800 --> 15:20.800
+How do we try to address them?
+
+15:20.800 --> 15:27.200
+Well, again, starting from a Docker file, in that first from that you see on the left,
+
+15:27.200 --> 15:33.040
+we put the distribution image, so let's say open Susa Tumble with latest, and then after
+
+15:33.040 --> 15:36.240
+that we install certain packages.
+
+15:36.240 --> 15:41.920
+That way we base out all the different distributions that we have out there, so if there are some
+
+15:41.920 --> 15:46.400
+packages that are not there in open Susa, we install them, or if it's in Ubuntu, we
+
+15:46.400 --> 15:50.240
+install them so that they are kind of balanced out, so that we can do everything that we
+
+15:50.240 --> 15:51.480
+need to do.
+
+15:51.480 --> 15:54.320
+We also do a little bit of system configuration.
+
+15:54.320 --> 16:01.400
+Mainly it is about ensuring that certain init processes get started properly.
+
+16:01.400 --> 16:07.640
+Then the result of that, we put into container image.
+
+16:07.640 --> 16:10.640
+One thing I want to mention is that we are agnostic.
+
+16:10.640 --> 16:12.600
+We use any OCI-building engine.
+
+16:12.600 --> 16:21.240
+If you're using Docker, great, if you want to use Podman, whatever works for you.
+
+16:21.240 --> 16:25.040
+We start building that new image.
+
+16:25.040 --> 16:28.120
+Then we install Kairos binaries.
+
+16:28.120 --> 16:31.360
+This can be, for example, the agent.
+
+16:31.360 --> 16:36.640
+The agent is used for installation, for upgrades, and other things.
+
+16:36.640 --> 16:39.080
+We then install Kairos packages.
+
+16:39.080 --> 16:41.360
+This is different from the distribution packages.
+
+16:41.360 --> 16:45.560
+These packages that are specific for Kairos, they are mainly for tooling.
+
+16:45.560 --> 16:54.360
+The really cool thing there is that they are completely agnostic.
+
+16:54.360 --> 17:02.760
+The OCI-building engine, so that means that we can be building Fedora image, and we can
+
+17:02.760 --> 17:07.600
+be using packages from open Susa and Ubuntu at the same time to do this.
+
+17:07.600 --> 17:11.400
+I personally find that really cool.
+
+17:11.400 --> 17:15.320
+Then after that, we do certain system configuration.
+
+17:15.320 --> 17:21.040
+This can be about how we're going to, for example, mount the different systems in the
+
+17:21.040 --> 17:23.000
+disk and stuff like that.
+
+17:23.000 --> 17:28.840
+The result of it is going to be a container image, an OCI image, that you can download
+
+17:28.840 --> 17:34.240
+for, like I was saying, because you might want to do certain configuration on top of
+
+17:34.240 --> 17:35.240
+it.
+
+17:35.240 --> 17:40.440
+You might also for doing upgrades, or we pass it through something that we call the OS
+
+17:40.440 --> 17:47.360
+Builder, which will convert that OCI image into an image that you can actually boot.
+
+17:47.360 --> 17:57.560
+You burn it into a USB, and you can put it into hardware, or net boot it.
+
+17:57.560 --> 18:04.120
+Of course, all of these changes are prone to issues, to errors, to breaking things.
+
+18:04.120 --> 18:10.360
+To avoid having that kind of situation, we have a CI system that is ensuring that we
+
+18:10.360 --> 18:13.200
+can build every one of those distributions.
+
+18:13.200 --> 18:19.240
+If something fails there, we go and fix it before it can be released.
+
+18:19.240 --> 18:26.080
+Once every image has been built, we run a certain acceptance criteria tests, like I
+
+18:26.080 --> 18:31.000
+don't know, we're sure that we can do an upgrade, we're sure that we can do an installation
+
+18:31.000 --> 18:36.600
+of Kairos, et cetera, et cetera.
+
+18:36.600 --> 18:43.200
+Putting it all together, that's how you can have a really nice secure distribution running
+
+18:43.200 --> 18:48.920
+at the edge of your network, talking to your Kubernetes cluster.
+
+18:48.920 --> 18:55.360
+If you're interested in testing it out, please, you can go to our website.
+
+18:55.360 --> 18:57.360
+There's a lot of documentation there.
+
+18:57.360 --> 19:00.040
+You can download the different releases, try it out.
+
+19:00.040 --> 19:02.720
+You can try it out on your Raspberry Pi.
+
+19:02.720 --> 19:05.440
+It's quite fun to do.
+
+19:05.440 --> 19:11.440
+You can talk to us via matrix, GitHub discussions, and we have even office hours.
+
+19:11.440 --> 19:18.160
+Every Wednesday, 5.30 p.m. European time, you can chat to us if you want.
+
+19:18.160 --> 19:19.680
+That's all I have for you today.
+
+19:19.680 --> 19:24.480
+If you have any questions, please let me know.
+
+19:24.480 --> 19:30.080
+By the end, if you are interested in stickers, please come and grab one or more.

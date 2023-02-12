@@ -1,0 +1,454 @@
+WEBVTT
+
+00:00.000 --> 00:07.200
+First lightning talk is Christian.
+
+00:07.200 --> 00:09.280
+Yeah, thanks, Dennis.
+
+00:09.280 --> 00:11.280
+Corn has said that he has a relaxed talk.
+
+00:11.280 --> 00:14.360
+I have only 10 minutes, so I need to speed up.
+
+00:14.360 --> 00:18.920
+What I would like to talk today is about HPC container conformance, which is a project
+
+00:18.920 --> 00:24.600
+that came out of the HPC container advisory council, which is every first Thursday.
+
+00:24.600 --> 00:29.280
+And we try to provide guidance on how to build and annotate HPC containers.
+
+00:29.280 --> 00:32.760
+So conformance, what you might ask, so what are we trying to achieve?
+
+00:32.760 --> 00:37.960
+We focus on two applications, maybe a third, but mainly Gromax and PyTorch, and we want
+
+00:37.960 --> 00:46.120
+to go through an exercise of providing best practices on how to build or shape the container
+
+00:46.120 --> 00:48.120
+and also how to annotate the container.
+
+00:48.120 --> 00:52.240
+And I think that's the most important part, is the annotation part, by the way, anyhow.
+
+00:52.240 --> 00:56.800
+What we don't want to achieve is we don't want to boil the ocean by making everything
+
+00:56.800 --> 00:57.800
+work everywhere.
+
+00:57.800 --> 01:00.400
+So that's why we focus on these two applications.
+
+01:00.400 --> 01:05.880
+And we want also to allow for generic and also highly optimized images and make with annotations,
+
+01:05.880 --> 01:12.520
+make sure that people can actually discover those and also provide some expectation management
+
+01:12.520 --> 01:13.520
+for those.
+
+01:13.520 --> 01:18.240
+We are going to focus on OCI images, and most likely on Docker files.
+
+01:18.240 --> 01:22.800
+I mean, if people throw a lot of singularity build recipes at me, then maybe I will change
+
+01:22.800 --> 01:28.480
+my mind, but for starters, we are going with Docker files and OCI images.
+
+01:28.480 --> 01:33.920
+And if we have a Docker file that is derived from other artifacts, like a spec YAML file
+
+01:33.920 --> 01:39.160
+or an easy build recipe or an HPCCM recipe, then of course we also want to include those
+
+01:39.160 --> 01:44.440
+to make it easy for people to reproduce and tweak the actual container.
+
+01:44.440 --> 01:49.960
+When going through this research or this project, I was like, I'm in touch with the
+
+01:49.960 --> 01:54.720
+biocontainer community, and they created a paper in 2019, which is pretty interesting,
+
+01:54.720 --> 01:59.240
+where they provide some recommendation on how to package and containerize bioinformatics
+
+01:59.240 --> 02:00.240
+software.
+
+02:00.240 --> 02:04.640
+Of course, they don't compile for different targets, and they don't use MPI a lot.
+
+02:04.640 --> 02:09.600
+So it's just a baseline, I think, for our work in HPC, but it's a good baseline, and
+
+02:09.600 --> 02:14.720
+I highly recommend this paper to be read by people.
+
+02:14.720 --> 02:20.360
+So the first thing in the HPC container conformance project is the expected image behavior.
+
+02:20.360 --> 02:23.440
+So I think we have all been there, where we have different images, we want you to swap
+
+02:23.440 --> 02:28.200
+out and then we realize, oh, the entry point is different, or the container does not use
+
+02:28.200 --> 02:30.200
+an entry point, but the application name.
+
+02:30.200 --> 02:35.360
+And so we want to make sure that at the end of the day, all the containers that we produce
+
+02:35.360 --> 02:40.120
+in the HPC world are built in a way that they behave the same way, so that you can
+
+02:40.120 --> 02:45.320
+just swap out the container, you want to run Gromax, you try out multiple different
+
+02:45.320 --> 02:48.360
+containers, and you don't need to change your submit script but only the name.
+
+02:48.360 --> 02:52.600
+So at the end of the day, the container should drop you into a shell, like you're logging
+
+02:52.600 --> 03:00.240
+into an SSH node, and it should also have a very small, ideally small, or even no entry
+
+03:00.240 --> 03:02.920
+point so that it's easy to debug as well.
+
+03:02.920 --> 03:08.600
+So if the entry point takes forever or makes a lot of changes, then it's hard to debug
+
+03:08.600 --> 03:09.600
+the container.
+
+03:09.600 --> 03:17.680
+So the container should be, has a very small or even no entry point, and maybe it changes
+
+03:17.680 --> 03:21.320
+some environment variables to pick up the application that is installed maybe by Easy
+
+03:21.320 --> 03:24.800
+Build or Spec, but it should be very small.
+
+03:24.800 --> 03:31.480
+The main part is annotations for this project, and why annotations are the basic ideas, and
+
+03:31.480 --> 03:37.560
+we have all been there, so everyone who's done HPC containers, that we encode the information
+
+03:37.560 --> 03:42.800
+about the specific implementations of the image in the tag or in the name, and we don't
+
+03:42.800 --> 03:44.080
+want to do this anymore, right?
+
+03:44.080 --> 03:48.880
+So we want the information to be annotated to the image and not part of the name, because
+
+03:48.880 --> 03:50.680
+the name might change.
+
+03:50.680 --> 03:53.500
+So what do we want to do with these annotations?
+
+03:53.500 --> 03:56.120
+We want two things.
+
+03:56.120 --> 04:00.840
+First, kind of describe the image, the content of the image, and how the image is expected
+
+04:00.840 --> 04:05.320
+to be used so that sysadmins and end users know what to expect.
+
+04:05.320 --> 04:08.520
+So what user land is provided by the image?
+
+04:08.520 --> 04:12.280
+What tools are installed on the image?
+
+04:12.280 --> 04:17.520
+How is the main application compiled, like for what target, for what microarchitecture
+
+04:17.520 --> 04:23.160
+of the CPU, for which GPU, which MPI is used and so on, so that we can take this information
+
+04:23.160 --> 04:31.040
+and make maybe configuration examples for different container runtimes that hooks can
+
+04:31.040 --> 04:35.600
+react to those annotations, like potman and seros, for instance, they can already react
+
+04:35.600 --> 04:36.600
+to annotations.
+
+04:36.600 --> 04:41.280
+So depending on what the image provides as information, the runtime can adapt and say,
+
+04:41.280 --> 04:45.920
+okay, I have an open MPI container, I do this hook, I have an MPI base container, I take
+
+04:45.920 --> 04:46.920
+this hook.
+
+04:46.920 --> 04:53.320
+So I think that would be great if we can agree on certain annotations and agreeing on certain
+
+04:53.320 --> 04:54.320
+annotations.
+
+04:54.320 --> 04:58.800
+I think it's a huge task, but I'm hopeful that we can achieve this, and then make sure
+
+04:58.800 --> 05:04.960
+that the configuration is done so that the application is tweaked the right way.
+
+05:04.960 --> 05:09.960
+And another piece that we can achieve here is that we create maybe a smoke test that
+
+05:09.960 --> 05:14.800
+looks at the host that is running on, looks at the annotations of the container that you
+
+05:14.800 --> 05:19.080
+want to run, and just tells you, okay, this thing will sack fault anyway, you are on a
+
+05:19.080 --> 05:23.760
+send too and you have an application that's compiled for Skylake, it won't work.
+
+05:23.760 --> 05:29.920
+So that you don't download 30 gigabytes of images of layers just to realize that your
+
+05:29.920 --> 05:30.920
+image won't work.
+
+05:30.920 --> 05:34.200
+So I think that's also a very important part that we can do this.
+
+05:34.200 --> 05:40.040
+Another part as well is not just describe the image, but make it easy for end users
+
+05:40.040 --> 05:41.760
+to discover what images are around.
+
+05:41.760 --> 05:46.640
+So you want to run Gromax, and you know or don't know the system you are on.
+
+05:46.640 --> 05:52.040
+So maybe you can just run a tool or have a website that tells you you want to run Gromax.
+
+05:52.040 --> 05:55.880
+I have looked through all the annotations, I know a little bit about your system.
+
+05:55.880 --> 05:57.600
+Here we go, this is the image that you want to use.
+
+05:57.600 --> 06:00.960
+So also for discovery, I think that's important.
+
+06:00.960 --> 06:05.040
+Of course, we will have mandatory and optional annotations.
+
+06:05.040 --> 06:09.680
+So mandatory ones might be what CPU architecture is it compiled for, I think that's the obvious
+
+06:09.680 --> 06:10.680
+one.
+
+06:10.680 --> 06:16.160
+And optional ones, of course, if you want to add a CUDA version because your image has
+
+06:16.160 --> 06:18.920
+CUDA installed, then of course that's an optional one.
+
+06:18.920 --> 06:23.960
+Or you want to annotate the whole software bill of material.
+
+06:23.960 --> 06:25.960
+Maybe it's too much information, but maybe not.
+
+06:25.960 --> 06:31.320
+So there are optional and mandatory annotations, I think that's pretty clear.
+
+06:31.320 --> 06:37.680
+And I created a couple of groups, like annotation groups that I think we should think about.
+
+06:37.680 --> 06:43.320
+I won't go through every single line item here because I only have 10 minutes and it's
+
+06:43.320 --> 06:48.920
+only 3 minutes left, so just maybe grab the slides afterwards and then go through it and
+
+06:48.920 --> 06:55.480
+it's not written in stone, it's just a proposal, so happy to have feedback on this as well.
+
+06:55.480 --> 06:58.920
+So the first big one, and I talked about it already, is of course hardware annotations.
+
+06:58.920 --> 07:06.240
+So what is the target optimized for, the architecture, generic architecture or the real microarchitecture
+
+07:06.240 --> 07:10.480
+and then a key version, a value for this.
+
+07:10.480 --> 07:15.560
+As I said CUDA versions, driver versions and so on, I think that's obvious that we need
+
+07:15.560 --> 07:20.920
+to annotate the container so that it defines what the actual execution environment should
+
+07:20.920 --> 07:22.880
+look like.
+
+07:22.880 --> 07:29.000
+Also obvious HPC things like the MPI and interconnect annotations so that you define
+
+07:29.000 --> 07:33.280
+what the implementation of the container is, is it open MPI, is it image based, is it even
+
+07:33.280 --> 07:37.120
+thread MPI because you only want to run single node.
+
+07:37.120 --> 07:41.160
+Not framework is used, libfabrics, ucx, what have you and now I'm going through all the
+
+07:41.160 --> 07:45.960
+line items so maybe I should stop, but at the end I think the last line is also important.
+
+07:45.960 --> 07:51.960
+What is the container, 2 minutes left even, what is the container actually, how is it
+
+07:51.960 --> 07:57.800
+expecting to be tweaked, so is the MPI being replaced, libfabric injected and so on, that's
+
+07:57.800 --> 08:02.560
+also I think important so that the sysadmin or the runtime knows what to do with the container
+
+08:02.560 --> 08:05.880
+to make it work on line speed.
+
+08:05.880 --> 08:10.200
+Sysadmin annotations I think is also important so that we know what the container expects
+
+08:10.200 --> 08:16.480
+from the kernel, what the modules are introduced and so on and also what the end user can expect
+
+08:16.480 --> 08:21.200
+what tools are installed, is jq installed, is wget installed and so on.
+
+08:21.200 --> 08:26.520
+Another annotation is of course documentation would be nice as well, base64 encoded markdown
+
+08:26.520 --> 08:32.440
+would be great so that you can render how-tos and build tweaks and so on directly.
+
+08:32.440 --> 08:38.520
+Okay, one minute, how to annotate, I think that's obvious as well that's a layered approach,
+
+08:38.520 --> 08:43.600
+of course the base image should have annotations that we can carry over and if you build subsequent
+
+08:43.600 --> 08:50.680
+images at the annotations that are important and after the image is already built you can
+
+08:50.680 --> 08:56.320
+use things like crane or builder or podman I think or builder to annotate images at the
+
+08:56.320 --> 09:02.400
+end without even rebuilding them, just repurposing them or we could also collect annotations offline
+
+09:02.400 --> 09:06.200
+in another format and then annotate it.
+
+09:06.200 --> 09:12.520
+Okay, ideally and that's like Kenneth and of course Todd as well, easy build, spec,
+
+09:12.520 --> 09:17.360
+they should annotate it correctly so that we don't need to teach everyone to annotate
+
+09:17.360 --> 09:20.680
+but the tools just annotate the image for us.
+
+09:20.680 --> 09:27.760
+And that's the external piece so I created a tool MetaHub where we define images for
+
+09:27.760 --> 09:32.680
+different use cases and we can also annotate those images without actually changing the
+
+09:32.680 --> 09:33.920
+image but just with this.
+
+09:33.920 --> 09:37.440
+So okay, 10 seconds, last one.
+
+09:37.440 --> 09:44.800
+We need of course a fingerprint of the system to match the annotations against the host
+
+09:44.800 --> 09:50.880
+itself so there needs to be a tool, time is up and yeah, so we need to discover the right
+
+09:50.880 --> 09:58.000
+image, need to have a smoke test and help tweak the container.
+
+09:58.000 --> 10:06.160
+That's like the last bit so I think that's it.
+
+10:06.160 --> 10:11.600
+Thank you for the excellent example on how to do a lightning talk on time, we'll take
+
+10:11.600 --> 10:14.680
+one question, any questions for Christian?
+
+10:14.680 --> 10:22.680
+Do you need the clicker?
+
+10:22.680 --> 10:28.040
+Thank you for your presentation, I would like to ask how does this relate to like existing
+
+10:28.040 --> 10:34.680
+software supply chain method databases like GraphiS, does this complement their functionality,
+
+10:34.680 --> 10:36.680
+is this completely something different?
+
+10:36.680 --> 10:40.800
+I mean we are good at HPC to build our own thing and then just say that everyone should
+
+10:40.800 --> 10:41.800
+adopt it.
+
+10:41.800 --> 10:47.640
+We want to complement it, we want to use these two applications and go to the exercise and
+
+10:47.640 --> 10:53.200
+then maybe learn from what we did with this project and try to push these ideas also in
+
+10:53.200 --> 10:54.200
+other things.
+
+10:54.200 --> 10:59.960
+But I think the AIML folks maybe didn't realize that they won't have this problem so we try
+
+10:59.960 --> 11:05.040
+also to not only think about HPC here but also think about other communities as well.
+
+11:05.040 --> 11:11.000
+So I'm open to everyone and the project is as well.
+
+11:11.000 --> 11:14.720
+Thank you very much Christian, if you want to chat with Christian he'll be around probably
+
+11:14.720 --> 11:19.520
+outside the door for the rest of the day or in the room and we'll switch it over to the
+
+11:19.520 --> 11:48.540
+next.

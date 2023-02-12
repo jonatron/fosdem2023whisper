@@ -1,0 +1,613 @@
+WEBVTT
+
+00:00.000 --> 00:29.800
+I hope you can hear me online, well, if not complain on the chat.
+
+00:29.800 --> 00:44.760
+We are going to talk about HPC, High Performance Computing, and Nix, and how we kind of deal
+
+00:44.760 --> 00:46.400
+with that.
+
+00:46.400 --> 00:51.880
+My name is Rodrigo and my co-worker Raul here.
+
+00:51.880 --> 01:00.200
+A bit of what we do, essentially we work on a parallel, concurrent task-based runtime,
+
+01:00.200 --> 01:04.480
+like similar to OpenMP, if you are familiar.
+
+01:04.480 --> 01:13.080
+We also need to work with a compiler based on LBM to read this pragmas in the code and
+
+01:13.080 --> 01:17.880
+transform them to function calls to the runtime.
+
+01:17.880 --> 01:25.520
+In our job performance it's critical, so we really need to take care, and in general
+
+01:25.520 --> 01:34.520
+we execute workloads on several hundreds or even thousands of CPUs.
+
+01:34.520 --> 01:38.720
+Here's a little example of something that we have observed.
+
+01:38.720 --> 01:46.120
+We have a program here that runs, and here you can see the CPUs, and this is the time
+
+01:46.120 --> 01:53.480
+of execution, and we are examining this little point here, because the time here is slightly
+
+01:53.480 --> 02:00.880
+bigger than what is normal, and we can see that the problem is that the allocator took
+
+02:00.880 --> 02:05.480
+a bit longer, so this is just an example.
+
+02:05.480 --> 02:11.360
+In general, in HPC or this high performance computing, it's just a lot of machines connected
+
+02:11.360 --> 02:18.080
+by fiber optic, they are managed by this SLUR diamond, which allows you to request a certain
+
+02:18.080 --> 02:20.440
+number of nodes.
+
+02:20.440 --> 02:26.480
+We don't have fruit in any node, and in general it's very old kernels and very old software
+
+02:26.480 --> 02:33.440
+stack, so yeah, we are stuck with that, and in general the state of the art now is to
+
+02:33.440 --> 02:40.280
+use LD library path to load other software and change versions.
+
+02:40.280 --> 02:46.440
+Problem with this technique is not very easy to reproduce, so the question is, can we benefit
+
+02:46.440 --> 02:47.440
+from using NICs?
+
+02:47.440 --> 02:55.120
+In general, we will get up-to-date packages, configuration options for every package, no
+
+02:55.120 --> 03:01.880
+more LD library path, and we can track everything that we use for an experiment.
+
+03:01.880 --> 03:07.160
+The problem is we don't have fruit, so we cannot install the NICs diamond as we would
+
+03:07.160 --> 03:10.120
+like to do.
+
+03:10.120 --> 03:16.120
+So let's take a closer look at what we do and how we do it.
+
+03:16.120 --> 03:24.600
+In general, we work in these three hats, so to say, in the development side, we take a
+
+03:24.600 --> 03:29.720
+program and we compile it several times until it actually compiles, and we kind of need
+
+03:29.720 --> 03:37.640
+to do this cycle quickly, so we want the compilation time to be very low, so we need to reuse
+
+03:37.640 --> 03:43.160
+the already built tree to rerun the build command.
+
+03:43.160 --> 03:49.160
+When we are finished, we switch to the experimentation side, and we run this program in the machine,
+
+03:49.160 --> 03:55.240
+and we maybe need to tickle with the arguments or the configuration file of the program to
+
+03:55.240 --> 03:58.040
+get some results that we want to examine.
+
+03:58.040 --> 04:01.720
+And then we also do some visualization of the results, but we are not going to talk in
+
+04:01.720 --> 04:03.560
+this talk about this.
+
+04:03.560 --> 04:12.240
+So we will focus first on the experimentation and later on in the development side.
+
+04:12.240 --> 04:15.600
+So a bit of what we did.
+
+04:15.600 --> 04:21.080
+We tried with individual installation of the NICS store by using username spaces.
+
+04:21.080 --> 04:26.840
+The problem is that the number of packages grows, so we would like to share the store
+
+04:26.840 --> 04:29.480
+with several users.
+
+04:29.480 --> 04:36.720
+So we use an auxiliary machine where we actually have a NICS demo, and then we can perform
+
+04:36.720 --> 04:43.880
+the build in that machine, and then use the post-build-hoc to execute some script that
+
+04:43.880 --> 04:49.000
+copies the output derivation to the actual cluster.
+
+04:49.000 --> 04:56.440
+Problem is inside the cluster, NICS store doesn't work, so we wrap the command NICS store
+
+04:56.440 --> 04:58.360
+in a shell script.
+
+04:58.360 --> 05:04.320
+And when it's involved by the auxiliary machine, it creates a name space where it mounts the
+
+05:04.320 --> 05:09.360
+NICS store there, and then it runs the NICS store and receives the derivation, so we can
+
+05:09.360 --> 05:13.200
+actually copy it over SSH.
+
+05:13.200 --> 05:19.800
+We also try to patch the NICS diamond to run inside the machine, but it's a bit complicated
+
+05:19.800 --> 05:24.920
+because we cannot even run a user diamond there.
+
+05:24.920 --> 05:31.200
+Okay, so let's focus on the experimentation cycle.
+
+05:31.200 --> 05:37.560
+The first requirement, most important thing, well, assuming that you already have a program
+
+05:37.560 --> 05:44.880
+that somehow you built in a sandbox, we want to execute this program in the machine, and
+
+05:44.880 --> 05:51.840
+we want to make sure that this program doesn't load anything that is outside the NICS store.
+
+05:51.840 --> 05:58.400
+So, especially the LD library path may have some path that actually has libraries for
+
+05:58.400 --> 06:05.480
+your program, so we don't want that, and also it may use the deal open to load other libraries.
+
+06:05.480 --> 06:11.320
+So ideally we want something like the NICS booth with a sandbox that prevents accesses
+
+06:11.320 --> 06:18.880
+to slash user or a slash opt, and it needs to work in a slurm too.
+
+06:18.880 --> 06:26.640
+Another requirement that we need is for MPI, the communication mechanism, to use this syscall
+
+06:26.640 --> 06:33.680
+process being read by, that only works if the process are inside the same name space.
+
+06:33.680 --> 06:39.760
+So we solve this by running a check, that checks if the name space is already created,
+
+06:39.760 --> 06:45.440
+and if it is so, we enter it, otherwise we create another one.
+
+06:45.440 --> 06:49.880
+So let's take an overview of how this works in the cluster.
+
+06:49.880 --> 06:56.880
+We have here the login node and two compute nodes that were given to us for running our
+
+06:56.880 --> 06:58.280
+program.
+
+06:58.280 --> 07:04.560
+In general, we have to wait a bit after requesting the nodes, that is fine.
+
+07:04.560 --> 07:12.000
+After this moment, we take a shell that is connected to one of the allocated nodes.
+
+07:12.000 --> 07:16.640
+These are the nodes, and each node in your case has two sockets.
+
+07:16.640 --> 07:23.240
+So we usually run one process per socket, and we talk to one of them only.
+
+07:23.240 --> 07:27.640
+Inside this process, we don't have NICS.
+
+07:27.640 --> 07:34.960
+So we first load this name space by using our script, and then we can run other programs
+
+07:34.960 --> 07:44.080
+like srun, which is the client that will launch the workload, but is inside the NICS store.
+
+07:44.080 --> 07:52.360
+So we can compile programs linked to this specific version of Slurm, sorry.
+
+07:52.360 --> 07:58.240
+After that, it requests the Slurm demo to execute something in parallel, and the Slurm
+
+07:58.240 --> 08:05.080
+demo forks in every process, one process that will run something, but it's outside the name
+
+08:05.080 --> 08:09.400
+space because it's not controlled by us.
+
+08:09.400 --> 08:14.920
+So we execute our script again to join the name space if it's found, or otherwise we
+
+08:14.920 --> 08:19.320
+create another one, like in the second compute node.
+
+08:19.320 --> 08:26.160
+And here we can see that we can communicate in the same node because they are both in
+
+08:26.160 --> 08:34.480
+the same name space, and they're one too, and here we use fiber optic communications.
+
+08:34.480 --> 08:38.960
+Another requirement that we need is that we need custom packages.
+
+08:38.960 --> 08:48.280
+We use that with this technique where we define a call package function that takes priority
+
+08:48.280 --> 08:51.120
+over our attribute set.
+
+08:51.120 --> 08:57.960
+So we can change software that is provided in upstream with NICS packages, and we use
+
+08:57.960 --> 09:05.720
+our version first, so we can hack on those without disturbing the whole package set.
+
+09:05.720 --> 09:09.960
+Another thing that we need is to define packages with compilers.
+
+09:09.960 --> 09:17.760
+In general, we use LBM with a custom runtime, so we use the wrapcc width and inject this
+
+09:17.760 --> 09:25.080
+little environment bar so we can load our runtime without needing to recompile the compiler.
+
+09:25.080 --> 09:34.200
+We also need, unfortunately, proprietary compilers, and we use this RPM extract and the AutoPatch
+
+09:34.200 --> 09:51.240
+Elf hook to fix the headers so we can run them on NICS2 and compile derivations for
+
+09:51.240 --> 09:52.240
+them.
+
+09:52.240 --> 09:58.240
+Okay, let's move on to the development cycle.
+
+09:58.240 --> 10:02.920
+In general, the development process consists in getting an application, adding some new
+
+10:02.920 --> 10:09.800
+on-cube features to it, breaking things, testing and retesting the tiles, okay?
+
+10:09.800 --> 10:17.040
+And this interactive workflow requires frequent changes in the source and compilation steps.
+
+10:17.040 --> 10:22.800
+For this reason, NICS build is not good to work with because every change in the source
+
+10:22.800 --> 10:28.920
+will trigger a full copy of this source to the NICS store and a full compilation.
+
+10:28.920 --> 10:36.320
+With big repositories, this is a problem because, for example, in the slide we can see the time
+
+10:36.320 --> 10:41.640
+about how much time it takes to build LLVM in a 32-core machine with hardware string,
+
+10:41.640 --> 10:44.920
+so it's a big machine.
+
+10:44.920 --> 10:49.040
+And we can see that although we use Ccatch, we talk about different orders of magnitude
+
+10:49.040 --> 10:55.080
+comparing it with simply reducing the previous build.
+
+10:55.080 --> 11:03.000
+Another alternative could be using NICSel to get our tools to build the application,
+
+11:03.000 --> 11:07.400
+but this environment is not isolated from the system.
+
+11:07.400 --> 11:13.320
+And we can find software that includes hard-code paths directly to the system, like in this
+
+11:13.320 --> 11:21.560
+case with a Sigma model file of ROKM that is CUDA4AMD for those who don't know what
+
+11:21.560 --> 11:23.120
+is it.
+
+11:23.120 --> 11:31.200
+And if we take an application that uses ROKM and configure it and check the lock output,
+
+11:31.200 --> 11:36.000
+we can see that, at the end, the installation selected is the system one instead of the
+
+11:36.000 --> 11:39.480
+NICS package we want to.
+
+11:39.480 --> 11:44.080
+An isolated environment will prevent us from this situation, avoiding the necessity of
+
+11:44.080 --> 11:49.720
+patching the source to solve this problem.
+
+11:49.720 --> 11:55.000
+Our solution for these two requirements is to first build an isolated environment with
+
+11:55.000 --> 11:58.400
+a tool we named NICSwrap.
+
+11:58.400 --> 12:04.800
+NICSwrap is a script that uses bubble wrap to enter a username space where the NICS store
+
+12:04.800 --> 12:11.520
+is available, but not the system directories, like in this case, slash user.
+
+12:11.520 --> 12:17.960
+And in this environment, we can launch our NICS tools, like, for example, NICSBuild.
+
+12:17.960 --> 12:23.960
+This works because inside the name space, NICSBuild creates a new sandbox in an instant
+
+12:23.960 --> 12:28.800
+name space so the environment is not affected.
+
+12:28.800 --> 12:36.080
+And the most powerful feature of it is running NICShell inside this isolated environment
+
+12:36.080 --> 12:41.400
+to get your tools to build your application in an isolated environment so you don't have
+
+12:41.400 --> 12:45.680
+to worry about accessing to the system.
+
+12:45.680 --> 12:52.840
+And in this case, it's the previous example, LLBM, and reusing the build.
+
+12:52.840 --> 13:03.400
+And finally, if you are using, like, as a slum, you can execute your application by running
+
+13:03.400 --> 13:10.520
+NICSwrap after the slum step-forward process and your application.
+
+13:10.520 --> 13:14.840
+Another requirement for us is, since we are in an HP environment, we want to get the best
+
+13:14.840 --> 13:22.480
+performance of the applications, and for this reason, we need to build the critical performance
+
+13:22.480 --> 13:26.880
+software with CPU optimization flags.
+
+13:26.880 --> 13:33.160
+Our solution for this situation is to override the compiler wrapper injected flags by overriding
+
+13:33.160 --> 13:41.040
+the host platform attribute, specifying the architecture and other stuff to the compiler
+
+13:41.040 --> 13:45.880
+in a standard environment in OCC, and finally, we create the standard environment we will
+
+13:45.880 --> 13:59.280
+use to build our software with this compiler wrapper.
+
+13:59.280 --> 14:02.600
+I will talk about conclusions.
+
+14:02.600 --> 14:10.480
+In general, we can actually benefit from using NICS, but obviously we have some drawbacks.
+
+14:10.480 --> 14:15.960
+The cycles that I was talking about, we can still do it very fast, so yeah, it's very
+
+14:15.960 --> 14:16.960
+nice for us.
+
+14:16.960 --> 14:22.720
+And also, if we have the chance to get something like a NICS demo without the root requirement
+
+14:22.720 --> 14:26.680
+and still be able to share the NICS store, that would be awesome.
+
+14:26.680 --> 14:27.680
+Thank you very much.
+
+14:27.680 --> 14:41.360
+We have five minutes left for questions, if there are questions.
+
+14:41.360 --> 15:03.120
+Yeah, so question is how can we manage to NICS store where users can install if that
+
+15:03.120 --> 15:06.400
+can be an issue for this space?
+
+15:06.400 --> 15:15.880
+So in general, right now we have about 300 gigabytes of storage for our particular group.
+
+15:15.880 --> 15:24.480
+We have around 2,000, 3,000 gigabytes of space available.
+
+15:24.480 --> 15:34.000
+In general, in HPC, people use a lot of space, but if we share the store, that will be the
+
+15:34.000 --> 15:38.600
+best solution instead of every user to have their own installation.
+
+15:38.600 --> 15:45.440
+And we also, when we kind of analyze someone that says to us, please use less space, we
+
+15:45.440 --> 15:47.680
+run their garbage collector.
+
+15:47.680 --> 15:49.320
+Thank you.
+
+15:49.320 --> 15:50.320
+Yeah.
+
+15:50.320 --> 16:08.000
+Did you consider using, or can NICS use our path instead of using run path, because that
+
+16:08.000 --> 16:10.000
+would get rid of your problems there.
+
+16:10.000 --> 16:24.400
+And then the other thing you can do is, there's a talk in HPC about free binding paths to
+
+16:24.400 --> 16:25.400
+SO.
+
+16:25.400 --> 16:26.400
+Okay.
+
+16:26.400 --> 16:27.400
+But that's a little bigger hammer.
+
+16:27.400 --> 16:28.400
+Okay.
+
+16:28.400 --> 16:29.400
+I see your SPAC T-shirt from here.
+
+16:29.400 --> 16:30.400
+Okay, so question is about using our path.
+
+16:30.400 --> 16:31.400
+Our path, yeah, because I mean it takes precedence over all the library paths, and you don't have
+
+16:31.400 --> 16:37.400
+to worry about the user being stupid.
+
+16:37.400 --> 16:38.400
+Yeah.
+
+16:38.400 --> 16:49.400
+So the problem is that you can see programs using DL Open to load their own, so they don't,
+
+16:49.400 --> 16:50.400
+sorry?
+
+16:50.400 --> 16:51.400
+DL Open respects our path.
+
+16:51.400 --> 16:52.400
+Ah.
+
+16:52.400 --> 16:53.400
+Okay.
+
+16:53.400 --> 16:54.400
+I didn't know that.
+
+16:54.400 --> 16:55.400
+We're doing something to be okay with that.
+
+16:55.400 --> 16:56.400
+So.
+
+16:56.400 --> 16:57.400
+You can do, like, if you find the different namespace for DL Open, they won't respect that, but
+
+16:57.400 --> 16:58.400
+most of them are not using that.
+
+16:58.400 --> 16:59.400
+Okay.
+
+16:59.400 --> 17:15.400
+So DL Open is not only the only problem, because we also see software trying to read each C
+
+17:15.400 --> 17:21.400
+slash configuration file somewhere, and we also want to prevent that.
+
+17:21.400 --> 17:22.400
+Yeah.
+
+17:22.400 --> 17:28.800
+In general, we saw that it's safer to avoid the programs from accessing any path than
+
+17:28.800 --> 17:32.800
+trying to find every single option that the program can use to, because.
+
+17:32.800 --> 17:33.800
+Okay.
+
+17:33.800 --> 17:34.800
+There was still one eager question.
+
+17:34.800 --> 17:39.800
+Can we find the next wrapped script online?
+
+17:39.800 --> 17:40.800
+Yeah.
+
+17:40.800 --> 17:44.800
+I will, I think I will upload it to the fourth page.
+
+17:44.800 --> 17:45.800
+Any other questions?
+
+17:45.800 --> 17:46.800
+Yeah.
+
+17:46.800 --> 17:52.800
+Not so much of a question, but a bit of a shameless plug.
+
+17:52.800 --> 17:58.800
+The main blocker for having a rootless NixDemon was merged last week on the week before.
+
+17:58.800 --> 18:03.800
+So hopefully that's going to eventually solve the third of your points.
+
+18:03.800 --> 18:04.800
+Perfect.
+
+18:04.800 --> 18:05.800
+Thank you.
+
+18:05.800 --> 18:07.800
+So what about in-care libraries on the system?
+
+18:07.800 --> 18:13.800
+Are you only envisioning that you would install the library to things like MBI through Nix?
+
+18:13.800 --> 18:14.800
+Okay.
+
+18:14.800 --> 18:17.800
+Because that's not possible on something.
+
+18:17.800 --> 18:18.800
+Yeah.
+
+18:18.800 --> 18:19.800
+It's a very good question.
+
+18:19.800 --> 18:24.800
+For now, we have been very lucky to be able to work with only proprietary packages that
+
+18:24.800 --> 18:27.800
+can be put inside Nix.
+
+18:27.800 --> 18:30.800
+But it may happen that the proprietary something, it doesn't work.
+
+18:30.800 --> 18:35.800
+So we don't have a solution for now.
+
+18:35.800 --> 18:37.800
+Thank you.
+
+18:37.800 --> 19:02.800
+Just switch it over again.

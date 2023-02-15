@@ -1,0 +1,580 @@
+WEBVTT
+
+00:00.000 --> 00:12.360
+Hi, everybody. Yes. So, talk about debug packages and
+
+00:12.360 --> 00:18.200
+distributing debug packages today. So, my name is Morten Lindrö. I go by the nickname
+
+00:18.200 --> 00:22.320
+of Fox Brown on the Internet. I have been a contributor to the Arch Linux distribution
+
+00:22.320 --> 00:29.720
+since 2016. I'm doing sort of open source development since 2013. I do sort of security
+
+00:29.720 --> 00:34.080
+teamwork, re-use the builds. My care is sort of about usable security, supply chain security
+
+00:34.080 --> 00:40.760
+and all of that stuff and a lot of secure boots. But today I'm going to talk about
+
+00:40.760 --> 00:45.600
+what I've been spending sort of two years of my life working on, which is debug packages
+
+00:45.600 --> 00:54.480
+in Arch Linux. So, in the skills correctly. So, one of the sort of, normally when you
+
+00:54.480 --> 01:01.160
+sort of get some crashes at some point, you will see this fancy little stack trace. And
+
+01:01.160 --> 01:10.040
+if you use systemd, you will at some point have the crash handlers getting you the seg
+
+01:10.040 --> 01:18.640
+faults, which happens. And then you can sort of just debug this with GDB. And if you do
+
+01:18.640 --> 01:23.320
+look at the backtrace, you just see nonsense. There's nothing here that makes sense at all.
+
+01:23.320 --> 01:28.080
+You can't figure out what happened. You don't know what crashed. And you have no idea. So,
+
+01:28.080 --> 01:34.000
+if you actually do this on an Arch Linux system today, what you'll actually see is not that
+
+01:34.000 --> 01:46.400
+nonsense backtrace. You'll instead see, no, let's cross Y. And you'll instead get this,
+
+01:46.400 --> 01:49.960
+which has a lot more information. You'll see what happened, what crashed it. You'll get
+
+01:49.960 --> 01:54.120
+all the symbols. And you did nothing. You did not download any debug packages. You didn't
+
+01:54.120 --> 02:01.800
+think about it. You just happened behind the scenes. And if we ask what actually happened,
+
+02:01.800 --> 02:06.480
+you'll see that there's some internal syscall that crashed it. So, this is super nice. This
+
+02:06.480 --> 02:11.880
+is a lot better than sort of what the debugging experience has been on Arch Linux previously.
+
+02:11.880 --> 02:16.240
+And it took me, I don't know, three years, two and a half years implementing a little
+
+02:16.240 --> 02:22.960
+bit on and off. So, why do we care about debug packages? So, if we, for instance, have Pacman,
+
+02:22.960 --> 02:29.280
+which is a fairly sort of simple and small binary, it's like half a meg of size if you
+
+02:29.280 --> 02:35.360
+build it. But if you strip away all the debug information, you can almost half the size,
+
+02:35.360 --> 02:39.480
+which is nice. So, if you don't need all of that information on your disk, it's nice to
+
+02:39.480 --> 02:44.880
+sort of have some space savings. And in more like extreme cases, like in KeyCAD, had some
+
+02:44.880 --> 02:51.640
+sole name inside of Python, it's like half a gig. And if you strip away the debug information,
+
+02:51.640 --> 02:56.720
+it's 33 megabytes. It's sort of nice to sort of have the opportunities to sort of debug
+
+02:56.720 --> 03:05.400
+all of this. And this can all be sort of very large. So, what people do instead is that
+
+03:05.400 --> 03:10.240
+GDB implements what we call detached debug symbols. And that allows us to sort of separate
+
+03:10.240 --> 03:16.160
+out the debug symbols from the binaries and sort of re-link it together on the system.
+
+03:16.160 --> 03:21.080
+And one of the key elements for this is this fancy little build ID, which gets stamped
+
+03:21.080 --> 03:28.760
+into every binary on your system. And we use that to sort of link. We define the build
+
+03:28.760 --> 03:35.680
+ID. We can make some standard directory on your system. We can split out the debug symbols
+
+03:35.680 --> 03:42.240
+from the binary, move it to that directory, add some debug link to the binary, and everything
+
+03:42.240 --> 03:48.200
+just works. It will be as if the binary was, as the debug sections were still on the binaries.
+
+03:48.200 --> 03:53.160
+This is nice. And this is sort of what Debian, Ubuntu, Fedora, all of them do to make those
+
+03:53.160 --> 04:00.120
+debug packages. And that's nice. But one of the things that you saw in the demonstration
+
+04:00.120 --> 04:04.840
+is that we also have the source code of the binaries. And that's more of a hack which
+
+04:04.840 --> 04:09.680
+some distributions have support for and some distribution doesn't support. So Debian, Ubuntu
+
+04:09.680 --> 04:14.600
+does not have source listings, I believe, while Fedora, SUSE, and now Arch as well has
+
+04:14.600 --> 04:21.240
+source listings. And the way this sort of works is sort of you do a little bit of hacking.
+
+04:21.240 --> 04:26.920
+So if we build Pacman just normally and we run GDB on it and we ask what the sources
+
+04:26.920 --> 04:33.480
+were, you'll have your embedded project path in those binaries. So what you can do then
+
+04:33.480 --> 04:41.680
+instead is to use debug edit. Historically, this has been part of the RPM upstream. So
+
+04:41.680 --> 04:47.200
+Pacman didn't want to have a dependency on RPM to support debug packages, which is a
+
+04:47.200 --> 04:53.800
+bit weird. But this was split out now into a separate project in back in 2001, no, yeah,
+
+04:53.800 --> 04:59.200
+2021, which is now a separate project, which is quite nice, and it makes more sort of accessible
+
+04:59.200 --> 05:05.320
+for other package managers. So instead of sort of using the current working directory
+
+05:05.320 --> 05:10.520
+to embed stuff, we can rewrite all of those paths inside the binary to some standard path
+
+05:10.520 --> 05:16.600
+on the file system. So in Arch, we use source debug and then we do name spacing so we can
+
+05:16.600 --> 05:25.000
+have sources from multiple versions of Pacman. And if you sort of do these DOMs, you'll have
+
+05:25.000 --> 05:30.600
+rewritten all of those source listings, which is part of the binary, which is super nice.
+
+05:30.600 --> 05:37.640
+And then you can sort of get all the source code associated with binary. So before debug
+
+05:37.640 --> 05:44.680
+edit was available as a sort of normal thing, Pacman also had support for source listings,
+
+05:44.680 --> 05:49.920
+but he didn't use debug edit. He decided to use awk instead. So he then tried to parse
+
+05:49.920 --> 05:55.640
+out all of the file paths, I don't know, from read-off, try to figure out whatever was there
+
+05:55.640 --> 06:00.880
+and sort of try to get it out. And this worked for, like, simple C programs, but if you threw
+
+06:00.880 --> 06:08.480
+like a rush to go at it, it had no clue what that was at all. So it was a hack. It worked.
+
+06:08.480 --> 06:13.360
+It was in the source code for, I don't know, six years maybe. So I ripped that out last
+
+06:13.360 --> 06:23.240
+year. So this, yes. So when these packages get built and you have the debug symbols and
+
+06:23.240 --> 06:28.320
+have all of the source listings, we can then sort of compile all of this to some package
+
+06:28.320 --> 06:36.800
+and then distribute it to our distributions. So all our packages in Arch Linux goes to
+
+06:36.800 --> 06:41.720
+this repo.archin.org, which is a tier zero mirror. That's where all the packages gets
+
+06:41.720 --> 06:46.800
+distributed from to all our mirrors. And on this, there's two package pools. There is
+
+06:46.800 --> 06:54.960
+from corn extra. There's a package. Just flash debug pool. And for community, there's, okay,
+
+06:54.960 --> 07:01.360
+there's a big community's dashboard debug, not packages. But these can be fetched and
+
+07:01.360 --> 07:07.880
+distributed to all mirrors, but it's a huge amount of packages. So what we do instead
+
+07:07.880 --> 07:12.440
+is that we are synced over this to something called a debug info instance we have, which
+
+07:12.440 --> 07:23.200
+allows us to do fetch everything over HTTP instead. So debug info is a very cool microservice
+
+07:23.200 --> 07:28.200
+which is capable of getting you the source code and the symbols from binaries over HTTP.
+
+07:28.200 --> 07:32.640
+So you don't have to think about which debug packages do you need, which one do you have
+
+07:32.640 --> 07:37.880
+to download to get full backtrace. We can just point GDB at this instance and it will
+
+07:37.880 --> 07:42.920
+just fetch everything for us, which is quite nice.
+
+07:42.920 --> 07:51.160
+So it's written, maintained by the ELF maintenance. It's a web server in C in the year 2020.
+
+07:51.160 --> 07:55.880
+So it's running on, like, I think a few distributions, like, I think Boyd Linux has one, Debian has
+
+07:55.880 --> 08:02.880
+one, Debian and Ubuntu got one past six months. And there's Fedora and SUSE also has several
+
+08:02.880 --> 08:08.960
+of these. So it's super simple. We can just use the
+
+08:08.960 --> 08:15.480
+debug info. We can give it that this is some tar archives that you want to parse and give
+
+08:15.480 --> 08:21.080
+it a package pool. And we just set the debug info URLs variable and then we can run GDB
+
+08:21.080 --> 08:26.680
+on the binaries and it works. That's all you have to do to sort of make GDB read those
+
+08:26.680 --> 08:34.200
+files instead of having to distribute them. So, yes. And then you can have this debug
+
+08:34.200 --> 08:41.280
+info find command line thing to fetch stuff for you or you can use it as a library instead.
+
+08:41.280 --> 08:51.240
+But yeah. So running a web server in C in 2020 is, you know, a little bit iffy. So we
+
+08:51.240 --> 08:58.200
+sort of wrote this, distributed this in sort of this hardware system file. So if something
+
+08:58.200 --> 09:03.560
+gets exploited or something happening in that C code, you never know. It's still sort of
+
+09:03.560 --> 09:08.880
+only really contained to some fairly restrictive set of policies. So you can't ask your privileges,
+
+09:08.880 --> 09:14.880
+you can't really write anything to the system. But you can sort of just read stuff, which
+
+09:14.880 --> 09:21.840
+is quite nice. So the only really two paths this has access to on our sort of in production
+
+09:21.840 --> 09:26.920
+system is just these two package pools and some cache directory and sort of that's everything
+
+09:26.920 --> 09:33.160
+it sees. So that's fairly quite nice. Been planning to upstream it. And I think you bumped
+
+09:33.160 --> 09:43.560
+into and Debian uses this as well, but it's an extremely properly yet sadly. So, you know,
+
+09:43.560 --> 09:49.160
+we have debug packages, we distribute it, people can use them, but we can also parse
+
+09:49.160 --> 09:56.800
+metrics from people accessing this server. So I spent a little bit of time. Look what
+
+09:56.800 --> 10:21.000
+you're how this vendors. Yeah. Okay. It does not like that. I don't know. I can't zoom
+
+10:21.000 --> 10:37.800
+out. I hate this. So, so what you sort of see here is just some basic statistics. So
+
+10:37.800 --> 10:43.640
+what people have been doing on it, we enabled debug packages for all our packages fairly
+
+10:43.640 --> 10:47.640
+recently this year. So that's why you see the biggest corpus spike going straight up
+
+10:47.640 --> 10:53.200
+because we have more symbols now. But you also see that we reached two terabytes of
+
+10:53.200 --> 10:58.080
+data being sent out to different users the past month. So that's the last 30 days with
+
+10:58.080 --> 11:04.280
+two terabytes out. And you can see some statistics on how much data people are fetching the errors
+
+11:04.280 --> 11:09.000
+from through but statistics is sort of quite nice. And you sort of get this from free from
+
+11:09.000 --> 11:21.800
+hosting it. Yes. So all of this infrastructure that's been put up in Arch, of course, is
+
+11:21.800 --> 11:28.080
+all open source. There's no proprietary infrastructure. There's no hidden files. So all the stuff
+
+11:28.080 --> 11:32.200
+we use to distribute debug info is all in our infrastructure repository under the roles
+
+11:32.200 --> 11:37.240
+of debug info. That's sort of how we fetch all of the packages, how we do the service
+
+11:37.240 --> 11:49.640
+management stuff, and all of those things. Yes. So I'll probably have more time. Yes.
+
+11:49.640 --> 11:55.120
+So one of the things I also did because, you know, debug packages is usually done on C
+
+11:55.120 --> 12:00.280
+applications and stuff, but I don't actually know C. I do Python and Go instead. So what
+
+12:00.280 --> 12:05.200
+I also spent a lot of time on doing is to sort of try to get better debug info support
+
+12:05.200 --> 12:12.840
+in Go because that's cool. So here, just to sort of give an example, here we're going
+
+12:12.840 --> 12:19.480
+to crash the tail scale SSH client because that's a nice example, I think. So this instructed
+
+12:19.480 --> 12:26.440
+the Go compiler to actually give us a core dump. And then we can use the delve debugger
+
+12:26.440 --> 12:33.920
+in Go. And it actually, with a few patches, is able to read out all the debug symbols,
+
+12:33.920 --> 12:38.520
+all of the source code, which is fetched from the debug info server as well, which is quite
+
+12:38.520 --> 12:45.680
+nice as it will give us the more opportunities to sort of debug Go applications. It also
+
+12:45.680 --> 12:50.440
+works on Rust. It also works on Julia and whatever sort of programming languages you
+
+12:50.440 --> 12:54.720
+want. Which is quite nice. So it's sort of an improvement for the entire ecosystem as
+
+12:54.720 --> 13:12.160
+well. Yes. That was it. I'll have a lot of time for questions if anybody has anything.
+
+13:12.160 --> 13:34.720
+So I'm wondering what you actually store for the source. Is it the build tree or are you
+
+13:34.720 --> 13:42.360
+trying to remove some things to save storage? Because, I mean, you have like a package,
+
+13:42.360 --> 13:45.960
+you have an upstream source, you have patches on top of the upstream source, and then maybe
+
+13:45.960 --> 13:53.840
+even the build process might generate sources itself. Yes. So I don't quite know how, but
+
+13:53.840 --> 13:59.520
+this is just a binary, which sort of dwarf generates the source listing as part of the
+
+13:59.520 --> 14:05.120
+dwarf metadata, I think. So this is all the, there's some generated optimized out sources,
+
+14:05.120 --> 14:10.080
+I think, and there's some sort of things that points around to different sources, but it
+
+14:10.080 --> 14:16.040
+will mostly just be sort of the patched up, generated, done sources, which gets embedded
+
+14:16.040 --> 14:20.960
+there. So it's, the source listing is a nice bonus, but it's not necessarily some would
+
+14:20.960 --> 14:40.600
+normally be distributing with the binary. That answers the question. Yes. Any more questions?
+
+14:40.600 --> 14:45.920
+Thanks for using it. Could you upstream the system deservers files? Yes, it's been a
+
+14:45.920 --> 14:49.440
+moment to do this for a long time. It's a little bit problematic though, because you
+
+14:49.440 --> 14:53.160
+don't need to figure out sort of how the paths and stuff needs to get into the service file
+
+14:53.160 --> 14:57.040
+with some configuration file, but it can probably be done. And I think that there will be people
+
+14:57.040 --> 15:03.760
+use it as well. Yes, it should be upstreamed. Yes.
+
+15:03.760 --> 15:16.960
+Yeah. So, and we normally hide the HB server behind the proxy. Yes. It's written in C++
+
+15:16.960 --> 15:22.800
+if that helps. Yeah, no, yes. It's actually C++ is not C. It's all the elf stuff that's
+
+15:22.800 --> 15:33.120
+mostly written in C, I think. Yeah, so it's a C++ program that uses Lib, micro, HBD,
+
+15:33.120 --> 15:41.960
+and SQLite to store our other data. Yeah. So we have it behind the reverse proxy to
+
+15:41.960 --> 15:46.400
+sort of get the TLS configuration going and outside, but we also just warranted the hardening
+
+15:46.400 --> 15:50.480
+there because it's just, it's easy with system D to just get the hardening there. So it's
+
+15:50.480 --> 15:55.400
+no reason to sort of not do it. So it's quite nice, but I'll try to upstream it.
+
+15:55.400 --> 16:11.880
+Thanks. Yes.
+
+16:11.880 --> 16:19.240
+Are those statistics on your dashboard pulled from the HTTP server he was describing? Are
+
+16:19.240 --> 16:26.720
+those from like your Nginx or whatever proxy you're using? What? Sorry. Are the statistics
+
+16:26.720 --> 16:31.800
+you had on your dashboard earlier? Yes. Are those pulled from the back end? Or are they
+
+16:31.800 --> 16:36.440
+from like a proxy in front? So the debug info has a slash metrics, which
+
+16:36.440 --> 16:41.440
+is all Promtail. So it just exports a bunch of metrics and you just point Promtail from
+
+16:41.440 --> 16:46.280
+it and it will just parse it. So that dashboard is something we made internally, which I just
+
+16:46.280 --> 16:50.960
+spent two weeks making, and that's also open source. So you can just fetch the JSON file
+
+16:50.960 --> 16:55.520
+for the dashboard on the Grafana and everything there is all sort of open. So you can go look
+
+16:55.520 --> 17:01.400
+at it. But it's all, it's just this sort of slash metrics endpoint of debug info. So
+
+17:01.400 --> 17:06.840
+the Red Hat people actually watches this for all the debug info servers that has been
+
+17:06.840 --> 17:11.600
+employed and they can like look at the statistics and errors from all of different servers and
+
+17:11.600 --> 17:17.800
+see how the traffic between all of those are sort of how much is Fedora distributing compared
+
+17:17.800 --> 17:23.800
+to Arch and stuff, which is quite nice. That was not public, I think. But yeah, it's cool.
+
+17:23.800 --> 17:43.480
+Can you tell us a bit about the requirements in terms of storage? Because I recently looked
+
+17:43.480 --> 17:49.960
+at another distribution and they didn't build all the packages because of lack of storage.
+
+17:49.960 --> 17:54.360
+So that's what I'm trying to figure out now because we enabled debug symbols for all the
+
+17:54.360 --> 17:58.960
+packages, but they're not currently distributing it to our mirrors. So Arch, the total mirror
+
+17:58.960 --> 18:05.080
+size for Arch is like 60, 70, 80 gigabytes, I think, of data. But I assume like that would
+
+18:05.080 --> 18:10.640
+be several hundreds if we actually upload all the debug packages. But I think Fedora
+
+18:10.640 --> 18:20.360
+in total is like three, four terabytes or something. So I assume it will go inside three,
+
+18:20.360 --> 18:26.360
+four times and stuff. I know like the LLVMD stuff is like a two gigabyte package, I think,
+
+18:26.360 --> 18:31.080
+with symbols and people try to optimize it a little bit so you get a better, faster
+
+18:31.080 --> 18:39.360
+to upload. So it's, yeah, one sort of main issue with debug edit and sort of debug info
+
+18:39.360 --> 18:44.720
+and stuff is that you have, Dwarf 5 has support for compressed sections, but debug edit does
+
+18:44.720 --> 18:49.880
+not understand the compressed sections. So you have to decompress the sections before
+
+18:49.880 --> 18:54.280
+you leave out the paths and there's no good way to sort of recompress everything again.
+
+18:54.280 --> 19:00.560
+So getting better support for sort of compressed Dwarf info would sort of help fix a few of
+
+19:00.560 --> 19:04.440
+those sort of space requirements, I think, on the mirrors.
+
+19:04.440 --> 19:11.720
+Can I ask another question? Is there work on the duplication instead of compression?
+
+19:11.720 --> 19:17.520
+Because you have different version of packages as well.
+
+19:17.520 --> 19:22.640
+So it's not that relevant for ours because we don't keep those versions and we don't
+
+19:22.640 --> 19:27.640
+really do delta files on the packages. So on the arch side of things I don't think that's
+
+19:27.640 --> 19:35.240
+really relevant for us, but I don't know. It could probably be done at some level, at
+
+19:35.240 --> 19:44.240
+least for like Fedora or Debian that keeps multiple versions of the same package.
+
+19:44.240 --> 20:12.520
+A small question, for which architectors are you generating those debug info binaries?
+
+20:12.520 --> 20:19.920
+So arch only really supports x8664. We don't really have any other architectures. But because
+
+20:19.920 --> 20:26.160
+we have the 32-bit port and we have the ARM people and I think they're just pulling our
+
+20:26.160 --> 20:31.240
+packages and probably building debug in full for them, but arch itself is not really distributing
+
+20:31.240 --> 20:46.160
+anything else on x8664 currently.
+
+20:46.160 --> 20:51.920
+So you mentioned different architectures. Do you know if there's plan to upstream the
+
+20:51.920 --> 20:58.080
+booking for D and in general risk five because I know Felix Yan is working on this?
+
+20:58.080 --> 21:06.080
+Yes, I know Felix is working on it. We want to, this is more an arch thing, but we don't
+
+21:06.080 --> 21:11.680
+have traditional build farm server setup. So it's a bit hard for us to do multiple architectures
+
+21:11.680 --> 21:17.240
+because one package maintainer has to build that package for each architecture. So currently
+
+21:17.240 --> 21:24.440
+we want to have support for more architectures and better support like V2, V3, V4 versions
+
+21:24.440 --> 21:31.440
+of X that you see now supporting. But you currently haven't really solved that in a good way currently.
+
+21:31.440 --> 21:32.440
+Okay, thanks.
+
+21:32.440 --> 21:33.440
+Thanks.
+
+21:33.440 --> 21:34.440
+Thank you.
+
+21:34.440 --> 21:35.440
+Thank you.
+
+21:35.440 --> 21:58.440
+Thank you.

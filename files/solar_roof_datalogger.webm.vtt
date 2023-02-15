@@ -1,0 +1,664 @@
+WEBVTT
+
+00:00.000 --> 00:29.840
+Okay, so, last talk of the dev room, Paolo Bonzini is going to be talking about.
+
+00:29.840 --> 00:40.000
+Reverse engineering a solar roof panel. Sorry, roof. Yeah, whatever. Well, whatever he said.
+
+00:40.000 --> 00:59.920
+Here, yes. So as a quick introduction to myself and to set the expectation straight, I'm not a
+
+00:59.920 --> 01:05.760
+hardware guy. I'm not a security guy. This is basically something I did for fun. So I'm a beginner
+
+01:05.760 --> 01:13.200
+in these topics. On the other hand, I'm not a total idiot either. I know assembly pretty well.
+
+01:13.200 --> 01:21.120
+I work with compilers, kernel stuff, so I know X dumps enough to do this stuff. So anyway,
+
+01:21.120 --> 01:30.320
+this all starts almost five years ago when I bought a solar roof for my family. And the installer
+
+01:30.320 --> 01:35.840
+asked about having this optional data logging component. And I didn't really want to have
+
+01:35.840 --> 01:41.760
+anything cloud related because IoT is short for Internet of Things that shouldn't be on the Internet.
+
+01:42.400 --> 01:47.200
+So I didn't want it to be on the Internet, but it's entirely local. So I said, sure,
+
+01:47.200 --> 01:55.520
+why not? And this is what I got from them. This is the normal solar roof setup, the stuff that
+
+01:55.520 --> 02:01.840
+they want to touch with them football. This is the part that this talk will be about. And
+
+02:02.640 --> 02:04.640
+it was already suspicious from the beginning.
+
+02:13.840 --> 02:17.840
+But I mean, who knows? Maybe they bought it on sale. I don't know.
+
+02:17.840 --> 02:26.960
+But the plot thickened when I by chance had wireshark running and I saw there was
+
+02:26.960 --> 02:33.600
+a Raspberry Pi that I didn't know of. I have other Raspberry Pies, but none with this IP address.
+
+02:33.600 --> 02:40.720
+So actually, a few years later, when I was not really preparing for this talk,
+
+02:40.720 --> 02:46.640
+but I noticed these on their website. So these are the specifications for this.
+
+02:46.640 --> 02:57.120
+It has quad core ARM cortex. It even has a microSD inside. Okay, so you know what kind of Raspberry
+
+02:57.120 --> 03:04.480
+Pi is going to be in there. But anyway, let's take a step back and go back to 2018 and say,
+
+03:04.480 --> 03:10.800
+let's see what this thing does. So it's pretty nice. I mean, you can only see these from outside,
+
+03:10.800 --> 03:16.720
+but actually there's extra things around. Here you can see that they power it through the GPIO.
+
+03:16.720 --> 03:23.200
+In fact, the power brick, they actually cut out the USB part and they just screwed the
+
+03:26.400 --> 03:33.120
+wires to the GPIO here. So what does it do? It basically logs data to the SD card every five
+
+03:33.120 --> 03:38.000
+minutes. It lets you plot nice graphs. Unfortunately, I don't have any picture of the graphs because
+
+03:38.000 --> 03:45.120
+I don't use the software anymore. But it also has five relays. You can see them here. Some of them
+
+03:45.120 --> 03:51.360
+have normally closed, normally open. Some of them only have normally open. And it's based on five
+
+03:51.360 --> 03:57.360
+volt inputs, which is a bit weird because usually you use 12 volts or 24 volts DC for communication.
+
+03:58.160 --> 04:03.840
+Five volts is a bit weird. And it's not very useful also because you have to actually put
+
+04:03.840 --> 04:08.640
+the wires on the wall and it was already hard to find a place for the whole solar roof things
+
+04:09.360 --> 04:14.960
+retrofitted into a relatively old house. Another interesting thing is that it has a built-in UPS
+
+04:16.080 --> 04:24.160
+because the inverter has like a 10 ampere line that stays up 24-7. If the grid goes away,
+
+04:24.160 --> 04:30.480
+it's still battery powered. So this is another incentive to actually reuse the Raspberry Pi for
+
+04:30.480 --> 04:37.120
+something else. And also on a slightly lower level, what does it do? It has port 22 open.
+
+04:37.120 --> 04:41.760
+Unfortunately, there's no way to upload keys. It has a remote update, but it triggered exactly
+
+04:41.760 --> 04:48.720
+once when I plugged it in and then not anymore for four years. The web server is not Apache.
+
+04:48.720 --> 04:54.800
+It's not nginx. It's just an embedded web server with a vanilla server header in HTTP.
+
+04:54.800 --> 05:01.360
+But it has a nice JSON API. It's easily discoverable with the Firefox developer tools and that's how
+
+05:01.360 --> 05:07.840
+I used this thing for some time. So for example, there is the API login. There is the API dash,
+
+05:07.840 --> 05:12.960
+which is basically what is used for the dashboard. And it returns the instant data like one minute
+
+05:12.960 --> 05:18.960
+old at most with some really cryptic names. Okay, Ver is not cryptic. Temp is not cryptic,
+
+05:18.960 --> 05:25.120
+but the other ones are a bit weird. And it also has the possibility to get CSV data with similar
+
+05:25.120 --> 05:31.920
+headers for a particular day or average across the whole year. The daily one is the most useful
+
+05:31.920 --> 05:39.600
+because if you have a lot of data for the same header, it's easy to figure out what it might be.
+
+05:39.600 --> 05:49.280
+So for example, this one, ENPH, okay, V probably stands for voltage, W stands for what, but H
+
+05:49.280 --> 05:53.840
+you may not know of hand. But if you look at the number, you can see that pretty clearly that it's
+
+05:53.840 --> 06:00.480
+probably the frequency of the grid or something like that because it's about 50. So you get lots
+
+06:00.480 --> 06:05.600
+of data. You get voltage, current, power values. You get a few computed fields that are easy to
+
+06:05.600 --> 06:12.080
+recognize because the name starts with X. So for example, X home is the current consumption of
+
+06:12.080 --> 06:19.520
+the home, independent of whether there is data coming from this, sorry, there is power coming
+
+06:19.520 --> 06:28.320
+from the solar panels, or maybe instead it's coming from the battery. The actual data from the
+
+06:28.320 --> 06:35.600
+inverter are a bit not suited, for example, to plotting useful graphs, but they have a few
+
+06:35.600 --> 06:40.160
+computed fields that put things together. There's also a few dozen flags that are interesting. They
+
+06:40.160 --> 06:46.800
+are almost all zero, and so they will be a bit harder to reverse engineer. And also you can see
+
+06:46.800 --> 06:52.160
+the five-volt inputs and the relay outputs in the logs. I actually never use these, so they are
+
+06:52.160 --> 06:56.480
+always zero, but they're named like in one, in two, in three, in four, in five, so it's pretty
+
+06:56.480 --> 07:02.320
+easy to figure out. So what you can do with this is already do simple-minded hacks with curls. So
+
+07:02.320 --> 07:06.000
+for example, you can gather all the yearly data and do your own plots. For example, you can see
+
+07:06.000 --> 07:14.080
+here is when I do laundry because the weekend and Tuesday is where I consume more power.
+
+07:15.280 --> 07:20.800
+And another thing that I did very early on was push data to MQTT to get some nice widgets on
+
+07:20.800 --> 07:25.600
+my phone that could give me instant data without opening the web interface. And also for home
+
+07:25.600 --> 07:32.720
+automation, at some point I was using these to turn on and off some ZigBee smart plug bugs.
+
+07:34.000 --> 07:41.680
+But this was not any reverse engineering at the Raspberry Pi level. It was just looking at JSON
+
+07:41.680 --> 07:50.720
+stuff and doing just stuff with curl. But this was already enough to find some interesting bugs.
+
+07:50.720 --> 07:57.040
+There are some weird stuff in the logs. So for example, here you can see this probably stands
+
+07:57.040 --> 08:04.640
+for day and hour, and this stands for month and seconds, but it's a value that has a decimal
+
+08:04.640 --> 08:09.760
+point in it, so it makes no sense. And I will show later what happens. Also, there are some fields
+
+08:09.760 --> 08:15.840
+that end with L and H, but sometimes they are swapped. So you can see that L is the one that
+
+08:15.840 --> 08:23.920
+stays always the same, and H is the one that keeps going up and down, up and down. And also with
+
+08:23.920 --> 08:29.440
+L and H, they didn't really care a lot about them because also if you plot them, the plot looks
+
+08:29.440 --> 08:35.920
+like this. So this is the solar production from the total solar production since the day that I
+
+08:35.920 --> 08:45.760
+installed it. And this is how much it had produced in January, 2021. This is in December, and it's
+
+08:45.760 --> 08:56.160
+really weird. What actually happened is that they put the low as a signed value, but it should have
+
+08:56.160 --> 09:04.720
+been unsigned. So whenever it goes from 2 to the 15 minus 1 to the 15, it actually flips back to
+
+09:04.720 --> 09:16.880
+minus 32,000, whatever. So you can see that this is exactly 655.36 kilowatt hours. And if you fix it,
+
+09:16.880 --> 09:22.800
+it's still wrong because there are some bugs. But I mean, this was not supposed really to be
+
+09:24.160 --> 09:30.480
+used by the buyers of the appliance. People were just supposed to look at the nice plots.
+
+09:30.480 --> 09:38.400
+Also, this is way more worrisome because there are flags that seem to be passing correctly. If you
+
+09:38.400 --> 09:44.800
+look at the logs, it keeps giving these weird names that they keep going on and off like a few times
+
+09:44.800 --> 09:51.760
+every day. And the name is very scary. It's battery charge over the current hard limit,
+
+09:51.760 --> 09:58.480
+and same for this charge. And the weird thing is that you can see this error in the web interface
+
+09:58.480 --> 10:04.080
+all the time, but you never see it on the inverter. The inverter has a little panel with errors,
+
+10:04.080 --> 10:09.280
+and you cannot see that any time. So that's weird. And I didn't really like that. I asked
+
+10:09.280 --> 10:14.720
+customer support, which were otherwise very nice, but they just said, yeah, don't worry, it's fine.
+
+10:17.040 --> 10:22.960
+So all the time while I was doing these things for fun, I had the lingering thought that the
+
+10:22.960 --> 10:29.600
+microSD card would die over me because they say diamonds are forever. I don't know if it's true,
+
+10:29.600 --> 10:35.680
+but certainly microSD cards are not forever. So even worse, I couldn't just go and say, okay,
+
+10:35.680 --> 10:43.440
+it's 10 years warranty, please send me another SD card. Because the newer models, they moved the
+
+10:43.440 --> 10:50.000
+storage to cloud, and they only have five years of service, which is suspiciously close to the
+
+10:50.000 --> 10:56.960
+time before my own SD card died. So people won't pay for the cloud service. You won't have to repair
+
+10:56.960 --> 11:03.440
+the data logger. Anyway, I never did anything about it until last year. Last year, I got the
+
+11:03.440 --> 11:10.880
+data logger to shut down on me twice in a week, and I naively thought that it was just a network
+
+11:10.880 --> 11:15.200
+problem, and I said, okay, I will just take out the SD card and set up a static address.
+
+11:15.200 --> 11:21.840
+Actually, the SD card was dying. I don't know why it really had all these problems in general.
+
+11:21.840 --> 11:26.720
+It didn't have any problem until last November, and last November, it really died in a matter
+
+11:26.720 --> 11:34.720
+of a week. So I have no idea what happened, but I'm very thankful to the SD card gods for.
+
+11:36.160 --> 11:41.360
+So when I open it, this is what it looks like, and this is the behind of Raspberry Pi 3.
+
+11:41.360 --> 11:49.680
+It's potato quality, but okay, the first impressions was that it's a standard Raspbian
+
+11:49.680 --> 11:54.880
+install, so I guess I can forgive them for not obeying the GPL because they didn't do anything
+
+11:54.880 --> 12:00.400
+weird. I mean, it was just Raspbian. And there were two statically linked binaries in OMPI.
+
+12:01.360 --> 12:06.480
+One was running on TTY1. Nobody ever noticed that it was running there because there's no
+
+12:06.480 --> 12:13.760
+room for an HDMI cable, so it was there, though. The main use of that HomePI, I think, was that
+
+12:13.760 --> 12:21.520
+if you plug a keyboard through the USB and you press there, it rebooted, so it probably was
+
+12:21.520 --> 12:28.560
+a quick way for them to do some testing. But it had some nice ASCII art of the company logo.
+
+12:28.560 --> 12:36.160
+The other one is the one that we care more about. The data is placed in HomePI storage,
+
+12:37.040 --> 12:44.240
+and the nice thing is that Strays is installed, so I was already thinking of ways to get some data
+
+12:44.240 --> 12:49.920
+from this because with Strays, it's so easy. Anyway, there's basically, again,
+
+12:49.920 --> 12:58.480
+in stock install, some files are newer than the others, so that's an easy way to see what's going
+
+12:58.480 --> 13:05.360
+on and what they changed. There's a couple system D units. There's an I2C RTC. This is nice because
+
+13:05.360 --> 13:10.000
+at the time, I hadn't even looked at the PCB or anything, so I didn't know what was in there.
+
+13:10.000 --> 13:17.680
+And knowing that there is a real-time clock on the board is nice to know. They disabled Bluetooth
+
+13:17.680 --> 13:24.720
+for no particular reason. Well, there is a reason, but I will say it later. So what I do
+
+13:24.720 --> 13:30.720
+is just I copy the binaries to my computer, I add my SSH, and I turn it back on and it works.
+
+13:32.000 --> 13:38.320
+So one thing that you need to consider before doing this kind of work is what about the warranty,
+
+13:38.320 --> 13:43.040
+especially for something as expensive as the Solar Roof. The thing is the connection to the
+
+13:43.040 --> 13:51.200
+inverter is through USB. It's not direct RS485. There is a scooter. This thing is away from the
+
+13:51.200 --> 13:56.160
+board, so I didn't touch it. I just removed the screws to take a picture, and that was it.
+
+13:57.200 --> 14:05.360
+It's basically RS485 to USB adapter. So also, the inverter has the Baud rate. You can customize it,
+
+14:05.360 --> 14:12.480
+and the user manual has basically three choices. Date and time. What was the other one? It was
+
+14:12.480 --> 14:22.320
+the total that it reports for the produced energy. So you can reset it to zero if you give it to
+
+14:22.320 --> 14:28.800
+another person or for whatever reason you want to change it. And the Baud rate for RS5. So the user
+
+14:28.800 --> 14:40.160
+is supposed to know that it is based on RS485 and is supposed to look at RS485 data. I don't think
+
+14:40.160 --> 14:46.320
+this is any kind of lawyer analysis, but still I'm pretty sure I didn't break the warranty
+
+14:46.320 --> 14:52.800
+on the inverter, which is the really expensive part. So anyway, I got the binaries. The first
+
+14:52.800 --> 15:00.880
+thing I do is using strings, and just doing strings by plus is awesome source of information.
+
+15:00.880 --> 15:06.720
+And what I noticed by doing quick search, for example, for the API endpoints and for
+
+15:06.720 --> 15:12.000
+DevTTY USB, is that all the strings are together, and this means the program is unlikely to be
+
+15:12.000 --> 15:17.200
+written in C, because in C they will be null terminated, and they will be all one after another.
+
+15:18.400 --> 15:25.120
+So it could be go because, I mean, there's not that many languages that you would use to write
+
+15:25.120 --> 15:31.200
+a web server in and that produce a large binary. Certainly, it wouldn't be rushed because it was
+
+15:31.200 --> 15:38.560
+four years ago, so it wasn't as fancy as today. And anyway, if you do a read-elf, you can see
+
+15:38.560 --> 15:45.680
+some section editors that go sim, tab, go pcl, and tab is basically the go format for the bug
+
+15:45.680 --> 15:53.440
+information. So it's almost certainly go, like what? Certainly go. Another thing that you can do
+
+15:53.440 --> 16:06.240
+for strings is for GitHub, because why wouldn't people use RPIO libraries from GitHub? And also,
+
+16:06.240 --> 16:16.480
+you can find some nice names and things. And this is the name of the model of my inverter,
+
+16:16.480 --> 16:26.560
+so I know that what they call it in the source code or in the files can be handy. So anyway,
+
+16:26.560 --> 16:33.360
+the thing is, there is running this, I have SSH access, so what I can do is just trace it
+
+16:33.360 --> 16:40.320
+and see what happens. And one nice thing is that the T2 opens and closes the DevTTY USB 0 every
+
+16:40.320 --> 16:47.680
+minute, so it's pretty easy to also get not just the board rate, but also the parity, the stop bits.
+
+16:49.760 --> 16:57.360
+Okay, that's very little, but okay. I will go fast. So with go, the thing is it has an event
+
+16:57.360 --> 17:02.720
+loop that can move a subroutine from one thread to another, so you need to track the file descriptor
+
+17:02.720 --> 17:10.000
+numbers. So what you get here is something that is basically you can recognize to be Modbus.
+
+17:10.000 --> 17:20.880
+This is a read 16-bit register request. This is read one-bit register request. So what I did is
+
+17:20.880 --> 17:28.880
+I basically took this from the logs and I put it in a small C program to the code what it was.
+
+17:28.880 --> 17:34.640
+I mean, I could probably do something with Wireshark or whatever, but trace gave me already some C
+
+17:34.640 --> 17:42.080
+strings, so I put it in a C program. And this is enough, for example, to compare with the CSV files,
+
+17:43.440 --> 17:50.000
+at least for the 16-bit registers. So for example, I can see now that these are probably low and high.
+
+17:50.000 --> 17:58.880
+So this was the minutes and seconds, the hour, the day, the month, and the year. This is 21 in
+
+17:58.880 --> 18:06.320
+hexadecimal. And I can also see that some values are fixed points. So this one is the version
+
+18:06.320 --> 18:12.000
+multiplied by 100, and this one is the temperature multiplied by 10. For the discrete inputs,
+
+18:12.000 --> 18:22.640
+it's a lot more complicated. I could find in strings some nice names of the fields. So for
+
+18:22.640 --> 18:32.800
+example, GRN was no voltage from the grid and so on. It's a bit weird that they put it an alert
+
+18:32.800 --> 18:39.600
+that there was a blackout, but they didn't put as an alert that the fan broke, whatever. And this
+
+18:39.600 --> 18:44.560
+also doesn't make a lot of sense to average the bulls, but whatever. So anyway, this is already
+
+18:44.560 --> 18:48.880
+nice because I have the names corresponding to all the fields, but I don't have the mappings
+
+18:48.880 --> 18:55.600
+of the discrete inputs. That's what Modbus calls the one-bit Boolean values to the flag.
+
+18:55.600 --> 19:03.040
+So, and I knew that this was the part that was broken in the code. So this was probably not going
+
+19:03.040 --> 19:11.280
+to succeed, but actually it was successful. I used radar 2 for this, and I will super, super quickly
+
+19:11.280 --> 19:16.800
+go through radar 2. This is what I learned about radar 2 because I had never used it before. So
+
+19:16.800 --> 19:23.680
+the commands are one letter per word. So ADF means analyze data in functions. There are some
+
+19:23.680 --> 19:29.520
+people here that are old enough to remember Lotus 1, 2, 3. That's the way the menus worked in
+
+19:29.520 --> 19:36.480
+Lotus 1, 2, 3. Basically, you had like one letter per word in the command that you wanted to execute.
+
+19:36.480 --> 19:43.840
+And the main ones are seek, print, and slash for search. And another interesting thing to know
+
+19:43.840 --> 19:49.920
+is that the state of your work is saved in a project, which is actually a single file in the
+
+19:49.920 --> 19:55.680
+Git repository with thousands of commands in it that say all the nice things about your binary.
+
+19:57.520 --> 20:09.120
+You can get some information from the debug info that I showed earlier. There's a nice command to
+
+20:09.120 --> 20:14.160
+do all the analysis that is possible, but it doesn't really work for a static binary-linked
+
+20:16.480 --> 20:22.400
+binary. So I use these ones instead. It starts giving some nice information. So for example,
+
+20:23.520 --> 20:29.280
+in the project file, after I do the analyze strings commands, I can see that it has these
+
+20:29.280 --> 20:36.400
+CS commands. And now when I do the disassembly, it actually prints these as a string and not
+
+20:36.400 --> 20:45.920
+as instructions. Likewise, when I do AXD, I can see that it loads these. And it also says what is
+
+20:45.920 --> 20:49.600
+the data that is loaded from here. This is probably in the constant pool. So for example,
+
+20:49.600 --> 20:55.920
+this instruction is the one that loads the address of dev.tty.usb0. One thing that you can do is also
+
+20:55.920 --> 21:02.000
+you can write your own commands and add them to the file. So for example, here, I know that this
+
+21:02.000 --> 21:08.320
+location is a data operand for this instruction. And I can tell Rader 2, for everything that is
+
+21:08.320 --> 21:18.240
+in here, make it dumped as bytes, not instructions. So after I add all these things to the project
+
+21:18.240 --> 21:24.320
+file, it will not be dumped as a rubbish ARM instruction. It will actually print the word.
+
+21:24.320 --> 21:32.240
+Then you can also search keys. For example, if I search for the two flags that went up and
+
+21:32.240 --> 21:39.520
+down, I can see that they are here. And here, they are closed. So I decided to search for this
+
+21:39.520 --> 21:45.280
+address. You have to put it backwards, because it's little Indian. So this is the first byte and
+
+21:45.280 --> 21:52.080
+this is the last one. But then I found that they were found relatively close, like 68 bytes
+
+21:52.080 --> 22:00.560
+apart. So you dump them and it's very helpful that it even tells you where the hits were from
+
+22:00.560 --> 22:08.080
+the previous searches. And here, you can see some nice things. It seems to repeat every
+
+22:12.000 --> 22:20.000
+68 bytes. And it's always pointed to the string followed by the length. And also, there's these
+
+22:20.000 --> 22:27.840
+nice numbers, which might be maybe the numbers of the discrete inputs, who knows.
+
+22:30.000 --> 22:36.560
+And if you go back and back, you can see using the seek command, I can go back 68 bytes at the
+
+22:36.560 --> 22:45.680
+time. And sooner or later, I get to a point where the format changes. 68 bytes before,
+
+22:45.680 --> 22:52.240
+there's nothing like what was afterwards. So this was the beginning of the array. And now, I know
+
+22:52.240 --> 23:04.400
+exactly which discrete input was with which name and so on. I can also tell to print data. So,
+
+23:04.400 --> 23:11.200
+for example, this was a floating point number. And if I print it, it's 0.1. So the guess is that
+
+23:11.200 --> 23:17.600
+this would also be something related to the fixed point values. And now, it's time to actually find
+
+23:19.120 --> 23:27.760
+the pointer to this. I do, I search for this address here. And I find it here. It's also
+
+23:27.760 --> 23:34.480
+address followed by the number of entries. So it's probably some kind of array descriptor for go.
+
+23:34.480 --> 23:42.080
+And then, I search for the address of the descriptor. And then, if I go here, I see that there is
+
+23:44.960 --> 23:50.160
+a reference from the query function of my model of the inverter. So I guess we have a winner.
+
+23:51.600 --> 23:58.080
+And in fact, what I did then was rewrite the software using Modbus. It outputs the logs
+
+23:58.080 --> 24:03.120
+in exactly the same format. So I still have a continuous log from the date of the installation,
+
+24:03.120 --> 24:08.400
+except I didn't fix, I didn't leave it exactly the same. I fixed the bugs. So,
+
+24:10.560 --> 24:17.280
+no averages of dates. The scary flags are not logged anymore. I can see now whether it's using
+
+24:17.920 --> 24:22.880
+the battery or not. And I even got the grid non-flag during a blackout. So I guess that's
+
+24:22.880 --> 24:30.400
+full confirmation that it works. It also does the same thing that I was doing before with curl.
+
+24:30.400 --> 24:36.160
+Now, I do it natively. So every minute, I export it to MQTT with Home Assistant. I don't have the
+
+24:36.160 --> 24:40.160
+plot functionality, but I can get it from Home Assistant. So that's fine. This is the source
+
+24:40.160 --> 24:46.480
+code. And sooner or later, I will try to put an Ansible playbook so that if the SD card dies
+
+24:46.480 --> 24:53.040
+once more, I will just have a very quick way to deploy it. As a bonus, for the last minute
+
+24:53.040 --> 24:57.760
+of the talk, I have a picture of the PCB because at some point, I wanted to update the DBN11.
+
+24:57.760 --> 25:06.160
+The nickname changed, so it didn't get the network anymore. I had to really connect the Raspberry
+
+25:06.160 --> 25:16.080
+Pi to the keyboard and monitor. So here's the PCB. It's a work of art. It's all through whole
+
+25:16.080 --> 25:24.960
+components. Don't ask me why. The inputs are voltage dividers, so learning that the blue resistors
+
+25:24.960 --> 25:32.160
+are the more precise one finally paid off after, like, 40 years of my life. Here's the battery-backed
+
+25:32.160 --> 25:41.360
+RTC. There's a power LED and an alert LED connected to the GPIO. This is nice. This is a driver I see
+
+25:41.360 --> 25:48.800
+for the relays and also for the LEDs because these are powered in five volts, not 3.3. And there's
+
+25:48.800 --> 25:52.960
+also, this is nice if somebody wanted to hack further on it. These are test pins and they are
+
+25:52.960 --> 25:59.760
+connected to eight more GPIOs on the Raspberry Pi thing. But there's something really weird here
+
+25:59.760 --> 26:08.800
+because this part, these Q-terminals are not exposed. They're unused. And this is a bias
+
+26:08.800 --> 26:14.400
+resistor. This is a terminal resistor. This is another RS485 transducer because remember that
+
+26:14.400 --> 26:19.520
+it was connected through USB. And it actually works. I have no idea why it's there. But if you
+
+26:19.520 --> 26:23.440
+look at the website, there is probably an older version of the board where you can actually
+
+26:24.080 --> 26:29.520
+read here common A and B. So at some point they wanted to use it. And then they didn't so
+
+26:31.280 --> 26:36.080
+on the brochure picture, this is not used on the website picture. They still have the older version.
+
+26:36.080 --> 26:50.960
+And that's it.

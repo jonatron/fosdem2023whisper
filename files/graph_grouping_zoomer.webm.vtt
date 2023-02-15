@@ -1,0 +1,856 @@
+WEBVTT
+
+00:00.000 --> 00:12.000
+The next board is on graph aggregation, graph grouping, especially on streaming graphs.
+
+00:12.000 --> 00:18.000
+Graph grouping is a really interesting challenge because we've all seen individualizations,
+
+00:18.000 --> 00:20.000
+hairballs, and complex graphs.
+
+00:20.000 --> 00:25.000
+What graph grouping allows you is ready to pick these graphs, group them by certain attributes,
+
+00:25.000 --> 00:30.000
+and you have kind of these better nodes that then can be selectively expanded.
+
+00:30.000 --> 00:35.000
+But you can also then, on a group graph, which is mostly a monopod type graph, in many cases,
+
+00:35.000 --> 00:38.000
+you can also run graph analytics, which is a really interesting problem.
+
+00:38.000 --> 00:46.000
+So I'm really excited to have Christopher here because both working on streaming graphs
+
+00:46.000 --> 00:51.000
+as well on temporary graphs with graph grouping is a really challenging and interesting aspect.
+
+00:51.000 --> 00:58.000
+So I'm really looking forward to the talk, and so without further ado, I come to the graph network.
+
+00:58.000 --> 01:02.000
+Yeah, thanks.
+
+01:02.000 --> 01:08.000
+Yeah, so thanks for that introduction and also thanks for accepting my abstract for this talk.
+
+01:08.000 --> 01:10.000
+Yeah, my name is Christopher Rost.
+
+01:10.000 --> 01:15.000
+I'm a PhD student of the University of Leipzig, and I'm currently writing my thesis,
+
+01:15.000 --> 01:21.000
+so I'm glad that I bring some free time to doing this talk.
+
+01:21.000 --> 01:30.000
+Yeah, so about us or our team, so that's me, and I have also a master's student working on this project.
+
+01:30.000 --> 01:39.000
+We called Graph Stream Zoomer, and this project is a result of two master's thesis of our university
+
+01:39.000 --> 01:47.000
+from Lia Salman and Rana Nurideen, and I think it's also nice to show the result of a master's thesis here
+
+01:47.000 --> 01:50.000
+at the FOSTEM.
+
+01:50.000 --> 01:53.000
+At the top is our professor of the database department.
+
+01:53.000 --> 01:55.000
+Yeah, just to say that.
+
+01:55.000 --> 01:59.000
+Okay, what you should take away from this talk.
+
+01:59.000 --> 02:08.000
+So you will see what the property Graph Stream is and why it's important to have the streaming idea
+
+02:08.000 --> 02:15.000
+inside the Graph topic, and second why you should or should not group a Graph Stream,
+
+02:15.000 --> 02:20.000
+and then you will learn what the Graph Stream Zoomer, so this specific project is,
+
+02:20.000 --> 02:49.000
+and the main idea behind it, because we provided Java API to do that.
+
+02:49.000 --> 02:54.000
+Okay, let's just start what is an event stream.
+
+02:54.000 --> 02:57.000
+I think I don't can skip that maybe.
+
+02:57.000 --> 03:03.000
+So we say that anything that happens as a specific time and that can be recorded is an event,
+
+03:03.000 --> 03:12.000
+and if an event stream is now stream of these events, so a sequence that is ordered by time.
+
+03:12.000 --> 03:20.000
+So and I think everyone knows why we need event processing, so we cannot store everything into a database or whatever to analyze it.
+
+03:20.000 --> 03:27.000
+So I want to identify these meaningful events and respond to them as quickly as possible.
+
+03:27.000 --> 03:30.000
+Okay, what is now a Graph Stream?
+
+03:30.000 --> 03:37.000
+A Graph Stream is an event stream where each event is a Graph element or some Graph update.
+
+03:37.000 --> 03:41.000
+Yeah, that could be edges, could be vertices, triples or whatever.
+
+03:41.000 --> 03:44.000
+And a Graph Update could be a modification of this.
+
+03:44.000 --> 03:51.000
+For example, the addition of an edge, the removal of an edge, the addition of a property or an edge or whatever.
+
+03:51.000 --> 03:54.000
+So this is just an overview.
+
+03:54.000 --> 03:57.000
+Okay, why should I use now a Graph Stream?
+
+03:57.000 --> 04:10.000
+Because I can execute on this Graph Stream all algorithms and also all mathematical stuff from Graph Theory on this stream of Graph Data.
+
+04:10.000 --> 04:17.000
+For example, calculate page strength concurrently with the evolving Graph of the Graph Stream.
+
+04:17.000 --> 04:24.000
+Okay, I can update my analysis results with a low latency if I combine that in a stream processing engine.
+
+04:24.000 --> 04:34.000
+And my goal is to monitor the changes or monitor the changes in the Graph or to create some notification or some reactivity.
+
+04:34.000 --> 04:41.000
+For example, if something, some average goes over threshold, then I create a notification.
+
+04:41.000 --> 04:47.000
+Okay, by now, the Graph Stream could be very heterogeneous.
+
+04:47.000 --> 04:53.000
+That means it consists of many different types and it can also occur on a high frequency.
+
+04:53.000 --> 04:59.000
+So it is advisable to summarize the Graph elements in a specific way.
+
+04:59.000 --> 05:04.000
+And we can summarize Graph elements by three criteria.
+
+05:04.000 --> 05:08.000
+For example, by time, that means Graph elements that belong together.
+
+05:08.000 --> 05:12.000
+For example, the time window, we group them together by structure.
+
+05:12.000 --> 05:17.000
+That means, for example, edges that share the same source or target vertex can be grouped together.
+
+05:17.000 --> 05:24.000
+And by content, that means vertices and edges that share the same label or a specific value of a property.
+
+05:24.000 --> 05:29.000
+And we introduced for our algorithm so-called grouping key functions.
+
+05:29.000 --> 05:34.000
+That means it is a function that maps a vertex or an edge to a grouping key.
+
+05:34.000 --> 05:38.000
+And that could be everything that is inside this vertex or edge.
+
+05:38.000 --> 05:42.000
+It could be labeled, temporal information, some kind of property or whatever.
+
+05:42.000 --> 05:48.000
+So you can map everything that is represented by a vertex or edge to a key function or to a key.
+
+05:48.000 --> 05:51.000
+And on this key, we group the Graph.
+
+05:51.000 --> 06:01.000
+So that means, at the end, the result is again a Graph stream, but the grouped representation of that.
+
+06:01.000 --> 06:04.000
+Okay, now you can question, okay, why I need this?
+
+06:04.000 --> 06:06.000
+So what are the applications of that?
+
+06:06.000 --> 06:10.000
+You can think about it as a pre-processing step.
+
+06:10.000 --> 06:19.000
+For example, before you calculate the page frames, you just group the vertices to the city attribute of users together or something like this.
+
+06:19.000 --> 06:22.000
+You also use it as a pre-processing step.
+
+06:22.000 --> 06:26.000
+Second application could be as a post-processing step.
+
+06:26.000 --> 06:32.000
+For example, after you apply the Graph stream analysis, for example, a community detection,
+
+06:32.000 --> 06:40.000
+you can now group on this cluster ID with our grouping algorithm to summarize the different communities together.
+
+06:40.000 --> 06:45.000
+You can also use it to understand the Graph stream in more detail.
+
+06:45.000 --> 06:52.000
+For example, okay, just to know which vertex or edge types exist in my Graph stream,
+
+06:52.000 --> 07:01.000
+how frequent these different types arrive, or how vertices and edges with different characteristics are connected together.
+
+07:01.000 --> 07:08.000
+So just to get deeper insights, or if you use our aggregation functions or aggregation,
+
+07:08.000 --> 07:11.000
+for example, counting or calculating an average on that,
+
+07:11.000 --> 07:18.000
+you can also get or reveal some hidden information that you would not see in the Graph stream itself.
+
+07:18.000 --> 07:21.000
+Okay, so this is an introduction.
+
+07:21.000 --> 07:29.000
+Now I explain the ideas behind this Graph stream zoomer application just by an example,
+
+07:29.000 --> 07:32.000
+and then afterwards I summarize this.
+
+07:32.000 --> 07:42.000
+For example, we're using bike rental data that can have two different Graph schemas.
+
+07:42.000 --> 07:45.000
+I named them A and B.
+
+07:45.000 --> 07:52.000
+So the first Graph schema A is that a bike rental is an edge between two station nodes.
+
+07:52.000 --> 07:54.000
+You see it on the left side.
+
+07:54.000 --> 08:01.000
+So a station has several properties like the name, the number of bikes, latitude, longitude, and so on.
+
+08:01.000 --> 08:09.000
+And the trip edge has properties like the user ID, so who rented the bike, which bike was used by the bike ID,
+
+08:09.000 --> 08:16.000
+and from and to, so when this trip happens, until when, and the duration, for example, in seconds.
+
+08:16.000 --> 08:18.000
+So this is schema A on the left side.
+
+08:18.000 --> 08:21.000
+On the right side we have a more heterogeneous schema.
+
+08:21.000 --> 08:25.000
+So we have also stations and trips as vertices here.
+
+08:25.000 --> 08:31.000
+And we have also bike nodes and user nodes with several properties.
+
+08:31.000 --> 08:46.000
+So I just divided into this because I can explain the examples that follow a bit better compared to just using a simple schema like here on the left side.
+
+08:46.000 --> 08:52.000
+Okay, so how a Graph stream of these schemas could look like this.
+
+08:52.000 --> 08:58.000
+Yeah, of schema A I have just these trip edges between two stations and all information inside.
+
+08:58.000 --> 09:05.000
+And from schema B I have here the trip nodes connected with all the other vertex types.
+
+09:05.000 --> 09:11.000
+So this is just an exemplary view how a stream of this graph data could look like.
+
+09:11.000 --> 09:20.000
+Okay, so now begin with a very simple or a simple example of our grouping algorithm.
+
+09:20.000 --> 09:29.000
+So the input of the grouping is the graph stream, I think it's clear, and we need a grouping configuration.
+
+09:29.000 --> 09:34.000
+And the grouping configuration consists of five attributes.
+
+09:34.000 --> 09:39.000
+The first is the window because we are doing windowing on our graph stream.
+
+09:39.000 --> 09:45.000
+So I can define a window size, which is here, for example, 10 minutes.
+
+09:45.000 --> 09:54.000
+And then VG key are the vertex grouping keys, that means the key functions that leads to the grouping of vertices.
+
+09:54.000 --> 10:02.000
+EG key are the edge grouping keys, that means the key functions that are needed to group the edges together.
+
+10:02.000 --> 10:06.000
+And we also have a collection of vertex aggregate functions.
+
+10:06.000 --> 10:15.000
+This is VA-GG and EA-GG are the group of edge aggregate functions.
+
+10:15.000 --> 10:21.000
+So the four on the bottom are just an array of several key functions and aggregate functions.
+
+10:21.000 --> 10:29.000
+Okay, and now having the input stream and applying that grouping, we get a result.
+
+10:29.000 --> 10:38.000
+And just looking like this, because we define for the vertex grouping keys a function that maps every vertex to an integer value.
+
+10:38.000 --> 10:46.000
+And that results in, it doesn't matter which vertex exists in our graph stream, we group everything together to one vertex.
+
+10:46.000 --> 10:50.000
+And that's the white one with an empty label.
+
+10:50.000 --> 10:57.000
+And the same for edges, that means every edge that exists in our graph stream, we group them together to a super edge,
+
+10:57.000 --> 11:03.000
+we call them super vertex and super edge that is displayed here in gray.
+
+11:03.000 --> 11:11.000
+And because of the count aggregate functions, we add a new property to the super vertex with the count of all vertices that are grouped together.
+
+11:11.000 --> 11:16.000
+And a new property to the super edge with also the count value.
+
+11:16.000 --> 11:21.000
+And this is now our result for every window that we defined on the graph stream.
+
+11:21.000 --> 11:24.000
+For example, here the first window, second window and so on.
+
+11:24.000 --> 11:30.000
+That means we are creating a stream of grouped graphs here.
+
+11:30.000 --> 11:34.000
+Okay, that is for schema A and that's the most zoomed out view.
+
+11:34.000 --> 11:38.000
+So I group everything together that exists in the graph stream.
+
+11:38.000 --> 11:48.000
+For schema B and same grouping configuration, it looks the same because it doesn't matter which type label exists, so we group everything together.
+
+11:48.000 --> 11:55.000
+So we have just different counts because we have a bit more vertices and edges and also for the second window it looks the same.
+
+11:55.000 --> 12:00.000
+Okay, so this is my first example, so the most zoomed out way.
+
+12:00.000 --> 12:06.000
+The second example are called a graph stream schema.
+
+12:06.000 --> 12:16.000
+So that means now we are using as a vertex grouping key a function that maps a vertex to its label and a function that maps the edge to its label.
+
+12:16.000 --> 12:19.000
+So what's the result here?
+
+12:19.000 --> 12:29.000
+Now our node has a label station and the count because the count aggregate function stays the same and our edge has a label trip.
+
+12:29.000 --> 12:37.000
+So it's more or less the same because our graph streamer has just one node type and one edge type and that's it also for the second window.
+
+12:37.000 --> 12:42.000
+Now it gets a bit more interesting when we are using schema B.
+
+12:42.000 --> 12:49.000
+The result here with the same grouping configuration as before is now this.
+
+12:49.000 --> 12:59.000
+That means every vertex is grouped by their label and every edge is grouped by their label and now I have like a schema representation of my graph stream.
+
+12:59.000 --> 13:04.000
+And again with all counts because we are just using count aggregation.
+
+13:04.000 --> 13:13.000
+Okay, and that's for the second window and so on and so on, I just leave here the properties.
+
+13:13.000 --> 13:23.000
+Okay, the next example we stay with the vertex grouping keys and edge grouping keys, but now I added several aggregate functions to vertices and edges.
+
+13:23.000 --> 13:30.000
+For example I say okay for the vertices I want to calculate the average of all available bikes for these stations.
+
+13:30.000 --> 13:40.000
+And for the edge aggregate functions I want to have the minimum, maximum and average duration that a trip between two vertices has.
+
+13:40.000 --> 13:43.000
+And the result would be this.
+
+13:43.000 --> 13:49.000
+So same grouped graph, but now I have three additional properties on the edges.
+
+13:49.000 --> 13:59.000
+Minimum duration, it's in seconds here, maximum duration and average duration and the average bikes available on this station also as a new property.
+
+13:59.000 --> 14:03.000
+Same for the second window.
+
+14:03.000 --> 14:11.000
+And now my last example, it is, I call it, not the last example, there's one more.
+
+14:11.000 --> 14:19.000
+So I added now here a second vertex grouping key function and that's an important thing of the graph stream group.
+
+14:19.000 --> 14:22.000
+You can also implement your own grouping key function.
+
+14:22.000 --> 14:32.000
+For example this one called getDistrict consumes the latitude and longitude property of the vertices and then calculates like a district identifier.
+
+14:32.000 --> 14:37.000
+For example here of Priscilla, whatever, so in which district that belongs to.
+
+14:37.000 --> 14:44.000
+And then the graph is grouped on this representing district identifier.
+
+14:44.000 --> 14:49.000
+And we also say that for the edges we want to group the edges on the user type.
+
+14:49.000 --> 14:57.000
+So that means for every edge, so in this data set we have a user type subscriber and something else we will see it shortly.
+
+14:57.000 --> 15:04.000
+So that means for every edge I get new now two edges, one for this one user type, one for the other one.
+
+15:04.000 --> 15:08.000
+And also here some aggregate functions added.
+
+15:08.000 --> 15:11.000
+And the result is something like this.
+
+15:11.000 --> 15:15.000
+So here exemplified for three stations.
+
+15:15.000 --> 15:22.000
+And here the district ID one, two, and three and the average latitude and longitude for example for visualization,
+
+15:22.000 --> 15:24.000
+proposes to place it on the map.
+
+15:24.000 --> 15:31.000
+And for the trips between two stations or between two district representatives,
+
+15:31.000 --> 15:36.000
+we calculated also the minimum, maximum and average duration and counted them.
+
+15:36.000 --> 15:48.000
+And you see here the green edges are for the user type customer and the red edges are for user type subscriber.
+
+15:48.000 --> 15:56.000
+So and the last example is then this one here if I say okay as vertex grouping key functions,
+
+15:56.000 --> 15:59.000
+I say please extract me the identifier of that.
+
+15:59.000 --> 16:05.000
+That means every vertex that exists in the graph stream is placed here and also for the edge identifier.
+
+16:05.000 --> 16:10.000
+That means since we have unique identifiers, every vertex and edges are placed here.
+
+16:10.000 --> 16:16.000
+And this is more or less like a snapshot of the current state of this graph stream for the specific window.
+
+16:16.000 --> 16:18.000
+So therefore I call that zoomed in.
+
+16:18.000 --> 16:25.000
+It's the most zoomed in configuration that you could use.
+
+16:25.000 --> 16:30.000
+Okay, you could imagine implementing this is not that easy.
+
+16:30.000 --> 16:36.000
+So the master students found a way using Apache Flink and its table API.
+
+16:36.000 --> 16:43.000
+So everything works distributed since we are using just the API functions of Apache Flink.
+
+16:43.000 --> 16:47.000
+But we also figured out several implementation challenges.
+
+16:47.000 --> 16:52.000
+So first was to find a good graph representation.
+
+16:52.000 --> 16:56.000
+Second one is since we are creating a workflow of this graph stream,
+
+16:56.000 --> 17:02.000
+we have to ensure the chronological ordering of every step in this workflow.
+
+17:02.000 --> 17:06.000
+As a third point is also you want to ensure the scalability.
+
+17:06.000 --> 17:14.000
+Since if we scale out this algorithm, the scalability should be also high.
+
+17:14.000 --> 17:21.000
+And also keep the state as minimum as possible and provide a low latency and high throughput.
+
+17:21.000 --> 17:26.000
+So these were several challenges the master student solved quite well.
+
+17:26.000 --> 17:35.000
+And at the end we created a grouping operator looking like this.
+
+17:35.000 --> 17:37.000
+I don't want to get into detail.
+
+17:37.000 --> 17:43.000
+This is just an architectural overview of every Flink steps we used.
+
+17:43.000 --> 17:48.000
+What is quite interesting is that we created like an operator encapsulation of this.
+
+17:48.000 --> 17:54.000
+That means the operator consumes a graph stream at input and has a graph stream as output.
+
+17:54.000 --> 17:57.000
+That means you can combine several of these grouping operators.
+
+17:57.000 --> 18:03.000
+Or if you define another graph stream algorithm that produces a graph stream as output,
+
+18:03.000 --> 18:06.000
+you can just put them before.
+
+18:06.000 --> 18:10.000
+So you can like chaining these grouping operators together.
+
+18:10.000 --> 18:18.000
+And like I said, this consists of the mapping of the input data, the duplication of vertices,
+
+18:18.000 --> 18:26.000
+grouping of vertices and edges, and then mapping it to an output graph stream.
+
+18:26.000 --> 18:28.000
+How an API would look like?
+
+18:28.000 --> 18:34.000
+It looks a bit messy, but I think it's quite fast clear what's happening here.
+
+18:34.000 --> 18:42.000
+So first you have to define the execution environment of Flink.
+
+18:42.000 --> 18:48.000
+Then we read the data from some streaming source, for example, a socket source,
+
+18:48.000 --> 18:53.000
+or some Kafka stream, or whatever you want, whatever Flink supports in our case.
+
+18:53.000 --> 19:00.000
+Then we map it to a graph stream object, which is the internal representation of our stream.
+
+19:00.000 --> 19:04.000
+The interesting part here, you define the grouping operator.
+
+19:04.000 --> 19:07.000
+So in the middle, that's the grouping config I showed you in the examples.
+
+19:07.000 --> 19:09.000
+You can define it here by an API.
+
+19:09.000 --> 19:11.000
+You set the window size.
+
+19:11.000 --> 19:14.000
+You set the vertex and edge grouping keys.
+
+19:14.000 --> 19:17.000
+You set the aggregate functions and so on.
+
+19:17.000 --> 19:21.000
+And at the end, you just execute this operator on this graph stream,
+
+19:21.000 --> 19:27.000
+and then you can define a thing or just print it to the console, or whatever you want.
+
+19:27.000 --> 19:34.000
+So that's the operator call, how you define it in the API.
+
+19:34.000 --> 19:42.000
+And current state, the students are about at 90% of the complete implementation of that.
+
+19:42.000 --> 19:51.000
+We figured out some bugs at the SQL or at the table API of Flink that were not fixed yet,
+
+19:51.000 --> 19:54.000
+so we had to define some workaround that cost us time.
+
+19:54.000 --> 19:58.000
+But like I said, we found the workaround.
+
+19:58.000 --> 20:01.000
+And the next steps are that we plan an evaluation.
+
+20:01.000 --> 20:04.000
+So how is the latency and throughput of this complete system?
+
+20:04.000 --> 20:08.000
+And we want to test it on real-world and synthetic graph streams.
+
+20:08.000 --> 20:11.000
+And maybe then publish some results, so let's see.
+
+20:11.000 --> 20:19.000
+And also, the user-defined key and aggregate functions are still under development.
+
+20:19.000 --> 20:24.000
+Okay, then that's it. That's all folks.
+
+20:24.000 --> 20:29.000
+Please check out our GitHub repository, or maybe you want to contribute, so we are open for this.
+
+20:29.000 --> 20:36.000
+The two links here at the bottom are also the icons are two other projects.
+
+20:36.000 --> 20:38.000
+The one is Gradube.
+
+20:38.000 --> 20:43.000
+This is a big temporary graph processing engine also based on Apache Flink.
+
+20:43.000 --> 20:51.000
+So there where I'm also a main contributor to that project, which was initially created by Marty Nugans,
+
+20:51.000 --> 20:54.000
+who's now working at Neo4j.
+
+20:54.000 --> 20:59.000
+And also, the temporary graph explorer is a user interface for that system,
+
+20:59.000 --> 21:07.000
+where you can play around with the evolution of a graph, but in a historical data set.
+
+21:07.000 --> 21:12.000
+Okay, so that's it. And please ask questions. Thanks.
+
+21:12.000 --> 21:21.000
+Yeah, please.
+
+21:21.000 --> 21:29.000
+On one slide, you said a problem was to decide on the, on slide 20, I think, as well.
+
+21:29.000 --> 21:30.000
+Yeah.
+
+21:30.000 --> 21:33.000
+The optimal graph representation in the streaming model.
+
+21:33.000 --> 21:34.000
+Yeah.
+
+21:34.000 --> 21:37.000
+What was the answer?
+
+21:37.000 --> 21:43.000
+And so the question was, what, so we had this challenge to find the optimal graph representation,
+
+21:43.000 --> 21:44.000
+and what was the answer?
+
+21:44.000 --> 21:49.000
+The answer was a triple stream, but a rich triple stream, we called it,
+
+21:49.000 --> 21:56.000
+since two property graph vertices are connected with an edge.
+
+21:56.000 --> 22:04.000
+That means every vertex consists of the label and possibly a big set of key value pairs as properties,
+
+22:04.000 --> 22:06.000
+and the same for the edges.
+
+22:06.000 --> 22:12.000
+And this was our optimal, because you can then model everything with this model.
+
+22:12.000 --> 22:18.000
+But the counterpart of this was in here that we have to do a vertex de-deplication.
+
+22:18.000 --> 22:21.000
+For example, if you have a self-loop, so from one vertex to another one,
+
+22:21.000 --> 22:26.000
+we have a duplicate of that vertex, so we have to de-deplicate it afterwards for this model.
+
+22:26.000 --> 22:28.000
+So this was one counterpart.
+
+22:28.000 --> 22:35.000
+Yeah, but we figured out that using every concept of the property graph model there as a triple is,
+
+22:35.000 --> 22:41.000
+that was the best choice for the students.
+
+22:41.000 --> 22:43.000
+So another, yeah?
+
+22:43.000 --> 22:50.000
+Would you comment a bit more on the scalability, like what graph size should test this on?
+
+22:50.000 --> 22:55.000
+Yeah, so the question was some words about the scalability.
+
+22:55.000 --> 23:03.000
+The scalability is an open point of future work, so we don't have concrete results of that.
+
+23:03.000 --> 23:11.000
+We tested it with some city bike data that we interpreted as a stream, so some historical data.
+
+23:11.000 --> 23:19.000
+And we could process, I think it was about 600,000 edges in a few seconds.
+
+23:19.000 --> 23:28.000
+But this is just some first results, and we have not tried it on big and high-frequent graph streams on a cluster.
+
+23:28.000 --> 23:37.000
+Because we have huge flint clusters at our university, so we can benchmark the scalability of that in a later step.
+
+23:37.000 --> 23:39.000
+Yeah, thanks.
+
+23:39.000 --> 23:40.000
+Yeah?
+
+23:40.000 --> 23:45.000
+These aggregate functions, are they part of, you know, like a Java API, and how do you define them?
+
+23:45.000 --> 23:49.000
+Yeah, so the question was how we define the aggregate functions.
+
+23:49.000 --> 23:54.000
+So we have a set of predefined aggregate functions, like the count, average, min, max,
+
+23:54.000 --> 23:59.000
+and then you have an interface you can implement against, so there's an interface called aggregate function,
+
+23:59.000 --> 24:10.000
+and then you have to implement, I think, two or three functions, and then you can define your own and use it then here on, yeah, there.
+
+24:10.000 --> 24:19.000
+Where you give the classes of the account and average property, you can give your own class, and then it will be used.
+
+24:19.000 --> 24:20.000
+Yeah?
+
+24:20.000 --> 24:27.000
+Could you elaborate more on the real-life use cases or real-life applications?
+
+24:27.000 --> 24:33.000
+So the question is if we elaborate more real-life use cases and real-life questions.
+
+24:33.000 --> 24:35.000
+So applications.
+
+24:35.000 --> 24:37.000
+Applications.
+
+24:37.000 --> 24:45.000
+So since, yeah, so we are in, so I'm at the university, that means we are missing real-world data a lot,
+
+24:45.000 --> 24:51.000
+and we need also some input from companies to provide us with real-world data that we can use.
+
+24:51.000 --> 25:01.000
+So use cases could be, we also have to, we only have this bike sharing stuff or Twitter data and whatever,
+
+25:01.000 --> 25:06.000
+and I think if you have something like this aggregated function, like here an average property,
+
+25:06.000 --> 25:13.000
+you can use, because at the end it's a time series of changing values, for example, of the average property,
+
+25:13.000 --> 25:17.000
+and of like defining a threshold and get the notification afterwards.
+
+25:17.000 --> 25:21.000
+I think this is maybe one good application afterwards.
+
+25:21.000 --> 25:27.000
+So to, for example, if you have network traffic, you see, okay, now the average, I don't know, packet size is increasing.
+
+25:27.000 --> 25:30.000
+Now I get notified, for example, like this.
+
+25:30.000 --> 25:32.000
+But this could be an application, yeah.
+
+25:32.000 --> 26:01.000
+The idea was to use like a video stream for that, but then the question is,
+
+26:01.000 --> 26:08.000
+how much graph that is, could that maybe not be done just in a regular stream processing way?
+
+26:08.000 --> 26:16.000
+So I think this is just advisable to use that if you have some quite complex relationships between entities,
+
+26:16.000 --> 26:25.000
+then you can use this system besides just an ordinary stream processing engine or complex event processing engine.
+
+26:25.000 --> 26:33.000
+So I think the unique point of this is to have the graph aspects into the streaming world, yeah.
+
+26:33.000 --> 26:35.000
+So any further questions?
+
+26:35.000 --> 26:36.000
+Yeah.
+
+26:36.000 --> 26:38.000
+So could the events are only additive, right?
+
+26:38.000 --> 26:43.000
+So you can only add to the graph, but not delete from the graph by streaming it, right?
+
+26:43.000 --> 26:47.000
+Yes, so at the moment everything is interpreted as an insult only,
+
+26:47.000 --> 26:53.000
+but since Flink supports everything, like also updates and also deletions,
+
+26:53.000 --> 26:58.000
+it is thinkable about some future work that we also can support this.
+
+26:58.000 --> 27:03.000
+Because at the end, the result of us is also, since we are using windowing,
+
+27:03.000 --> 27:05.000
+it's also an insult only stream at the end,
+
+27:05.000 --> 27:10.000
+but if we maybe think about to remove the windowing aspect,
+
+27:10.000 --> 27:14.000
+so they have something like a continuous aggregation or whatever,
+
+27:14.000 --> 27:20.000
+then we need to support like a continuous addition on the end
+
+27:20.000 --> 27:26.000
+to update already existing aggregating results.
+
+27:26.000 --> 27:29.000
+Okay, any further questions?
+
+27:29.000 --> 27:51.000
+Thank you again. Thanks.

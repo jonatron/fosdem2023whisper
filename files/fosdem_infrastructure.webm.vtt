@@ -1,0 +1,787 @@
+WEBVTT
+
+00:00.000 --> 00:11.920
+Okay. Hello, everyone, and welcome to the last lightning talk of the conference. I hope
+
+00:11.920 --> 00:16.560
+you've enjoyed yourselves. This will be the FOSDEM infrastructure review, same as every
+
+00:16.560 --> 00:30.640
+year presented by Richard and Basti. So normally I do this thing, but Basti has been helping
+
+00:30.640 --> 00:36.920
+a ton and the ball of spaghetti and spit and duct tape, which I left him. He turned it
+
+00:36.920 --> 00:42.720
+to into something usable. So I'm just going to sit here on the side and I'm here on for
+
+00:42.720 --> 00:47.360
+the Q&A. But for the rest, it's Basti and it's his first public talk for Realty, so
+
+00:47.360 --> 00:59.440
+give him a big round of applause. Well, thank you. I hope I will not screw this one up.
+
+00:59.440 --> 01:05.160
+Okay. So we'll have about 15 minutes and 10 minutes of talk and five minutes for Q&A,
+
+01:05.160 --> 01:12.080
+and I hope it's somewhat interesting to you. First, the facts. The core infrastructure
+
+01:12.080 --> 01:18.920
+hasn't changed that much since the last FOSDEM 2020. We're still running on its Cisco ASR
+
+01:18.920 --> 01:27.360
+10K for routing, ACLs, NAT64, and DHCP. We have already reused several switches that
+
+01:27.360 --> 01:38.200
+were already here from the last FOSDEM. They're owned by FOSDEM. These are Cisco C73750 switches.
+
+01:38.200 --> 01:43.320
+We had our old servers, which are now turning 10 this year. They were still here and they
+
+01:43.320 --> 01:50.200
+will be replaced next year. We have done, like all the years before, everything with
+
+01:50.200 --> 01:55.360
+Prometheus, Loki, and Grafana for monitoring our infrastructure, because that's what helps
+
+01:55.360 --> 02:03.040
+us running all the conference here. And we've built some public dashboards and we just put
+
+02:03.040 --> 02:09.840
+it out to a VM outside of ULB because we were running out of bandwidth, like the years before,
+
+02:09.840 --> 02:18.360
+and I'll come to that back later. We have a quite beefy video infrastructure. You might
+
+02:18.360 --> 02:25.600
+have seen this one here. It's a video capturing device. It's called a video box here at FOSDEM.
+
+02:25.600 --> 02:30.880
+It's all public. It's all open source, except one piece that's in there. You can find it
+
+02:30.880 --> 02:37.800
+on GitHub if you try to build it yourself. Go ahead, just grab the GitHub repo and clone
+
+02:37.800 --> 02:43.840
+it. These devices, there's two of them, one at the camera, one here for the presenters'
+
+02:43.840 --> 02:50.640
+laptop. They sent their streams to a big render farm that we have over in the K building, where
+
+02:50.640 --> 02:59.640
+every year our render farm is running on some laptops. So laptops sent the streams off to
+
+02:59.640 --> 03:04.560
+the cloud from Hatsner and from there we just distribute it to the world. So everyone at
+
+03:04.560 --> 03:14.240
+home can see the talks. We have some sort of semi-automated reverb on cutting process.
+
+03:14.240 --> 03:19.240
+Those of you who have been talking here maybe have known S-Review for years. This is the
+
+03:19.240 --> 03:24.400
+first time it's running on Kubernetes. So we are trying to go cloud native as well with
+
+03:24.400 --> 03:34.120
+our infrastructure. Just to show how all has been held together. This is our video boxes.
+
+03:34.120 --> 03:42.360
+I don't know if you can see it. We got those black magic encoders here that are turning
+
+03:42.360 --> 03:49.400
+the signals that we get, like SDI, HDMI, into a useful signal that we can process with our
+
+03:49.400 --> 03:55.160
+banana pie that we have in there. Everything is wired up to a dump switch here and then
+
+03:55.160 --> 04:01.800
+we go out like here and have our own switching infrastructure inside those boxes. There's
+
+04:01.800 --> 04:07.200
+some SSD below here where we just, in case of network failure, dump everything to the
+
+04:07.200 --> 04:13.160
+SSD as well. So hopefully everything that was been talked about at the conference is
+
+04:13.160 --> 04:21.000
+still captured and available in case of a network breakdown. Those boxes also have a
+
+04:21.000 --> 04:27.280
+nice display for the speaker so we can see if everything is running or it's not running,
+
+04:27.280 --> 04:31.080
+which makes it easy for people to operate these boxes. You don't have to be a video
+
+04:31.080 --> 04:35.560
+pro. You just have to wire yourself up to the box. You see a nice Fostum logo and see
+
+04:35.560 --> 04:42.240
+okay, everything is working and you're done and everything gets sound set out. This is
+
+04:42.240 --> 04:48.960
+like how the video system is actually working. All this can be found on the GitHub. You don't
+
+04:48.960 --> 04:56.440
+have to take screenshots for that. If you would like to see it, we will tear down this
+
+04:56.440 --> 05:01.040
+room afterwards so everyone can have a look at the infrastructure we're using because
+
+05:01.040 --> 05:08.160
+it's not being used after this talk. You see it's quite some interesting things to do.
+
+05:08.160 --> 05:15.040
+This is the instructions that all our volunteers get when they wire up the whole buildings
+
+05:15.040 --> 05:22.360
+here on one day on Friday. So they are not here but they should be given some round of
+
+05:22.360 --> 05:27.400
+applause because they are volunteers that are doing really the hard work and building
+
+05:27.400 --> 05:41.480
+up on one day the complete Fostum. So maybe it's time for round of applause for them.
+
+05:41.480 --> 05:48.760
+So here we have the other thing. This is also on the GitHub where you can see where is something
+
+05:48.760 --> 05:53.320
+coming from. We have the room sound system. This is what you're hearing me through and
+
+05:53.320 --> 05:57.640
+we have a camera with audio gear and speaker laptops and it's all getting pushed down until
+
+05:57.640 --> 06:05.040
+someone reaches your device down here. There's a ton of services processing it in between
+
+06:05.040 --> 06:13.400
+and this is almost all done with open source software. Expect for the encoder that's running
+
+06:13.400 --> 06:19.840
+in there which is from Blackmagic Design. So how is it processed? We have a rendering
+
+06:19.840 --> 06:27.960
+farm. This is the laptops. It's 27 this year. For those of you who don't know those laptops
+
+06:27.960 --> 06:33.800
+are being sold after Fostum. So if you want one you can grab one. This year they are already
+
+06:33.800 --> 06:39.920
+gone but for next year maybe you want to have a cheap device. You can have them with everything
+
+06:39.920 --> 06:45.800
+that's on them because we literally don't care for that. You can have it because after
+
+06:45.800 --> 06:51.760
+things have been processed after the Fostum you can see it. We have some racks where we
+
+06:51.760 --> 07:03.280
+just put them four wise and we have 27 of them. We have some switch infrastructure that
+
+07:03.280 --> 07:08.720
+is used for processing all that stuff and this one's not running out of bandwidth but
+
+07:08.720 --> 07:15.400
+we're coming back to what's running out of bandwidth. You might see this mess over here.
+
+07:15.400 --> 07:24.240
+This is our internet and looks like every common internet on the planet and this is like our
+
+07:24.240 --> 07:28.760
+safety net. We have a big box here where all the streams go and this will be sent out to
+
+07:28.760 --> 07:37.000
+Bulgaria to the video team right after Fostum so we have a really off-site copy of everything.
+
+07:37.000 --> 07:45.520
+So the challenges for this year. DNS64. All the years we've been running on bind 9 since
+
+07:45.520 --> 07:56.680
+ages and we switched to Core DNS just like testing it on Sunday of Fostum 2020. We really
+
+07:56.680 --> 08:04.120
+saw a significant reduction in CPU usage and that's why we stuck to Core DNS since then
+
+08:04.120 --> 08:08.840
+and this year we also replaced the remaining bind installations that we handled for all
+
+08:08.840 --> 08:14.640
+the internal DNS and all other recursive stuff that's been used here to provide you internet
+
+08:14.640 --> 08:20.880
+access. Richie always used to give you some timelines and that's what I'm trying to do
+
+08:20.880 --> 08:30.840
+as well. There were times when it was mentally challenging for people building up Fostum.
+
+08:30.840 --> 08:36.120
+We got better by year by year by year by doing some sort of automation and getting people
+
+08:36.120 --> 08:45.520
+used to know what to do and have everything set up before that. We installed routers.
+
+08:45.520 --> 08:51.080
+You see that there's a slide. It's getting better year of the year. This year we had
+
+08:51.080 --> 08:57.480
+like a very, we thought it would be okay from what we know. We just set it up in January
+
+08:57.480 --> 09:04.320
+and everything worked. We came here on the 5th of January I think, put everything up
+
+09:04.320 --> 09:11.000
+and it just worked which is great which gives you some sort of things not to care about
+
+09:11.000 --> 09:18.000
+because there were other things to care about. The network to have it up and running here
+
+09:18.000 --> 09:22.880
+took us a bit longer this year than the last years because we were playing around with
+
+09:22.880 --> 09:30.160
+the second uplink that we got. We used to have one gigabit uplink. Last week we got
+
+09:30.160 --> 09:36.640
+a 10 gigabit uplink and we thought okay, just enable that and play with it and it turned
+
+09:36.640 --> 09:44.440
+out to be not that easy to getting up both of the BGP sessions running and doing it properly.
+
+09:44.440 --> 09:51.640
+That's why it took us a bit longer this year. The monitoring was also one thing which really
+
+09:51.640 --> 09:57.000
+helps us to understand if FOSDM is ready to go or if someone has to stay very, very late
+
+09:57.000 --> 10:05.400
+here. The last years we've been very, very good at that. Basically in January everything
+
+10:05.400 --> 10:11.960
+was done like the last of January but it's January. This time it was in the first half
+
+10:11.960 --> 10:17.960
+of January everything was set up and was running and it worked and yeah, it was really great
+
+10:17.960 --> 10:27.560
+because some people actually got some sleep at FOSDM, didn't need to stay here very long
+
+10:27.560 --> 10:34.360
+because everything was pre-made and it just go and look at the dashboard, okay, this is
+
+10:34.360 --> 10:40.720
+missing, this is missing and just okay, just have them all checked. The video build up
+
+10:40.720 --> 10:47.080
+took a bit longer this year because of we getting old and rusty at that. Also, very
+
+10:47.080 --> 10:54.720
+many new faces that have never built up such great conference. This is why we took us a
+
+10:54.720 --> 11:01.680
+bit longer and the video team also, yeah, I think they got the least amount of sleep
+
+11:01.680 --> 11:09.560
+of all of the stuff that was running the conference. This was the story so far. We closed FOSDM
+
+11:09.560 --> 11:18.120
+2020, I was also there at 2020. 2020 was really one of the best ones we ever had from a technical
+
+11:18.120 --> 11:24.600
+perspective. We had everything running via Ansible, just like one command and then wait
+
+11:24.600 --> 11:30.040
+an hour till everything is deployed and you're gone, cool, have some beer, some mate in between
+
+11:30.040 --> 11:37.920
+and everything was cool. Then we had this pandemic, just for me like a week after FOSDM
+
+11:37.920 --> 11:47.600
+everything went down. You had FOSDM 2021 and 2022, there were no conference here at ULB
+
+11:47.600 --> 11:52.480
+so we had no infrastructure to manage, it was quite okay. We had to do some other things
+
+11:52.480 --> 11:58.000
+like most of you have learned that we have a big metrics installation to run and the
+
+11:58.000 --> 12:07.520
+FOSDM conference and help you with communicating during the conference. Then there was this
+
+12:07.520 --> 12:14.440
+bad thing that the maintainer of the infrastructure left FOSDM in between these years and so Richie
+
+12:14.440 --> 12:22.080
+searched for someone who was dumb enough to do that, yeah, that's me. So this year we're
+
+12:22.080 --> 12:38.440
+back again in persona, sorry, yeah thanks. So after two years we came looking for the
+
+12:38.440 --> 12:45.080
+two machines after almost two years, like no one touched them, they rebooted one or two
+
+12:45.080 --> 12:53.760
+times due to power outages in the server cabinet, but we had a working SSH key, we had tons
+
+12:53.760 --> 12:59.320
+of updates to install after literally three years, I wonder nobody broke into the machines
+
+12:59.320 --> 13:07.360
+because they were publicly exposed on the internet, but only SSH and I think a three
+
+13:07.360 --> 13:13.960
+year old or three and a half year old Prometheus installation which was full of bugs, yeah.
+
+13:13.960 --> 13:19.280
+We noticed that the battery pack of the rate controllers have been depleted, so this was
+
+13:19.280 --> 13:27.080
+the only thing that actually happened in the three years, the batteries went to zero and
+
+13:27.080 --> 13:32.440
+didn't set themselves on fire, so everything was okay, the machines worked, just a bit
+
+13:32.440 --> 13:37.840
+of performance degradation, but everything seemed to be okay. Then we tried to run this
+
+13:37.840 --> 13:45.080
+Ansible thing from the last years and three years later Ansible has done a lot of things
+
+13:45.080 --> 13:51.760
+in the time and you want to use a current version of Ansible with that old stuff, you
+
+13:51.760 --> 13:58.400
+end up like this, this is me, yeah, start from scratch or fix all the Ansible roads,
+
+13:58.400 --> 14:06.280
+you can have a look at them, they're also on GitHub, so when we saw okay, how do we
+
+14:06.280 --> 14:14.640
+do this and said okay, Ansible be gone, we just fix it after the FOSDM because we will
+
+14:14.640 --> 14:20.960
+have to renew the service anyway and everything will change.
+
+14:20.960 --> 14:26.600
+So the service timeline, we have them service life at the eighth of January, services, DNSX4
+
+14:26.600 --> 14:31.160
+although at the mid of January, we had centralized all our locks, this was something Richie was
+
+14:31.160 --> 14:37.120
+looking for since ages, that we had easy accessible lock files for everything that's running here
+
+14:37.120 --> 14:46.280
+at the FOSDM, which is good that we had them because we could see things like oh, the internet
+
+14:46.280 --> 14:53.120
+line that was proposed to be there actually came, we did, nobody told us but it came up,
+
+14:53.120 --> 14:59.360
+you see that, we, thanks to the centralized logging, we were aware of things like that
+
+14:59.360 --> 15:07.840
+and then we could go and fire up our BGP sessions.
+
+15:07.840 --> 15:11.440
+Then two days later, we noticed okay, firing up the BGP sessions wasn't that a good idea
+
+15:11.440 --> 15:17.320
+because we lost almost all connectivity, stop it says but I don't care, yeah, I just keep
+
+15:17.320 --> 15:25.680
+talking, yeah, we lost all our connectivity and said okay, damn it, we're in some sort
+
+15:25.680 --> 15:31.320
+of panic mode because the reason for looking at the service was like this bind security
+
+15:31.320 --> 15:39.320
+issue that was been, I read the mail at the morning of January 28th and said okay, we
+
+15:39.320 --> 15:42.880
+have to fix the bind installations and then you suddenly can't reach the service anymore
+
+15:42.880 --> 15:47.840
+and say okay, are they already hacked or what's going on and doing some back and forth with
+
+15:47.840 --> 15:54.640
+our centralized logging, you see that, this is Grafana Loki that we leveraged for that,
+
+15:54.640 --> 16:03.520
+we were kind of like, yeah, it's been really nice to debug things like that, we also noticed
+
+16:03.520 --> 16:11.280
+that there was an interface constantly flapping to our backbone which we also could fix within
+
+16:11.280 --> 16:20.600
+that session and after that we said okay, there are some MTU problems, we have to restart
+
+16:20.600 --> 16:27.640
+our BGP and so on and back and forth and then we finally agreed to just throw away the BGP
+
+16:27.640 --> 16:35.240
+sessions, go with the 1 gigabit line and yesterday evening we switched to the 10 gigabit line
+
+16:35.240 --> 16:43.680
+because we had the congested uplink like since 11 in the morning, so many people using too
+
+16:43.680 --> 16:50.000
+much bandwidth and since yesterday evening everything is okay, it's better and we are
+
+16:50.000 --> 16:55.240
+on the 10 gigabit link, due to the fact that there are not so many people here today, yesterday
+
+16:55.240 --> 17:01.720
+there were quite a bit more, the link was not fully saturated but you can tell this
+
+17:01.720 --> 17:06.840
+is the place where we could use some more bandwidth, it was like, I don't know, this
+
+17:06.840 --> 17:12.160
+is usually time for something to eat but at 3.30 we could actually use something of the
+
+17:12.160 --> 17:18.920
+new bandwidth that we had available, so if you want to look at all of the things, we
+
+17:18.920 --> 17:23.120
+have a dashboard put out there publicly, if you want to have a look at the infrastructure
+
+17:23.120 --> 17:27.720
+and the Ansible repo, that will be fixed to work with current Ansible versions within
+
+17:27.720 --> 17:34.080
+the next few days, just clone our infrastructure, clone everything and if you have any questions
+
+17:34.080 --> 17:58.840
+I'll be glad to take them, yeah, fire away.
+
+17:58.840 --> 18:05.680
+As I don't see any questions then, we're about to tear down this room after this, so please
+
+18:05.680 --> 18:13.760
+don't leave anything in here because it will be cleaned and everything will be torn out.
+
+18:13.760 --> 18:23.440
+If anyone else has a question, just, there's one, we use, the question is, why do you use
+
+18:23.440 --> 18:28.880
+laptops for rendering because they have a built-in USB called battery, so in place of the power
+
+18:28.880 --> 18:36.560
+outage we can easily run with them, also they're very cheap for us, we can just use the computing
+
+18:36.560 --> 18:40.720
+power and sell it at the same price that we bought it to the people here, you get a cheap
+
+18:40.720 --> 18:47.280
+laptop, we get some computing time on them before and that's the main reason for running
+
+18:47.280 --> 18:56.560
+it on laptops.
+
+18:56.560 --> 19:03.000
+Well actually the question was why you were using banana pie, that's a good question,
+
+19:03.000 --> 19:08.440
+the thing is that the capabilities of the banana pie were a bit better than the Raspberry
+
+19:08.440 --> 19:16.320
+pie, the times the decision was made, if you see there's a big LCD screen in front of the
+
+19:16.320 --> 19:21.920
+boxes where you can see that thing, I think it was with driving those LCD panels and also
+
+19:21.920 --> 19:27.080
+the computing power available on the banana pie that wasn't, yeah, but actually we have
+
+19:27.080 --> 19:36.600
+to look that up in the repo, there's everything documented, okay, yeah, there's another one
+
+19:36.600 --> 19:45.640
+in the front.
+
+19:45.640 --> 19:51.120
+So the question was if there are any public dashboards out there, yeah, we've put some
+
+19:51.120 --> 20:00.280
+public dashboards on dashboard.graphana.org, oh, dashboard.phasdom.org, sorry, which you
+
+20:00.280 --> 20:05.440
+can have a look at the infrastructure, we used to have some more dashboards like the
+
+20:05.440 --> 20:11.080
+t-shirts that have been sold, but due to the fact that we changed the shop, we converted
+
+20:11.080 --> 20:18.440
+to something that we bought to an open-source solution and the thing is we totally forgot
+
+20:18.440 --> 20:23.400
+to monitor that, so that's, but there are some dashboards out there to monitor it and
+
+20:23.400 --> 20:28.320
+if you want to see something more, just come to me after the talk and I'll show you something
+
+20:28.320 --> 20:41.040
+more here at the laptop, okay, yeah, another one.
+
+20:41.040 --> 20:54.400
+The biggest one standing here, no, actually the biggest issues we had was like running
+
+20:54.400 --> 21:01.240
+all that stuff after three years and not having set up everything properly was quite challenging,
+
+21:01.240 --> 21:07.640
+like on Saturday morning we had to run and redo the whole video installation on the K
+
+21:07.640 --> 21:13.040
+building because of, you see those transmitters here, they were not plugged properly and so
+
+21:13.040 --> 21:17.840
+we had no audio on the stream, this was one thing and then another very challenging thing
+
+21:17.840 --> 21:24.640
+was like when we played around and as I play, we did not engineer anything properly, when
+
+21:24.640 --> 21:29.080
+we played around with the BGP sessions, it was not clear how long it would take till
+
+21:29.080 --> 21:37.600
+things distributed to the whole net and we were literally just trying to get information,
+
+21:37.600 --> 21:41.720
+is it working, is it working not and till this BGP information propagates from here
+
+21:41.720 --> 21:46.800
+to the rest of the planet like Brazil, it takes quite some time and so you can't be
+
+21:46.800 --> 21:54.080
+sure that you're setting up the BGP session, everything works because shit will hit the
+
+21:54.080 --> 22:01.080
+fan after ten, twenty, thirty minutes and not instantly and so it's quite a problem
+
+22:01.080 --> 22:19.280
+to have instant recognition if things are going well or not.
+
+22:19.280 --> 22:24.480
+So the question was if the problems with the Wi-Fi that we had here on site were due
+
+22:24.480 --> 22:32.640
+to our BGP playing or was it due to something else, solar flares and so, the thing is that
+
+22:32.640 --> 22:39.120
+we had some issues, we've been given access to the WLC, the wireless controllers, you
+
+22:39.120 --> 22:44.440
+see these boxes over there, they're centrally controlled and we have to dig in that.
+
+22:44.440 --> 22:49.160
+We have some visibility of the infrastructure that's owned by the ULB, they've given us
+
+22:49.160 --> 22:55.880
+access to that so we can engineer that but we're not quite sure why it was that.
+
+22:55.880 --> 23:02.360
+Most of the time FOSDEM, which is an IPv6 only, was working quite good except for some
+
+23:02.360 --> 23:09.240
+Apple devices that do tend to just set up an IPv4 address even if there's no proper
+
+23:09.240 --> 23:17.800
+IPv4 and things get complicated and FOSDEM dual stack, which is dual stack, usually worked
+
+23:17.800 --> 23:24.800
+for most of the Apple devices, but we're not very certain of it.
+
+23:24.800 --> 23:30.880
+Yeah, yeah, you will see that.
+
+23:30.880 --> 23:39.320
+There's another one.
+
+23:39.320 --> 23:47.760
+So the question is if the live streams will be made, yeah, this week, rewindable or not,
+
+23:47.760 --> 23:52.560
+I honestly can't tell you that, I don't know, I can ask the video guys if they're planning
+
+23:52.560 --> 23:57.240
+that for next year, but there's no plan of that as far as I know.
+
+23:57.240 --> 24:05.520
+The biggest challenge was to redo things with HDMI over VGA, which we had the last years.
+
+24:05.520 --> 24:18.640
+But there's another one, yeah.
+
+24:18.640 --> 24:23.240
+So the question is that we're planning to use service, do we know what and what's planned
+
+24:23.240 --> 24:25.000
+for next year?
+
+24:25.000 --> 24:29.240
+We'll have a talk about that next week, I think, and then we go through the post-mortem,
+
+24:29.240 --> 24:33.560
+which is usually a week after FOSDEM, and then we decide on things to be bought for
+
+24:33.560 --> 24:43.240
+next year because switches are old and the route is also old, I think, and we have one
+
+24:43.240 --> 24:48.240
+more year on the route to go that should be fine for next year, but what after that?
+
+24:48.240 --> 24:53.040
+We have to make some decisions and some investments for next year to run this stuff, and this
+
+24:53.040 --> 25:01.600
+will be done next week when we're all bit cooled down and refreshed after this FOSDEM.
+
+25:01.600 --> 25:06.600
+Anyone else?
+
+25:06.600 --> 25:15.920
+Yeah, come.
+
+25:15.920 --> 25:24.400
+So the question was what part of the infrastructure are being reused and what do we bring for
+
+25:24.400 --> 25:26.000
+the event?
+
+25:26.000 --> 25:34.800
+Well in numbers, I think it was three truckloads of stuff, not three because the video arrived
+
+25:34.800 --> 25:40.040
+in a second.
+
+25:40.040 --> 25:48.720
+We bring mainly cameras and those boxes here, switches stay at the ULB, most of them stay
+
+25:48.720 --> 25:55.320
+here but the one that didn't stay here, they won't be here next year because ULB is planning
+
+25:55.320 --> 26:01.640
+to do some tidying up and giving us here some video ports for our VLANs.
+
+26:01.640 --> 26:05.600
+They're very, very good at working with us.
+
+26:05.600 --> 26:11.760
+We get access to most of the infrastructure, we just say tell them what you like to use
+
+26:11.760 --> 26:17.360
+and they just throw it on their controllers and bridge it to our service and we can use
+
+26:17.360 --> 26:24.520
+it and make fun with it, and they will be replacing part of the network infrastructure
+
+26:24.520 --> 26:33.200
+next year and we then will have to bring even less gear here.
+
+26:33.200 --> 26:34.200
+Which one first?
+
+26:34.200 --> 26:35.200
+Yeah.
+
+26:35.200 --> 26:44.760
+What about the rest of the year?
+
+26:44.760 --> 26:50.280
+So the question was what's about all the other stuff that FOSDEM is doing through the year?
+
+26:50.280 --> 26:53.400
+We hosted on our own hardware, is it in the cloud or somewhere?
+
+26:53.400 --> 26:59.920
+We used, yeah we have another company called Tegron here, it's a Belgian provider and most
+
+26:59.920 --> 27:03.720
+of the stuff is running at Tegron during the year.
+
+27:03.720 --> 27:11.120
+During FOSDEM we also spin up some VMs at Hetzner in Germany and they are only for during
+
+27:11.120 --> 27:17.280
+the event and short time after the event, so like cutting videos and so on in the cloud
+
+27:17.280 --> 27:22.360
+and they will be turned off like two or three weeks and then everything is running on Tegron
+
+27:22.360 --> 27:25.120
+on our own hardware there as well.
+
+27:25.120 --> 27:32.960
+So there was another question.
+
+27:32.960 --> 27:37.880
+So the question was what is being used for the communication between volunteers?
+
+27:37.880 --> 27:43.680
+We have that matrix set up, I don't know who's aware of matrix, it's a real time communication
+
+27:43.680 --> 27:48.440
+tool like Slack or something like that.
+
+27:48.440 --> 27:56.560
+We use matrix since 2020 internal for our video team for communicating and then we expanded
+
+27:56.560 --> 28:03.440
+that for 2020 and then with the pandemic we opened it up for all of the people and now
+
+28:03.440 --> 28:06.920
+the volunteers are being coordinated to that.
+
+28:06.920 --> 28:13.040
+And we also have our own trunk tier steel that we have here especially for this event
+
+28:13.040 --> 28:20.640
+set up and volunteers are also can be reached via those radios.
+
+28:20.640 --> 28:21.840
+Am I correct volunteers?
+
+28:21.840 --> 28:23.520
+Yes, yes, okay.
+
+28:23.520 --> 28:25.000
+We have two volunteers here.
+
+28:25.000 --> 28:32.040
+So yeah, we'll get you.
+
+28:32.040 --> 28:36.240
+Is there anything else you want to know or any other?
+
+28:36.240 --> 28:38.880
+Where's the money?
+
+28:38.880 --> 28:44.120
+The question is where's the money Lebowski, that's the real phrase from the film.
+
+28:44.120 --> 28:48.960
+I don't actually know, I'm not yet the member of FOSDOM stuff so you have to ask someone
+
+28:48.960 --> 28:55.280
+in a yellow shirt, there happens to be one next to me just from the microphone.
+
+28:55.280 --> 29:08.840
+We have a money box and a bank account.
+
+29:08.840 --> 29:09.840
+Anyone else?
+
+29:09.840 --> 29:10.840
+Three to one.
+
+29:10.840 --> 29:11.840
+Thank you very much.
+
+29:11.840 --> 29:12.840
+Thank you very much.
+
+29:12.840 --> 29:41.840
+Thank you very much.

@@ -1,0 +1,1615 @@
+WEBVTT
+
+00:00.000 --> 00:10.280
+Hi, I'm Brian Bellendorf. I'm the general manager for the Open Source Security Foundation,
+
+00:10.280 --> 00:16.400
+which is a project hosted at the Linux Foundation, but has its own rather large membership and
+
+00:16.400 --> 00:21.000
+set of activities and the like. And I thought I'd take the time to talk to you this morning
+
+00:21.000 --> 00:26.640
+about some of the things that we learned coming out of the log for shell incident. And in
+
+00:26.640 --> 00:31.160
+general, what we're doing at the OpenSSF to try to improve the state of security across all of
+
+00:31.160 --> 00:37.000
+Open Source software. And I do apologize for using the term software supply chain. I know folks
+
+00:37.000 --> 00:41.320
+are sometimes very sensitive to thinking of themselves as suppliers. You're all developers,
+
+00:41.320 --> 00:46.280
+you're all building components, you're all handing things off to the next person, right? And I,
+
+00:46.280 --> 00:51.280
+you know, I just want to be sensitive to that and recognize, you know, a lot of us pursue this,
+
+00:51.280 --> 00:56.600
+not just to write code for our companies or for other people to use, but because we love it,
+
+00:56.600 --> 01:01.480
+because it's like a form of literature. And so I come to this very much from an expansive view
+
+01:01.480 --> 01:07.400
+of what software is. But if you'll indulge me with the term software supply chain, you know,
+
+01:07.400 --> 01:13.520
+lots has been made about the fact that today, 2023, Open Source software is incredibly pervasive,
+
+01:13.520 --> 01:19.000
+because the further upstream you go in most software supply chains, even if the end result is
+
+01:19.000 --> 01:24.160
+proprietary software, the further upstream, the much more likely it is that your dependencies,
+
+01:24.160 --> 01:30.280
+your components are Open Source code. Something like 78%, according to a study by Synopsys last
+
+01:30.280 --> 01:36.760
+year, 78% of code in a typical product code base, that could be a container image, that could be
+
+01:36.760 --> 01:43.920
+software in a phone, that could be or a car, 78% on average is pre-existing Open Source code. That
+
+01:43.920 --> 01:51.720
+last 22% is the part that, you know, the company put its name on and whatever. But every 97% of
+
+01:51.720 --> 01:57.720
+code bases somewhere contain Open Source software. And 85% of code bases contain Open Source that
+
+01:57.720 --> 02:02.240
+is more than four years out of date. The comparable for this and log for Shell, by the way, were the
+
+02:02.240 --> 02:07.160
+number of companies who claimed we're not vulnerable to the log for J problem, because we're still
+
+02:07.160 --> 02:12.720
+on version 1.x, rather than 2.x. Don't worry, which had been out of support out of any updates for
+
+02:12.720 --> 02:20.440
+five years. So this is kind of a disaster. But fixing this requires thinking about, systematically,
+
+02:20.440 --> 02:25.440
+what does the software supply chain look like? And this is highly simplified. And in a way, this is
+
+02:25.440 --> 02:32.800
+only what happens at one node of a chain, right? But within a given software lifecycle, you've got
+
+02:32.800 --> 02:39.400
+the developer writing code from their head or in partnership with co-pilot now, I guess, into an
+
+02:39.400 --> 02:45.640
+IDE that then goes into a build system and pulls in dependencies and then creates packages and pushes
+
+02:45.640 --> 02:52.120
+them out to a consumer of sorts, right? Who could be another developer who then repeats that process
+
+02:52.120 --> 02:57.080
+and just uses that input as dependencies. And there's at least eight, and there's probably a lot
+
+02:57.080 --> 03:03.400
+more, but at least eight kind of major opportunities to take advantage of some default biases and
+
+03:03.400 --> 03:09.880
+assumptions. And frankly, just things we forgot to close up in the course of this development
+
+03:09.880 --> 03:15.200
+process. Everything from bypassing code review to compromising the source control system, to
+
+03:15.200 --> 03:19.480
+modifying code after it's come through source code and into build, to compromising the build
+
+03:19.480 --> 03:25.960
+platform, to using a bad dependency to bypassing CI CD entirely, which we all know happens,
+
+03:25.960 --> 03:33.320
+to compromising the package repo, to using a bad package as a consumer. So each of those has had
+
+03:33.320 --> 03:39.200
+examples of compromise in the last few years that has caused major breaches and data loss out
+
+03:39.200 --> 03:45.200
+there. And of course, we all, I don't know if any of you were on the front lines of fighting this
+
+03:45.200 --> 03:55.080
+fire over the winter holiday of 2021 into 2022, but it ruined a lot of people's holidays when log
+
+03:55.080 --> 04:00.760
+for shell hit. And by the way, I want to refer to the vulnerability and the breach and the remediation
+
+04:00.760 --> 04:05.520
+as the log for shell problem, not the log for J problem, because the log for J developers don't
+
+04:05.520 --> 04:10.120
+deserve to have their brand of their project turned into exhibit A in what's broken about open
+
+04:10.120 --> 04:14.440
+source. They were actually, it's great software. They're all professional developers. Let's give
+
+04:14.440 --> 04:17.880
+them some credit. There's a bunch of contributing factors we'll walk through, but it was really
+
+04:17.880 --> 04:23.880
+the log for shell breach. And what happened in the course of about six weeks is you went from a
+
+04:23.880 --> 04:31.080
+researcher for Alibaba in China, finding a vulnerability out of the ordinary course of due
+
+04:31.080 --> 04:36.160
+diligence work that he was doing, reporting it appropriately through the Apache software
+
+04:36.160 --> 04:43.440
+foundation processes and that leading to the very first CVE. It from starting from November 24th
+
+04:43.440 --> 04:49.800
+to all the way to January 4th and January 10th. So about six weeks where you have governments like
+
+04:49.800 --> 04:59.800
+the UK government warning people of this major systematic issue. And three more CVEs being
+
+04:59.800 --> 05:03.760
+discovered of various degrees of intensity, each of them leading to a subsequent patch,
+
+05:03.760 --> 05:10.200
+to a subsequent remediation by exhausted IT teams. If you talk to any of the log for J
+
+05:10.200 --> 05:13.400
+developers, I don't believe any of them are here, but they would talk about things like
+
+05:13.400 --> 05:20.360
+getting these demand letters from corporate legal departments, asking them to fax back a signed
+
+05:20.360 --> 05:25.640
+attestation that they had fixed the holes in log for J and that company's use. When there had been
+
+05:25.640 --> 05:30.600
+no relationship, that company was a free rider on top of their code. So I'm not going to read
+
+05:30.600 --> 05:34.280
+through each of these steps. I apologize for this, but there was this incredibly compressed
+
+05:34.280 --> 05:40.440
+timeline where people were intensely stressed where really the goodwill that we show as open
+
+05:40.440 --> 05:44.720
+source developers by putting our code out there and the fair warning that we give people to
+
+05:44.720 --> 05:51.120
+use it at your own risk was substantially attacked. It was substantially all these misconceptions
+
+05:51.120 --> 05:55.760
+that companies have about underlying open source code and the degree to which they take
+
+05:55.760 --> 06:00.880
+advantage of it kind of came to bear. And so it raised a bunch of questions amongst folks who
+
+06:00.880 --> 06:06.360
+perhaps hadn't thought about this before. Is open source software generally good reputation for
+
+06:06.360 --> 06:11.960
+security? Is it well-deserved? Does this demonstrate deep and pervasive technical issues
+
+06:11.960 --> 06:16.680
+across how we consume and develop open source code? Do these issues extend to the sustainability
+
+06:16.680 --> 06:21.880
+model for open source itself? Can we really depend upon so many, quote, volunteers, right?
+
+06:22.760 --> 06:26.760
+I mean, think about it. We don't depend upon volunteers to build bridges and highways to
+
+06:26.760 --> 06:32.920
+maintain our electrical grid, right? How do we depend upon volunteers to maintain our critical
+
+06:32.920 --> 06:38.600
+infrastructure that everything runs on, right? And of course, it wasn't just like us as technologists
+
+06:38.600 --> 06:44.040
+asking these questions of each other. It was like compliance and risk officers. It was the
+
+06:44.040 --> 06:49.080
+cybersecurity insurance industry. It was the European Union and the White House and UK's
+
+06:49.080 --> 06:53.480
+NCSC and other government agencies kind of all challenging us. Do we know what we're doing?
+
+06:54.520 --> 07:00.280
+And one interesting report, and it is worth your time to read, it's about 49 pages, came out about
+
+07:00.280 --> 07:05.640
+six months after the fact. What happened was the US government convened a group of experts
+
+07:05.640 --> 07:11.320
+from across industry and had them go and talk to the log bridge developers, talk to other open
+
+07:11.320 --> 07:16.600
+source experts, talk to lots and lots of open source foundations and try to ask what went on?
+
+07:16.600 --> 07:23.000
+What contributed to this? And it was modeled after, you know, when a plane crashes and the
+
+07:23.000 --> 07:28.120
+government will convene for many of them like a study group to answer, well, why did this plane
+
+07:28.120 --> 07:33.000
+crash other than, of course, sudden loss of altitude? You know, what were the underlying
+
+07:33.000 --> 07:38.200
+root causes to this plane crash? And so this was modeled after the very same thing. And it's a great
+
+07:38.200 --> 07:43.080
+report to read, I think, because it also comes up with some recommendations for how potentially
+
+07:43.080 --> 07:49.080
+to prevent the next one. And I'll walk through a couple of the conclusions. They said, you know,
+
+07:49.080 --> 07:54.760
+a focused review of the log for J code could have identified the unintended functionality
+
+07:54.760 --> 07:59.480
+that led to the problem. Understand the bug, the original big bug was in a portion of code
+
+07:59.480 --> 08:05.880
+that had been contributed to log for J years and years earlier by a company that wanted to
+
+08:05.880 --> 08:10.280
+support LDAP lookups in real time during the logging process, which seems like an extraordinarily
+
+08:10.280 --> 08:16.040
+bad idea to me. But okay, I'm not an enterprise IT. So they had added this functionality and then
+
+08:16.040 --> 08:21.880
+kind of left. They kind of didn't stick around to maintain it. They didn't really do a due diligence
+
+08:21.880 --> 08:26.440
+into the security of its own code. And the other log for J developers just kind of kept it around
+
+08:26.440 --> 08:31.640
+because they didn't get many bug reports on it. It wasn't really a problem. So it was kind of this
+
+08:31.640 --> 08:39.880
+forgotten portion of the code. So part of it was if they had security resources to look at every
+
+08:39.880 --> 08:43.640
+line of code that they were shipping out, rather than just the core stuff, which they were pretty
+
+08:43.640 --> 08:50.600
+diligent about, they might have discovered this bug. It might also have been discovered if the
+
+08:50.600 --> 08:56.040
+developers themselves had developed, had adopted certain secure coding practices consistent with
+
+08:56.040 --> 09:01.240
+how certain other organizations kind of define how those processes should work. If they'd had
+
+09:01.240 --> 09:06.840
+design reviews that focused on security and reducing kind of the surface area, the attack surface,
+
+09:06.840 --> 09:13.480
+sorry, for problems. If they'd used threat models to understand, hey, we really should try to make
+
+09:13.480 --> 09:19.720
+sure we're better protected against people using, through the user generated input, right? When
+
+09:19.720 --> 09:24.200
+you're a logging engine, you're dealing with a ton of user generated input. If you're parsing that
+
+09:24.200 --> 09:28.920
+for things like format strings, which is what they were doing in this, that's potentially very
+
+09:28.920 --> 09:32.760
+dangerous, right? That's something we've known kind of since some of the earliest CVEs out there.
+
+09:33.400 --> 09:38.760
+And then finally, if they'd had proper security audits. And so in answering that and trying to
+
+09:38.760 --> 09:43.640
+generalize from it, and that's always dangerous to generalize from a single example, but they found
+
+09:43.640 --> 09:47.800
+that the only way to reduce the likelihood of risk to the entire ecosystem caused by these kind of
+
+09:47.800 --> 09:52.680
+vulnerabilities and other widely used open source code was to ensure that as much code as possible
+
+09:52.680 --> 09:59.080
+is developed pursuant to standardized secure coding practices. Now, that kind of sounds like, well,
+
+09:59.080 --> 10:04.520
+if only the pilots had had better training, or if only the planes had been maintained better,
+
+10:04.520 --> 10:09.320
+then we wouldn't have had these problems, right? It seems a little bit like hindsight is 2020,
+
+10:09.320 --> 10:16.360
+right? But they did acknowledge that the volunteer based model of open source would need many more
+
+10:16.360 --> 10:21.480
+resources than they have to be able to make this possible, on average. I mean, you've all heard
+
+10:21.480 --> 10:27.960
+the aphorism, which is called Linus's law, but it was coined by Eric Raymond. Linus has disavowed
+
+10:27.960 --> 10:33.800
+the law actually, that says, with enough eyeballs, all bugs are shallow, right? What was missing
+
+10:33.800 --> 10:39.080
+from that quote was eyeballs per line of code. And I would argue that even in some of the MEST
+
+10:39.080 --> 10:44.520
+resource open source projects, we don't have enough eyeballs per line of code. And anything we do that
+
+10:44.520 --> 10:51.720
+divides that list, such as forks, for example, only takes us further away from having enough eyeballs
+
+10:51.720 --> 10:57.640
+to review code. There's lots that I can go into about it's not really just a supply chain security
+
+10:57.640 --> 11:03.880
+story. It was kind of a supply chain story because of just how pervasive log for J was. It was a bug
+
+11:03.880 --> 11:09.320
+that affected everything from the iTunes store to people badging in with security, kind of like
+
+11:09.320 --> 11:15.320
+badges to all sorts of like embedded systems and the like log for J was kind of everywhere. And
+
+11:15.320 --> 11:20.040
+because it was everywhere, it was in a whole lot of places that people didn't have the tools to even
+
+11:20.040 --> 11:26.920
+go and discover. Often it was compiled into jar files, so you couldn't even just do a directory
+
+11:26.920 --> 11:31.560
+listing and grep through it to find log for J.jar. You actually had to interrogate the development
+
+11:31.560 --> 11:37.160
+process. And without things like S-bombs, which appropriately the US government has focused on
+
+11:37.160 --> 11:42.440
+kind of saying this is an important thing to have, without a tool like that, a lot of enterprises
+
+11:42.440 --> 11:46.520
+were left scrambling to figure out if they were vulnerable, which versions they were running.
+
+11:46.520 --> 11:50.600
+And then, as I mentioned, making ludicrous claims like we're not vulnerable because we're
+
+11:50.600 --> 11:55.480
+way on an old version of log for J, or asking a completely disinterested third party like the
+
+11:55.480 --> 12:00.760
+log for J developers themselves to attest that they're not vulnerable. It was kind of crazy.
+
+12:00.760 --> 12:08.920
+Moving on, part of this as well is trying to understand the motivations of developers on an
+
+12:08.920 --> 12:14.520
+open source project, which again, they took a look at, but I think they could have pursued this even
+
+12:14.520 --> 12:18.760
+a little bit further. When you work on an open source project, your primary motivation, well,
+
+12:18.760 --> 12:23.080
+okay, first off, you probably all start as a user of the software. Your probably your first step
+
+12:23.080 --> 12:27.640
+into an open source project was not to write it from scratch. Maybe it is, but in either case,
+
+12:27.640 --> 12:31.880
+you have some utilities, something you want to use it for. So your first interest is get it running
+
+12:31.880 --> 12:36.120
+and get it running correctly. And so you're going to be fixing bugs. You're going to be adding
+
+12:36.120 --> 12:43.080
+features here and there, right? But adding things that help make the software more secure, very
+
+12:43.080 --> 12:47.240
+rarely do they turn into immediate benefit for you. It's often a thing that's hard to convince
+
+12:47.240 --> 12:52.280
+your manager is worth doing, right? Because it doesn't necessarily affect what the manager sees
+
+12:52.280 --> 12:58.200
+in terms of like the feature set and the code or hey, it's now fit for purpose or whatever. So
+
+12:58.200 --> 13:03.000
+there's a lot of sympathy that we can have for positions taken by like folks like Ben who wrote
+
+13:03.000 --> 13:09.800
+the cyber resilience act who was up here yesterday kind of defending what was written in the act
+
+13:09.800 --> 13:14.280
+to say, well, maybe there are other forces that need to come into play to help support
+
+13:15.240 --> 13:20.280
+those kinds of outcomes, right? To act as a forcing function for it if it wouldn't otherwise be there.
+
+13:20.280 --> 13:26.360
+But it's really hard to measure the return on that benefit independently. And if you can't
+
+13:26.360 --> 13:32.840
+measure the ROI, it tends to get disincented. So as a way to illustrate this, particularly the
+
+13:32.840 --> 13:37.560
+log for J, you know, I've had conversations with the mirror Montessori who some of you might know
+
+13:37.560 --> 13:43.640
+who's with AUSTIF who's here. We've kind of asked just hey, what would it have taken to do a proper
+
+13:43.640 --> 13:49.400
+third party code review for security of the log for J code base, right? Just as an independent
+
+13:49.400 --> 13:53.160
+thing looking at the number of lines of code in there. And the estimate we came back with was
+
+13:53.160 --> 13:57.880
+$50,000 to $100,000 depending on how deep you wanted to get. Let's say, and one of those would
+
+13:57.880 --> 14:03.720
+have found all four of those CVEs possibly more and with a little bit more money, generously,
+
+14:03.720 --> 14:09.160
+let's say another $50,000 to $100,000, you could have funded the fixes for those bugs and coordinated
+
+14:09.160 --> 14:14.040
+a disclosure process such that everybody got or a lot of people would get updated. And then you
+
+14:14.040 --> 14:18.680
+published the release and it wouldn't have been this mad scramble taking place over between Christmas
+
+14:18.680 --> 14:24.840
+and New Year's for a lot of folks. So $200,000, which is beyond what I think any of the log for
+
+14:24.840 --> 14:29.640
+J developers had in their back pocket. It's beyond what I think even, you know, the eight or ten of
+
+14:29.640 --> 14:33.800
+them together would have individually been able to put together or convince their employers to put
+
+14:33.800 --> 14:41.560
+in as a chunk of cash. But it was far less than the negative impact that that breach had on
+
+14:43.160 --> 14:47.560
+society, right? I mean, no one's actually sat and tried to calculate how much and when they've
+
+14:47.560 --> 14:53.080
+started, they've come back with billions of dollars in lost productivity in breaches and other
+
+14:53.080 --> 14:59.320
+things. So like trying to play that back and do hindsight, you know, 2020, that kind of thing,
+
+14:59.320 --> 15:05.560
+could we have discovered this and fixed it? You know, could we find the next one and spend $200,000
+
+15:05.560 --> 15:11.000
+and fix that from being likely to happen? I don't think I could give you the one that that's likely
+
+15:11.000 --> 15:17.080
+to be, but what if I could give you a list of 200 projects, each of which probably had a greater
+
+15:17.080 --> 15:23.480
+than 1% chance based on their criticality as you can measure from how often these codes,
+
+15:23.480 --> 15:29.720
+code bases are depended upon by other packages. There's lots of data sources for that and we at
+
+15:29.720 --> 15:35.320
+the open SSF have developed something called the criticality index that'll find that. What if we
+
+15:35.320 --> 15:41.400
+could find this list of 200 projects based on criticality based on how well they score by
+
+15:41.400 --> 15:46.600
+some objective measure of risk? And I'll get into this in a little bit. Could I give you that list
+
+15:46.600 --> 15:52.520
+of 200 and could that likely, I mean, more than 50% chance prevent the next log for J? I would wager
+
+15:52.520 --> 15:57.800
+yes. And that $40 million, again, is more than any open source foundation has to be able to spend
+
+15:57.800 --> 16:01.720
+on this kind of work. Even all the foundations together collectively probably couldn't spend
+
+16:01.720 --> 16:06.040
+that. And this is the kind of thing you probably have to do each year in order to have that kind
+
+16:06.040 --> 16:11.080
+of impact. But $40 million is, I don't mean to like sound blasé about it, but frankly,
+
+16:11.080 --> 16:17.080
+pocket change for a lot of governments, especially if we got governments to work together on this,
+
+16:17.080 --> 16:22.440
+or the insurance industry to work together, or say many of the sectors who use this software
+
+16:22.440 --> 16:26.520
+without lifting a finger to contribute back, right? If we pooled these kinds of funds,
+
+16:26.520 --> 16:30.360
+we could have an impact like that. Some people just want to watch the world burn. I had to throw
+
+16:30.360 --> 16:35.560
+in this the obligatory slide, of course, but I want to kind of push forward this theory of change
+
+16:35.560 --> 16:41.560
+then around security. Because it's not just about spending money on specific interventions
+
+16:41.560 --> 16:48.600
+like that. I'll come back to that in a little bit, how we might rally those kinds of funds and
+
+16:48.600 --> 16:52.440
+focus on that kind of work. And what we're doing is the open SSF to have it. But I want to also
+
+16:52.440 --> 17:00.920
+put forward, it's actually not just about a matter of spending money. It's not just a matter of a
+
+17:00.920 --> 17:06.200
+mandate from a government to get a soft open source software to be more secure, to get our
+
+17:06.200 --> 17:11.240
+processes and the supply chain to be more secure. There's a culture change that has to happen as
+
+17:11.240 --> 17:17.320
+well. People are often very resistant to change. When your CI system is running and you're able
+
+17:17.320 --> 17:24.440
+to put out a new release and turn the crank, and a few hours after initiating, accepting a
+
+17:24.440 --> 17:28.680
+pull request, you've got a binary, you kind of don't want to mess it up. You don't want to change
+
+17:28.680 --> 17:33.880
+it. And especially the older we get, the more resistant we are to having to learn a new system
+
+17:33.880 --> 17:38.680
+or change, especially if there seems to be no benefit. But this is not unlike other times
+
+17:38.680 --> 17:44.680
+over the last 30 years that we've taken an insecure paradigm and made it more secure.
+
+17:44.680 --> 17:51.240
+And my general theory is something called Carrot's Defaults and Sticks. And the best
+
+17:51.240 --> 17:55.400
+example I can come up with this is how we went from a completely unencrypted web
+
+17:55.400 --> 18:01.560
+where browsers and servers talked clear text HTTP that could be sniffed by anybody between
+
+18:01.560 --> 18:05.480
+browser and server and got to the point where today, I mean, somebody might know the number,
+
+18:05.480 --> 18:10.760
+it was like 95% of web traffic is HTTPS. It's actually probably 99% now based on what's
+
+18:10.760 --> 18:14.920
+happening recently with browsers. But it didn't start with the browser maker saying,
+
+18:14.920 --> 18:20.760
+right, on April 1st, we're going to cut off or send these warning signs about unencrypted access
+
+18:20.760 --> 18:26.040
+in the beginning of the TLS era. It started with incentives. It started with carrots. It started
+
+18:26.040 --> 18:31.400
+by having that little green key that would show up in the location bar on a browser. It might
+
+18:31.400 --> 18:35.800
+start by certain folks saying, well, this is something that should be used for banking websites
+
+18:35.800 --> 18:41.400
+or for e-commerce websites or, you know, hosted email sites or that kind of thing.
+
+18:41.400 --> 18:46.680
+And that got about 15% of the web traffic getting encrypted out there, but it started
+
+18:46.680 --> 18:52.440
+the flat line. And then a bunch of people got together and realized, you know, we don't actually,
+
+18:52.440 --> 18:56.680
+it doesn't have to be this hard to get a TLS certificate and install it in the right place.
+
+18:56.680 --> 19:02.600
+We can automate this. We can automate demonstrating that you have domain control over this domain
+
+19:02.600 --> 19:08.440
+name. And if you do, then to give you a short lived TLS certificate that can automatically
+
+19:08.440 --> 19:14.040
+be installed in the right place in the web server. And that service was called Let's Encrypt. And it
+
+19:14.040 --> 19:19.000
+is now, I mean, for the last 10 years, it's been at the point where you can automatically,
+
+19:19.000 --> 19:26.760
+when you install Apache, when you install a web server and tell it to install a, you know,
+
+19:26.760 --> 19:31.080
+the TLS kind of version of that or a TLS profile, it will automatically set up a fetch to Let's
+
+19:31.080 --> 19:35.640
+Encrypt for a domain name you give it. And it's like automated, automatable out of the box,
+
+19:35.640 --> 19:42.120
+right? And that is what got us from 15% of the web being encrypted to about 75%.
+
+19:42.120 --> 19:48.360
+And at that point, about five, six years ago is when the web browser makers said, right,
+
+19:48.360 --> 19:53.800
+it's time for us to bring up the tail. And that's where I talk about sticks. And to finally get
+
+19:53.800 --> 19:59.880
+the laggards, the legacy sites, the folks who probably don't care about it, who probably even
+
+19:59.880 --> 20:04.840
+haven't updated their web server in five years or 10 or whatever, to finally get off the duff
+
+20:04.840 --> 20:09.560
+and use Let's Encrypt or some other technique. And they did that by making it progressively
+
+20:09.560 --> 20:15.720
+harder and harder for you to access a nonencrypted website through Firefox, through Chrome, through
+
+20:17.320 --> 20:21.320
+MSI, through other browsers. And they kind of talked amongst themselves how to do that.
+
+20:21.320 --> 20:25.960
+They tried not to piss people off, but you kind of have to piss some people off to do that.
+
+20:26.600 --> 20:31.560
+And as long as you just kind of progressively roll through, you can kind of bring people along.
+
+20:31.560 --> 20:36.600
+And there's some who will just forever be pissed off. But that's like the tail end of an adoption
+
+20:36.600 --> 20:40.920
+curve, right, is this kind of concepts of sticks. We need to think about the same thing when it
+
+20:40.920 --> 20:49.800
+comes to things like S-bombs or signing artifacts in the supply chain or software attestation levels,
+
+20:49.800 --> 20:53.400
+which I'll get into a bit. But when we think about how to get adoption of some of these
+
+20:53.400 --> 20:59.400
+security paradigms, it's got to be through this three-step kind of process. We can't just jump
+
+20:59.400 --> 21:04.280
+directly to sticks, which is kind of what the European Union Cyber Resiliency Act attempts to
+
+21:04.280 --> 21:10.360
+do. And I will say, I think the CRA is a backlash to the Silicon Valley move fast and break things
+
+21:10.360 --> 21:15.320
+kind of paradigm, this concept that open source software is some sort of reflection of that
+
+21:15.320 --> 21:19.400
+or connected to that and that we're just as reckless. But none of you all are Mark Zuckerberg,
+
+21:19.400 --> 21:24.040
+thankfully. None of you all, I think, take that degree of recklessness as a badge of honor.
+
+21:24.040 --> 21:28.600
+I think we're all just completely strapped for the amount of time that we'd rather,
+
+21:28.600 --> 21:33.160
+we'd really like to spend on making the software as secure as possible. And we need help. We need
+
+21:33.160 --> 21:39.000
+defaults. And we need, by the way, what's always worked in open source software as a doocracy,
+
+21:39.000 --> 21:43.800
+which is people showing up and doing the work, if that's what their primary interest is about.
+
+21:44.440 --> 21:48.680
+If somebody can sit on stage here and say, it's absolutely essential that this French nuclear
+
+21:48.680 --> 21:54.120
+power plant only run open source software that has been certified against a whole bunch of
+
+21:54.120 --> 22:00.200
+cybersecurity requirements, it's on them to do that work, not on the log for J developers or others.
+
+22:00.200 --> 22:10.200
+So this is where OpenSSF comes in. We were started in 2020, kind of as a result of a small kind of
+
+22:10.200 --> 22:15.560
+gathering that had been hosted on the West Coast, people working on software projects that had to
+
+22:15.560 --> 22:20.440
+do with enhancing the software development processes in the open source community to be a bit more
+
+22:20.440 --> 22:28.120
+secure. It was a mix of a bunch of different pieces of software, suggestions of protocols,
+
+22:28.120 --> 22:33.480
+building on some of the SBOM work that had been actually championed first by the licensing
+
+22:33.480 --> 22:38.120
+community, by the software licensing community. This is in particular a standard called SPDX
+
+22:38.120 --> 22:43.000
+for SBOMs. But they kind of realized that collectively what they were doing was building
+
+22:43.000 --> 22:48.200
+tools that would help try to measure risk in open source. And what does that mean? It means
+
+22:48.200 --> 22:53.240
+measuring the likelihood that there will be a new undiscovered vulnerability in this component
+
+22:53.240 --> 22:58.920
+and the impact that that would have downstream. Measurement is essential. If we can't measure
+
+22:58.920 --> 23:03.640
+whether we're improving the overall risk in that chain and the collective risk and our use of that
+
+23:03.640 --> 23:07.480
+software, we're not going to know whether the interventions that we're trying are actually
+
+23:07.480 --> 23:12.520
+meaningful. So you've got to measure it. You've got to then think about this sequence of carrots
+
+23:12.520 --> 23:19.320
+and defaults and sticks to eventually get this stuff adopted if it's any good. And then finally,
+
+23:19.320 --> 23:23.880
+as part of this culture change, are there things that we should be learning as open source developers,
+
+23:23.880 --> 23:31.640
+things that we should be thinking about as a professional type of operation, like as a diligence
+
+23:31.640 --> 23:37.320
+of care, as something that, as engineers, and that term used to have to go and take a certification
+
+23:37.320 --> 23:42.520
+exam to call yourself an engineer, right? And that instilled a sense of professionalism in that
+
+23:42.520 --> 23:47.960
+industry that led to bridges that didn't fall down when you hired an engineer to design it.
+
+23:47.960 --> 23:53.000
+We need a little bit of the same professionalism in software development across the board, not just
+
+23:53.000 --> 23:58.120
+open source. And here are a set of resources that might help us from a security point of view be
+
+23:58.120 --> 24:03.880
+better developers. So collectively, we want to put these pieces together. And we've got all sorts
+
+24:03.880 --> 24:09.160
+of projects in working groups, projects organized by thematically related working groups, a working
+
+24:09.160 --> 24:15.320
+group on best practices and documenting those and advocating for those, a working group on
+
+24:15.320 --> 24:21.960
+identifying security threats, understanding, relatively speaking, what are the areas to
+
+24:21.960 --> 24:28.040
+really worry about in the areas that might represent low threat? How do we think about supply chain
+
+24:28.040 --> 24:34.040
+integrity, like that chart I showed? How do you get those pieces, those opportunities for
+
+24:34.920 --> 24:41.080
+bugs to be inserted to just be locked down and hardened? How do we think about the CVE system
+
+24:41.080 --> 24:46.520
+is not great? Frankly, it's nowhere near perfect. It's not great for trying to automate and understand
+
+24:46.520 --> 24:50.600
+given this collection of software I use. Where are the vulnerabilities? Where are the known
+
+24:50.600 --> 24:55.240
+vulnerabilities? And how easy is it to remediate them? Are there known vulnerabilities that just
+
+24:55.240 --> 24:59.720
+don't matter because I'm not using them? And so there's an entire working group focused on
+
+24:59.720 --> 25:04.360
+vulnerability disclosures and on the vulnerability system that has a bunch of new ideas for this,
+
+25:04.360 --> 25:09.080
+but also developed content to try to help developers simply be better at coordinating
+
+25:09.080 --> 25:15.240
+vulnerability disclosures and updates. We've got another working group focused on once you've
+
+25:15.240 --> 25:19.480
+identified those critical projects, well securing and identifying critical projects,
+
+25:20.120 --> 25:23.720
+and that's where we've defined the criticality score. We've done some work with Harvard Business
+
+25:23.720 --> 25:30.360
+School to understand quantitatively how are things being used by enterprises and where might the
+
+25:30.360 --> 25:36.680
+next log for JB lurking, so to speak. And then one of the most important things we've got here
+
+25:36.680 --> 25:41.960
+is we've pulled together the architects and the people responsible for product at many of the
+
+25:41.960 --> 25:49.000
+major security repositories, NPM, PyPy, Maven Central, because if we're going to get anything
+
+25:49.000 --> 25:53.160
+improved throughout the chain, you need to involve the last couple hops of each of the
+
+25:53.160 --> 25:58.200
+nodes in that chain, which are the distribution points, and there are things you can do there to
+
+25:58.200 --> 26:02.920
+encourage more secure alternatives and eventually have the stick to say, well, no, we're not going
+
+26:02.920 --> 26:07.880
+to accept, you know, things like you might need to enforce two-factor auth for the more popular
+
+26:07.880 --> 26:12.920
+packages, right, which has been controversial to say the least, but is one of those things where
+
+26:12.920 --> 26:17.640
+it's like somewhere in that adoption curve we need to start nudging people into a more secure
+
+26:17.640 --> 26:24.280
+direction. But all of these pieces work together, and if you are an open-source software maintainer,
+
+26:24.280 --> 26:29.240
+what I'm going to walk through now is a set of specific things coming out of the open SSF that
+
+26:29.240 --> 26:33.160
+I'd love you to adopt. I'm not going to be able to talk about all the features of each just given
+
+26:33.160 --> 26:40.840
+time, but we've come up the very best starting point you can start to consume. The very first
+
+26:40.840 --> 26:45.720
+piece of thing that you can get from the open SSF are two concise guides, one that we've developed
+
+26:45.720 --> 26:50.280
+for evaluating open-source code. When you're out there looking at packages and you're trying to
+
+26:50.280 --> 26:57.960
+figure out is this community likely to have processes and is there likely to be an undiscovered
+
+26:57.960 --> 27:03.960
+vulnerability lurking in this code that I'm about to use? Is this a well-engineered, well-maintained
+
+27:03.960 --> 27:09.720
+active community that has adopted the right practices and the like, or is this a one-off
+
+27:09.720 --> 27:14.520
+that was developed by one person in a hurry thrown up on a repo and not well-maintained?
+
+27:14.520 --> 27:19.960
+I mean, we've got some ad hoc cues that we can use that most of us have, but how many of you use
+
+27:19.960 --> 27:25.640
+GitHub stars as your basis for deciding whether something is probably secure enough or not?
+
+27:25.640 --> 27:31.480
+I'm going to guess like probably too many of you. So there's a bunch of kind of subjective
+
+27:31.480 --> 27:37.800
+criteria that you can use. The flip side of that is if you are a maintainer and you are pushing
+
+27:37.800 --> 27:44.440
+code out, here are the signals you can send to your consumers of that software that show that
+
+27:44.440 --> 27:50.040
+you're taking this stuff seriously. And it's a bunch of best practices, adopting multi-factor
+
+27:50.040 --> 27:55.720
+auth, taking the courses on secure software development, using a specific combination of tools
+
+27:55.720 --> 28:01.880
+in the CI pipeline, thinking about how do you get to the point of doing rapid updates without
+
+28:01.880 --> 28:06.280
+throwing curveballs to your users because you change APIs all the time? That's the number one
+
+28:06.280 --> 28:11.560
+reason people don't update is that they assume even in minor point releases something is going to
+
+28:11.560 --> 28:17.160
+break because somebody took an API and marked it not only deprecated but removed it or changed a
+
+28:17.160 --> 28:22.280
+field that just sends things sideways or changed behavior in a way that they thought was compatible
+
+28:22.280 --> 28:26.520
+but was not. How do you get to the point where you can have more rapid updates and make it easier
+
+28:26.520 --> 28:34.200
+for your end users to pick those up? Now some of these ideas were elaborated upon in a course
+
+28:34.200 --> 28:38.840
+that we built within OpenSSF and have offered for free now through the Linux Foundation's
+
+28:38.840 --> 28:43.640
+training department called Secure Software Development Fundamentals. This has been translated
+
+28:43.640 --> 28:48.600
+to Japanese. It's being translated to a bunch of other languages, Chinese, Arabic, and Hebrew.
+
+28:49.320 --> 28:55.560
+And this is 14 to 18 hours worth of content that primarily talks about anti-patterns. What does
+
+28:55.560 --> 29:01.800
+it mean to not trust user-contributed input? What are some of the other common gotchas that have
+
+29:01.800 --> 29:08.040
+led to security vulnerabilities and breaches? Most software developers are self-taught. Some people
+
+29:08.040 --> 29:13.400
+take courses but even most university undergraduate level courses on computer science don't really
+
+29:13.400 --> 29:18.680
+teach about vulnerabilities and about common mistakes as well as they could. So this is
+
+29:18.680 --> 29:24.680
+something we think anybody who is writing code for a living or even for a hobby and you're
+
+29:24.680 --> 29:29.880
+giving this to somebody else to run, you should probably take this course. And the flip side
+
+29:29.880 --> 29:33.880
+of this is you might want to look and see whether the developers who are working on a thing you
+
+29:33.880 --> 29:38.200
+really care about have taken this course. You can get a badge that certifies you've taken the
+
+29:38.200 --> 29:43.320
+course, you've answered a basic quiz, it's not onerous, and it's free. But we hope it's something
+
+29:43.320 --> 29:49.480
+that helps substantiate that somebody is a bit more knowledgeable about this than they otherwise
+
+29:49.480 --> 29:54.600
+would be. Another part of this is something called the best practices badge. This is a checklist
+
+29:54.600 --> 29:59.000
+that's fairly extensive of the things that open-source projects can do to show that they
+
+29:59.000 --> 30:04.520
+take steps, they have a security team, they distribute things over HTTPS. I mean some of
+
+30:04.520 --> 30:09.880
+these things that seem pretty basic and each individual one is no guarantee of, you know,
+
+30:09.880 --> 30:17.080
+that it's security whole free code, but collectively can represent that this is a project that
+
+30:17.080 --> 30:21.480
+takes security more seriously. And studies have shown that the projects that have better scores
+
+30:21.480 --> 30:28.040
+tend to have fewer CVEs over the subsequent months and years. Now there's an automated tool
+
+30:28.040 --> 30:32.440
+for those projects because the best practice is badge is something that requires the maintainers
+
+30:32.440 --> 30:36.360
+to fill out, kind of a questionnaire, a checklist. There's some automation to that,
+
+30:36.360 --> 30:41.480
+but it's really just used to check the answers that the maintainers give. There's a different
+
+30:41.480 --> 30:47.800
+approach which is much more of a scanning kind of approach that called the OpenSSF security
+
+30:47.800 --> 30:53.240
+scorecards that automatically goes and scans repositories. It's gone and done a first wave
+
+30:53.240 --> 30:58.520
+scan of a million different repos, and you can trigger it to do an updated scan if you've made
+
+30:58.520 --> 31:04.680
+changes to your repo, but it takes a dozens of different heuristics. Things like is the,
+
+31:04.680 --> 31:10.200
+do you have artifacts, binary artifacts you've checked into your GitHub repo? That's probably
+
+31:10.200 --> 31:14.440
+not a great thing. Storing binaries and repos, I don't know how many of you might disagree, but
+
+31:14.440 --> 31:20.440
+like for reproducibility maybe, but use your package manager for to get your binary packages,
+
+31:20.440 --> 31:25.880
+checking it into source code control, opens the door to things that are not scrutinizable
+
+31:25.880 --> 31:32.200
+inside your source code system. Branch protection, CI test, do you have the best practices badge?
+
+31:32.200 --> 31:37.560
+Do you, have you done code reviews before code is merged, or does everybody just have commit
+
+31:37.560 --> 31:42.440
+proves, right? Do you have contributors from more than one organization? So some of this is
+
+31:43.160 --> 31:48.280
+adopts the chaos metrics, which looks at community health, but some of this as well are
+
+31:48.280 --> 31:54.200
+things like, do your tests, your automated tests, do they call fuzzing routines, fuzzing libraries?
+
+31:54.200 --> 31:58.840
+Now you can, you game a lot of these tests, right? Again, none of this is proof that your
+
+31:58.840 --> 32:05.320
+code is DFREC free, but collectively what this can do along with these other kind of measures of
+
+32:05.320 --> 32:13.560
+risk is develop a, is essentially develop a credit score for a project. And the scores and score
+
+32:13.560 --> 32:19.720
+card actually do correlate to lower CVEs. There was a study done by Sonotype who looked at the
+
+32:19.720 --> 32:24.520
+projects that had been scored and discovered that after receiving a score, there was a couple
+
+32:24.520 --> 32:29.240
+different categories within the security score cards. So they really were interested on what,
+
+32:29.240 --> 32:34.840
+which of those correlate most strongly to lower number of CVEs. So that was an interesting
+
+32:34.840 --> 32:38.920
+outcome. And this is going to be used, going to be used to refine the security score cards
+
+32:38.920 --> 32:44.200
+continuously over time to have them reflect kind of the changing landscape of some of the better
+
+32:44.200 --> 32:50.600
+run projects. But that's a big deal. And it's something that some projects have picked up as
+
+32:50.600 --> 32:56.600
+a leaderboard tool. The Cloud Native Compute Foundation ran a kind of a competition recently
+
+32:56.600 --> 33:03.320
+called the CLO Monitor, kind of on the sidelines for a month of their main KubeCon event where
+
+33:03.320 --> 33:10.040
+they got the maintainers of the different projects to commit to have a floor on the score. I think
+
+33:10.040 --> 33:16.040
+it was six or seven out of 10 for all of their projects, right? And have kind of a competition
+
+33:16.040 --> 33:22.440
+between them and with rewards for the maintainers who got their projects highest on the score card.
+
+33:22.440 --> 33:29.240
+So really cool to see. So all of that was about measurement. This now, the next set of things
+
+33:29.240 --> 33:35.160
+are about tools that help actually harden the software supply chain, so to speak. And one
+
+33:35.160 --> 33:38.840
+that you've heard, no doubt, talked about before, so I won't dwell on it too much, is something
+
+33:38.840 --> 33:45.320
+called Sigstore. And Sigstore is a software signing service. It's a set of software that are clients
+
+33:45.320 --> 33:50.920
+into that service. It's a protocol because it's a certain way of signing it that's an alternative
+
+33:50.920 --> 33:56.520
+to GPG signing of code. And it's a recognition that we haven't really signed artifacts through the
+
+33:56.520 --> 34:02.040
+supply chain pervasively, except for the very end. You know, when you do an app to get installed,
+
+34:02.040 --> 34:07.800
+it checks the GPG signatures on each package. Okay, that is helpful even above and beyond the
+
+34:07.800 --> 34:14.360
+fact that you're sending stuff over TLS, right? But for the rest of upstream, so often people are
+
+34:14.360 --> 34:20.120
+just pulling off of NPM, pulling off of package hosting, other packages just stored on bare
+
+34:20.120 --> 34:26.040
+websites where even validating the hash of that and fetching it over HTTPS doesn't prove the
+
+34:26.040 --> 34:30.520
+connection between the developers behind that code and the binary you have. There have been
+
+34:30.520 --> 34:35.400
+examples of people registering NPM packages that are named the same thing as a GitHub repo,
+
+34:36.280 --> 34:41.960
+kind of a typosquadding kind of attack as a way to try to cause you to inadvertently pick up
+
+34:41.960 --> 34:48.280
+the wrong piece of code. Obviously, sites, even sites like GitHub can be hacked, could be compromised,
+
+34:48.280 --> 34:52.360
+and you don't want your enterprise to be compromised if GitHub is compromised, frankly.
+
+34:53.480 --> 35:00.200
+So this is a tool to try to prevent that kind of thing, and it logs all of this to essentially
+
+35:00.200 --> 35:05.160
+a distributed ledger, a public database using short-lived keys, so you don't have to worry like
+
+35:05.160 --> 35:11.480
+PGP requires you to, to have private keys that you battle and keep private for a long time,
+
+35:11.480 --> 35:17.640
+just like let's encrypt, this is based on short-lived keys and an easy way to reprovision
+
+35:17.640 --> 35:22.680
+those keys. I won't go into much more depth on that. There's a few other things I'll point you to,
+
+35:22.680 --> 35:29.480
+something called Salsa, which is for supply chain level attestations, basically a way to distinguish
+
+35:29.480 --> 35:35.320
+between those things in your chain that are built to a higher degree of rigor than other things that
+
+35:35.320 --> 35:40.200
+are not. We've got another, something back on the best practices working group, which is a guide
+
+35:40.200 --> 35:45.640
+to coordinated vulnerability disclosure. So the next time there's a team, say they're not associated
+
+35:45.640 --> 35:50.120
+with Apache, say they're not associated with a major foundation who discover that they've got a
+
+35:50.120 --> 35:57.080
+pretty nasty bug and their code is used pretty widely, well, who do they turn to to understand
+
+35:57.080 --> 36:03.400
+how to, how to manage a coordinated disclosure process, how to not get in trouble for keeping
+
+36:03.400 --> 36:07.960
+something a little bit quiet while they've come up with the right fix, and then how do you evaluate
+
+36:07.960 --> 36:12.280
+who potentially to notify ahead of time so that you're upgrading enough of the internet before
+
+36:12.280 --> 36:16.120
+something becomes more widely known. And by the way, even if that sounds controversial, like there's
+
+36:16.120 --> 36:20.840
+some people who say, including the CRA, like if you know about a bug, you should tell everybody
+
+36:20.840 --> 36:25.160
+immediately, well, does anyone remember the hack that almost brought down the internet,
+
+36:25.160 --> 36:31.960
+the DNS cash poisoning bug in Bind, that if that had become widely known before the root name
+
+36:31.960 --> 36:36.840
+servers had been updated, would really, I mean, would have set us back so far, we would have had
+
+36:36.840 --> 36:42.440
+to revert to Etsy host files to be able to like connect on the internet again and get started.
+
+36:42.440 --> 36:47.560
+So the need for coordinated vulnerability disclosure might be somewhat controversial,
+
+36:47.560 --> 36:53.000
+but has become much more widely accepted today than ever before. And what one thing we're going
+
+36:53.000 --> 36:57.320
+to do in the OpenSSF is pull this all together into kind of a single dashboard to understand that
+
+36:57.320 --> 37:04.200
+risk, understand how organization, how open source projects compare apples to apples, and
+
+37:04.200 --> 37:08.280
+really as a tool to help the maintainers on those projects get better at what they do.
+
+37:08.280 --> 37:13.480
+But also, frankly, if we can help enterprises understand how where the risk lies and their
+
+37:13.480 --> 37:19.320
+use of code, if they can start making more choices based more on the security of that
+
+37:19.320 --> 37:23.720
+code than necessarily what is the most features of the most users, then we can start to, I think,
+
+37:23.720 --> 37:28.760
+bend industry in a better direction, somewhere between the carrots and the defaults kind of step
+
+37:28.760 --> 37:35.880
+of getting folks to adopt stuff. I do also want to throw out one of the biggest efforts that
+
+37:35.880 --> 37:41.240
+we have under the OpenSSF is this thing called the Alpha Omega project, which is independently
+
+37:41.240 --> 37:48.520
+funded and staffed, and it's got two pieces to it. The Alpha side is going and helping
+
+37:48.520 --> 37:53.480
+the largest open source foundations out there with the most critical needs, basically develop
+
+37:53.480 --> 37:59.720
+better security practices, develop security teams, go and do some proactive third party audits, but
+
+37:59.720 --> 38:05.080
+develop this muscle, this capability that hopefully persists even, you know, we'll go and we'll fund
+
+38:05.080 --> 38:09.480
+some of these projects for a couple years, and our hope is that at some point the stakeholders
+
+38:09.480 --> 38:13.320
+in that community take on that funding themselves, right? The companies who are depending upon that
+
+38:13.320 --> 38:17.480
+see the value of this kind of proactive investment and continue it forward so we can move on to
+
+38:17.480 --> 38:22.680
+the next set of projects. The Omega side of that is trying to set up scanning infrastructure for
+
+38:22.680 --> 38:28.120
+the most important 10,000 open source code bases to look for new kinds of vulnerabilities, to ask,
+
+38:28.120 --> 38:33.960
+you know, in theory, this GND LDAP bug in log4j that led to this thing, is it novel? And if it's
+
+38:33.960 --> 38:39.080
+novel, can we systematically scan for other projects that might be vulnerable to the same thing?
+
+38:39.080 --> 38:46.280
+And in some cases, could we even submit proactive pull requests to go and close those? And an example
+
+38:46.280 --> 38:49.960
+of another organization that has done this recently, I don't know if folks saw this
+
+38:49.960 --> 38:57.800
+announcement by Trelix last week, where they went and discovered 60,000, 61,000 open source
+
+38:57.800 --> 39:04.360
+projects that used the Python tar file module in an insecure way. This is actually an old CVE from
+
+39:04.360 --> 39:10.680
+2007 that the C Python devs have refused to fix because of a claim that the only way to fix it
+
+39:10.680 --> 39:15.160
+would be to break POSIX. So we can have that debate some other time. They went and found
+
+39:15.160 --> 39:20.360
+61,000 projects that have a vulnerability because they used it unsafely. They didn't sanitize inputs
+
+39:20.360 --> 39:29.080
+to it. They went and proactively issued 61,000 pull requests on those projects to fix this code.
+
+39:29.800 --> 39:35.480
+Doing this at scale is tremendously hard, but they did it. So far, after a month and a half of
+
+39:35.480 --> 39:39.480
+having those pull requests up, do you want to guess how many projects have actually accepted
+
+39:39.480 --> 39:47.160
+that pull request? Literally push the button to make their project more secure? 1,000. We still
+
+39:47.160 --> 39:51.000
+have a culture problem here. We still have an incentives problem. Even when you've given them
+
+39:51.000 --> 40:00.120
+this gift, it might not happen. Towards the end of time, I just want to say we've recognized that
+
+40:00.760 --> 40:05.800
+as the point I made earlier, you've got to show up. If you're an organization that cares about
+
+40:05.800 --> 40:11.400
+increasing the security of code, you've got to be prepared to invest time and ultimately money
+
+40:11.400 --> 40:15.000
+to make that happen. You cannot demand that open source developers simply be better.
+
+40:15.960 --> 40:21.160
+You've got to go and help them do that and spend that in. So one of the things we've done at the
+
+40:21.160 --> 40:27.080
+OpenSSF is over the last year, we developed an overarching plan to go and address 10 systematic
+
+40:27.080 --> 40:31.960
+weaknesses in open source and put together essentially business plans for each of them
+
+40:31.960 --> 40:37.880
+that would call for some funding to pay for the core of a project on the presumption that we
+
+40:37.880 --> 40:41.880
+could leverage volunteers around the periphery to try and have some of this impact. I won't go
+
+40:41.880 --> 40:46.440
+into detail of what that is too much. We call it the security mobilization plan. It includes
+
+40:46.440 --> 40:53.880
+things like $40 million to go and close security holes and some other things. It includes setting
+
+40:53.880 --> 41:00.840
+up an emergency response team for development teams that are understaffed who find a vulnerability
+
+41:00.840 --> 41:05.400
+to going and doing new scanning, to driving adoption of SigStore and other standards.
+
+41:05.400 --> 41:11.080
+So it's pretty comprehensive and it might seem like $150 million, which is the number we came up
+
+41:11.080 --> 41:15.880
+with after saying what could we do that would be lean, that would be kind of low-hanging fruit,
+
+41:15.880 --> 41:20.520
+but actually have a big impact. And we came up with this two-year number of $150 million. It
+
+41:20.520 --> 41:24.760
+might sound like a lot of money. It's certainly more than the Linux Foundation has. It's more than
+
+41:24.760 --> 41:29.320
+any of the other major open source foundations or even, frankly, Google and Microsoft have to spend
+
+41:29.320 --> 41:35.560
+on this, arguably. But there's a larger number out there that I want to focus on, which is $700
+
+41:35.560 --> 41:41.480
+million, which is the fine that the U.S. Federal Trade Commission levied on Equifax for the 2007
+
+41:41.480 --> 41:46.760
+data breach, caused in part by their use of unpatched open source software, Apache Struts.
+
+41:47.400 --> 41:52.920
+So to the industry, making the case that we collectively could pool our funds to go do this
+
+41:52.920 --> 41:56.520
+should be easy, right? And we've been out there trying to do it and have these conversations
+
+41:56.520 --> 42:02.200
+doing it at a time when the economic headwinds have not been in our favor. But still, the kinds
+
+42:02.200 --> 42:07.160
+of conversations we're having are very positive. And things like seeing the sovereign tech fund
+
+42:07.160 --> 42:11.880
+in Germany pop up and be able to fund not just some improvements in open source code,
+
+42:11.880 --> 42:16.760
+but security enhancement and the like has been really positive to see. And it should be a model
+
+42:16.760 --> 42:21.160
+for other countries to go and do this. But frankly, insurance companies as well as banks,
+
+42:21.160 --> 42:26.120
+as well as all these other industries that have benefited from open source software
+
+42:26.120 --> 42:31.080
+and haven't put things really in. And again, we're kind of out of time, so I won't go too much
+
+42:31.080 --> 42:36.600
+into depth. I do want to emphasize tooling around the S-bomb space is an important part of this
+
+42:36.600 --> 42:41.960
+as well, and being able to paint this overarching picture about how S-bombs, signed artifacts,
+
+42:41.960 --> 42:46.520
+software level attestations, and all these other things could have a positive impact.
+
+42:46.520 --> 42:51.160
+But we've got to show up and not just tell projects to adopt this, but weave it into the
+
+42:51.160 --> 42:57.240
+development tools as defaults so we can bring industry along. We've launched this with U.S.
+
+42:57.240 --> 43:03.480
+government back in May. We had a similar meeting in Japan in July. We've had conversations in
+
+43:03.480 --> 43:09.880
+Singapore and with people in other countries, and hopefully we'll see something here in Europe
+
+43:09.880 --> 43:17.080
+along the same lines. But let me just wrap up by saying there are attacks on the integrity of
+
+43:17.080 --> 43:21.560
+open source software that are increasingly disruptive and require us to work together
+
+43:21.560 --> 43:25.720
+to do things a little bit differently than we have before. It's not that we were reckless or
+
+43:25.720 --> 43:30.280
+careless or didn't care about security, most of us at least. There's some open source projects
+
+43:30.280 --> 43:35.640
+that definitely have been problems. But there's simply more that we can do and more that people
+
+43:35.640 --> 43:40.200
+who care about this and are starting to use open source software in French nuclear power plants
+
+43:40.200 --> 43:45.720
+can do to help this space be better. There's some specific steps as I've talked about,
+
+43:45.720 --> 43:50.440
+and that's why we're here at the open SSF, and we're here to help, but we also need your help
+
+43:50.440 --> 43:57.320
+as developers. It'd be very easy to see what we do as being the enterprises trying to make
+
+43:57.320 --> 44:04.520
+open source boring and make it all about checklists, and I'll concede that. But we're also here to
+
+44:04.520 --> 44:09.000
+try to say if we're going to shift the landscape, how do we work with the open source community
+
+44:09.000 --> 44:13.400
+to do that? Because we are part of the open source community, how we collectively take some action
+
+44:13.400 --> 44:19.400
+to make it less likely that our next winter holidays will be ruined. And with that, thank you.
+
+44:28.280 --> 44:30.360
+I think I left about 22 seconds for questions.
+
+44:30.360 --> 44:49.880
+Okay, five minutes. Okay, so we've got about five minutes for questions. So let me start by
+
+44:49.880 --> 44:56.520
+reading one question online. There was a question whether open SSF allows for anonymous reporting
+
+44:56.520 --> 45:00.600
+which could be without disclosing the reporter because that would be useful for companies
+
+45:00.600 --> 45:07.320
+fearing backlash or high expectations regarding what they have to do. So why bother reporting
+
+45:07.320 --> 45:12.120
+if you're just going to get into trouble? Why not just keep it, not release anything? So
+
+45:12.120 --> 45:17.400
+doing anonymity, making it possible to report anonymously would possibly improve that.
+
+45:17.400 --> 45:22.520
+Well, so the question is about anonymous reporting of bugs, and would that be helpful? Well, I will
+
+45:22.520 --> 45:28.520
+submit open source software has benefited tremendously by the fact that you aren't badging in to GitHub
+
+45:28.520 --> 45:34.280
+with your national ID, right? You are able to be pseudonymous. And you can use Satoshi Nakamoto
+
+45:34.280 --> 45:39.560
+as a famous example of that, whatever, right? But most of us or many of us have probably created
+
+45:39.560 --> 45:44.040
+login IDs that have nothing to do with our real name, right? And open source software is one of
+
+45:44.040 --> 45:48.760
+the last remaining places where you can actually productively collaborate with people who aren't,
+
+45:48.760 --> 45:52.760
+you know, fully identifying who they are, right? You're basing it on their quality
+
+45:52.760 --> 45:57.000
+of their contribution. And that's a really essential thing to try to preserve. And whether
+
+45:57.000 --> 46:02.040
+it's in reporting bugs or even collaborating on code, we should fight to preserve the right
+
+46:02.040 --> 46:07.160
+to be pseudonymous or even anonymous, if you want to call it that, in the development of code and
+
+46:07.160 --> 46:12.040
+in the fixing, reporting of bugs in the fixing of bugs. So I'm committed to trying to make sure we
+
+46:12.040 --> 46:19.400
+don't get to know your developer kinds of rules like some countries have started to call for.
+
+46:19.400 --> 46:23.880
+Thanks for a really interesting talk. I have a question about the economics of your proposed
+
+46:23.880 --> 46:31.640
+solution. It's not that you can pay developers out of the blue to do these tasks. You have to
+
+46:31.640 --> 46:38.520
+pull them away from other work. So you have to pay them actually more to let all the other work rest
+
+46:38.520 --> 46:45.080
+and focus on security. So this requires a major shift. Have you factored this into your proposal?
+
+46:45.080 --> 46:48.840
+No, I haven't thought about like having to pay not just for the work that we're doing,
+
+46:48.840 --> 46:53.160
+but fang for work that wouldn't be done because we're paying people to do the work. I think most
+
+46:53.160 --> 46:57.080
+of the time developers aren't able to work on open source code because they have to work on
+
+46:57.080 --> 47:02.280
+proprietary code to pay the bills. And so I think there's a lot of capacity out there for us if we
+
+47:02.280 --> 47:06.600
+do have funds to be able to pay for the kind of work that needs to be done. I also don't think
+
+47:06.600 --> 47:11.000
+we're talking about taking away from other software development work that's about adding
+
+47:11.000 --> 47:16.360
+features or fixing bugs. This is about bringing new types of organizations like the software
+
+47:16.360 --> 47:24.200
+auditor community to look at, to find new bugs. So it's not a big deal and frankly
+
+47:24.200 --> 47:28.600
+$150 million, even if that were all spent on software developers, would be a drop in the bucket
+
+47:28.600 --> 47:33.480
+compared to the total amount that is spent on developer salaries out there. So that doesn't
+
+47:33.480 --> 47:37.000
+worry me. But it's a good question. Thank you for that.
+
+47:39.160 --> 47:41.560
+Do you have more questions from the public?
+
+47:45.640 --> 47:50.200
+Okay, well thank you so much. There was one question in the chat about how it's the open
+
+47:50.920 --> 47:55.560
+SSL collaborating with OWASP. Is that a collaboration there or not?
+
+47:56.280 --> 48:01.720
+So how are we, there's a question in chat on how is the open SSL collaborating with OWASP.
+
+48:01.720 --> 48:05.160
+So Andrew Vanderstock who's the executive director of OWASP is on our board.
+
+48:06.520 --> 48:11.960
+There's a lot that OWASP does in terms of education and certification and community
+
+48:11.960 --> 48:16.280
+building that absolutely is essential and so we look for ways to work together and we'd like to
+
+48:16.280 --> 48:23.160
+avoid overlap with what they do. But yeah, that's about it. We're very complimentary to their efforts
+
+48:23.160 --> 48:32.120
+and I think they think the same. Okay, anybody else? Go.
+
+48:43.480 --> 48:47.880
+Hello, we are in Europe here. You have spoken about different
+
+48:47.880 --> 48:53.880
+conferences all over the world in Singapore but do you have something in Europe?
+
+48:54.600 --> 48:59.880
+We've had lots of conversations in Europe. There are many OSPOs starting in Europe who are
+
+48:59.880 --> 49:04.920
+interested in this and I do think OSPOs are an interesting lever point in being able to get
+
+49:04.920 --> 49:10.840
+standards adopted around security, being able to present measures of risk to be thinking about
+
+49:10.840 --> 49:15.400
+all these kinds of things. So have had interesting conversations that way, have not had the kind of
+
+49:15.400 --> 49:21.000
+full-throated engagement around this that we've seen with the United States and with some other
+
+49:21.000 --> 49:26.280
+countries. So I would like to see more but frankly even those other countries haven't yet put money
+
+49:26.280 --> 49:29.800
+into this. We're kind of waiting for certain political cycles to make their way through
+
+49:30.360 --> 49:34.760
+but I know we've inspired some action. Again, I do want to cite the sovereign tech fund out of
+
+49:34.760 --> 49:40.040
+Germany as not specifically a security fund but the right kind of thing for these countries to
+
+49:40.040 --> 49:43.720
+be doing. So anyways, thank you for the question. Anything else?
+
+49:43.720 --> 49:49.320
+That's exactly how much time we've had. So thank you again, Brian. Thanks all.

@@ -1,0 +1,1054 @@
+WEBVTT
+
+00:00.000 --> 00:09.360
+So, hello everyone, pleasure to be here.
+
+00:09.360 --> 00:14.320
+I'm Ithamar Holder and I'm a senior software engineer working for Red Hat.
+
+00:14.320 --> 00:20.400
+And this is a talk about the journey through supporting VMs with dedicated CPUs and Kubernetes.
+
+00:20.400 --> 00:26.400
+And the reason that there's a journey word in the subject is that this was a true journey
+
+00:26.400 --> 00:27.400
+for me.
+
+00:27.400 --> 00:33.600
+And I'm going to guide you through the journey until we reach the actual problems and solutions.
+
+00:33.600 --> 00:34.760
+And there are two reasons for that.
+
+00:34.760 --> 00:40.360
+So first reason is that we need to understand the problems and solutions.
+
+00:40.360 --> 00:43.960
+So we need to understand the background for it.
+
+00:43.960 --> 00:48.960
+But the second reason is that I've gained a lot of insights and takeaways during that
+
+00:48.960 --> 00:49.960
+journey.
+
+00:49.960 --> 00:55.160
+And I think that I hope that you could find is also valuable for your journeys.
+
+00:55.160 --> 01:00.680
+And yeah, that you can take the same takeaways for whatever you're doing and whatever you're
+
+01:00.680 --> 01:02.120
+interested in.
+
+01:02.120 --> 01:08.440
+So we're going to talk about all sorts of stuff like dedicated CPUs and CPU manager,
+
+01:08.440 --> 01:13.640
+C groups, spot isolation and namespaces, Kubernetes resource allocation.
+
+01:13.640 --> 01:16.440
+And so let's begin.
+
+01:16.440 --> 01:19.520
+So first of all, an introduction to Kuber.
+
+01:19.520 --> 01:27.320
+So Kubernetes is designed to run containers, which are designed very differently than VMs.
+
+01:27.320 --> 01:34.280
+And running VMs on one platform and containers on another platform is not the best approach.
+
+01:34.280 --> 01:37.520
+And this is where Kuber comes into play.
+
+01:37.520 --> 01:42.720
+This is basically an add-on or extension to Kubernetes, which lets you run VMs on top
+
+01:42.720 --> 01:47.880
+of Kubernetes as a first-class citizen, as a completely cloud native.
+
+01:47.880 --> 01:53.120
+And I'm not going to dive into all the architectural details here, but the trick is basically to
+
+01:53.120 --> 01:59.880
+run a VM within a container, like this picture tries to illustrate.
+
+01:59.880 --> 02:05.200
+And that's basically what you need to know for this talk.
+
+02:05.200 --> 02:08.040
+So what's the deal with dedicated CPUs?
+
+02:08.040 --> 02:14.640
+So basically, the key word here is avoiding preemption or context switches, right?
+
+02:14.640 --> 02:20.000
+These are crucial, this is crucial for certain use cases like real-time VMs or VMs that
+
+02:20.000 --> 02:21.920
+depend on very low latency.
+
+02:21.920 --> 02:27.640
+So as a naive example, let's think about a VM that hot loops over some condition.
+
+02:27.640 --> 02:31.680
+And when this condition becomes true, it has to react really, really fast.
+
+02:31.680 --> 02:36.800
+So if we context switch this workload out, then it would take more time.
+
+02:36.800 --> 02:41.520
+Because once the condition becomes true, it would take time to context switch back, and
+
+02:41.520 --> 02:45.040
+only then the VM could react.
+
+02:45.040 --> 02:48.200
+So this is very crucial for some use cases.
+
+02:48.200 --> 02:54.560
+Also it's supported by most hyper-hypervisors, and it's a pretty standard feature.
+
+02:54.560 --> 02:58.920
+And we aim to bring this also to Kubernetes.
+
+02:58.920 --> 03:00.280
+So a question to the crowd.
+
+03:00.280 --> 03:02.120
+Who recognizes this section?
+
+03:02.120 --> 03:03.840
+Who knows what this is?
+
+03:03.840 --> 03:06.600
+Okay, so most of you.
+
+03:06.600 --> 03:12.680
+And another question, who can say that he's confident about how this is implemented behind
+
+03:12.680 --> 03:16.680
+the scenes, or how Kubernetes actually does that?
+
+03:16.680 --> 03:18.720
+A lot less of you, right?
+
+03:18.720 --> 03:23.920
+So that's good, it means that this is relevant, right?
+
+03:23.920 --> 03:27.560
+So obviously, this is taken from the pods manifest.
+
+03:27.560 --> 03:30.360
+This is the place when we specify resources.
+
+03:30.360 --> 03:33.160
+We have, of course, requests and limits.
+
+03:33.160 --> 03:40.960
+We can specify CPU, memory, a firmware storage, and a bunch of other stuff.
+
+03:40.960 --> 03:43.920
+And so let's talk about containers for a second.
+
+03:43.920 --> 03:50.200
+So containers are actually a conceptual concept that can be implemented in many ways.
+
+03:50.200 --> 03:56.520
+So from the Linux kernel perspective, there isn't such a thing as a container, really.
+
+03:56.520 --> 04:03.040
+There are basically a couple of main kernel features that serve as the building blocks
+
+04:03.040 --> 04:04.960
+for containers.
+
+04:04.960 --> 04:06.880
+One of them is C groups.
+
+04:06.880 --> 04:12.320
+C groups is very important, and is one of the main building blocks for containers.
+
+04:12.320 --> 04:15.760
+So let's talk about C groups a bit.
+
+04:15.760 --> 04:22.280
+So basically, the idea is that the architecture is a tree of resources, right?
+
+04:22.280 --> 04:26.600
+We have the root C group, which is basically all of the resources on the node.
+
+04:26.600 --> 04:29.000
+So for example, 100 CPUs.
+
+04:29.000 --> 04:35.280
+And then we divide them into groups, like for example, 70 CPUs, 20 CPUs, 10 CPUs, and
+
+04:35.280 --> 04:37.520
+so on.
+
+04:37.520 --> 04:44.560
+The idea is that every process on the system is attached to a C group.
+
+04:44.560 --> 04:54.160
+And that basically the C groups limits the resources for this group of processes.
+
+04:54.160 --> 04:57.560
+And in Kubernetes, there is usually one C group per container.
+
+04:57.560 --> 05:01.240
+This actually depends on the CRI that you're using.
+
+05:01.240 --> 05:09.720
+But the most common approach is to use one C group per container.
+
+05:09.720 --> 05:14.640
+So in Kubernetes, all of the values are always absolute, right?
+
+05:14.640 --> 05:20.920
+When we specify CPU, for example, we can specify 100M, which stands for milli-CPUs, which is
+
+05:20.920 --> 05:27.240
+similar to 0.1 CPUs, 1.3, whatever, but these are always absolute values.
+
+05:27.240 --> 05:29.880
+In C groups, it's all relative, right?
+
+05:29.880 --> 05:31.480
+It's called CPU shares.
+
+05:31.480 --> 05:34.560
+The default is 1024, but it doesn't really matter.
+
+05:34.560 --> 05:43.040
+So if we'll look on a very naive example again, let's say that we have a node with two pods
+
+05:43.040 --> 05:45.000
+running on the system, pod A and pod B.
+
+05:45.000 --> 05:49.920
+And let's say that pod A has one CPU share and pod B has two CPU shares.
+
+05:49.920 --> 05:57.280
+What it would mean is that pod B would have twice as CPU time as pod A. It doesn't really
+
+05:57.280 --> 06:02.280
+matter how many CPUs the nodes have, because this is all relative, right?
+
+06:02.280 --> 06:10.200
+So how does Kubernetes convert between the absolute values and the relative shares?
+
+06:10.200 --> 06:17.320
+So we can think about one CPU as 1024 shares, just because it's the default in C groups.
+
+06:17.320 --> 06:20.680
+So let's say that a pod asks for 200M CPUs.
+
+06:20.680 --> 06:23.320
+So this is actually a fifth of a CPU.
+
+06:23.320 --> 06:32.960
+So what we can do is divide 1024 by 5 and we get approximately 205 shares.
+
+06:32.960 --> 06:36.800
+And this would work, but remember that shares are still relative.
+
+06:36.800 --> 06:44.760
+So what happens, for example, if the node has 100 CPUs and one pod with 200M CPUs request
+
+06:44.760 --> 06:46.520
+runs on that pod?
+
+06:46.520 --> 06:50.100
+Since it's relative, it would just use all of the node's resources, right?
+
+06:50.100 --> 06:52.320
+So this has a nice side effect.
+
+06:52.320 --> 07:01.520
+The spare resources on the node can be used by the pod relatively to their request.
+
+07:01.520 --> 07:05.800
+So basically the request is the minimum amount that is actually allocated and all of the
+
+07:05.800 --> 07:14.280
+spare resources are being split relatively to their request.
+
+07:14.280 --> 07:18.080
+So let's talk about Kubernetes QoS for a second.
+
+07:18.080 --> 07:21.280
+There are three quality of service levels.
+
+07:21.280 --> 07:23.080
+The first one is best effort.
+
+07:23.080 --> 07:25.080
+That means that I don't specify anything.
+
+07:25.080 --> 07:30.760
+I don't have request, I don't have limits, not for memory and not for CPU.
+
+07:30.760 --> 07:34.080
+The last one, guaranteed, is kind of the opposite from that.
+
+07:34.080 --> 07:38.760
+I specify both request and limits to both CPUs and memory and the request and limits
+
+07:38.760 --> 07:40.680
+are equal.
+
+07:40.680 --> 07:44.760
+Now if you're not best effort and you're not guaranteed, you'd be burstable.
+
+07:44.760 --> 07:50.440
+So this is just an example, but the idea is that you can specify either only request,
+
+07:50.440 --> 07:53.000
+only limits, you can specify them both, but they're not equal.
+
+07:53.000 --> 08:00.080
+So any other than best effort and guaranteed.
+
+08:00.080 --> 08:05.320
+Now basically the trade-off here is predictability in order to get stability.
+
+08:05.320 --> 08:10.880
+So basically Kubernetes tells you, if you want me to guarantee you stability, you have
+
+08:10.880 --> 08:16.960
+to be predictable or if you will be more predictable, you'll gain more stability.
+
+08:16.960 --> 08:22.360
+Like one example for that, if we're talking about memory for example, are node pressures.
+
+08:22.360 --> 08:29.840
+So when the node would have high memory pressure, it would evict guaranteed QoS pods last.
+
+08:29.840 --> 08:35.600
+And after that it would get to burstable, after that it would get to best efforts.
+
+08:35.600 --> 08:39.240
+So this is true by the way, as long as you keep your promises.
+
+08:39.240 --> 08:43.280
+If you say that you're limited to a certain amount of memory and then you exceed this
+
+08:43.280 --> 08:53.160
+memory, then on most CRIs we'll just kill the pod.
+
+08:53.160 --> 08:56.080
+So can we use dedicated CPUs on Kubernetes?
+
+08:56.080 --> 08:57.760
+So the answer is yes.
+
+08:57.760 --> 09:01.160
+This is possible with CPU manager.
+
+09:01.160 --> 09:05.760
+And in order to do that, we have two requirements.
+
+09:05.760 --> 09:09.600
+First of all, the pod needs to be of guaranteed QoS.
+
+09:09.600 --> 09:14.080
+Second of all, the CPU request, which equals the limit because it's a guaranteed QoS, has
+
+09:14.080 --> 09:15.280
+to be an integer.
+
+09:15.280 --> 09:20.440
+It cannot be a floating point value.
+
+09:20.440 --> 09:24.720
+Also an interesting fact is that only a single container or some of the containers in a pod
+
+09:24.720 --> 09:34.060
+can have dedicated CPUs, but the whole pod needs to be of a guaranteed QoS.
+
+09:34.060 --> 09:36.880
+So let's talk about namespaces for a second.
+
+09:36.880 --> 09:41.560
+So remember this little diagram from before, so namespaces is another building block for
+
+09:41.560 --> 09:46.000
+containers and it basically is responsible for the isolation of the containers.
+
+09:46.000 --> 09:50.200
+So when I'm picturing a pod, this is what I think about.
+
+09:50.200 --> 09:53.160
+Like it's a box with some containers in it.
+
+09:53.160 --> 09:57.680
+The containers are absolutely isolated from one another.
+
+09:57.680 --> 10:03.880
+And as we said, container is a concept.
+
+10:03.880 --> 10:11.080
+So if we will take some of the namespaces out and we will break some of the isolations
+
+10:11.080 --> 10:12.080
+between the containers.
+
+10:12.080 --> 10:14.040
+Are there still containers?
+
+10:14.040 --> 10:19.280
+How do we need to, how layers of isolation do we need to strip before it stops being
+
+10:19.280 --> 10:20.780
+a container?
+
+10:20.780 --> 10:25.520
+This is more of a philosophical question, but is it possible on Kubernetes and the answer
+
+10:25.520 --> 10:27.040
+is yes.
+
+10:27.040 --> 10:32.840
+So for example, it's possible to share the pod namespace between containers or the process
+
+10:32.840 --> 10:34.000
+namespace between containers.
+
+10:34.000 --> 10:39.560
+And what it means is that inside the container, if you will do something like PS, you would
+
+10:39.560 --> 10:42.440
+see all of the processes from all of the containers.
+
+10:42.440 --> 10:46.040
+This isolation will not exist anymore.
+
+10:46.040 --> 10:51.040
+Another interesting fact is that as a side effect, the file systems are also shared.
+
+10:51.040 --> 10:57.840
+Now they're not shared directly, but you can use that trick to use them indirectly.
+
+10:57.840 --> 11:06.720
+We'll get you to the root file system of another process that now can be in another container.
+
+11:06.720 --> 11:11.360
+So to actually enable that, that's what you need to do.
+
+11:11.360 --> 11:19.600
+In the pod, in the spec, share process namespace, true, and that's it.
+
+11:19.600 --> 11:21.880
+So now a word about KVM.
+
+11:21.880 --> 11:24.320
+So who knows KVM, by the way?
+
+11:24.320 --> 11:26.880
+Oh, a lot of you, okay.
+
+11:26.880 --> 11:31.280
+So this is a kernel model which turns the Linux into a hypervisor.
+
+11:31.280 --> 11:34.880
+Basically we have two kinds of hypervisors, type one and type two.
+
+11:34.880 --> 11:39.360
+Type one means that it's also called a bare metal hypervisor because it's being installed
+
+11:39.360 --> 11:40.360
+on a bare metal.
+
+11:40.360 --> 11:42.760
+There's no OS benefit.
+
+11:42.760 --> 11:47.800
+And what it means is that it's really fast, but the downside is that it has to implement
+
+11:47.800 --> 11:52.280
+stuff like a scheduler, a virtual memory, and a lot of stuff that already exists on every
+
+11:52.280 --> 11:53.720
+OS.
+
+11:53.720 --> 11:58.280
+Type two hypervisors are being installed on top of the OS, so they don't have to re-implement
+
+11:58.280 --> 12:01.600
+all of those stuff, but they're usually a lot slower.
+
+12:01.600 --> 12:06.960
+So KVM is really incredible because it turns Linux into a type one hypervisor.
+
+12:06.960 --> 12:14.160
+And this is what Qvert is using to gain native performance.
+
+12:14.160 --> 12:18.800
+An interesting fact about a KVM is that its main purpose is CPU virtualization because
+
+12:18.800 --> 12:22.040
+this is the performance part.
+
+12:22.040 --> 12:28.160
+It's also backed by QEMU, which does things like IO and stuff like that, which are usually
+
+12:28.160 --> 12:33.480
+less related to performance.
+
+12:33.480 --> 12:36.640
+So how does KVM actually works?
+
+12:36.640 --> 12:41.960
+So from the guest perspective, it will have, for example, four CPUs.
+
+12:41.960 --> 12:44.120
+But these aren't real CPUs, right?
+
+12:44.120 --> 12:46.800
+They are virtual CPUs or VCPUs.
+
+12:46.800 --> 12:52.680
+And from the kernel perspective, these are just threads, VCPU threads.
+
+12:52.680 --> 12:58.840
+So what the guest sees as a physical CPU is actually from the host perspective is just
+
+12:58.840 --> 13:00.920
+another thread on the system.
+
+13:00.920 --> 13:07.000
+Okay, so now back to Qvert after all of these introductions.
+
+13:07.000 --> 13:09.380
+In Qvert, we have the VRT Launcher pod.
+
+13:09.380 --> 13:11.560
+It has some containers in it.
+
+13:11.560 --> 13:14.360
+The compute container is the main container.
+
+13:14.360 --> 13:20.840
+Inside the compute container, we run the QEMU process, which actually runs the guest.
+
+13:20.840 --> 13:26.040
+And this is the main container that we're using.
+
+13:26.040 --> 13:29.040
+So first attempt to support dedicated CPUs.
+
+13:29.040 --> 13:36.800
+So the idea was let's allocate the compute container that we talked about with dedicated
+
+13:36.800 --> 13:38.000
+CPUs.
+
+13:38.000 --> 13:40.480
+So this is possible with CPU manager as we talked about.
+
+13:40.480 --> 13:45.560
+All we need is to do is to have a pod that's guaranteed QS and to have an integer amount
+
+13:45.560 --> 13:51.320
+of CPUs on the compute container.
+
+13:51.320 --> 13:57.320
+So by the way, is it a good approach, do you think?
+
+13:57.320 --> 14:00.600
+This is a problem and let me explain you why.
+
+14:00.600 --> 14:04.240
+So let's zoom into the compute container for a second.
+
+14:04.240 --> 14:09.320
+The list here is all of the processes and threads that run inside the compute container.
+
+14:09.320 --> 14:13.480
+You don't need to understand everything that's running here.
+
+14:13.480 --> 14:15.440
+But let me show you the interesting part.
+
+14:15.440 --> 14:18.400
+So you see the QEMU KVM process.
+
+14:18.400 --> 14:22.040
+All of the red ones are threads.
+
+14:22.040 --> 14:29.560
+Now as you can see, we have two threads, which are the actual vCPU threads, like I said earlier.
+
+14:29.560 --> 14:37.760
+So the problem is that we have a lot of threads with different priorities.
+
+14:37.760 --> 14:45.120
+And if we let all of the compute container run with dedicated CPUs, this aren't really
+
+14:45.120 --> 14:50.120
+dedicated CPUs because we said that the keyword here is avoiding preemption, right?
+
+14:50.120 --> 14:55.120
+But with the previous setting, we're basically, we will context switch out the vCPUs in order
+
+14:55.120 --> 14:58.120
+for other threads inside the compute containers.
+
+14:58.120 --> 15:02.760
+So the vCPUs aren't running on dedicated CPUs really.
+
+15:02.760 --> 15:05.440
+We actually lie to the guest.
+
+15:05.440 --> 15:09.920
+So that's a problem.
+
+15:09.920 --> 15:12.880
+Now the second approach is called the housekeeping C-group.
+
+15:12.880 --> 15:21.400
+And the idea is that we will make a child C-group for all of the low priority threads or processes.
+
+15:21.400 --> 15:22.680
+So how would it work?
+
+15:22.680 --> 15:26.520
+So let's say that the user asks for XCPUs.
+
+15:26.520 --> 15:30.560
+We would actually allocate X plus one dedicated CPUs.
+
+15:30.560 --> 15:36.280
+And one dedicated CPU will serve all of the housekeeping tasks.
+
+15:36.280 --> 15:44.240
+And when I say housekeeping tasks, I basically mean everything but the vCPUs themselves.
+
+15:44.240 --> 15:51.000
+Then what we can do is move all of the threads that aren't vCPUs into the housekeeping C-groups.
+
+15:51.000 --> 15:56.280
+And then the vCPUs would be with two dedicated CPUs.
+
+15:56.280 --> 15:57.280
+So this is how it looks like.
+
+15:57.280 --> 16:02.240
+We have the vert launcher pod inside of we have the compute container with X plus one
+
+16:02.240 --> 16:04.000
+dedicated CPUs.
+
+16:04.000 --> 16:08.120
+One dedicated CPU is for everything but the vCPUs themselves.
+
+16:08.120 --> 16:14.600
+And the X dedicated CPUs are for the vCPUs.
+
+16:14.600 --> 16:19.680
+So this approach is much better because it lets us, this basically supports two dedicated
+
+16:19.680 --> 16:22.280
+CPUs for the vCPUs.
+
+16:22.280 --> 16:24.640
+But this also has a problem.
+
+16:24.640 --> 16:33.000
+So first problem is that we waste one dedicated CPU for stuff that are of low priority.
+
+16:33.000 --> 16:35.320
+This is a huge waste.
+
+16:35.320 --> 16:43.240
+Ideally, we would have wanted to do something like give me like four or X amount of dedicated
+
+16:43.240 --> 16:47.840
+CPUs and another amount of shared CPUs for everything else.
+
+16:47.840 --> 16:51.480
+And this is actually possible on C-groups but it's not possible on Kubernetes because
+
+16:51.480 --> 16:52.840
+what we said earlier.
+
+16:52.840 --> 16:57.680
+If we're going to ask like 3.2 CPUs or something like that, they won't be dedicated.
+
+16:57.680 --> 16:59.440
+That would be all shared.
+
+16:59.440 --> 17:03.120
+So basically Kubernetes goes for an all or nothing approach.
+
+17:03.120 --> 17:09.560
+Either all of the CPUs are dedicated or all of the CPUs are shared.
+
+17:09.560 --> 17:13.680
+Another problem which is more of a design problem is that we're focused around the lowest
+
+17:13.680 --> 17:15.600
+priority processes.
+
+17:15.600 --> 17:18.200
+And this kind of should be reversed, right?
+
+17:18.200 --> 17:24.560
+I mean we want to configure the vCPUs to have dedicated CPUs.
+
+17:24.560 --> 17:27.760
+So we configure everything that is not the vCPUs.
+
+17:27.760 --> 17:34.680
+And this is problematic because we would ideally want to only change the vCPUs threads and
+
+17:34.680 --> 17:42.040
+leave everything as is to keep it open for extensions in the future and stuff like that.
+
+17:42.040 --> 17:45.840
+There are more problems related to C-groups v1 and v2.
+
+17:45.840 --> 17:54.040
+I'll not dive into details here but two words about it is for example in v2 we have the
+
+17:54.040 --> 17:57.560
+threaded C-group concept which doesn't exist in v1.
+
+17:57.560 --> 18:01.160
+And in a threaded C-group we have a lot of limitations.
+
+18:01.160 --> 18:06.480
+Some of the controllers and some systems of C-groups cannot work at all.
+
+18:06.480 --> 18:11.800
+So just know that there are more problems with this solution.
+
+18:11.800 --> 18:18.360
+So a third attempt, I'm calling it the dedicated CPU C-group approach and here's the idea.
+
+18:18.360 --> 18:23.280
+So the compute container stays completely as it is.
+
+18:23.280 --> 18:24.960
+We won't touch it at all.
+
+18:24.960 --> 18:32.400
+We would allocate it with CPUs that are not a dedicated, sorry they are shared CPUs but
+
+18:32.400 --> 18:38.200
+remember that the pods still need to be with guaranteed QoS and I'll explain why.
+
+18:38.200 --> 18:44.840
+So what we will do is add another container which is basically a blank container with
+
+18:44.840 --> 18:50.600
+X dedicated CPUs and as I said every container creates a new C-group so it will create a new
+
+18:50.600 --> 18:51.960
+C-group for us.
+
+18:51.960 --> 18:53.840
+So what do I mean by a blank container?
+
+18:53.840 --> 18:56.240
+I mean a container doesn't really run anything.
+
+18:56.240 --> 19:01.240
+It could run for example a sleep forever process just to keep the container alive but that's
+
+19:01.240 --> 19:02.240
+it.
+
+19:02.240 --> 19:04.160
+It would be entire the blank.
+
+19:04.160 --> 19:10.160
+And then what we will do is move only the VCPUs into another container, right, into
+
+19:10.160 --> 19:11.840
+another C-group.
+
+19:11.840 --> 19:19.520
+All of the compute containers stays as is and only the VCPUs are configured.
+
+19:19.520 --> 19:22.480
+So this is how it looks like.
+
+19:22.480 --> 19:27.440
+So as the VM starts or before it starts, we have the VRT launcher.
+
+19:27.440 --> 19:29.320
+Now we have two different containers.
+
+19:29.320 --> 19:32.280
+One of them is the compute container with Y shared CPUs.
+
+19:32.280 --> 19:34.360
+These are not dedicated CPUs.
+
+19:34.360 --> 19:37.280
+The other one is a container with dedicated CPUs.
+
+19:37.280 --> 19:42.920
+X dedicated CPUs, exactly the amount we need, not X plus one as before.
+
+19:42.920 --> 19:49.120
+So in the compute container everything is being run when the VM is being started.
+
+19:49.120 --> 19:53.920
+But right after it's being started or right before it's being started, what we will do
+
+19:53.920 --> 19:58.080
+is move the VCPUs into the different container.
+
+19:58.080 --> 20:03.320
+And that basically solves our problem because now all of the housekeeping tasks are being
+
+20:03.320 --> 20:10.040
+run with shared CPUs, the VCPUs are running on dedicated CPUs.
+
+20:10.040 --> 20:11.800
+So can we actually do that?
+
+20:11.800 --> 20:18.600
+I mean, we actually moved some threads of a process to another container.
+
+20:18.600 --> 20:21.160
+This looks extremely weird, right?
+
+20:21.160 --> 20:24.880
+But this is possible because we shared the PID namespace.
+
+20:24.880 --> 20:31.520
+So you can think about it like the processes are not isolated anymore.
+
+20:31.520 --> 20:36.160
+They're not really being moved from one container to another because the container does not
+
+20:36.160 --> 20:38.160
+isolate processes anymore.
+
+20:38.160 --> 20:40.720
+So we only change C groups.
+
+20:40.720 --> 20:46.920
+So from the VCPUs perspective, they just stay the same.
+
+20:46.920 --> 20:52.760
+They can communicate with all of the threads and processes in the system.
+
+20:52.760 --> 20:57.320
+So only the relevant threads are being configured, as I said, shared CPUs for the housekeeping
+
+20:57.320 --> 21:01.680
+test so we don't waste one dedicated core anymore.
+
+21:01.680 --> 21:04.200
+And we keep things open for extensions in the future.
+
+21:04.200 --> 21:08.920
+Maybe we would want to do more plays with C groups in the future.
+
+21:08.920 --> 21:14.080
+So we want everything in the compute container to stay completely as is.
+
+21:14.080 --> 21:18.120
+OK, so summary and takeaways.
+
+21:18.120 --> 21:19.760
+There were a lot of introductions here.
+
+21:19.760 --> 21:25.720
+And I've scratched the surface of a lot of cool facts and technologies that I've seen
+
+21:25.720 --> 21:27.920
+along the way.
+
+21:27.920 --> 21:35.400
+So we've seen CPU allocation, implementation in Kubernetes, how C group uses relative shares
+
+21:35.400 --> 21:44.360
+and not absolute values, and how the CPUs and the resources are being spread along the
+
+21:44.360 --> 21:48.080
+pods relatively to their requests.
+
+21:48.080 --> 21:50.920
+We've seen how to enable dedicated CPUs and Kubernetes.
+
+21:50.920 --> 21:56.720
+We've seen namespaces and how to break the isolation within a pod.
+
+21:56.720 --> 22:05.640
+We've talked a bit about KVM and how it uses threads to run the actual CPUs.
+
+22:05.640 --> 22:07.280
+And of course, we talked about Kuvert.
+
+22:07.280 --> 22:13.200
+And again, I really hope that these takeaways would serve you in your journeys in the future.
+
+22:13.200 --> 22:15.800
+And I hope that you find this interesting.
+
+22:15.800 --> 22:20.800
+So thanks a lot, and you're always welcome to send questions or feedback or anything
+
+22:20.800 --> 22:26.840
+else to my mail and I'll also be outside for questions.
+
+22:26.840 --> 22:27.840
+OK.
+
+22:27.840 --> 22:28.840
+So thank you.
+
+22:28.840 --> 22:29.840
+And if you have any questions.
+
+22:29.840 --> 22:30.840
+OK.
+
+22:30.840 --> 22:42.840
+So the question is, do we need to do something like this?
+
+22:42.840 --> 22:49.080
+OK, so the question is, do we need more permission to divert launcher pod, or is it being done
+
+22:49.080 --> 22:50.160
+by the vert handler?
+
+22:50.160 --> 22:53.480
+And the answer is, it's being done by the vert handler.
+
+22:53.480 --> 22:58.960
+So just a bit of context, a vert handler is another pod that Kuvert uses.
+
+22:58.960 --> 23:04.000
+It's a pod with high privileges, and therefore, we don't need any extra privileges for it
+
+23:04.000 --> 23:05.000
+to configure that.
+
+23:05.000 --> 23:06.000
+Yeah.
+
+23:06.000 --> 23:15.000
+Does this allow for easier networking communication if you talk in service communication in the
+
+23:15.000 --> 23:16.000
+Kubernetes sense?
+
+23:16.000 --> 23:20.800
+You could do it VM to VM, presumably with the exact same mechanism, so resolving service
+
+23:20.800 --> 23:25.640
+names from what VM to whatever VM is using Kubernetes, does that work at the moment?
+
+23:25.640 --> 23:27.640
+So that's a question about Kuvert in general, right?
+
+23:27.640 --> 23:32.640
+But in Kubernetes, I can do it, but presumably I can do the same thing from a VM running
+
+23:32.640 --> 23:33.640
+inside the pod.
+
+23:33.640 --> 23:34.640
+Right.
+
+23:34.640 --> 23:37.760
+Yeah, so the answer is yes.
+
+23:37.760 --> 23:38.760
+OK.
+
+23:38.760 --> 23:39.760
+Yeah.
+
+23:39.760 --> 23:40.760
+Any other question?
+
+23:40.760 --> 23:41.760
+Yeah.
+
+23:41.760 --> 23:42.760
+I have a question.
+
+23:42.760 --> 23:45.760
+You are dedicating the CPUs separately, but about other threads, which are, for some
+
+23:45.760 --> 23:50.760
+of these cases, highly CPU consuming like network threads or IO threads, is there a network
+
+23:50.760 --> 23:51.760
+thread as well?
+
+23:51.760 --> 23:52.760
+Right.
+
+23:52.760 --> 24:04.560
+So the question is, what about IO threads or network related threads, what about them?
+
+24:04.560 --> 24:09.200
+And, actually, in the VM manifest, we have configurations for that.
+
+24:09.200 --> 24:13.720
+So you can ask, for example, for an IO thread to run on a dedicated CPU.
+
+24:13.720 --> 24:14.720
+That is also supported.
+
+24:14.720 --> 24:15.720
+Yeah.
+
+24:15.720 --> 24:23.160
+I focused solely on the CPUs themselves, but this is entirely possible in Kuvert today.
+
+24:23.160 --> 24:24.160
+Yes.
+
+24:24.160 --> 24:28.880
+Can I combine it with new machines, so dual machine machines can be used by the same
+
+24:28.880 --> 24:34.720
+machine, and what's running with it?
+
+24:34.720 --> 24:38.160
+So the question is, can we support NUMA with this?
+
+24:38.160 --> 24:39.920
+The answer is yes.
+
+24:39.920 --> 24:49.320
+I'm not sure if it works right now outside of the box, but I think it should be possible
+
+24:49.320 --> 24:52.120
+with, especially with C-groups V2.
+
+24:52.120 --> 24:53.640
+But this is an interesting question.
+
+24:53.640 --> 24:56.160
+I will have to think about it a little more.
+
+24:56.160 --> 25:00.640
+I think it is possible.
+
+25:00.640 --> 25:01.640
+Anyone else?
+
+25:01.640 --> 25:02.640
+Time's up.
+
+25:02.640 --> 25:05.160
+Sorry, but I'll be out here if you want to ask further questions.
+
+25:05.160 --> 25:06.160
+Thank you.
+
+25:06.160 --> 25:30.160
+Thank you.

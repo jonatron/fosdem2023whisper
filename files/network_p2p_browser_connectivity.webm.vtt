@@ -1,0 +1,691 @@
+WEBVTT
+
+00:00.000 --> 00:10.920
+Welcome to the first talk in the network dev room, peer-to-peer browser connectivity.
+
+00:10.920 --> 00:17.840
+We're going to talk a bunch about what we see and the new shiny web transport protocol
+
+00:17.840 --> 00:24.920
+and in general how to get the browser connected to a larger network.
+
+00:24.920 --> 00:30.320
+First off, before we start, very grateful to be here, thanks to all the organizers, thanks
+
+00:30.320 --> 00:33.280
+to all the volunteers making this event possible.
+
+00:33.280 --> 00:34.280
+That's wonderful.
+
+00:34.280 --> 00:38.840
+Yeah, and then thanks for all of you to be here and listen in.
+
+00:38.840 --> 00:41.040
+Cool.
+
+00:41.040 --> 00:43.200
+Just quick introduction about myself.
+
+00:43.200 --> 00:44.200
+I'm Max.
+
+00:44.200 --> 00:46.520
+I'm a software engineer at ProtocolApps.
+
+00:46.520 --> 00:48.720
+I'm stewarding the Lippie-to-peee project.
+
+00:48.720 --> 00:53.000
+I'll do a brief introduction of what Lippie-to-peee is, so don't worry too much about that.
+
+00:53.000 --> 00:56.520
+I'm maintaining the rest implementation of the library.
+
+00:56.520 --> 00:59.280
+In the past life, you might know me from my Prometheus time.
+
+00:59.280 --> 01:03.600
+I worked a bunch on Prometheus and its integration into Kubernetes is still a little bit active
+
+01:03.600 --> 01:04.600
+in that community.
+
+01:04.600 --> 01:05.600
+Yeah.
+
+01:05.600 --> 01:10.680
+You find me anywhere on the web with Mxenden and then on the website you find emails in
+
+01:10.680 --> 01:13.560
+case you want to get in touch.
+
+01:13.560 --> 01:15.360
+All right.
+
+01:15.360 --> 01:17.800
+So what is Lippie-to-peee?
+
+01:17.800 --> 01:19.280
+Just a small disclaimer.
+
+01:19.280 --> 01:24.080
+The talk does mention Lippie-to-peee from time to time.
+
+01:24.080 --> 01:27.680
+It is not particularly important, so in a sense if you want to build your own Lippie-to-peee
+
+01:27.680 --> 01:31.600
+application, all the content here is applicable for you as well.
+
+01:31.600 --> 01:37.080
+But if you want to have this pre-built, you can leverage Lippie-to-peee.
+
+01:37.080 --> 01:38.080
+So what is Lippie-to-peee?
+
+01:38.080 --> 01:43.320
+Lippie-to-peee, as you can infer from the name, I'm guessing, is a peer-to-peee networking
+
+01:43.320 --> 01:44.320
+library.
+
+01:44.320 --> 01:49.240
+It has one specification, and then that specification is implemented in many, many different languages.
+
+01:49.240 --> 01:56.200
+Like, for example, Go, JS, Rust, Nim, C++, Java, but a couple others as well.
+
+01:56.200 --> 02:03.200
+The goal of Lippie-to-peee is provide low-level features like encryption, authentication,
+
+02:03.200 --> 02:05.160
+hole-punching, and things like that.
+
+02:05.160 --> 02:11.640
+And then on top of that, leverage those features to then also provide higher-level protocols.
+
+02:11.640 --> 02:19.560
+Like, for example, DHT, distributed hash table, or gossiping protocols, or things like that.
+
+02:19.560 --> 02:26.280
+And my big slogan always is Lippie-to-peee is all you need to build peer-to-peee applications
+
+02:26.280 --> 02:27.760
+on the internet.
+
+02:27.760 --> 02:31.280
+Okay, wonderful.
+
+02:31.280 --> 02:38.200
+One small disclaimer that's important later on is that I want to highlight here is Lippie-to-peee
+
+02:38.200 --> 02:42.760
+always encrypts and always authenticates, and we'll go into that later on, what that
+
+02:42.760 --> 02:43.760
+means.
+
+02:43.760 --> 02:45.480
+But that's very important for me.
+
+02:45.480 --> 02:50.720
+We don't ship any traffic over the internet that is ever unencrypted or not authenticated,
+
+02:50.720 --> 02:54.800
+and in terms of authentication, I'm talking about mutual authentication.
+
+02:54.800 --> 03:03.200
+Okay, that's enough introduction for today, and now to the actual topic.
+
+03:03.200 --> 03:09.040
+What I want to convey today is how we can get from here, from the left side to the right
+
+03:09.040 --> 03:10.540
+side.
+
+03:10.540 --> 03:18.240
+So my great motivation is for browsers to be first-class citizens in networked applications.
+
+03:18.240 --> 03:25.120
+Now on the very left side, you see the typical internet application today.
+
+03:25.120 --> 03:26.720
+So you have a browser.
+
+03:26.720 --> 03:31.800
+I'm using the Firefox logo here, but you can use any browser, really.
+
+03:31.800 --> 03:37.120
+That tries to interact with a network deprecation somewhere in the internet.
+
+03:37.120 --> 03:41.960
+Instead of interacting with the nodes directly, it acts through a server, and that server
+
+03:41.960 --> 03:45.720
+acts on behalf of the browser, right?
+
+03:45.720 --> 03:49.440
+The browser pretty much never interacts with the whole network.
+
+03:49.440 --> 03:54.320
+And to put this with an example, if you, for example, have a file sharing, you want to
+
+03:54.320 --> 03:55.320
+share a file.
+
+03:55.320 --> 03:58.800
+So for example, from my laptop here, I want to share a file with all of you.
+
+03:58.800 --> 04:02.680
+I would usually upload that to the server, and then all of you would download it from
+
+04:02.680 --> 04:04.280
+that server.
+
+04:04.280 --> 04:07.800
+We would never interact directly.
+
+04:07.800 --> 04:12.320
+Now there are many reasons for that to be a good architecture, right?
+
+04:12.320 --> 04:13.880
+Browsers usually move a lot.
+
+04:13.880 --> 04:20.320
+They might be in the living room, then in a cafe, and then at a conference in FOSDEM.
+
+04:20.320 --> 04:26.800
+And they are usually low power, but what's the most hurt argument for this kind of architecture
+
+04:26.800 --> 04:32.000
+in terms of that, in comparison to the right architecture, is that you cannot connect to
+
+04:32.000 --> 04:35.920
+browsers, and that browsers cannot connect to other nodes.
+
+04:35.920 --> 04:38.280
+That's oftentimes hurt, right?
+
+04:38.280 --> 04:43.000
+And what I want to kind of convey here today is that you can actually nicely connect a
+
+04:43.000 --> 04:47.200
+browser to a whole network, and that the browser actually has a lot of connectivity options
+
+04:47.200 --> 04:49.800
+out there, and I want to go through these.
+
+04:49.800 --> 04:55.000
+And the next time you design a network deprecation, maybe you want to consider the architecture
+
+04:55.000 --> 04:59.160
+on the right versus the architecture on the left.
+
+04:59.160 --> 05:02.280
+All right, cool.
+
+05:02.280 --> 05:07.520
+When it comes to connectivity for a browser, I want to differentiate this in two dimensions,
+
+05:07.520 --> 05:14.280
+and the first dimension is whether my node, whatever, for example, my computer here, is
+
+05:14.280 --> 05:15.440
+public or private.
+
+05:15.440 --> 05:23.280
+So can it be reachable directly, or is it behind an app or firewall, and or firewall?
+
+05:23.280 --> 05:27.480
+In public, you would usually refer to it as a server, and in private, you would, for
+
+05:27.480 --> 05:31.360
+example, refer to my laptop or the browser running on my laptop.
+
+05:31.360 --> 05:32.360
+Cool.
+
+05:32.360 --> 05:37.360
+Then the other dimension, when we talk about connectivity, I want to differentiate in two
+
+05:37.360 --> 05:41.200
+platforms, which is browser and non-browser.
+
+05:41.200 --> 05:42.200
+Why is this relevant?
+
+05:42.200 --> 05:46.640
+Well, there are a lot more platforms, I know, but usually it's the non-browser, which is
+
+05:46.640 --> 05:52.240
+very unrestricted, in terms of, for example, I have access to a UDP or a TCP socket, and
+
+05:52.240 --> 05:57.360
+then I have the browser, which is very restricted, where sometimes I can't make a connection
+
+05:57.360 --> 06:00.080
+without, for example, a valid TLS certificate.
+
+06:00.080 --> 06:01.080
+Wonderful.
+
+06:01.080 --> 06:02.080
+Okay.
+
+06:02.080 --> 06:08.920
+So, and my goal today is kind of, we fill this matrix now with the different options
+
+06:08.920 --> 06:13.800
+that we have, and this way I kind of convey the fact that actually browsers can be first
+
+06:13.800 --> 06:16.040
+class citizens in network applications.
+
+06:16.040 --> 06:17.640
+All right.
+
+06:17.640 --> 06:22.600
+So let's talk about public non-browser to public non-browser.
+
+06:22.600 --> 06:25.760
+I'm in the network dev room, like this is the easiest one, I'm not going to explain
+
+06:25.760 --> 06:28.400
+this much.
+
+06:28.400 --> 06:31.560
+Reachability, they're both nodes are public.
+
+06:31.560 --> 06:39.520
+We can just reach out them directly over IP and TCP, or then UDP and the shiny new quick.
+
+06:39.520 --> 06:44.160
+We don't have firewalls and that on either side, and the platform, which is non-browser,
+
+06:44.160 --> 06:49.480
+so for example, an application running on my laptop has direct access to the TCP and
+
+06:49.480 --> 06:52.000
+UDP socket.
+
+06:52.000 --> 06:53.360
+Cool.
+
+06:53.360 --> 06:54.840
+So we have that.
+
+06:54.840 --> 07:00.160
+Then private non-browser to public non-browser, again, really easy.
+
+07:00.160 --> 07:06.680
+You do this every day by any application on your laptop going to a server.
+
+07:06.680 --> 07:12.080
+We don't have any firewalls, and we're not at the receiver side, so on the server side,
+
+07:12.080 --> 07:16.520
+the left side is private, but we don't really care as we have the direction from the left
+
+07:16.520 --> 07:17.760
+to the right.
+
+07:17.760 --> 07:23.200
+And then the platform, again, we're not running in the browser, so we're pretty unrestricted.
+
+07:23.200 --> 07:27.720
+We probably have access to a TCP or UDP socket.
+
+07:27.720 --> 07:30.080
+Wonderful.
+
+07:30.080 --> 07:36.280
+To make this a little bit more complex, what if I'm a public non-browser connecting to
+
+07:36.280 --> 07:37.880
+a private non-browser?
+
+07:37.880 --> 07:42.720
+So does that mean, for example, on the left that could be a server, and then on the right
+
+07:42.720 --> 07:47.200
+that could be some application running on my laptop right now?
+
+07:47.200 --> 07:53.400
+What we can do here is something called connection reversal, simply where my laptop connects
+
+07:53.400 --> 07:58.360
+to some public node, then whoever wants to reach out to me reaches out to that public
+
+07:58.360 --> 08:04.080
+node as well, relayes a message to me, my laptop, and then my laptop dials whoever wanted
+
+08:04.080 --> 08:05.080
+to dial me initially.
+
+08:05.080 --> 08:11.680
+This is depicted here, so B connects to the relay R, and then A relays a network over
+
+08:11.680 --> 08:17.440
+R to B, and then B can actually connect to A, which is commonly referred to as connection
+
+08:17.440 --> 08:18.760
+reversal.
+
+08:18.760 --> 08:23.440
+In terms of platform, again, we're a non-browser, so access to TCP and UDP socket, so we're
+
+08:23.440 --> 08:24.960
+all good.
+
+08:24.960 --> 08:26.640
+Cool.
+
+08:26.640 --> 08:32.640
+And then the last one I want to fill before it becomes complicated, namely before we introduce
+
+08:32.640 --> 08:37.400
+a browser, is private non-browser to private non-browser.
+
+08:37.400 --> 08:42.720
+You see this depicted down there as A and B. Reachability really sucks.
+
+08:42.720 --> 08:47.800
+Both are probably behind gnats or firewalls, so not much luck either.
+
+08:47.800 --> 08:52.000
+So what we need to employ here is a technique called hole punching.
+
+08:52.000 --> 08:56.200
+I don't have much time today in this talk, but we have another talk later on.
+
+08:56.200 --> 09:02.480
+So if you want to learn all about hole punching or what success rate we have across different,
+
+09:02.480 --> 09:06.000
+protocols or IP stacks, join the talk.
+
+09:06.000 --> 09:08.080
+I think it's at 11.45.
+
+09:08.080 --> 09:10.040
+So we'll go a bunch into that.
+
+09:10.040 --> 09:14.000
+Just short, brief one, A and B want to connect.
+
+09:14.000 --> 09:15.600
+Both are behind firewalls.
+
+09:15.600 --> 09:19.320
+Both connect to a relay R, that R is public.
+
+09:19.320 --> 09:25.920
+They coordinate a hole punch over that relay, and then execute that hole punch through both
+
+09:25.920 --> 09:27.160
+of their firewalls.
+
+09:27.160 --> 09:28.160
+Cool.
+
+09:28.160 --> 09:31.600
+In terms of platforms, again, we're not on the browser yet.
+
+09:31.600 --> 09:34.120
+So we have access to the TCP and UDP socket.
+
+09:34.120 --> 09:35.120
+All good.
+
+09:35.120 --> 09:36.120
+Life is pretty easy.
+
+09:36.120 --> 09:37.120
+Wonderful.
+
+09:37.120 --> 09:39.120
+All right.
+
+09:39.120 --> 09:44.920
+Now comes complexity, which is the browser world.
+
+09:44.920 --> 09:51.400
+And what we can, what I want to talk about first is what if I'm a private browser.
+
+09:51.400 --> 09:54.480
+Now private browser is somewhat of a weird term.
+
+09:54.480 --> 09:59.080
+Usually you're not at Faustum and you don't have a public IPv4 or IPv6 address.
+
+09:59.080 --> 10:06.800
+So browsers are usually always private, which I'm not suggesting to change.
+
+10:06.800 --> 10:07.800
+Definitely not.
+
+10:07.800 --> 10:11.760
+There are many security considerations to keep it that way.
+
+10:11.760 --> 10:16.400
+But what if I want to connect from a private browser to a public non-browser?
+
+10:16.400 --> 10:22.920
+So what if I, for example, want to connect from my laptop within my browser to some server?
+
+10:22.920 --> 10:28.560
+Now this, again, sounds pretty easy to everyone, except one small disclaimer.
+
+10:28.560 --> 10:33.280
+Again, we don't have a firewall or NAT at the receiver side, right?
+
+10:33.280 --> 10:38.880
+A server is public, depending on the firewall rules, obviously, but we can easily reach
+
+10:38.880 --> 10:39.880
+out to them.
+
+10:39.880 --> 10:45.280
+In terms of platform, we are on the browser, so we're quite restricted in the sense of
+
+10:45.280 --> 10:46.680
+what we can do.
+
+10:46.680 --> 10:50.680
+Eventually, I want to end up with a byte stream between the two endpoints.
+
+10:50.680 --> 10:54.200
+So what I'm restricted to is either web sockets.
+
+10:54.200 --> 10:55.200
+Everyone knows that.
+
+10:55.200 --> 11:00.720
+So TCP, TLS, HTTP, then an upgrade, and then I have web socket.
+
+11:00.720 --> 11:05.360
+The problem with that is I need a valid TLS certificate, so I need the remote server to
+
+11:05.360 --> 11:12.040
+either have a signed IP certificate or based on a domain.
+
+11:12.040 --> 11:13.400
+So that's a bummer.
+
+11:13.400 --> 11:17.960
+What I can do as an alternative in the browser is use the shiny new web transport, which
+
+11:17.960 --> 11:22.920
+is basically, I'm simplifying a lot here, but basically web sockets on top of Quick
+
+11:22.920 --> 11:26.360
+or HTTP3.
+
+11:26.360 --> 11:31.040
+Web transport actually allows us to handle self-signed certificates.
+
+11:31.040 --> 11:36.640
+And then as a last alternative, we can use WebRTC to get a byte stream, WebRTC gives
+
+11:36.640 --> 11:44.080
+us data channels, so in the end, we can run on IP, UDP, then SCTP, and then use data channels
+
+11:44.080 --> 11:45.680
+from WebRTC.
+
+11:45.680 --> 11:49.240
+Now before you scream, this is insecure.
+
+11:49.240 --> 11:53.640
+The small disclaimer that I did at the beginning is in case you built this yourself, you still
+
+11:53.640 --> 11:57.040
+need to figure out proper authentication, right?
+
+11:57.040 --> 12:01.320
+Best would be mutual authentication, because self-signed certificates, you're not part
+
+12:01.320 --> 12:08.120
+of the authority trust chain, but otherwise, yeah, these are your options.
+
+12:08.120 --> 12:12.720
+So web socket, web transport, and WebRTC.
+
+12:12.720 --> 12:14.520
+Cool.
+
+12:14.520 --> 12:23.000
+So what if I want to connect from a public non-browser to a private browser?
+
+12:23.000 --> 12:26.320
+We had this in the past, a couple of slides back.
+
+12:26.320 --> 12:32.400
+In terms of reachability, my left side is reachable, my right side is not reachable,
+
+12:32.400 --> 12:36.880
+so what I can do, I don't need to do fancy hole punching, I can just do connection reversal
+
+12:36.880 --> 12:43.720
+right over the relay, where A asks B basically to dial it back over the relay.
+
+12:43.720 --> 12:48.640
+In terms of platform, we don't have direct access to the TCP or UDP socket, given that
+
+12:48.640 --> 12:53.400
+on the right side, we have a browser in the whole stack, so that's a bummer.
+
+12:53.400 --> 12:59.440
+We can do web sockets in case we have a valid TLS certificate signed by some authority.
+
+12:59.440 --> 13:03.360
+If not, we can do web transport and WebRTC.
+
+13:03.360 --> 13:05.880
+Cool.
+
+13:05.880 --> 13:11.080
+And now comes the very hard part, or not very hard part, but a little bit more difficult
+
+13:11.080 --> 13:19.000
+part, which is private browser to private browser, or what is basically the same is,
+
+13:19.000 --> 13:25.400
+was it private non-browser to private browser, or private browser to private non-browser,
+
+13:25.400 --> 13:29.120
+all the red boxes down there.
+
+13:29.120 --> 13:35.200
+In terms of reachability, we need to leverage hole punching at this point.
+
+13:35.200 --> 13:38.880
+Both end points are behind the firewall and are not.
+
+13:38.880 --> 13:43.440
+So again, we'll go more into details on how hole punching works.
+
+13:43.440 --> 13:46.160
+Probably a lot of you are really familiar with that.
+
+13:46.160 --> 13:52.740
+In terms of platforms, at least one of our two sides are behind our browsers.
+
+13:52.740 --> 13:57.560
+So that means we don't have access to TCP or UDP socket directly.
+
+13:57.560 --> 14:01.320
+Why am I always saying no access to TCP and UDP?
+
+14:01.320 --> 14:07.000
+That's relevant because you don't control the ports, and this way you don't have the
+
+14:07.000 --> 14:09.600
+capability of hole punching yourself.
+
+14:09.600 --> 14:12.920
+But what the browser gives us is WebRTC.
+
+14:12.920 --> 14:18.960
+WebRTC has hole punching built in, so what we can do is leverage WebRTC and some signaling
+
+14:18.960 --> 14:24.600
+server R in the middle to then do the actual hole punch.
+
+14:24.600 --> 14:28.680
+WebSockets doesn't work because we can't hole punch with WebSockets and WebTransport
+
+14:28.680 --> 14:33.240
+doesn't work either because we can't hole punch with WebTransport either.
+
+14:33.240 --> 14:35.960
+Okay, wonderful.
+
+14:35.960 --> 14:42.680
+And that concludes the whole matrix, and what I'm pretty much showing here is you can connect
+
+14:42.680 --> 14:48.720
+the browser to everyone out there that runs on IP, and that means your application can
+
+14:48.720 --> 14:53.040
+actually make the browser a first-class citizen within your network.
+
+14:53.040 --> 14:54.720
+Cool.
+
+14:54.720 --> 14:56.520
+That's all from my end.
+
+14:56.520 --> 15:02.360
+Yeah, I'll be around the venue for quite a bit.
+
+15:02.360 --> 15:07.640
+If you want to learn more about LiPi2P in general, which makes all this nicely packaged
+
+15:07.640 --> 15:11.160
+for you, you can visit docs.lippi2p.io.
+
+15:11.160 --> 15:15.640
+If you want to see all the nitty-gritty details about the different transports and what that
+
+15:15.640 --> 15:21.720
+means for, I don't know, for example, you sign TLS certificate or where you can hole punch,
+
+15:21.720 --> 15:24.720
+that would be on connectivity.lippi2p.io.
+
+15:24.720 --> 15:30.000
+There are various forums, there's a specification online, and then all the implementations are
+
+15:30.000 --> 15:35.600
+open source, so you can just check that out on github.com slash lippi2p.
+
+15:35.600 --> 15:36.600
+Cool.
+
+15:36.600 --> 15:37.600
+That's all from my end.
+
+15:37.600 --> 16:03.120
+Thank you very much.

@@ -1,0 +1,826 @@
+WEBVTT
+
+00:00.000 --> 00:09.920
+Hello, my name is Kai and I'm going to talk to you about Everest, AC and DC electric
+
+00:09.920 --> 00:13.760
+vehicle charging with open source software and hardware.
+
+00:13.760 --> 00:16.440
+First, a few words about myself.
+
+00:16.440 --> 00:22.000
+I have a background in computer science and robotics and I've been working at Pyonix
+
+00:22.000 --> 00:26.680
+on the Everest project since early 2021.
+
+00:26.680 --> 00:29.600
+So how do you actually charge a car?
+
+00:29.600 --> 00:34.600
+Most of you that have electric vehicles will probably be familiar with these methods but
+
+00:34.600 --> 00:39.800
+I'm just going to recap them real quick so everybody is on the same baseline here.
+
+00:39.800 --> 00:45.880
+You have your basic AC charging when you have a portable charger at home that you just plug
+
+00:45.880 --> 00:53.000
+into a wall socket or maybe even have a wall mounted charging station that can charge your
+
+00:53.000 --> 00:57.080
+car with up to 11 or 22 kilowatts.
+
+00:57.080 --> 01:04.880
+In public, you sometimes still see these slow AC chargers where you maybe even have to bring
+
+01:04.880 --> 01:06.360
+your own cable.
+
+01:06.360 --> 01:11.620
+Just plug that one in, plug into your card and you authorize with an RFID card or maybe
+
+01:11.620 --> 01:17.520
+even an app and then charging is properly built to your account.
+
+01:17.520 --> 01:24.280
+There's an alternative to that which I would call the smart AC charging with ISO 15118
+
+01:24.280 --> 01:31.000
+or maybe even plug and charge which is a much more secure way of authorizing your charging
+
+01:31.000 --> 01:37.480
+session with a back end provider and what's probably for the crowd at this presentation
+
+01:37.480 --> 01:44.200
+very interesting in the future is the possibility to have B-directional AC charging.
+
+01:44.200 --> 01:50.480
+Think about vehicle to grid, vehicle to load scenarios where the car can be used maybe
+
+01:50.480 --> 01:56.640
+as a solar battery for your home that you can charge when the sun is shining, when energy
+
+01:56.640 --> 02:01.880
+is cheap and then you can use that energy in times where the grid is stressed a little
+
+02:01.880 --> 02:08.120
+bit and you want to reduce your demand on the electricity grid and then you might be
+
+02:08.120 --> 02:15.880
+able to just discharge your car and use your car as a battery for your home.
+
+02:15.880 --> 02:21.840
+Also something that people will be most familiar with is the DC charging using the dinspec
+
+02:21.840 --> 02:24.480
+and the ISO norm again.
+
+02:24.480 --> 02:33.320
+These are usually the big highway fast chargers where you can charge up to like 200, 300 kilowatts
+
+02:33.320 --> 02:40.840
+and but there's also smaller units for the home, think about like DC-DC solar systems
+
+02:40.840 --> 02:47.640
+and things like that and also here what's probably very exciting for all of you is upcoming
+
+02:47.640 --> 02:55.480
+like B-directional DC charging and yeah, taking energy back out of the car again.
+
+02:55.480 --> 02:56.480
+What is Everest?
+
+02:56.480 --> 03:03.480
+It's a complete software stack for EV Chargers, it runs on basically any embedded Linux platform
+
+03:03.480 --> 03:09.840
+out there, it is released under the Apache 2.0 license and the aim is to support as
+
+03:09.840 --> 03:13.160
+many different hardware platforms as possible.
+
+03:13.160 --> 03:19.040
+In this talk we're going to mostly focus on building our own charger with an open hardware
+
+03:19.040 --> 03:21.480
+design that I will present later on.
+
+03:21.480 --> 03:27.080
+So some of the features that Everest has, it's built on a very modular architecture
+
+03:27.080 --> 03:32.600
+where different modules can do very specific things and then they can communicate over
+
+03:32.600 --> 03:35.160
+MQTT with each other.
+
+03:35.160 --> 03:43.400
+There is also a graphical setup web interface that you can use to configure different topologies
+
+03:43.400 --> 03:48.660
+of charges, you can see some examples here on the slides and you can also use the same
+
+03:48.660 --> 03:55.920
+web interface to do energy management configuration as well.
+
+03:55.920 --> 04:04.680
+Next I'm going to quickly go through the steps that you would have to take to use this graphical
+
+04:04.680 --> 04:08.800
+web interface to configure your own charging station.
+
+04:08.800 --> 04:16.920
+First we start with an EVSE manager, this is a module that owns a charging connector and
+
+04:16.920 --> 04:22.280
+takes care of the charging logic and the whole charging session handling and it orchestrates
+
+04:22.280 --> 04:27.560
+all the other modules access to this one connector.
+
+04:27.560 --> 04:35.800
+Now we add a board support package which in this case is the EET driver module which will
+
+04:35.800 --> 04:42.680
+handle all the control pilot handling the access to the relays and the reading of for
+
+04:42.680 --> 04:47.920
+example the RCD currents.
+
+04:47.920 --> 04:52.880
+Now we add an energy manager, this can be just a very simple configuration, a more advanced
+
+04:52.880 --> 04:58.320
+one I will show you in a few slides.
+
+04:58.320 --> 05:04.960
+Following that we need an authentication mechanism, here we add an authentication manager as well
+
+05:04.960 --> 05:14.280
+as two token providers that will be able to authenticate our charging session with.
+
+05:14.280 --> 05:22.840
+In the next step we can add some cloud connectivity, in this example we add a OCVP 1.6 JSON module
+
+05:22.840 --> 05:31.680
+as well as a power meter via Modbus and a system module that supports the rebooting
+
+05:31.680 --> 05:38.400
+and firmware update of the charging station via OCVP.
+
+05:38.400 --> 05:45.480
+And in the last step we add an API module so that external applications can talk to
+
+05:45.480 --> 05:54.720
+the Everest system and read out some pedmetry but also control the charging session.
+
+05:54.720 --> 06:00.320
+As I mentioned before you can use the same graphical configuration interface to also
+
+06:00.320 --> 06:03.960
+configure the energy management.
+
+06:03.960 --> 06:11.200
+Here you can see a more complex energy distribution tree to be able to load panels multiple charging
+
+06:11.200 --> 06:13.920
+stations.
+
+06:13.920 --> 06:22.440
+Here we add an energy manager as a root node, add a 22 amp fuse to our grid connection and
+
+06:22.440 --> 06:31.920
+then as children of that fuse we can add smaller fuses that then connect to the EVSE managers
+
+06:31.920 --> 06:39.080
+underneath it and these EVSE managers now have different cars connected with different
+
+06:39.080 --> 06:47.480
+charging goals and the energy management system is able to schedule charging by a global optimizer
+
+06:47.480 --> 06:54.720
+so that every car gets the most optimal charging schedule assigned to it.
+
+06:54.720 --> 07:00.520
+Everest also comes with software and hardware in the loop simulation facilities and it implements
+
+07:00.520 --> 07:07.440
+a lot of protocols that are relevant in the EV charging space at the moment like OCVP
+
+07:07.440 --> 07:12.800
+2.6 with 2.0.1 support coming very soon.
+
+07:12.800 --> 07:20.560
+We have support for ISO 15118 AC and DC, for the Dinspec, for the basic PWM charging.
+
+07:20.560 --> 07:26.560
+We also have the possibility to do communication with Modbus devices, think about external
+
+07:26.560 --> 07:32.480
+power meters for example and also an API over MQTT where you can get some data about the
+
+07:32.480 --> 07:39.840
+charging session to maybe integrate into your home automation system.
+
+07:39.840 --> 07:46.760
+Everest itself is written in C++17 but there's also language bindings for Python and JavaScript
+
+07:46.760 --> 07:53.120
+available so you can write modules in all of these three languages whichever suits your
+
+07:53.120 --> 07:54.840
+needs the most.
+
+07:54.840 --> 08:00.520
+So, let's talk about the basic PWM charging.
+
+08:00.520 --> 08:05.840
+The car and the charging station can communicate over the so-called control pilot signal.
+
+08:05.840 --> 08:11.160
+This is just a plus minus 12 volt signal where the car can lower the positive part of the
+
+08:11.160 --> 08:17.480
+signal by adding load resistors and a diode to lower this voltage to a specific voltage.
+
+08:17.480 --> 08:23.640
+For example, 9 volt signals that the car is connected, 6 volt means that the car actually
+
+08:23.640 --> 08:25.760
+wants to charge.
+
+08:25.760 --> 08:34.600
+And the charging station then can use a PWM duty cycle to encode the available current
+
+08:34.600 --> 08:36.240
+for the car to draw.
+
+08:36.240 --> 08:40.120
+This is typically between 6 and 32 amps.
+
+08:40.120 --> 08:44.640
+So, how do you actually build one of these AC chargers?
+
+08:44.640 --> 08:49.280
+The good news is an AC charger is not a complicated battery charger.
+
+08:49.280 --> 08:53.240
+This part happens on the onboard charger in the car.
+
+08:53.240 --> 08:56.920
+The AC charger is just a smart relay.
+
+08:56.920 --> 09:04.200
+So what you typically only need is a power path, so a mains connection, some relays,
+
+09:04.200 --> 09:09.600
+an RCD for safety, optionally maybe a power meter if you want to know how far your car
+
+09:09.600 --> 09:16.560
+has charged already plus a microcontroller to interface with this control pilot signal.
+
+09:16.560 --> 09:21.560
+If you want to do some more advanced things, Linux port is usually a good idea to have
+
+09:21.560 --> 09:23.480
+as well.
+
+09:23.480 --> 09:28.600
+I'm now going to talk about our open hardware design that we've released, the Yeti and
+
+09:28.600 --> 09:29.600
+the YAK boards.
+
+09:29.600 --> 09:36.080
+They are available under this Github repository and are released under the CERN open hardware
+
+09:36.080 --> 09:40.400
+license version 2 in the permissive flavor.
+
+09:40.400 --> 09:46.240
+This hardware design has been developed to be as developer-friendly as possible, so it
+
+09:46.240 --> 09:48.160
+includes a lot of features.
+
+09:48.160 --> 09:57.760
+But it's obviously not optimized for cost savings or ease of manufacturing in mind,
+
+09:57.760 --> 10:03.640
+but it has a lot of very exciting features, so you can build all kinds of charging stations
+
+10:03.640 --> 10:05.640
+on top of these designs.
+
+10:05.640 --> 10:13.040
+It's been designed in Keycard 6 and case design files for 3D printing are also available.
+
+10:13.040 --> 10:18.560
+So let's talk about the first of these hardware designs, which is the Yeti power board.
+
+10:18.560 --> 10:25.000
+It is a 22kW AC free-phase power board.
+
+10:25.000 --> 10:32.680
+Here on the low left you can see a block diagram of this power board and on the right some pictures
+
+10:32.680 --> 10:36.360
+of the upper and the lower side of the board.
+
+10:36.360 --> 10:40.200
+Let's talk about the features that the Yeti board has.
+
+10:40.200 --> 10:46.040
+It is capable of doing the control pilot signal generation as well as the control pilot signal
+
+10:46.040 --> 10:49.680
+sampling in sync with the PWM signal.
+
+10:49.680 --> 10:57.920
+It also has onboard relays for free-phase power switching with welding detection and
+
+10:57.920 --> 11:04.000
+a free-phase power metering support with up to 8kHz of sampling.
+
+11:04.000 --> 11:08.960
+There is the possibility to measure voltages, currents, power, frequencies of all phases
+
+11:08.960 --> 11:10.560
+plus the neutral.
+
+11:10.560 --> 11:17.320
+There is an RCD module integrated which can detect DC ground faults as well as AC faults
+
+11:17.320 --> 11:22.720
+and it can output the measured leakage current as telemetry.
+
+11:22.720 --> 11:31.560
+There is also a 10 pin connector for a high-level board to control the Yeti board over UART.
+
+11:31.560 --> 11:39.000
+This is also used to connect the Yeti to our YAK high-level board design which I will talk
+
+11:39.000 --> 11:42.320
+about later.
+
+11:42.320 --> 11:46.680
+If you want to use the Yeti as a stand-alone charger which is totally possible, there is
+
+11:46.680 --> 11:51.440
+also an external connector for a small LCD.
+
+11:51.440 --> 11:57.480
+You can also add modbus devices for external power meters, we have some external GPIOs
+
+11:57.480 --> 12:04.960
+on this board and the board itself can be powered just by the 110V or 230V mains connection
+
+12:04.960 --> 12:10.800
+with an internal power supply which is also capable of supplying the YAK board.
+
+12:10.800 --> 12:16.000
+But you can also connect an external 12V supply if you so choose.
+
+12:16.000 --> 12:21.360
+This board is also a lot of more features which you can then just look up under this
+
+12:21.360 --> 12:22.860
+link.
+
+12:22.860 --> 12:28.960
+The Yeti comes with an STM32 microcontroller on board and the firmware for this microcontroller
+
+12:28.960 --> 12:33.920
+is also available on our Github page.
+
+12:33.920 --> 12:39.320
+It's licensed under Apache 2.0 license and the purpose of this microcontroller firmware
+
+12:39.320 --> 12:46.960
+is that it can control all the devices on the Yeti board and all the electrical safety
+
+12:46.960 --> 12:51.040
+relevant code is encapsulated into that firmware.
+
+12:51.040 --> 12:59.480
+On top of that it also does all of the communication of the Yeti board over the UART using protobuf
+
+12:59.480 --> 13:04.200
+with a high level communication board and then with the Everest software.
+
+13:04.200 --> 13:05.760
+How do you use this Yeti board?
+
+13:05.760 --> 13:11.600
+You can either use it as a stand-alone charger or you can use it as a power path for a smart
+
+13:11.600 --> 13:12.600
+charger.
+
+13:12.600 --> 13:20.080
+You can also configure it to do automatic switching between these modes in case like
+
+13:20.080 --> 13:23.520
+the higher level Linux board fails for some reason.
+
+13:23.520 --> 13:28.720
+You can still continue as a stand-alone charger.
+
+13:28.720 --> 13:34.520
+If you want to use the Yeti board as a stand-alone charger it is a complete AC charger for electric
+
+13:34.520 --> 13:40.160
+vehicles supporting the basic charging I talked about earlier.
+
+13:40.160 --> 13:45.640
+This means it contains the complete charging logic that you need and a car will charge
+
+13:45.640 --> 13:51.480
+immediately when you connect it to the board.
+
+13:51.480 --> 13:57.520
+There is also some UART connection that you can use to observe the status of the charging
+
+13:57.520 --> 14:02.280
+session and also to have limited control over the charging system such as pausing and resuming
+
+14:02.280 --> 14:04.280
+charging.
+
+14:04.280 --> 14:10.120
+This mode is what we call the high level control mode of the firmware.
+
+14:10.120 --> 14:14.760
+But you can also use the Yeti board as a power path for a smart charger.
+
+14:14.760 --> 14:21.360
+Here you would then switch it into the so-called low level control mode just with a UART command
+
+14:21.360 --> 14:27.320
+and here you must provide the charging logic externally.
+
+14:27.320 --> 14:32.880
+Only the basic state machine remains in the microcontroller which is essential for electrical
+
+14:32.880 --> 14:34.880
+safety.
+
+14:34.880 --> 14:41.040
+An external board is then capable to set the PWM in duty cycle and is able to read back
+
+14:41.040 --> 14:43.200
+the control pilot events.
+
+14:43.200 --> 14:48.640
+This is also the mode that Everest then uses to enable the so-called high level charging
+
+14:48.640 --> 14:52.880
+using ISO 15118 or the DeanSpec.
+
+14:52.880 --> 14:56.640
+I will now explain what this high level charging mode is.
+
+14:56.640 --> 15:01.760
+It uses a power line communication on top of the control pilot PWM signal.
+
+15:01.760 --> 15:07.600
+It literally uses the same wire using the home plug green fire standard and the following
+
+15:07.600 --> 15:12.800
+steps need to be done to create a successful high level charging session.
+
+15:12.800 --> 15:17.760
+First, a logical network between the charger and the car is set up using Slack.
+
+15:17.760 --> 15:23.480
+Then IPv6 link local addresses are set up on both sides.
+
+15:23.480 --> 15:29.320
+The car will then send a UDP broadcast to find the charger and the charger replies with
+
+15:29.320 --> 15:32.120
+its IP address and port number.
+
+15:32.120 --> 15:39.320
+A TCP TLS connection is then created from the car to the charger and over that the ISO
+
+15:39.320 --> 15:48.960
+15118 protocol is then spoken which is encoded in some XML data in a binary XML representation
+
+15:48.960 --> 15:49.960
+called XE.
+
+15:49.960 --> 15:55.240
+Now I am going to talk to you about the YAK high level control board.
+
+15:55.240 --> 16:00.400
+Here on the right side you can see a few photos of one of these boards assembled and on the
+
+16:00.400 --> 16:06.240
+left side you see a block diagram of this high level control board.
+
+16:06.240 --> 16:12.520
+This is used to run Everest on an embedded Linux system.
+
+16:12.520 --> 16:18.320
+Some of the features of this YAK control board is that it can receive a Raspberry Pi compute
+
+16:18.320 --> 16:19.920
+module 4.
+
+16:19.920 --> 16:23.800
+This is basically your system where you run your Linux on.
+
+16:23.800 --> 16:28.960
+It has a 10 pin connector for a direct connection to the motherboard, a real time clock with
+
+16:28.960 --> 16:35.280
+a backup battery, a power line communications green fire modem for doing the high level
+
+16:35.280 --> 16:38.240
+charging communication with the car that I just talked about.
+
+16:38.240 --> 16:48.120
+There is also a UART and power connector populated for popular RFID modules and there
+
+16:48.120 --> 16:54.800
+is also RS485 modbus connectivity, you have a CANBUS available, you have Ethernet, wireless
+
+16:54.800 --> 17:02.840
+LAN, you have Bluetooth, USB ports, there is even a USB client port to be able to flash
+
+17:02.840 --> 17:08.760
+the flash storage of the compute module 4 and of course you have lots of external GPIOs
+
+17:08.760 --> 17:12.400
+to play with.
+
+17:12.400 --> 17:19.880
+Now we have everything that we need to put together a basic but also smart charging station.
+
+17:19.880 --> 17:28.440
+So from right to left you just need a mains freeface power in plug, you need one of these
+
+17:28.440 --> 17:35.480
+GTE power boards, plug that in, on the other side you plug in a type 2 connector to your
+
+17:35.480 --> 17:44.080
+car, if you then plug this into your car you are already good to go and you will be able
+
+17:44.080 --> 17:51.640
+to charge your electric vehicle with up to 22kW if the vehicle supports it.
+
+17:51.640 --> 17:59.480
+If you want to do some more interesting things like try out some of the smart charging protocols
+
+17:59.480 --> 18:05.960
+and maybe develop some interesting solutions on top of that you can add this high level
+
+18:05.960 --> 18:16.520
+control board and then just start working on some interesting implementations.
+
+18:16.520 --> 18:22.560
+Another exciting project that we are working on right now is a DIY B-directional DC charger.
+
+18:22.560 --> 18:26.400
+If you paid attention over the last couple of minutes you will have noticed that the
+
+18:26.400 --> 18:33.520
+jack board already comes prepared with everything that you would need for proper DC communication
+
+18:33.520 --> 18:40.120
+because the DC communication is done over the same control pilot wire using the high
+
+18:40.120 --> 18:47.000
+level charging protocols and the only things you really just need to build a proper DC
+
+18:47.000 --> 18:53.080
+charger is some power electronics and an isolation monitor and then they are pretty much good
+
+18:53.080 --> 18:54.080
+to go.
+
+18:54.080 --> 18:59.640
+Obviously this is a lot more complicated and we are still hard at work for creating a good
+
+18:59.640 --> 19:07.360
+design here but you can definitely stay tuned for more coming in the spring or summer from
+
+19:07.360 --> 19:09.880
+us.
+
+19:09.880 --> 19:14.520
+If this was interesting for you here is how you can get involved with the Evers project.
+
+19:14.520 --> 19:19.040
+You can check out our code on the GitHub organization.
+
+19:19.040 --> 19:23.160
+You can also check out the hardware designs and microcontroller firmware.
+
+19:23.160 --> 19:26.120
+We do have a mailing list if you want to ask some questions.
+
+19:26.120 --> 19:30.400
+There is the project page on the Linux Foundation Energy website.
+
+19:30.400 --> 19:35.120
+We do have a quick start guide to help you get started with development and on every
+
+19:35.120 --> 19:41.200
+fourth first day of the month there is a technical steering committee meeting where we talk about
+
+19:41.200 --> 19:50.440
+what we implemented in the last weeks leading up to this technical steering committee meeting.
+
+19:50.440 --> 19:56.000
+It's always being announced via the mailing list and recordings are made available shortly
+
+19:56.000 --> 19:57.640
+after on YouTube.
+
+19:57.640 --> 20:06.360
+There is also a weekly developer sync meeting where you can join Evers developers, ask questions
+
+20:06.360 --> 20:08.160
+and start contributing.
+
+20:08.160 --> 20:14.720
+This meeting happens every Tuesday between 10 and 11 am Central European time and the
+
+20:14.720 --> 20:18.000
+meeting link for that is sent out via our mailing list.
+
+20:18.000 --> 20:34.040
+Thank you very much for listening and I am open to receiving questions now.
+
+20:34.040 --> 20:52.280
+Hello, I see there is at least one question right now that you can purchase these boards
+
+20:52.280 --> 20:53.800
+pre-made somewhere right now.
+
+20:53.800 --> 21:01.600
+I think not yet at the moment and I also don't know if I want to do too much advertising
+
+21:01.600 --> 21:09.600
+here but yeah I think something will be available at least from our company at some point but
+
+21:09.600 --> 21:17.400
+you can also totally build your own here.
+
+21:17.400 --> 21:25.200
+So Nico is asking how many of these boards have been produced or tested yet?
+
+21:25.200 --> 21:33.080
+So like a few of our developers have had charging stations based on these boards at their home
+
+21:33.080 --> 21:38.520
+for way over a year now so they've been tested quite heavily.
+
+21:38.520 --> 21:45.080
+I'm charging my own electric vehicle basically every day with a charging station based on
+
+21:45.080 --> 21:54.800
+this design here and yeah so they are already well tested.
+
+21:54.800 --> 21:59.480
+Probably if you would want to build a product with these boards you would have to go through
+
+21:59.480 --> 22:07.920
+the certification processes because your designs might differ a bit but yeah they functionality
+
+22:07.920 --> 22:12.040
+wise they've been tested quite heavily.
+
+22:12.040 --> 22:19.000
+So Thomas is asking if there are any plans on scaling up production?
+
+22:19.000 --> 22:22.280
+Well I guess that kind of depends on the demand.
+
+22:22.280 --> 22:32.640
+Right now this kit is thought of as a basis for development especially doing Everest development
+
+22:32.640 --> 22:39.280
+but I could imagine if the demand is like crazy high that some scaling up of production
+
+22:39.280 --> 22:56.600
+would occur at some point in the future.
+
+22:56.600 --> 23:09.080
+See some people typing questions so erdjonker asks if the DC will be CCS yes for now the
+
+23:09.080 --> 23:17.680
+DC would be based on the CCS connector but that's just because we're based in Europe
+
+23:17.680 --> 23:22.680
+and that's the common plug here.
+
+23:22.680 --> 23:30.920
+I've heard of some people working on something with Tademo at the moment but I'm not completely
+
+23:30.920 --> 23:41.880
+sure what the status there is.
+
+23:41.880 --> 23:46.480
+So yeah Thomas is asking if there's already an idea how competitive this could be with
+
+23:46.480 --> 23:48.240
+regards to commercial charges.
+
+23:48.240 --> 23:56.080
+I guess this also kind of aligns with the next question from Wookie that the boards have
+
+23:56.080 --> 24:00.840
+a lot of functionality on top so I guess a run would come off as quite an expensive
+
+24:00.840 --> 24:07.680
+charger and that's true like I said in the presentation the boards are definitely not
+
+24:07.680 --> 24:17.600
+designed with cost saving and as less features that you need to build a charging station
+
+24:17.600 --> 24:27.240
+in there but it's more like a development kit that probably costs much more than like
+
+24:27.240 --> 24:33.640
+off the shelf mass produced charging station would cost but that's also not really the
+
+24:33.640 --> 24:42.640
+goal of this of this board is to enable development and to have as many things to play with as
+
+24:42.640 --> 24:52.520
+possible like think of the in the SDR space you have these boards where you also have
+
+24:52.520 --> 25:00.360
+a lot of features in them but they're not as cheap as like your typical cheap television
+
+25:00.360 --> 25:22.000
+receiving stick that you plug into your laptop I still see some typing going on so maybe there's
+
+25:22.000 --> 25:51.760
+some more questions coming up yes as Wookie is saying there that's also our
+
+25:51.760 --> 25:59.400
+feeling that especially he said that there's a terrible shortage of open EVSE kits out
+
+25:59.400 --> 26:06.640
+there and we think so too there are some projects like you mentioned but definitely a fully
+
+26:06.640 --> 26:11.880
+featured project especially with a nice open hardware design that you can just play around
+
+26:11.880 --> 26:18.520
+with and integrate into your own designs and maybe even like strip out half of the functionality
+
+26:18.520 --> 26:26.960
+that you don't need I think is a good thing especially if ever is being released under
+
+26:26.960 --> 26:33.800
+such a permissive license of the Apache 2.0 and the hardware designs themselves being
+
+26:33.800 --> 26:40.640
+under the certain open hardware license this could definitely open up a lot of possibilities
+
+26:40.640 --> 26:53.800
+for people to play with their own charging station hardware this is asking if this is
+
+26:53.800 --> 26:58.040
+targeted more towards commercial vendors or more towards hobbyists I personally would
+
+26:58.040 --> 27:06.040
+say it's targeted towards both groups like of course commercial vendors for the big DC
+
+27:06.040 --> 27:14.840
+charging stations you probably don't want to build something like that in your garage
+
+27:14.840 --> 27:22.320
+at home but you can use the same software stack and like I mentioned also parts of the
+
+27:22.320 --> 27:27.640
+hardware stack for that but for hobbyists as well like if you want to integrate it into
+
+27:27.640 --> 27:36.160
+your home automation system or if you want to dig in deeper in communication with the
+
+27:36.160 --> 27:42.480
+car especially with the ISO 15118 coming up and the B-directional charging possibilities
+
+27:42.480 --> 27:54.320
+that will soon open up to many vehicles out there and as Marco also mentioned obviously
+
+27:54.320 --> 28:01.560
+academia is also an interesting part there so you can imagine yeah like students working
+
+28:01.560 --> 28:27.960
+on EV charging there and things like that alright looks looks like normal questions I will definitely
+
+28:27.960 --> 28:39.200
+be around for a few more minutes in the public room afterwards and yeah looking forward to
+
+28:39.200 --> 28:57.880
+some more questions.

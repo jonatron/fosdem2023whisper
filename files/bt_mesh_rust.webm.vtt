@@ -1,0 +1,643 @@
+WEBVTT
+
+00:00.000 --> 00:11.840
+Hey everyone, thanks for coming and yeah, today I would like to talk a little bit about
+
+00:11.840 --> 00:18.640
+the Bluetooth Mesh and what we did in the Rust ecosystem to basically support it both
+
+00:18.640 --> 00:25.520
+on the embedded and on the Linux side and it's a good continuation on the topic that
+
+00:25.520 --> 00:30.960
+we had in the previous session because it's a little bit comparable and there's a lot
+
+00:30.960 --> 00:37.000
+of material so basically what I will, and a little time, 20 minutes, so what I will
+
+00:37.000 --> 00:43.280
+basically give you today is a lot of teasers and a lot of pointers and I hope you'll get
+
+00:43.280 --> 00:51.120
+interested and could follow the links to further investigate things.
+
+00:51.120 --> 00:58.160
+So let's get started with what the Bluetooth Mesh is.
+
+00:58.160 --> 01:07.400
+Bluetooth Mesh is based on the BLE, so Bluetooth Low Energy Technology, but it's designed to
+
+01:07.400 --> 01:16.440
+create a mesh network or devices on top of it, meaning that you should be able to connect
+
+01:16.440 --> 01:26.800
+nodes or devices directly in dynamic hierarchies basically.
+
+01:26.800 --> 01:33.520
+What's different between the Bluetooth Mesh and the thread, for example, is that Bluetooth
+
+01:33.520 --> 01:39.800
+Mesh doesn't use any routing, it's based on the managed flooding principle, meaning
+
+01:39.800 --> 01:46.280
+that the device will try to publish messages to all the devices in the range and those
+
+01:46.280 --> 01:54.440
+devices will then figure out what to do next with those messages that have been received
+
+01:54.440 --> 02:01.200
+and it supports published subscribe model as we will see in a minute.
+
+02:01.200 --> 02:08.600
+So this is how it basically looks like and it's a similar what Stefan showed us with
+
+02:08.600 --> 02:15.560
+the threads, so we have a regular node that can send and receive messages, we have relay
+
+02:15.560 --> 02:22.440
+nodes which are only there to extend the range of the network, so they're just relaying
+
+02:22.440 --> 02:31.120
+things that they're receiving and in a similar fashion as thread, we can have a low power
+
+02:31.120 --> 02:37.600
+nodes that are mostly sleeping and are not active and which are accompanied by the friend
+
+02:37.600 --> 02:50.400
+nodes which will buffer messages addressed over these low power nodes.
+
+02:50.400 --> 02:57.000
+The stack looks something like this, so as I said like we have a Bluetooth load energy
+
+02:57.000 --> 03:04.120
+as a basic layer, there's a networking layer that's responsible for creating networks and
+
+03:04.120 --> 03:09.680
+exchanging keys and all that kind of things and then we have an application layer which
+
+03:09.680 --> 03:18.480
+is completely defined in the Bluetooth mesh, meaning that all our models are predefined
+
+03:18.480 --> 03:22.720
+and we can use it as we will see now.
+
+03:22.720 --> 03:32.080
+So as I said the models are defined, so for example all the things that are talking like
+
+03:32.080 --> 03:44.720
+a sensors or on-off switches are defined as a model on the application level on the mesh
+
+03:44.720 --> 03:50.320
+and we can have a client and a server model meaning that the client and the server will
+
+03:50.320 --> 03:58.720
+exchange the messages and communicate like that.
+
+03:58.720 --> 04:09.000
+So how does it work then is that each device, each node can have multiple elements and those
+
+04:09.000 --> 04:16.440
+elements can have multiple client or server models between them and each element has its
+
+04:16.440 --> 04:26.600
+own unicast address that can be used to address an element within the device.
+
+04:26.600 --> 04:34.240
+We can also create more complex hierarchies by defining a group of addresses and defining
+
+04:34.240 --> 04:43.320
+the virtual addresses which provides us with a way to create more complex topologies and
+
+04:43.320 --> 04:50.920
+to have like a full power of public subscriber architectures on the mesh level.
+
+04:50.920 --> 04:59.400
+And every device is part of the particular network and the particular application within
+
+04:59.400 --> 05:04.160
+that network meaning that all the messages that are exchanged between the devices are
+
+05:04.160 --> 05:11.360
+double encrypted with the network and the application key.
+
+05:11.360 --> 05:17.440
+To onboard the device onto the network we need to go through something like a provisioning
+
+05:17.440 --> 05:24.720
+process meaning that we need to have like a special node that will behave like a provisioner
+
+05:24.720 --> 05:33.640
+of the network and that node will be responsible for creating and managing the keys, setting
+
+05:33.640 --> 05:40.240
+the addresses and things like that.
+
+05:40.240 --> 05:52.120
+So what are the use cases on top of the Bluetooth low energy we can have extended range and more
+
+05:52.120 --> 06:01.880
+flexible topologies but we can also have existing hardware so this is just another application
+
+06:01.880 --> 06:09.880
+on existing Bluetooth low energy hardware that can be applied but with more flexible
+
+06:09.880 --> 06:18.640
+technologies and providing an option to connect larger number of devices.
+
+06:18.640 --> 06:24.760
+So I don't want to go too deep into this because it's probably a session of its own.
+
+06:24.760 --> 06:34.880
+We heard a lot about the thread here but this is just a small comparison between all the
+
+06:34.880 --> 06:46.280
+operating technologies in the space and their respective solutions in all the different layers.
+
+06:46.280 --> 06:54.880
+So when we started playing with this we had one goal in mind and that is to create like
+
+06:54.880 --> 07:04.200
+a full stack meaning that we can create application based on the Bluetooth mesh that will cover
+
+07:04.200 --> 07:12.120
+the full stack going from the embedded microcontrollers to the Linux and having support for these
+
+07:12.120 --> 07:17.920
+applications in the cloud and try to do all that in Rust.
+
+07:17.920 --> 07:27.160
+We will talk about that a bit more in a moment and the idea was to create a platform that
+
+07:27.160 --> 07:34.400
+could be easy to build these applications both on devices and on the cloud side but
+
+07:34.400 --> 07:46.120
+also provide a way to ease the management of the Bluetooth mesh networks.
+
+07:46.120 --> 07:57.160
+But before we dive into what we did in Rust is let's go a little bit through the current
+
+07:57.160 --> 08:03.920
+state and on the embedded side the ZFR is the only thing that I found in the open source
+
+08:03.920 --> 08:08.160
+that had a support for the Bluetooth mesh.
+
+08:08.160 --> 08:16.080
+Of course all the vendors had their own support as the case that can be used out of the box
+
+08:16.080 --> 08:23.800
+On the Linux side everything related to the Bluetooth is basically under the BlueZ project
+
+08:23.800 --> 08:33.080
+and the BlueZ defines the Dibas APIs for communicating with the Bluetooth demon on the different
+
+08:33.080 --> 08:40.480
+kind of things and of course they have the mesh API as well for the Dibas and it's used
+
+08:40.480 --> 08:47.560
+to send messages between the Bluetooth demon and the applications that want to talk a Bluetooth
+
+08:47.560 --> 08:50.800
+mesh on the Linux side.
+
+08:50.800 --> 08:58.080
+But the demon is different so if you want to use the mesh on the Linux box you need
+
+08:58.080 --> 09:05.200
+to install the different package and basically disable and stop the regular Bluetooth demon
+
+09:05.200 --> 09:17.600
+and enable the specific Bluetooth mesh demon.
+
+09:17.600 --> 09:25.760
+There's also a provisioner tool included which is called the Mesh CFG client and it's an
+
+09:25.760 --> 09:30.080
+interactive tool that allows us to do all the provisioning things.
+
+09:30.080 --> 09:36.040
+So create new networks, scan for the provision devices, add those devices to the network
+
+09:36.040 --> 09:41.360
+and create addresses for their models.
+
+09:41.360 --> 09:47.120
+One of the downsides of this tool is that it's too interactive so it's not that easily
+
+09:47.120 --> 09:58.720
+scriptable and it's making it hard to create like reproducible networks and environments
+
+09:58.720 --> 10:02.240
+that you want to do.
+
+10:02.240 --> 10:08.000
+And the final state is then how do we create these applications on the Linux side that
+
+10:08.000 --> 10:19.560
+will do this and there's even less examples of that on the network.
+
+10:19.560 --> 10:25.040
+All that I could find when I started looking into it was some of the Python examples done
+
+10:25.040 --> 10:32.960
+in the Bluetooth white papers and basically those are just simple Python applications
+
+10:32.960 --> 10:42.240
+that use the divas interface to basically communicate with the mesh demon over it.
+
+10:42.240 --> 10:53.560
+So coming from this kind of state you could see the end goal that we try to do is to try
+
+10:53.560 --> 11:03.840
+to see how far can we go with this tech and try to implement most of these things in Rust.
+
+11:03.840 --> 11:13.160
+And now the question is why Rust of course and we found a very good solution for system
+
+11:13.160 --> 11:21.440
+programming so it basically allows us to create, it's statically compiled and strongly typed
+
+11:21.440 --> 11:38.880
+which means that it has a strong preform.
+
+11:38.880 --> 11:45.480
+Save programs without introducing runtimes and VMs, again a very suitable for system
+
+11:45.480 --> 11:48.440
+programming for this kind of applications.
+
+11:48.440 --> 11:55.560
+And finally it's a fairly modern language with a lot of good tooling so you know people
+
+11:55.560 --> 12:03.480
+coming from other areas for example I don't consider myself an embedded programmer but
+
+12:03.480 --> 12:12.200
+I feel much more comfortable playing with Rust for these use cases than I would be if
+
+12:12.200 --> 12:17.440
+I would try to do the same thing in a C so yeah.
+
+12:17.440 --> 12:26.920
+So first thing we did is to create a bit mesh create and that's a basic create that we try
+
+12:26.920 --> 12:33.920
+to do is to implement all the traits that are needed for implementing the Bluetooth
+
+12:33.920 --> 12:35.240
+mesh specification.
+
+12:35.240 --> 12:44.120
+So as you remember all the layers of the Bluetooth mesh so everything needed for representing
+
+12:44.120 --> 12:51.320
+the application models or the networking layer traits should be defined in this one
+
+12:51.320 --> 13:02.000
+create and as you can see you will see we will be able to reuse that in all different
+
+13:02.000 --> 13:03.360
+layers of the stack.
+
+13:03.360 --> 13:11.480
+But in order to be able to reuse it in the embedded space that this create needs to be
+
+13:11.480 --> 13:19.880
+and no STD meaning that it shouldn't rely on a standard library.
+
+13:19.880 --> 13:32.520
+And this is a kind of go to example to show how the sensor data representation could look
+
+13:32.520 --> 13:41.120
+like in defined by the BT mesh create.
+
+13:41.120 --> 13:47.280
+So Rust embedded I think it's going so how many people here are using Rust today for
+
+13:47.280 --> 13:50.320
+embedded programming.
+
+13:50.320 --> 13:51.320
+Let's go.
+
+13:51.320 --> 13:55.560
+So what's the goal here?
+
+13:55.560 --> 14:02.600
+There's a Rust embedded working group that are dedicated to this task and its goal is
+
+14:02.600 --> 14:11.720
+to enable people to run firmware using Rust, firmware targeted to the microcontrollers
+
+14:11.720 --> 14:24.480
+with the small RAM and ROM capabilities without operating system and without memory allocator.
+
+14:24.480 --> 14:29.600
+As I said like we have only 20 minutes and there's a lot of things so I just giving you
+
+14:29.600 --> 14:30.600
+the pointers.
+
+14:30.600 --> 14:38.200
+So there's a lot more to be said about embedded Rust but we don't have that much time.
+
+14:38.200 --> 14:44.920
+And the next thing, next cool thing as I said doing embedded with Rust is that it enables
+
+14:44.920 --> 14:50.040
+you to do quite a model programming things even for the firmware.
+
+14:50.040 --> 14:55.720
+So there's a project called embassy which allows us to use basically as in programming
+
+14:55.720 --> 14:56.720
+for the firmers.
+
+14:56.720 --> 15:06.280
+It provides a scheduler and the hardware abstractions that we can use to build quite capable asynchronous
+
+15:06.280 --> 15:13.560
+applications in Rust and it has a hardware support for all the major hardware platforms
+
+15:13.560 --> 15:14.560
+today.
+
+15:14.560 --> 15:22.400
+On top of that the project that we are involved in is building on top of the embassy and trying
+
+15:22.400 --> 15:28.440
+to add more IoT things on top of the basic embedded development.
+
+15:28.440 --> 15:35.720
+So communication with the cloud in terms of MQTT or HTTP, trying to support use cases
+
+15:35.720 --> 15:47.800
+like Bluetooth mesh and try to create more advanced applications like OTA firmware updates.
+
+15:47.800 --> 15:56.400
+And you can see here one of the examples from the workshop that we did that I'll mention
+
+15:56.400 --> 16:03.280
+later on is for example how we can use the Bitimesh create on the firmware to basically
+
+16:03.280 --> 16:09.560
+every time we read the sensor data we can package that sensor data in the proper sensor
+
+16:09.560 --> 16:15.280
+Bluetooth mesh message and send it over the Bluetooth.
+
+16:15.280 --> 16:26.480
+Then on the Linux side there's a project called Bluer which is part of the BlueZ Linux official
+
+16:26.480 --> 16:34.920
+group which tries to implement all the Linux Bluetooth protocol stack in Rust and at the
+
+16:34.920 --> 16:43.160
+moment it provides support for all the major features of the Bluetooth like get or Bluetooth
+
+16:43.160 --> 16:45.320
+cloud energy.
+
+16:45.320 --> 16:52.600
+What we try to do here is to provide support for the Bluetooth mesh in a similar way as
+
+16:52.600 --> 16:56.560
+the rest of the Bluer works.
+
+16:56.560 --> 17:04.640
+So again, nice thing about Rust is that you can use a lot of crates and existing technologies
+
+17:04.640 --> 17:07.560
+that are there for different use cases.
+
+17:07.560 --> 17:16.240
+So for example, a Bluer uses a Tokyo runtime, very frequently used runtime for building
+
+17:16.240 --> 17:25.000
+all kind of server applications in Rust and communicates with the mesh daemon over using
+
+17:25.000 --> 17:27.800
+the DBScrate.
+
+17:27.800 --> 17:32.240
+The good thing is and that was the part of the plan is to use the Bitimesh create here
+
+17:32.240 --> 17:38.880
+as well to use for the mesh traits that we would need it.
+
+17:38.880 --> 17:45.600
+So this is the quick architecture of how things work on the Linux so I hope you can
+
+17:45.600 --> 17:46.880
+see it well.
+
+17:46.880 --> 17:53.000
+So we have a mesh daemon which communicates directly with the devices.
+
+17:53.000 --> 18:01.680
+It has its own state in the mesh config and the mesh storage volumes and it communicates
+
+18:01.680 --> 18:09.680
+with using the system DBScrate to random applications, being the gateway application
+
+18:09.680 --> 18:15.840
+or some device simulator on the Linux as well.
+
+18:15.840 --> 18:22.880
+But the good thing is that you can see here is that and this is one of the things that
+
+18:22.880 --> 18:28.040
+I personally like a lot about using Rust for these use cases is that this code running
+
+18:28.040 --> 18:33.800
+on the Linux looks pretty much similar like the code running on the firmware.
+
+18:33.800 --> 18:40.080
+So here we are receiving the Bluetooth message, we are parsing it, we are creating a JSON
+
+18:40.080 --> 18:44.480
+out of it and sending it over the MQTT to the cloud.
+
+18:44.480 --> 18:53.400
+But you know, it's very easy for a single person to jump back and forth over the different
+
+18:53.400 --> 19:01.080
+stack layers and using the similar crates and a similar style code then it would be
+
+19:01.080 --> 19:09.520
+if we go from writing a C for the firmware and then a Python code for the gateway and
+
+19:09.520 --> 19:13.080
+then doing something in Java in the cloud for example.
+
+19:13.080 --> 19:19.320
+So the mesh support is not officially landed in Bloor and this is all my fault due to my
+
+19:19.320 --> 19:22.720
+laziness and other priorities.
+
+19:22.720 --> 19:30.200
+But hopefully this PR will be merged in the coming weeks, let's say.
+
+19:30.200 --> 19:36.720
+Final part of the project that we have been building is to build a kind of IoT friendly
+
+19:36.720 --> 19:41.720
+cloud platform, again done in Rust.
+
+19:41.720 --> 19:46.840
+Here we try to provide all the services that your typical IoT application is needing.
+
+19:46.840 --> 19:53.440
+So being able to do a lot of connectivity, having a capable device registry and being
+
+19:53.440 --> 20:01.080
+able to integrate further into the cloud applications and using digital twinning and all these
+
+20:01.080 --> 20:04.840
+kind of things on the other side.
+
+20:04.840 --> 20:10.240
+But again, I'm coming back to the same thing.
+
+20:10.240 --> 20:16.840
+So there's a thing called payload converter in the cloud that can actually intercept our
+
+20:16.840 --> 20:19.320
+messages coming from the gateways.
+
+20:19.320 --> 20:27.440
+And if you can remember in the previous example, we already parsed the Bluetooth messages and
+
+20:27.440 --> 20:28.760
+send them as a JSON.
+
+20:28.760 --> 20:34.720
+But if your gateway is sending just the row bytes, you can do that thing on the cloud,
+
+20:34.720 --> 20:38.920
+again with the same crates and with a very similar code.
+
+20:38.920 --> 20:47.120
+So we will parse the bytes, get the message, do some JSON processing, and forward that
+
+20:47.120 --> 20:53.000
+message deeper into the cloud.
+
+20:53.000 --> 20:58.640
+So we were playing with this for a while, and then there was a chance to actually try
+
+20:58.640 --> 21:02.600
+to put this all into the work.
+
+21:02.600 --> 21:11.200
+With the EclipseCon, we had a hackathon and a workshop where we tried to cover the whole
+
+21:11.200 --> 21:17.880
+area with the Bluetooth mesh network, provide the microbeads for people to play around with,
+
+21:17.880 --> 21:25.040
+and provide some basic applications in the cloud that will talk to each other.
+
+21:25.040 --> 21:30.520
+But the basic big architecture looks like this.
+
+21:30.520 --> 21:37.680
+So we have a public sandbox for our drug cloud consisting of Kafka and all this kind of stuff.
+
+21:37.680 --> 21:40.280
+And we brought the gateway based on the Bloor.
+
+21:40.280 --> 21:51.920
+We provided some examples of how to use microbeads with the Rust embedded drug device and embassy,
+
+21:51.920 --> 21:57.840
+and provided a couple of applications that will talk to the cloud using the web socket
+
+21:57.840 --> 21:59.880
+in the background.
+
+21:59.880 --> 22:06.960
+So just to recap how this architecture looks on the firmware.
+
+22:06.960 --> 22:15.240
+So you have a couple of layers, the embassy and the Bluetooth radio on the bottom.
+
+22:15.240 --> 22:21.200
+Then we have a drug device and the BTMesh support next on, and on top of that, we can
+
+22:21.200 --> 22:30.760
+write our own application that will do things with these messages.
+
+22:30.760 --> 22:35.560
+On the gateway side, we implemented the gateway using the Bloor.
+
+22:35.560 --> 22:42.800
+And we also tried to use some of the, so to say, latest edge technologies to deploy and
+
+22:42.800 --> 22:44.440
+manage those gateways.
+
+22:44.440 --> 22:51.360
+So trying to use MicroShift, which is the RedHeads version of the single node Kubernetes cluster,
+
+22:51.360 --> 22:59.840
+paired with the open cluster management to deploy these gateways to appropriate nodes.
+
+22:59.840 --> 23:05.400
+And I must say, to my surprise, it all worked pretty well.
+
+23:05.400 --> 23:11.040
+So we had like a four or five gateways based on the Intel Nux and some Raspberry Pis.
+
+23:11.040 --> 23:17.280
+Because Raspberry Pis didn't run the Kubernetes, we used the basic podman and the Docker images
+
+23:17.280 --> 23:19.480
+to run the gateways.
+
+23:19.480 --> 23:24.280
+And that provides a very good coverage of a very large space.
+
+23:24.280 --> 23:28.440
+What we needed to do is to provide a couple of relay nodes.
+
+23:28.440 --> 23:36.640
+You can see on this other picture, is to just to basically extend the range over some longer
+
+23:36.640 --> 23:39.680
+corridors that were there.
+
+23:39.680 --> 23:48.360
+But everything worked pretty good from this perspective.
+
+23:48.360 --> 23:53.440
+So that's all what I have to cover today.
+
+23:53.440 --> 23:55.920
+So as I said, there's a lot of teasers.
+
+23:55.920 --> 23:59.020
+We didn't get into anything too much deeply.
+
+23:59.020 --> 24:00.520
+But these are the communities.
+
+24:00.520 --> 24:03.880
+So hit us on the Drug IoT metrics channel.
+
+24:03.880 --> 24:09.160
+That's where we all hang and are happy to talk about these things.
+
+24:09.160 --> 24:13.880
+If you're interested in EBC, I would suggest to take a look at that and the Bloor thing,
+
+24:13.880 --> 24:17.600
+hopefully with the official BTMesh support very soon.
+
+24:17.600 --> 24:18.600
+Thanks.
+
+24:18.600 --> 24:37.040
+Thank you very much.

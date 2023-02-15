@@ -1,0 +1,1303 @@
+WEBVTT
+
+00:00.000 --> 00:12.240
+So, hello, everyone. Thanks for joining us today to the Postgres Dayroom. Our next speaker
+
+00:12.240 --> 00:17.800
+is Chris Trevers, who flew all the way from Indonesia. Thank you. And he's going to talk
+
+00:17.800 --> 00:23.680
+about why database teams need human factor training. Thank you.
+
+00:23.680 --> 00:34.360
+Thank you very much for coming to this talk. I think it's certainly one of the topics I'm
+
+00:34.360 --> 00:41.360
+most excited about when it comes to database-related topics, actually, even though I'm very, very
+
+00:41.360 --> 00:48.200
+much into Postgres. This topic really excites me. So, just introducing myself a bit for
+
+00:48.200 --> 00:54.000
+those who don't know me. I have a bit over 24 years of experience in Postgres, so almost
+
+00:54.000 --> 01:00.240
+25 years. I've built accounting software on it. I have worked as a database administrator
+
+01:00.240 --> 01:07.440
+on very large databases, built database teams, managed infrastructure, a lot of that sort
+
+01:07.440 --> 01:12.320
+of thing. So, I have a wide range of experience. I have submitted several patches in for Postgres,
+
+01:12.320 --> 01:18.120
+so which one has been accepted, and I'll probably be submitting more patches at some point in
+
+01:18.120 --> 01:26.080
+the future. So, I absolutely love Postgres for its extensibility. And with that, of course,
+
+01:26.080 --> 01:31.160
+comes some complexity, some difficulties in kind of maintaining our mental models about
+
+01:31.160 --> 01:38.440
+how things are actually working. And especially if you're working at things in scale, it's
+
+01:38.440 --> 01:43.360
+really easy for your mental model not to match what's actually happening, and then sometimes
+
+01:43.360 --> 01:53.320
+we make mistakes and things happen. So, this talk is basically going to be about two things.
+
+01:53.320 --> 02:02.600
+The first thing is something our industry doesn't do very well. And that is how we look at human
+
+02:02.600 --> 02:11.280
+error, and how we can possibly do that better. I kind of want to talk a little bit about
+
+02:11.280 --> 02:17.800
+how we can improve, and what the benefits are that we can expect from some of the early
+
+02:17.800 --> 02:24.880
+steps that we can take as an industry. So, this is very much a talk about database people.
+
+02:24.880 --> 02:31.760
+It's a talk about us. It's much less a talk about like a specific technology. But a lot
+
+02:31.760 --> 02:38.680
+of the same technical approaches apply. So, I want to give a few thanks, first of all,
+
+02:38.680 --> 02:45.200
+timescale for paying me to come and do this. Wouldn't really be feasible for me to fly
+
+02:45.200 --> 02:51.000
+from an issue without them. But I also really want to thank two of my prior employers. I
+
+02:51.000 --> 02:57.360
+want to thank Adjust, where we were actually able to bring in aviation training on these
+
+02:57.360 --> 03:05.400
+human factors. So, we brought in a company that did training for pilots, as well as doctors.
+
+03:05.400 --> 03:09.480
+And a lot of the training was really eye-opening, and it allowed us to do some things that we
+
+03:09.480 --> 03:16.440
+couldn't do before. This was really a grand experiment, and it had a number of really
+
+03:16.440 --> 03:22.020
+big, tangible benefits. And then, of course, I also want to thank Delivery
+
+03:22.020 --> 03:28.240
+Hero, who I worked after that, where I was able to kind of work with people and evaluate
+
+03:28.240 --> 03:33.320
+both the successes and the shortcomings of what we had done at Adjust, and further develop
+
+03:33.320 --> 03:43.320
+some of these ideas. So, these are important areas, and I would also say that I'm involved
+
+03:43.320 --> 03:54.080
+in trying to help implement some of these things also at timescale. So, introduction.
+
+03:54.080 --> 04:00.480
+So, just as a, this is a completely rhetorical question. You don't have to raise your hand
+
+04:00.480 --> 04:05.880
+if you don't feel comfortable doing so. But how many of us have been on a team where somebody
+
+04:05.880 --> 04:09.840
+has been working on a production database while they're drunk?
+
+04:09.840 --> 04:16.840
+Yes, I see. I mean, as we go through our career, almost every single one of us will probably
+
+04:16.840 --> 04:27.840
+have that experience. And yet, how many times does it cause a major problem? Almost never.
+
+04:27.840 --> 04:33.480
+At least, I've never seen it cause a major problem. Now, part of that may be the context
+
+04:33.480 --> 04:38.040
+in which it happens, like, you know, the subject matter experts spent out partying was not
+
+04:38.040 --> 04:43.200
+expecting to, was not really on call and has now been called in an escalation. Somebody
+
+04:43.200 --> 04:48.800
+else may be handling a lot of the sort of wider incident strategy stuff where maybe
+
+04:48.800 --> 04:57.200
+alcohol might be a bigger problem. But at least in these contexts, alcohol doesn't seem
+
+04:57.200 --> 05:06.240
+to be a big factor in the further disruption of things once stuff's going on. But let me
+
+05:06.240 --> 05:13.160
+ask another question. How many people here have seen a case where a major incident or
+
+05:13.160 --> 05:24.160
+outage happened because somebody made a mistake because that person was tired? See? So, we
+
+05:24.160 --> 05:29.960
+valorize the thing that causes us problems. Well, we demonize something that probably
+
+05:29.960 --> 05:35.880
+does cause some problems, no doubt. And maybe the demonization helps prevent more problems,
+
+05:35.880 --> 05:43.200
+but we valorize something that causes a lot more problems. Okay? Why isn't we do that?
+
+05:43.200 --> 05:49.160
+How is it that we should stop doing that and actually we think our priorities? Now, on
+
+05:49.160 --> 05:57.920
+one side, this is a good example of human error, right? We can talk about all the factors
+
+05:57.920 --> 06:06.560
+that go into that prioritization. But on the other side, it's also partly because we don't
+
+06:06.560 --> 06:14.760
+understand human error in our field, right? When we do a post-mortem, if somebody made
+
+06:14.760 --> 06:18.840
+a mistake, we just say, oh, human error, and that's it. I'm going to come back to that
+
+06:18.840 --> 06:28.080
+point in a few minutes. So, drunkenness versus fatigue. Now, if one person drinks, say, a
+
+06:28.080 --> 06:33.720
+bottle of wine, and another person, one group of people drinks each a bottle of wine, and
+
+06:33.720 --> 06:38.240
+the other group of the people has, say, their sleep disrupted, so they're only sleeping
+
+06:38.240 --> 06:45.080
+four hours, and then get up, and a few hours later, they're in the other group. Give both
+
+06:45.080 --> 06:55.320
+of them complex tasks to perform. Who's going to perform worse? Sleep deprivation causes
+
+06:55.320 --> 07:03.000
+heavier cognitive deficiencies. Four hours of sleep, missing sleep, is worse than four
+
+07:03.000 --> 07:15.520
+drinks. Now, obviously, there are some tasks where that's not the case, like driving a
+
+07:15.520 --> 07:21.120
+car or something, because you also have coordination problems induced by the alcohol. From a peer
+
+07:21.120 --> 07:31.320
+information processing standpoint, having four hours of sleep only is worse than drinking
+
+07:31.320 --> 07:43.880
+a bottle of wine, and it's going to last at least the next day. So, totally, totally worth
+
+07:43.880 --> 07:55.560
+thinking about that. So, now that I've talked about, like, one aspect of human error, one
+
+07:55.560 --> 08:00.640
+thing that can induce a lot of human error, I want to talk about a brief history of why
+
+08:00.640 --> 08:11.720
+this field became really big in aviation. So, back in the 1950s, 1960s, 80% of the aircraft
+
+08:11.720 --> 08:16.760
+accidents or incidents were blamed on pilot error. Notice I didn't say human error, I
+
+08:16.760 --> 08:22.720
+said pilot error. I'm going to come back to that distinction in a moment. In fact, I think
+
+08:22.720 --> 08:31.160
+the number might have been closer than 90%. Today, our incident and accident rates in
+
+08:31.160 --> 08:38.720
+airlines are well over 100 times lower than they were at that point. So, if you think
+
+08:38.720 --> 08:44.400
+about it, improvements in the technology in men and of the airplanes could only account
+
+08:44.400 --> 08:52.240
+for maybe 10% of that improvement. All of the rest of this is due to much better understanding
+
+08:52.240 --> 08:59.320
+of the question of human error. There's been a shift from focusing on pilot error to focusing
+
+08:59.320 --> 09:04.720
+on human error. When the aviation industry talks about human error, they don't mean somebody
+
+09:04.720 --> 09:11.040
+made a mistake, and that's where they leave it. They have a rich taxonomy of understanding
+
+09:11.040 --> 09:21.080
+kinds of human error, causes of each of these particular types of errors, and sort of practices
+
+09:21.080 --> 09:27.280
+to try to mitigate them. The way I would actually describe this difference is that if you're
+
+09:27.280 --> 09:31.400
+debugging software and it's connecting to the database, and every time, let's say you
+
+09:31.400 --> 09:35.880
+have an error in your query or something the database can't fulfill your request, it just
+
+09:35.880 --> 09:41.400
+says something went wrong. You're not going to be able to debug that software at all,
+
+09:41.400 --> 09:48.600
+and you're probably going to have a lot of trouble. That's kind of what we do currently
+
+09:48.600 --> 09:53.040
+when we say human error. We just simply say the person made a mistake, and that's as far
+
+09:53.040 --> 09:59.320
+usually as we look. The aircraft industry has actually come up with something with a much
+
+09:59.320 --> 10:06.840
+richer understanding of this topic and sort of richer system of almost like error codes
+
+10:06.840 --> 10:14.160
+that they use when they talk about these issues. The reason is it's a very unforgiving environment.
+
+10:14.160 --> 10:20.280
+If you make a mistake, you might or might not be able to recover, so you have a lot
+
+10:20.280 --> 10:31.000
+of training on this, and now the chance of a massive disaster is down probably one error
+
+10:31.000 --> 10:43.400
+disaster per billion takeoffs, which is really impressive. We'd love to have that.
+
+10:43.400 --> 10:47.640
+So they've made this shift. They've also made a shift that we've already made, and it's
+
+10:47.640 --> 10:52.560
+worth pointing this out, and that's that they've made a shift from individual responsibility
+
+10:52.560 --> 10:58.440
+to collective responsibility. In our terms, we call that blameless culture. Somebody makes
+
+10:58.440 --> 11:03.000
+a mistake. We don't blame them. We don't go, hey, stop making mistakes. We try to find
+
+11:03.000 --> 11:07.240
+some way to keep that mistake from happening, but because we don't have a clear understanding
+
+11:07.240 --> 11:13.680
+of this topic, we try to solve this in ways that maybe aren't as effective as they could
+
+11:13.680 --> 11:20.480
+be. I want to give one really good example of sort of a watershed moment. Actually, before
+
+11:20.480 --> 11:27.960
+I talk about that, let me just discuss David Beatty's contribution quickly. Beatty was
+
+11:27.960 --> 11:36.000
+a cognitive psychologist and pilot in the U.K., and in 1969, he wrote a seminal book
+
+11:36.000 --> 11:41.480
+called The Human Factor in Aircraft Accidents, where he basically looked at the kinds of
+
+11:41.480 --> 11:47.560
+mistakes that happen and the kinds of circumstances that lead to those mistakes. There are newer
+
+11:47.560 --> 11:54.360
+versions of that book out now. It's actually worth reading, but probably not best to read
+
+11:54.360 --> 12:07.000
+if you're a nervous flyer. As a good description of how we break down error, it was the industry
+
+12:07.000 --> 12:13.600
+starting point. Ten years after that, there was I think the watershed moment in how this
+
+12:13.600 --> 12:19.120
+became really big within aviation, and that was the Tenerife disaster. Tenerife disaster
+
+12:19.120 --> 12:28.440
+was the most deadly aircraft accident still in history. It happened on the ground in Tenerife
+
+12:28.440 --> 12:34.560
+due to a variety of factors. I'm not sure how much detail I should go into in this talk,
+
+12:34.560 --> 12:40.680
+but the end result was basically that 1-747 tried to take off down a runway with limited
+
+12:40.680 --> 12:49.000
+visibility without a proper takeoff clearance, and they hit another 747 on the ground. Clear
+
+12:49.000 --> 12:55.800
+case of human error, and the Spanish report on this more or less blamed it on pilot error.
+
+12:55.800 --> 13:02.160
+This guy tried to take off. He didn't have the clearance. It was his fault. The Dutch
+
+13:02.160 --> 13:12.240
+report, which is often criticized in some documentaries that I've seen on this, was
+
+13:12.240 --> 13:15.840
+very, very different. What they actually did was they asked, why did he try to take off
+
+13:15.840 --> 13:22.160
+without clearance? What was going through, how did that mistake happen? The thing was,
+
+13:22.160 --> 13:28.080
+he was an extremely experienced pilot. He was their chief pilot. He actually didn't fly
+
+13:28.080 --> 13:33.520
+airplanes that much. He was mostly sitting on simulators. The thing was, at that time,
+
+13:33.520 --> 13:40.400
+when you were the senior pilot in the simulator, you were giving the clearances. A stressful
+
+13:40.400 --> 13:49.800
+situation, visibility is slow, there's pressure to take off, stressful situation. He goes
+
+13:49.800 --> 13:54.200
+back to what he's used to doing, which is assuming he has the clearance because he's
+
+13:54.200 --> 14:00.840
+used to giving them to himself. Airlines don't do that anymore in their simulators,
+
+14:00.840 --> 14:10.320
+for obvious reasons. The Dutch report actually became the basis for how the aviation industry
+
+14:10.320 --> 14:16.080
+has started to look at human error ever since. As a result, what we've seen is we've seen
+
+14:16.080 --> 14:23.720
+this massive, massive improvement in safety. Every pilot in every airline gets this sort
+
+14:23.720 --> 14:31.920
+of training, and it has made our flights much, much, much, much safer.
+
+14:31.920 --> 14:36.880
+The question is, can we benefit from the same thing? The answer is yes. We actually can get
+
+14:36.880 --> 14:45.800
+a lot more benefits from it than just reducing incidents and recovering from them. In fact,
+
+14:45.800 --> 14:51.360
+if you look at the standard definition that people give of crew resource management, it's
+
+14:51.360 --> 14:57.840
+the use of all available resources to ensure the safe and efficient operation of the aircraft.
+
+14:57.840 --> 15:05.000
+If we can use all of our resources to improve both safety and efficiency, that's going
+
+15:05.000 --> 15:11.720
+to make our jobs better, we're going to be more productive, we're going to be happier.
+
+15:11.720 --> 15:17.360
+This is actually a really, really important field that I think that we need to improve
+
+15:17.360 --> 15:22.000
+on. Now I'm going to talk about how we look at
+
+15:22.000 --> 15:33.000
+human error in the industry. Human error typically in the DevOps and SRE systems, we have one
+
+15:33.000 --> 15:38.920
+answer to human error. What that is, automation. If somebody made a mistake, we're going to
+
+15:38.920 --> 15:45.120
+automate that away. We're just going to add more automation. We're going to add more automation.
+
+15:45.120 --> 15:51.360
+It seems like a great idea. Computers are infallible, we're fallible, so we're just
+
+15:51.360 --> 15:58.520
+going to use the computers to prevent the mistake. The problem with this, the IEEE
+
+15:58.520 --> 16:06.080
+has done a bunch of research on something they call the automation paradox. The automation
+
+16:06.080 --> 16:19.600
+paradox is that the more reliable the automation is, the less opportunities humans have to
+
+16:19.600 --> 16:25.440
+contribute to the overall success of that. I think I'm going to take a little bit of
+
+16:25.440 --> 16:31.080
+time here to talk about why that is the case, and then I'll get reinforced in the next section
+
+16:31.080 --> 16:41.440
+when we talk about why we make mistakes. But to start with a basic summary, obviously
+
+16:41.440 --> 16:46.440
+we need automation because there are certain kinds of tasks that we're actually very bad
+
+16:46.440 --> 16:53.200
+at following, and there are certain kinds of requirements where automation can really
+
+16:53.200 --> 17:00.480
+save us a lot of safety considerations. So steps that have to be done together really
+
+17:00.480 --> 17:08.640
+should be automated so that they happen together. But automation is just done reflexively, at
+
+17:08.640 --> 17:15.040
+least according to a lot of the research that's come out of the IEEE as well as many of the
+
+17:15.040 --> 17:22.560
+aviation study groups on this, is that simply throwing automation at a problem can actually
+
+17:22.560 --> 17:27.280
+make human error more common and can make human error more severe, and then when things
+
+17:27.280 --> 17:41.240
+are out of whack, you have no possibility at all of saving, of preventing a major incident.
+
+17:41.240 --> 17:46.920
+Part of the reason here is that we process all of what we see through a mental model,
+
+17:46.920 --> 17:56.080
+and so when we add more complexity, when we add more automation around a lot of this,
+
+17:56.080 --> 18:02.400
+we make it really, really, really, really, really hard for us to keep that mental model
+
+18:02.400 --> 18:07.880
+reasonably in sync with reality. And then when something goes wrong, we can spend a
+
+18:07.880 --> 18:13.920
+lot of time and effort struggling to understand what's going on, or we may reflexively react
+
+18:13.920 --> 18:24.320
+in ways which actually make the problem worse. So automation isn't the answer, it is part
+
+18:24.320 --> 18:31.320
+of an answer. And reflexive automation, oh, we had a problem that's automated away, is
+
+18:31.320 --> 18:46.240
+not the answer. Now, I mentioned just a moment ago this issue of mental models. We humans,
+
+18:46.240 --> 18:50.640
+we operate in a world that's very different from the way computers operate. Computers
+
+18:50.640 --> 19:00.200
+are basically systems that mathematically process inputs and produce outputs, right?
+
+19:00.200 --> 19:06.480
+And therefore, computing programs basically operate in a closed world. We humans don't
+
+19:06.480 --> 19:12.480
+operate in closed worlds, right? We all operate in open worlds. We have the situation where
+
+19:12.480 --> 19:19.720
+we know we don't know everything. We know we don't know some things. We know, well,
+
+19:19.720 --> 19:24.200
+and then we don't know other things that we don't know we don't know, right? Some cases
+
+19:24.200 --> 19:32.400
+we know we don't know what we don't know, right? But in order to function, we have to
+
+19:32.400 --> 19:36.320
+maintain these mental models, and those mental models are necessarily a simplification of
+
+19:36.320 --> 19:42.160
+reality. And so when something's going wrong, we have to dig into how we think the system
+
+19:42.160 --> 19:49.200
+works and we have to kind of go through that. And the more complexity we throw into our
+
+19:49.200 --> 19:55.920
+automation, the harder that process becomes, right?
+
+19:55.920 --> 20:03.600
+So automation, as I say, is an important tool. I'm going to talk in a few moments about
+
+20:03.600 --> 20:08.840
+good automation versus bad automation, but it's something that we can't rely on to solve
+
+20:08.840 --> 20:15.720
+the human error problem. So I mentioned that I talked about good automation versus bad
+
+20:15.720 --> 20:22.080
+automation. I think this is really, really, really important here. So oftentimes what
+
+20:22.080 --> 20:28.560
+I've seen happen is that you end up with large automated systems, whether they're something
+
+20:28.560 --> 20:39.840
+like Ansible or Rax or Kubernetes or whatever. And oftentimes there isn't a clear understanding
+
+20:39.840 --> 20:48.960
+of how these things work underneath. Now, if people do understand all of that, and they've
+
+20:48.960 --> 20:54.800
+built in a lot of these things, then a lot of that's going to be a lot easier, right?
+
+20:54.800 --> 21:01.360
+So good automation is basically going to be a deliberate and engineered process, right?
+
+21:01.360 --> 21:06.240
+Rather than something that's thrown together in the course of the messy world of operations,
+
+21:06.240 --> 21:12.120
+it is a deliberate process which is designed around two factors and three factors, actually.
+
+21:12.120 --> 21:17.280
+The first factor is the system, right? The second factor is the people, and we usually
+
+21:17.280 --> 21:23.280
+forget that one. And then the last one is that we actually need to be thinking about
+
+21:23.280 --> 21:34.080
+the human machine interaction, right? So good automation takes the people into account.
+
+21:34.080 --> 21:42.000
+Good automation is something which has built in decision points where the person can actually
+
+21:42.000 --> 21:51.200
+sit there and say, hmm, this isn't going right. We're not going to proceed, right? And good
+
+21:51.200 --> 22:10.120
+automation is sort of then a well-understood process, right? So the other thing that is
+
+22:10.120 --> 22:14.560
+really important as we look at automation is this issue of feedback, right? Because the
+
+22:14.560 --> 22:19.800
+more we automate, typically the more we insulate the individual from the feedback of the individual
+
+22:19.800 --> 22:27.160
+steps that would be right, right? So it's really super important to sit down and think
+
+22:27.160 --> 22:34.360
+about what's the person going to see? What's the human going to see? How's the human going
+
+22:34.360 --> 22:40.400
+to be able to interpret this? How much feedback do we want to send? Do we want to send everything
+
+22:40.400 --> 22:46.520
+that we got? Do we want to send some summary of it? And those are going to be decisions
+
+22:46.520 --> 22:51.880
+that have to be made deliberately based upon the context of what we're doing, as well as
+
+22:51.880 --> 22:56.600
+a clear understanding of what the failure cases of the automation are. And then of course
+
+22:56.600 --> 22:59.760
+people actually need to be trained on what the automation is actually doing under the
+
+22:59.760 --> 23:05.560
+hood so that they understand it, rather than just simply saying, oh, push button, okay,
+
+23:05.560 --> 23:16.280
+everything good. So the way I always look at it is a lot of people think automation
+
+23:16.280 --> 23:23.240
+basically, a lot of people think checklists are a step towards automation. I think that
+
+23:23.240 --> 23:30.600
+automation should be a step towards a checklist, okay? The relationship should actually be
+
+23:30.600 --> 23:35.600
+something around on the other side so that you're thinking about how do I want the human
+
+23:35.600 --> 23:40.120
+to interact with this? How do I want the human to perform these? Where do I want the human
+
+23:40.120 --> 23:46.080
+to be able to say this isn't going while we are stopping? And those are the sorts of questions
+
+23:46.080 --> 23:50.320
+and designs that we have to think about when we're dealing with especially these sorts
+
+23:50.320 --> 23:55.760
+of critical systems like the databases, where if the database is down, you know, the business
+
+23:55.760 --> 24:16.000
+maybe now. So now I want to talk a little bit about why we make mistakes. Now, I'm
+
+24:16.000 --> 24:22.960
+mentioned before, computers operate in a closed world, right? They get inputs from us. They
+
+24:22.960 --> 24:34.720
+do processing. They give us outputs, right? We live in an open world. We have, we experience
+
+24:34.720 --> 24:41.120
+things, we perceive things. What we perceive is not a complete model of, or it's not even
+
+24:41.120 --> 24:48.720
+complete aspect of what our mental models are. We make inferences based on incomplete
+
+24:48.720 --> 24:57.440
+data, okay? And in order to function in this world, we have had to adapt and develop certain
+
+24:57.440 --> 25:03.760
+kinds of cognitive biases, okay? And a lot of times people look at this and they go,
+
+25:03.760 --> 25:09.480
+oh, it's not good to be biased. Bias is a bad word. We don't like biases. But the fact
+
+25:09.480 --> 25:13.240
+of the matter is that if you could get rid of all of your cognitive biases, you would
+
+25:13.240 --> 25:20.520
+be unable to function, okay? Confirmation bias, of course, is one thing that we tend
+
+25:20.520 --> 25:27.600
+to be aware of. But here's another one, continuation bias. Continuation bias is the tendency to
+
+25:27.600 --> 25:34.960
+continue to follow a plan you've put in motion, even when you're starting to get good indications
+
+25:34.960 --> 25:41.120
+that that's not a good idea, okay? If you didn't have continuation bias, you might have
+
+25:41.120 --> 25:49.480
+to sit down and rethink your plan continuously over and over and over again, right? That
+
+25:49.480 --> 25:55.200
+wouldn't be very helpful. So continuation bias, just like confirmation bias, actually
+
+25:55.200 --> 26:00.760
+helps us function in the real world. Problem is, it can also lead us into situations where
+
+26:00.760 --> 26:05.840
+we do the wrong thing. And so understanding these biases, understanding their implications
+
+26:05.840 --> 26:14.400
+is very clear, is a very important step to being able to notice when they're causing
+
+26:14.400 --> 26:21.120
+problems and start to trap those sorts of problems. So rather than trying to eliminate
+
+26:21.120 --> 26:29.000
+our biases, which is, I think, a way in which I see people typically trying to do this,
+
+26:29.000 --> 26:34.360
+is better to think about what kinds of problems the biases can cause and how we can detect
+
+26:34.360 --> 26:42.520
+and trap those problems, right? And there are a large number of these biases, right?
+
+26:42.520 --> 26:47.840
+Expectation bias. Expectation bias is also related to confirmation bias. It's the tendency
+
+26:47.840 --> 26:56.960
+to filter out perceptions that don't match your expectations, right? This happens today
+
+26:56.960 --> 27:02.720
+in a lot of environments. It happens in our industry. It obviously still happens in aviation,
+
+27:02.720 --> 27:08.160
+fortunately, usually not with serious problems. The most common problem it causes there is
+
+27:08.160 --> 27:13.480
+that the plane comes up to the gate, the pilot says disarmed doors and cross check. Somebody
+
+27:13.480 --> 27:17.760
+misses the door that's going to be opened. The other person cross checks and expectation
+
+27:17.760 --> 27:23.000
+bias kicks in and they don't notice that the door is still armed. Go to open the door and
+
+27:23.000 --> 27:27.600
+guess what happens. Emergency slide deploys. It doesn't harm anybody on the airplane, but
+
+27:27.600 --> 27:34.280
+it's going to make a bunch of people unhappy because the next leg on the airplane's flight
+
+27:34.280 --> 27:39.800
+is going to get canceled. And that's usually the worst that happens.
+
+27:39.800 --> 27:46.720
+But these are important things and we have to recognize that these sorts of biases are
+
+27:46.720 --> 27:55.200
+going to happen and that our ability to maintain a situation awareness in the course of these
+
+27:55.200 --> 28:07.760
+biases is very much tied to, very much tied to how aware we are of the kinds of problems
+
+28:07.760 --> 28:13.600
+that they can cause, right? Because, you know, we form this mental model. We're going to
+
+28:13.600 --> 28:18.200
+interpret things according to that mental model. We're going to continue our existing
+
+28:18.200 --> 28:23.960
+plans and things like that. And when somebody says, hey, wait, maybe this isn't right, then
+
+28:23.960 --> 28:29.000
+that's suddenly an opportunity to go, hey, my bias is maybe leading me astray. Let's
+
+28:29.000 --> 28:33.600
+sit down and figure out what's going on and verify.
+
+28:33.600 --> 28:39.200
+And human factors training actually tends to include exercises or training specifically
+
+28:39.200 --> 28:55.680
+aimed at doing that. So, second major issue is reversion to prior behavior under stress.
+
+28:55.680 --> 29:02.520
+Something that happens to all of us when we're under stress, our focus narrows, right? We
+
+29:02.520 --> 29:07.520
+start filtering things out and we start resorting to habit.
+
+29:07.520 --> 29:13.080
+What this also means is that in a database team, when there's an outage, if we're not
+
+29:13.080 --> 29:18.960
+careful, we will resort to the things that we're used to doing, even if we have decided
+
+29:18.960 --> 29:23.880
+that they're not maybe the best ways forward. And, you know, I've watched cases where, you
+
+29:23.880 --> 29:28.960
+know, incidents happen and, you know, if a company has been really trying to move towards
+
+29:28.960 --> 29:34.440
+a more collaborative approach to incidents, that suddenly when the incident happens, people
+
+29:34.440 --> 29:39.120
+are getting stressed out and they're going back to this like hyper-individualistic cowboy
+
+29:39.120 --> 29:45.760
+incident response. And a lot of that is just simply due to stress. It's a very well-documented
+
+29:45.760 --> 29:52.080
+part of the stress response. One thing that we got at a just with the human factors training
+
+29:52.080 --> 30:00.480
+was a strong understanding of that problem as well as good understandings of how to measure
+
+30:00.480 --> 30:06.800
+the stress so that we could actually kind of keep an eye on it.
+
+30:06.800 --> 30:13.360
+Another major point that causes problems, and I've alluded to this before, is fatigue.
+
+30:13.360 --> 30:18.400
+How often do we see people who have a rough on call night, who come back in the next day
+
+30:18.400 --> 30:25.000
+and start working on stuff? How often are we willing to say to that person, no, go home,
+
+30:25.000 --> 30:35.280
+get some rest, I don't want you working on this stuff right now? Right? How often have
+
+30:35.280 --> 30:42.560
+we seen people who are on call for an extended time period and a rough shift make mistakes
+
+30:42.560 --> 30:50.720
+after several days of continuous sleep interruptions? You know, do we start to think about the question
+
+30:50.720 --> 30:57.440
+of maybe when this happens, we should be switching these people out more frequently.
+
+30:57.440 --> 31:04.440
+In the airlines, before any flight happens, the flight crew get together and they check
+
+31:04.440 --> 31:10.280
+out how each other are doing, right? And there is an expectation that there is a standby
+
+31:10.280 --> 31:15.280
+flight crew so that if you're not feeling your best, you can say, hey, I didn't sleep
+
+31:15.280 --> 31:23.520
+well last night, I don't want to fly. And that's another thing which has really helped
+
+31:23.520 --> 31:29.440
+the increase of the safety, something we should probably think about doing. You're getting
+
+31:29.440 --> 31:38.440
+tired from the on call, time to switch you out. Do we? I have never worked anywhere
+
+31:38.440 --> 31:53.800
+the day. So a final major point on how and why we make mistakes has to do with a term
+
+31:53.800 --> 32:00.320
+in human factors, Lingo, called workload. Now, I don't like this term in this context
+
+32:00.320 --> 32:05.520
+because when we say workload in here, everybody is thinking, oh, I have so many things I need
+
+32:05.520 --> 32:12.000
+to get done this month. But in the human factor side, workload doesn't mean over the next
+
+32:12.000 --> 32:17.560
+month or over the next week, although planning that can be helpful. What it really means
+
+32:17.560 --> 32:26.760
+is how many tasks are you having to pay attention to right now? How many people here can actually
+
+32:26.760 --> 32:33.720
+listen to and understand two conversations at the same time? Nobody? Maybe it's possible
+
+32:33.720 --> 32:41.440
+for some people to train that. But a brain can't, there are certain kinds of things
+
+32:41.440 --> 32:49.920
+that our brains can't parallelize very well. Understanding where those boundaries are.
+
+32:49.920 --> 32:57.760
+Switching and flipping between tasks. How much can we reduce that workload? That's actually
+
+32:57.760 --> 33:01.640
+really important because one of the things I've seen happen is you have your standard
+
+33:01.640 --> 33:06.760
+runbook and the way most people write their runbooks is you have step, explanation, discussion
+
+33:06.760 --> 33:12.680
+of output, next step. What happens at three in the morning if you've never done this particular
+
+33:12.680 --> 33:22.160
+process is step. Okay? Yes, it did what I expected to. Where's the next step? It becomes
+
+33:22.160 --> 33:31.920
+really, really, really easy to miss the next step in your checklist or to miss critical
+
+33:31.920 --> 33:38.200
+details that are kind of obscured in the fact that now you're having to read through paragraphs
+
+33:38.200 --> 33:43.760
+at three in the morning while troubleshooting a broken system. One of the things that I
+
+33:43.760 --> 33:54.760
+did while it was at adjust is I started writing some of our, I guess I would call them unusual
+
+33:54.760 --> 34:02.000
+procedure checklists. A non-normal procedure checklist. So things that happen when, things
+
+34:02.000 --> 34:06.040
+that you do when something goes wrong. Things that you might have to do at three in the
+
+34:06.040 --> 34:11.800
+morning without doing them for any of the previous three months. And what I ended up
+
+34:11.800 --> 34:15.800
+doing in this case, and it was actually, this is a good opportunity to talk about some of
+
+34:15.800 --> 34:30.280
+the main benefits of this sort of training, is that we talked about, we talked about basically
+
+34:30.280 --> 34:37.440
+what we did was we did the following format. It's a bullet point. Here's what you can ideally
+
+34:37.440 --> 34:45.080
+copy and paste into the terminal. Expected output, warning signs, all in bullet points
+
+34:45.080 --> 34:53.280
+and then back, unindented again, the next bullet point. So they're hierarchical, it's
+
+34:53.280 --> 34:58.040
+easy to scan, but then your main points are all really, really, really short. And then
+
+34:58.040 --> 35:01.840
+all of the major description that would be in those paragraphs would be moved into foot
+
+35:01.840 --> 35:09.360
+notes. And those would all be hyperlinked. So you run a test, you know, you run a step.
+
+35:09.360 --> 35:12.440
+Something doesn't look quite right, you want to see the longer description, you click that
+
+35:12.440 --> 35:18.600
+hyperlink, you come down to the footnote, you read the whole thing, decide if you want
+
+35:18.600 --> 35:28.760
+to proceed or not, and then decide. And what this allowed us to do was to take, like the
+
+35:28.760 --> 35:36.840
+standard platform team people who are on call and actually have them do error spike maintenance
+
+35:36.840 --> 35:44.280
+at three in the morning on, as I say, the super critical high-speed database system.
+
+35:44.280 --> 35:51.360
+And before that, every time there was an error spike issue, it was an automatic escalation.
+
+35:51.360 --> 35:54.440
+And it was automatic escalation because we didn't trust that they would be able to do
+
+35:54.440 --> 35:59.160
+it or make proper decisions around it. But since we formalized it into checklists and
+
+35:59.160 --> 36:03.800
+we offered some training on them, and we tried to make sure that people kind of understood
+
+36:03.800 --> 36:10.040
+the overall considerations of the processes, then they could do some basic stuff and then
+
+36:10.040 --> 36:20.840
+call us if there were questions that weren't obviously answered by the documentation.
+
+36:20.840 --> 36:26.080
+Every very, very good tangible benefit meant that instead of several people waking up in
+
+36:26.080 --> 36:32.520
+the middle of the night, they could be done by the on-call engineer.
+
+36:32.520 --> 36:38.880
+So that's a really good example of the benefits that come out of paying attention to that
+
+36:38.880 --> 36:43.640
+workload issue and the sensory overload that happens that's much more serious at three
+
+36:43.640 --> 36:53.240
+in the morning than at three in the afternoon. So at this point, it's really important to
+
+36:53.240 --> 36:59.960
+recognize that at this point, we're no longer really talking about human error being somebody
+
+36:59.960 --> 37:06.960
+made a mistake. Instead, we're talking about the need to be able to debug the person and
+
+37:06.960 --> 37:17.560
+why they made the mistake. And this is something which very often times we don't even try to
+
+37:17.560 --> 37:27.560
+do in our industry, but we should. This requires that we have a really good taxonomy of types
+
+37:27.560 --> 37:38.320
+of mistakes. That we can say, okay, situation awareness laps because of sensory overload
+
+37:38.320 --> 37:44.040
+from too many monitoring alerts going off. A very common one that happens in our industry.
+
+37:44.040 --> 37:55.640
+It's also something that's caused airplane issues. So if we understand that, we know,
+
+37:55.640 --> 38:01.800
+they lost their situation awareness. They couldn't understand where the problem was. This happened
+
+38:01.800 --> 38:06.840
+because they had too many alerts they were trying to focus on. Now the question is, are
+
+38:06.840 --> 38:11.160
+we actually throwing too many alerts? Do we need to think about maybe prioritizing things
+
+38:11.160 --> 38:17.800
+differently? Do we need to rethink how we do alerting? And suddenly, we have a dimension
+
+38:17.800 --> 38:23.840
+for looking at these problems that we currently don't have. Instead, currently, what happens
+
+38:23.840 --> 38:28.360
+most places I've worked is, okay, something went wrong. We didn't spot it. Therefore,
+
+38:28.360 --> 38:33.480
+let's add another alert over this. But when I was at the delivery here, we actually had
+
+38:33.480 --> 38:43.680
+a major incident where somebody, again, missed a problem relating to a database, relating
+
+38:43.680 --> 38:49.800
+to a Postgres instance, I believe, if I remember right. Despite the fact that it was well
+
+38:49.800 --> 38:54.680
+alerted. I was talking to somebody afterwards and he says, do you know what the false positivity
+
+38:54.680 --> 39:00.040
+rate of our alerts are? And I'm like, no, it's like 99.8%. How do you expect somebody
+
+39:00.040 --> 39:08.040
+to spot the problem when almost all the time our alerts don't mean there's a real problem?
+
+39:08.040 --> 39:13.240
+Okay. Now what he meant by false positivity isn't what I would mean by it. I mean, there
+
+39:13.240 --> 39:18.120
+were problems that the alerts were alerting about, but they weren't like customer facing
+
+39:18.120 --> 39:31.040
+problems, right? So the second thing is we need a really good understanding of our cognitive
+
+39:31.040 --> 39:34.800
+biases and the functions that they provide to us and also the problems that they can
+
+39:34.800 --> 39:43.960
+lead us into, right? So one of the good examples is, hey, look, you know, I know you're about
+
+39:43.960 --> 39:49.240
+to do this. I'm not sure that's what the problem is. Can we think about this first, right?
+
+39:49.240 --> 39:52.400
+And as soon as somebody says that, that means that they're saying, my mental model is not
+
+39:52.400 --> 39:55.760
+the same as your mental model. One of us is wrong. We should probably figure that out
+
+39:55.760 --> 40:02.520
+before we proceed. Figuring out how to do that's really, really important, especially
+
+40:02.520 --> 40:06.200
+when we talk about social factors involved, right? It's one thing to do that with your
+
+40:06.200 --> 40:10.440
+peer when you're on an incident call and there are two of you there. Something very different
+
+40:10.440 --> 40:15.560
+to do when the person typing the words is very senior and you're very junior and there's
+
+40:15.560 --> 40:21.760
+somebody C-level popping into the call to ask for an update. I've been there. I've done
+
+40:21.760 --> 40:30.960
+that and yes, no, I have not raised the issue and I should have, right? You know, figuring
+
+40:30.960 --> 40:37.720
+out how to make these sorts of interventions and how to understand the intervention and
+
+40:37.720 --> 40:43.240
+how to respond to it, those are things that we actually need training on, right? We also
+
+40:43.240 --> 40:48.240
+need training on the social factors. We need to understand how power distance affects these.
+
+40:48.240 --> 40:51.840
+What happens when there's, you know, the C-level person in the call? How does that change your
+
+40:51.840 --> 40:58.880
+social interactions? How does that change your interactions in terms of debugging, right?
+
+40:58.880 --> 41:05.480
+Those are important things and that's one thing that we can get some really big improvements
+
+41:05.480 --> 41:14.000
+on relating to this. Finally, it's really important for us to be able to get to the
+
+41:14.000 --> 41:20.400
+point where we can contextualize the person. In other words, since we operate as humans
+
+41:20.400 --> 41:26.800
+in a relatively heuristic manner, right? We need to understand what the situation the
+
+41:26.800 --> 41:34.640
+human was in when the mistake happened and that's another thing that these sorts of trainings
+
+41:34.640 --> 41:45.160
+can help with. So, I've talked a little bit about social factors here. Power distance
+
+41:45.160 --> 41:50.280
+is what it sounds like, you know, how big the difference is between the most powerful
+
+41:50.280 --> 41:54.760
+person in the interaction and the least powerful person in the interaction, where we want it
+
+41:54.760 --> 42:00.440
+to be kind of, you know, not quite equal but much closer instead of like this, maybe more
+
+42:00.440 --> 42:09.120
+like this and, you know, figuring out how to structure things so that power distance
+
+42:09.120 --> 42:16.920
+doesn't cause a problem. That also means giving people good training on how to intervene when
+
+42:16.920 --> 42:22.520
+they see somebody much more senior about to make a mistake, you know, and you want to
+
+42:22.520 --> 42:27.480
+intervene in a way which is not threatening and in the event where there's somebody even
+
+42:27.480 --> 42:32.960
+higher in the call isn't going to be perceived as humiliating, right? Having good training
+
+42:32.960 --> 42:39.240
+on this and how to communicate in those cases is really, really important. And a lot of
+
+42:39.240 --> 42:45.680
+this ends up playing out into trying to create a work relationship between the people on
+
+42:45.680 --> 42:57.320
+the team which is very heavily mutually supportive and also kind of helps prevent or checks
+
+42:57.320 --> 43:08.720
+and traps the kinds of mistakes that each of us can make. So let's talk a little bit
+
+43:08.720 --> 43:24.400
+about the ideal role of humans in database operations. Now, we kind of need to understand
+
+43:24.400 --> 43:36.520
+this well. Okay, ten? Okay. Who's checking? Five? Okay, perfect. We kind of need to understand
+
+43:36.520 --> 43:42.640
+this. Humans need to be in control. We need to be the decision makers. We need to be the
+
+43:42.640 --> 43:49.480
+people who can say, this is what I think is going on. Let's go ahead and try this process.
+
+43:49.480 --> 43:54.640
+And halfway through that process goes, this is not going well. Let's back off, rethink,
+
+43:54.640 --> 44:01.080
+and make another decision, right? Partly because we're also operating heuristically, we can
+
+44:01.080 --> 44:08.640
+do things that computers can't, right? We need to maintain really good situation awareness.
+
+44:08.640 --> 44:12.920
+This means we need to have transparency in our complex automation. We need the automation
+
+44:12.920 --> 44:26.040
+to be built around helping us, not replacing us. And to do this, we need to be well rested.
+
+44:26.040 --> 44:32.200
+We need to be a clear peak capability ideally when we're in the middle of an incident. Now,
+
+44:32.200 --> 44:37.880
+we may not be able to completely manage that last part, but if we can take steps towards
+
+44:37.880 --> 44:48.040
+it and we can try to improve, we can do better, right? So a lot of this training is, at least
+
+44:48.040 --> 44:54.760
+what I've gotten out of it, is really important. What I think is really important about this,
+
+44:54.760 --> 45:00.960
+I'll just talk quickly about how to go about doing it, is that if we can get the organizational
+
+45:00.960 --> 45:06.680
+leverage behind the training, then we can actually turn the promise of the training
+
+45:06.680 --> 45:10.920
+into the reality. Sometimes you can't just teach people something and then have the
+
+45:10.920 --> 45:18.680
+punishment abandoned them. That doesn't work. So as an industry, we treat human error the
+
+45:18.680 --> 45:36.400
+way pilot error was treated in the 1950s. We have a whole lot to learn from aviation.
+
+45:36.400 --> 45:42.120
+Those lessons are already being played out in medicine and many other fields today. We
+
+45:42.120 --> 45:48.240
+need to do what we can to learn from it also. And it's really important to recognize that
+
+45:48.240 --> 45:54.280
+we can get really good improvements in reliability, efficiency, speed of development, all these
+
+45:54.280 --> 46:01.680
+sorts of things if we can better work with the human side of things. And I'm not talking
+
+46:01.680 --> 46:09.240
+about human managers rating performance. I'm talking about people on the team understanding
+
+46:09.240 --> 46:15.840
+performance for themselves and others. I just want to say that the three pieces of this
+
+46:15.840 --> 46:26.680
+are trying to get trainers in who have experience. Also, an organizational commitment to make
+
+46:26.680 --> 46:31.280
+it happen and then internally building your own programs and your own recurring trainings
+
+46:31.280 --> 46:36.760
+and your own training for new people. So that internally you have a big culture around it
+
+46:36.760 --> 46:41.400
+and you have experts who can think about it when it comes to be a post-mortem. So that's
+
+46:41.400 --> 46:47.760
+what I have. Any questions?
+
+46:47.760 --> 47:04.520
+Thank you. That was an amazing talk. Do you have any recommendations for further reading
+
+47:04.520 --> 47:07.840
+if you can't bring in experts?
+
+47:07.840 --> 47:19.360
+So this is a field which an aviation has a massive textbook industry. I think probably
+
+47:19.360 --> 47:24.880
+the best, sort of the most accessible book I would recommend starting with is the more
+
+47:24.880 --> 47:30.160
+recent versions of David Beatty's human factors and aircraft accidents. I think the most recent
+
+47:30.160 --> 47:34.240
+version is called the naked pilot of human factors and aircraft accidents. It's just
+
+47:34.240 --> 47:45.760
+referring to exposing the inner workings of the human piece of the aircraft. But again,
+
+47:45.760 --> 47:51.680
+if you're a nervous flyer, probably look for a crew resource management textbook instead
+
+47:51.680 --> 47:59.320
+because it may be less nerve wracking, it may be less intimidating, but it will have
+
+47:59.320 --> 48:09.080
+information there too.
+
+48:09.080 --> 48:13.880
+Do you have any recommendations for testing or drilling your processes like those checklists?
+
+48:13.880 --> 48:20.520
+Yes, I do. One thing that I think we really should figure out how to do is an industry
+
+48:20.520 --> 48:27.920
+and I completely believe in this. Obviously, like the chaos monkey idea and Netflix could
+
+48:27.920 --> 48:34.280
+be exploited to do this if you can also build war games around it. But the thing is it's
+
+48:34.280 --> 48:39.040
+really important to have drills, which means oftentimes you've actually got to probably
+
+48:39.040 --> 48:45.680
+simulate or create some sort of a potential incident that you have to come together and
+
+48:45.680 --> 48:51.360
+resolve. Now, ideally, you need to figure out how to do this without threatening your
+
+48:51.360 --> 48:56.120
+customer-oriented services. In some cases, maybe the cloud's a really good opportunity
+
+48:56.120 --> 49:04.720
+for that. But having those sorts of drills, maybe once a quarter or twice a year or something,
+
+49:04.720 --> 49:09.840
+can really give you an opportunity to spot problems, figure out improvements and actually
+
+49:09.840 --> 49:17.560
+go figure out what to do about those.
+
+49:17.560 --> 49:22.280
+Just kind of building on that last point is how do you justify the expense in time or
+
+49:22.280 --> 49:27.880
+money? Given that if this is successful, then nothing goes wrong. So it can sometimes be
+
+49:27.880 --> 49:33.120
+the outcome of success is that you're spending a lot of effort on apparently doing nothing.
+
+49:33.120 --> 49:37.040
+I don't believe that, but that's a reasonable thing that gets asked. How do you go about
+
+49:37.040 --> 49:43.520
+justifying the time or the money on this after it's successful?
+
+49:43.520 --> 49:49.600
+What I've usually done in the past is I make my points about, yes, we're going to improve
+
+49:49.600 --> 49:56.280
+our incident response. This will reduce our time recovery. It'll improve our reliability,
+
+49:56.280 --> 50:03.160
+et cetera. Maybe it'll improve our throughput organizationally. But then usually, people
+
+50:03.160 --> 50:08.280
+don't listen. And then usually, there are more incidents. And then you can come in and
+
+50:08.280 --> 50:13.480
+say, you know, these are specific problems that we had here where this training would
+
+50:13.480 --> 50:19.680
+help. And I usually find that after two or three of those, people start listening and
+
+50:19.680 --> 50:22.680
+go, oh, really? Maybe there is something to this.
+
+50:22.680 --> 50:44.880
+Thank you.

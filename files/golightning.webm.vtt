@@ -1,0 +1,601 @@
+WEBVTT
+
+00:00.000 --> 00:15.520
+Hello everybody, I will talk about Go Evil, which is a project, a personal project, which
+
+00:15.520 --> 00:27.880
+allows you to do one-liners in Go, so you just type your Go code and call it with Go
+
+00:27.880 --> 00:38.920
+Evil, and you can simply write a name or word from the command line. So this is like magic.
+
+00:38.920 --> 00:51.160
+I will show you a bit under the hood how it works. The word project is about 300 lines of code,
+
+00:51.160 --> 01:04.120
+not more. Here is an example, you can call Go Evil and tell it to take the code from the
+
+01:04.120 --> 01:19.040
+STD in, but here is how it works under the hood. From your Go code, from the command line, Go Evil
+
+01:19.040 --> 01:32.720
+generates a full Go program, and so the dash E allows to print that Go program that has been
+
+01:32.720 --> 01:41.040
+generated. It is sometimes useful when you want to debug the syntax around that you make, and then
+
+01:41.040 --> 01:52.200
+the Go import equal allows to stop using Go import, because here you see that in that code,
+
+01:52.200 --> 02:01.960
+there is no import of the FMT package, but it is introduced by the Go imports, which is called
+
+02:01.960 --> 02:13.040
+by Go Evil. So I am announcing today that Go Evil has been, 1.0 has been released just a few
+
+02:13.040 --> 02:23.960
+hours ago, and the new feature of Go Evil 1 is that Go modules are supported, and with Go module,
+
+02:23.960 --> 02:39.280
+you get locked versions for your dependency code from Go Evil. So this allows to submit to share
+
+02:39.280 --> 02:47.880
+your one-liners with other people, because the previous code that I showed was depending on
+
+02:47.880 --> 02:58.480
+the dependency to be installed in Go pass. And so that's it. Try it, use it, report bugs,
+
+02:58.480 --> 03:12.760
+and I'm available for question later. Thank you. It's weirdly enough, not the first open source
+
+03:12.760 --> 03:18.960
+project to be released when people are in the dev room. If this is your slide, you can come up now.
+
+03:18.960 --> 03:33.000
+Hello, everyone. My name is Keegan. I'm a staff software engineer element, and I've been spending
+
+03:33.000 --> 03:40.760
+the past year debugging why Go servers are slow. So hands up, who's made a crud application before?
+
+03:40.760 --> 03:44.160
+Create read, update, delete. That's basically everyone in this room, which is what I thought.
+
+03:44.160 --> 03:51.160
+Who's tried to speed up their server before? This is a slow request, 3.6 seconds. Fewer people,
+
+03:51.160 --> 03:57.520
+but still a fair number of people. Cool. Who's used PPROF before? So flame graphs. It's great.
+
+03:57.520 --> 04:06.960
+Who's used runtime trace before? Not that many people. Okay. Who's struggled to figure out what
+
+04:06.960 --> 04:14.080
+was going on when you're using this? Right. Okay. Great. This talk is for you. So the first thing
+
+04:14.080 --> 04:20.240
+you need to really is use spans to make these traces readable. Very easy. If you've ever used
+
+04:20.240 --> 04:24.440
+Jager spans before, they're basically the same sort of thing. So you can create a new task,
+
+04:24.440 --> 04:28.720
+and then you get a new context. You pass the context through to new functions. You can create
+
+04:28.720 --> 04:32.040
+regions from those, and you end up getting something that looks a bit like the stuff on the
+
+04:32.040 --> 04:39.360
+bottom there. You can also add log lines for some contextual information. That'll appear on the UI,
+
+04:39.360 --> 04:45.920
+which we'll get to in a moment. And the crash course in using runtime trace is you make a trace
+
+04:45.920 --> 04:50.520
+in the same way that you'd make a CPU profile with PPROF, except you hit a different endpoint,
+
+04:50.520 --> 04:55.920
+but you also tell it how long you want to trace for, and then you use gotool trace to open that
+
+04:55.920 --> 05:01.280
+trace. You don't use the gotool PPROF, confusingly, and you'll get something like the bottom over
+
+05:01.280 --> 05:07.000
+here, which is quite a lot of scary words and links, and you have no idea which thing to click.
+
+05:07.000 --> 05:12.720
+The only thing you care about is the user-defined tasks. If you click on that, you'll see something
+
+05:12.720 --> 05:17.280
+a bit like this. The only thing you care about is this GoRoutine view, and if you click on that,
+
+05:17.280 --> 05:21.920
+you can profile basically everything. So, for example, here's a bit of a request,
+
+05:21.920 --> 05:26.240
+which is slow because of garbage collection, and if you click on any one of those Gs at the
+
+05:26.240 --> 05:31.600
+bottom, which are highlighted with the red circle, you'll see stack traces that mention GC. Also,
+
+05:31.600 --> 05:38.440
+the blue bar in the middle there says GC, so spoiler. Other thing, if you have slow SQL queries,
+
+05:38.440 --> 05:44.640
+you can find that as well because if you click on any of these things, you'll see stack traces,
+
+05:44.640 --> 05:52.600
+and those stack traces refer to any point where the GoRoutine yields away for network IO or
+
+05:52.600 --> 05:57.280
+syscalls or things like that. So, you can clearly see, oh, it's doing something with SQL, and it's
+
+05:57.280 --> 06:02.840
+just doing the same thing for SQL for not particularly long here, only 20 mils, but still,
+
+06:02.840 --> 06:09.200
+it takes a long time. You can do the same thing for profiling functions, if functions are being
+
+06:09.200 --> 06:14.600
+slow, so you may, this is calling the same function over and over and over again, which it
+
+06:14.600 --> 06:20.440
+probably shouldn't be doing in this particular scenario, but again, it depends on your actual
+
+06:20.440 --> 06:24.600
+code as to whether or not this is the right thing for it to do. Sometimes that is normal
+
+06:24.600 --> 06:29.480
+behavior, in this case, it's definitely not normal behavior. So, the TLDR is you should
+
+06:29.480 --> 06:36.960
+probably use runtime trace next time and not CPU profiles. So, for me, I've sped up requests
+
+06:36.960 --> 06:42.120
+that were taking 3.6 seconds to 96 milliseconds for the same request, and they're bottlenecks
+
+06:42.120 --> 06:47.280
+from various different things, so from garbage collection to poor database queries and poor
+
+06:47.280 --> 06:51.480
+computational complexity on certain algorithms, and some of these things will only be visible
+
+06:51.480 --> 06:56.880
+if you use runtime trace. So, flame graphs don't help you for debugging slow SQL queries,
+
+06:56.880 --> 07:08.040
+but runtime trace will do. Thank you very much.
+
+07:08.040 --> 07:20.200
+Thank you. If this GitHub repo is yours, come to the stage. And you've got 10 seconds to
+
+07:20.200 --> 07:37.640
+switch laptops. 10. No. And it works, which is a miracle for Linux.
+
+07:37.640 --> 07:59.800
+Hi. I actually didn't create a slide, and this will be the fastest lightning talk in
+
+07:59.800 --> 08:05.760
+my life. Basically, I just wanted to talk about the JSON package and the issue what
+
+08:05.760 --> 08:18.280
+we faced with, and a lot of people faced with it. Basically, it's the... Have you ever used
+
+08:18.280 --> 08:26.400
+struct with omitempty? Then, basically, this is where the issue come in, and that is an
+
+08:26.400 --> 08:35.400
+open issue here, which trying to fix this, but it's basically abandoned, and it's a pretty
+
+08:35.400 --> 08:46.840
+big issue because it's created in 2015, and there is nearly 200 comments under that. And
+
+08:46.840 --> 08:51.640
+basically, I just wanted to make an attention on this ticket, because if someone fixing
+
+08:51.640 --> 08:59.120
+this ticket, that means that, basically, you can do something like what I show you in this
+
+08:59.120 --> 09:19.600
+code. So it's really hard with point. Yeah. Probably use this package, the encoding JSON.
+
+09:19.600 --> 09:30.600
+I have a struct here, which is here. Thank you. Thank you. So this is basically, I introduced
+
+09:30.600 --> 09:37.920
+a new struct, which is basically a new string, or something like that, and here I added omitempty.
+
+09:37.920 --> 09:44.880
+In this case, I implemented the E0 method here, which says if it's not valid, then it's
+
+09:44.880 --> 09:54.040
+basically a 0, so I wanted to remove it from the JSON. But if I run the actual code, please
+
+09:54.040 --> 10:06.200
+run it. Live demo is in a lightning talk. You're brave. Yes, live coding. You see that
+
+10:06.200 --> 10:18.120
+it's basically here inside the JSON, however, I wanted to basically an empty JSON. And there
+
+10:18.120 --> 10:25.640
+is another implementation with exactly the same code, but I just created a pumpkin seed
+
+10:25.640 --> 10:33.880
+JSON, which is exactly the copy of the built-in JSON. The only difference here that the issue
+
+10:33.880 --> 10:39.960
+what I mentioned is basically suggesting an implementation that the omitempty section
+
+10:39.960 --> 10:45.920
+of the built-in JSON should check for the E0 method, whether it's existing in the struct
+
+10:45.920 --> 11:02.880
+or not. And if I run this one, it's basically doing what it should do. And basically that's
+
+11:02.880 --> 11:16.200
+it. So this is something what I think should be implemented in Go and this ticket with
+
+11:16.200 --> 11:25.400
+this number is basically showing actual implementations for that. Right now, most of them are not
+
+11:25.400 --> 11:31.800
+declined but not processed. So I think if anyone has a good idea how to implement it
+
+11:31.800 --> 11:39.280
+in Go, then basically it would be nice to put into this ticket. There are also, this
+
+11:39.280 --> 11:47.080
+is the actual change request in the code language what the guy made and I just copied
+
+11:47.080 --> 12:01.840
+his code. Yeah. One disclaimer, the pumpkin seed JSON package, you shouldn't use in production.
+
+12:01.840 --> 12:24.200
+And that's it. Thank you. If this is your slide, come to the stage.
+
+12:24.200 --> 12:31.880
+All right. Hello. My name is Michiel. I created Mox. I've been working on this for quite some
+
+12:31.880 --> 12:38.200
+time. I started using it two weeks ago, released it earlier this week. It's a meal server.
+
+12:38.200 --> 12:43.320
+So I'm curious, is anyone here running their own meal servers around the main? One, two
+
+12:43.320 --> 12:54.400
+persons? Wow. Okay. Three, room for improvement. So let's go right ahead. This is the tagline.
+
+12:54.400 --> 12:58.360
+It's a modern, full-featured open source secure meal server for low maintenance self-hosted
+
+12:58.360 --> 13:04.240
+email. So let's break it down. It's modern because it supports all the latest meal standards
+
+13:04.240 --> 13:09.720
+and there have been added quite a few over the years. It is full-featured in the sense
+
+13:09.720 --> 13:14.880
+that it aims to do everything at once, meaning all the relevant email standards. So you just
+
+13:14.880 --> 13:18.640
+need this one thing. You don't need a whole bunch of components to make a working system.
+
+13:18.640 --> 13:23.680
+So just really to make it easier. It's MIT licensed. It is secure, meaning it supports
+
+13:23.680 --> 13:28.880
+all the latest security things about email like TLS, et cetera. And of course, a bit
+
+13:28.880 --> 13:34.040
+of secure coding and low maintenance. So you actually started using it because I hear many
+
+13:34.040 --> 13:40.120
+people are moving all their email to the cloud, some big providers because it's too hard apparently
+
+13:40.120 --> 13:48.240
+to run a meal server. So it's for your self-hosted email. Email is one of the oldest decentralized
+
+13:48.240 --> 13:53.600
+messaging protocols, but we're making it more centralized by moving everything to the few
+
+13:53.600 --> 14:01.520
+big providers. So Mox is an attempt to make it so easy that you will all start using it.
+
+14:01.520 --> 14:06.760
+So a bunch of features, a list of acronyms. IMAP, so you can access your mail, SNTP, so
+
+14:06.760 --> 14:11.640
+you can send mail. Nowadays, if you want to send mail, you need to configure SPF, DKIM,
+
+14:11.640 --> 14:18.160
+DMARC. Does anyone know what that means? Yeah, see, that's good. Automatic TLS, so you don't
+
+14:18.160 --> 14:23.000
+have to worry about any certificate stuff. So it's like the caddy for email. TLS reporting,
+
+14:23.000 --> 14:29.520
+MTA, STS, that's one of the latest additions to secure email. There's a reputation-based
+
+14:29.520 --> 14:34.480
+junk filter in there, so if you receive messages from people and you don't like those messages
+
+14:34.480 --> 14:39.760
+and you mark them as junk, the next time those people send mail, it's rejected. So new senders
+
+14:39.760 --> 14:43.640
+don't have any reputation. You can look at the content, so there's a content-based abyeasing
+
+14:43.640 --> 14:47.520
+spam filter, so in there. Internationalized email, so you can have smileys in your domain
+
+14:47.520 --> 14:52.360
+names, that's what you want. And auto-configuration, so you get your thunderbird, and setup is
+
+14:52.360 --> 14:57.800
+just instant. No need to worry about all the port numbers, et cetera. It just works. So
+
+14:57.800 --> 15:01.480
+getting started, of course, now you're all convinced you want to use this. Luckily, there's
+
+15:01.480 --> 15:07.720
+a quick start. You just set up a Linux machine, probably, get your email address for your
+
+15:07.720 --> 15:11.520
+domain, and you get a configuration file that's all, that has this all configured. You just
+
+15:11.520 --> 15:16.040
+can start it right after. Not only does it make a configuration file, also print some
+
+15:16.040 --> 15:19.640
+commands and all the DNS records that you need to create, so you don't have to think.
+
+15:19.640 --> 15:26.440
+You can just copy, paste, and be happy. Then the code, 40K lines of implementation, 10K
+
+15:26.440 --> 15:31.400
+lines of tests, quite some test coverage. There's integration tests, fuzzing tests.
+
+15:31.400 --> 15:36.240
+It's all pure Go, no C Go, just go install, cross compile, all the good stuff that you
+
+15:36.240 --> 15:43.840
+get from Go. The implementation is heavily cross-referenced with the RFCs, so both ways.
+
+15:43.840 --> 15:48.120
+You can go from code to the RFC and back from the RFC to the places in the code where it's
+
+15:48.120 --> 15:52.280
+used. So this is supposed to help with maintenance, so it's implementing all these protocols,
+
+15:52.280 --> 15:58.800
+and it gets a bit overwhelming to understand all of that. So if you would code it once,
+
+15:58.800 --> 16:03.680
+you cannot go back to the specification and back to the implementation. You don't know
+
+16:03.680 --> 16:09.280
+what's going to, so how you, how to fix bugs, et cetera. Let's move. Oh, wow, quick.
+
+16:09.280 --> 16:13.720
+So what's next? I just released it. I'm looking for feedback. Please use it and tell me if
+
+16:13.720 --> 16:18.000
+it works for you or why it does not work for you. So I aim to make it very simple, so if
+
+16:18.000 --> 16:21.560
+you find something that's not simple, let me know. Of course, if you find bugs, let
+
+16:21.560 --> 16:28.560
+me know. And this is where you can find it. All right.
+
+16:28.560 --> 16:39.200
+Thank you. If this is your slide deck, you can come to the stage. If this is nobody's
+
+16:39.200 --> 16:49.040
+slide deck, I'll just skip it. Something with Postgres. If this is your 404 page which you
+
+16:49.040 --> 16:56.680
+sent to me, please also come to talk to me. So yeah, also the speaker is not found. That's
+
+16:56.680 --> 17:01.720
+the thing with last minute talks. Then I had one backup speaker. You can come to the stage.
+
+17:01.720 --> 17:10.720
+And the gophers are also falling down. They are tired. Understands me too, me too. Yes,
+
+17:10.720 --> 17:35.720
+I have HDMI. I also use USB-C. Let me just close this down for you. That's 4G clicker.
+
+17:35.720 --> 18:00.000
+Okay. So thank you, first of all. So I want to tell a go-of-story and why we use Go to
+
+18:00.000 --> 18:05.840
+have to implement this idea of fluid pull requests. Before starting with that, I need
+
+18:05.840 --> 18:11.920
+to talk a little bit about pull requests. So for that, I brought Robin and Kat with me.
+
+18:11.920 --> 18:19.000
+So Robin wants to contribute to a project that Kat is a maintainer. And what everyone
+
+18:19.000 --> 18:24.360
+does or at least they try to, they open a branch, they create what they have to do. And
+
+18:24.360 --> 18:28.560
+then at the end, it comes a time when it needs to merge into main. And then when Kat comes
+
+18:28.560 --> 18:34.920
+in and says, wait a minute, we need to review those changes. So this kind of methodology
+
+18:34.920 --> 18:40.200
+is important for critical contributions from interested parties. And it's well-known as
+
+18:40.200 --> 18:45.360
+open source projects, especially with the name of pull requests. We also use it inside
+
+18:45.360 --> 18:52.280
+our own companies. But it's well-known at the open source community. And it's quite
+
+18:52.280 --> 18:58.240
+popular. As you can see, in 2021, we got a lot of pull requests. And the process goes
+
+18:58.240 --> 19:02.340
+like you do whatever you want to do. Then the CI triggers, you get the review, you get
+
+19:02.340 --> 19:06.880
+some feedback, and then you have to apply the feedback. And we enter a loop here until
+
+19:06.880 --> 19:11.880
+someone decides that it's good to go and we get our approval. Then it goes to merge and
+
+19:11.880 --> 19:17.600
+that everyone is happy. And the problem here is that Robin goes through this process every
+
+19:17.600 --> 19:25.120
+time, regardless of the type of change it is. And we are unavailable with the fact that
+
+19:25.120 --> 19:32.120
+Robin and Kat have been contributing and working with each other for some time. So this idea
+
+19:32.120 --> 19:37.000
+that all pull requests are the same can be actually improved. For instance, this scenario
+
+19:37.000 --> 19:41.600
+where Robin is just trying to do some configuration change, why do we need a pull request? Maybe
+
+19:41.600 --> 19:48.240
+we can just go directly to main without a review. Another scenario where Robin just
+
+19:48.240 --> 19:56.040
+gets an API with some documentation or some warnings. Let's imagine why can it go to main
+
+19:56.040 --> 20:01.120
+and then we can do a review afterwards. And then when it comes to critical changes, then
+
+20:01.120 --> 20:04.480
+when we want to stop the process and say, okay, this is critical, we need to have a
+
+20:04.480 --> 20:09.680
+very good review here. And maybe instead of just asking one guy, we can ask two people
+
+20:09.680 --> 20:15.280
+for them to get their own approval. So this idea of pull requests is that all that I just
+
+20:15.280 --> 20:22.560
+said could be defined in rules. And we can apply those rules into our own process and
+
+20:22.560 --> 20:28.400
+minimize the time. That's where we came with the review pad, which is done on go and it's
+
+20:28.400 --> 20:32.880
+full open source. And that's where we can define all these ideas of what are the rules
+
+20:32.880 --> 20:41.640
+for our team. So here's how we could work with this terminology. Behind this is go,
+
+20:41.640 --> 20:47.880
+of course, then it can, for instance, if my changes are all on markdown files, I want
+
+20:47.880 --> 20:52.840
+to merge my pull request right away. So no review. If, for instance, my author actually
+
+20:52.840 --> 21:00.320
+is considered a new joiner, a new joiner could be someone that didn't do 10 PRs, like Spotify
+
+21:00.320 --> 21:07.120
+does, I want to assign a reviewer from my tech leads. And then, for instance, if I want
+
+21:07.120 --> 21:12.360
+to get some compliance, make sure that my pull request is an issue. I can confirm that and
+
+21:12.360 --> 21:19.000
+make sure that the user gets notified as soon as possible in order to iterate on that. And
+
+21:19.000 --> 21:25.640
+then we can do some more incredible things. I want you to look at the line at the top
+
+21:25.640 --> 21:29.720
+where we have an annotation saying that it's critical, saying that every time someone changes
+
+21:29.720 --> 21:35.160
+that function, that function is critical. If the function is critical, if my code touches
+
+21:35.160 --> 21:40.240
+a function that has this annotation, then I want to trigger my pull request review that
+
+21:40.240 --> 21:44.960
+is for critical changes, like I want to assign a label, I want to send someone from the tech
+
+21:44.960 --> 21:50.280
+list to review it, and I want to notify join, which is the tech architecture. Okay, we
+
+21:50.280 --> 21:56.000
+had a talk this morning about reducing cognitive load from Federic, and I want to show how
+
+21:56.000 --> 22:01.440
+we could do that with this terminology. So here's how we could look into line of sign
+
+22:01.440 --> 22:07.760
+and make sure that if someone uses a lot of tabs, so it means that we have a lot of loops
+
+22:07.760 --> 22:13.600
+between each other, if and else, we can actually send a warning to the user. For instance,
+
+22:13.600 --> 22:18.400
+our error validation, making sure that they don't use string contains for errors or equals,
+
+22:18.400 --> 22:25.400
+but they use error is. And last one, the mysterious Boolean, making sure that no more than one
+
+22:25.400 --> 22:32.200
+Boolean is used in the function signature, that's pretty much it, how we could use to
+
+22:32.200 --> 22:39.960
+make our lives easier on pull requests. Thank you all.
+
+22:39.960 --> 22:47.800
+Thank you. The last lightning talk of the day is from me again. What do we want to talk
+
+22:47.800 --> 22:53.520
+about today? Well, two subjects, what is naming God? No, I want to talk to you first of all
+
+22:53.520 --> 22:59.400
+a big thank you again to everyone. First of all, to all speakers who came here today to
+
+22:59.400 --> 23:05.280
+give an amazing talk, standing with a lot of stress to say things. I also want to thank
+
+23:05.280 --> 23:11.840
+Eva again for helping me out. I also want to thank the two FOSDEM engineers in the back
+
+23:11.840 --> 23:20.400
+who made our audio video work all day. I want to thank the people from FOSDEM who brought
+
+23:20.400 --> 23:28.560
+me food today. I also want to thank everybody at FOSDEM. And I also want to thank all the
+
+23:28.560 --> 23:40.320
+volunteers. I think they are left right now. Who helped us with video, even what they couldn't
+
+23:40.320 --> 23:45.920
+solve today. Thank you very much. Thank you all for coming, by the way. Thank you for
+
+23:45.920 --> 23:55.920
+staying so late. Thank you. And now my second subject. Which is that Go is a garbage collected
+
+23:55.920 --> 24:01.880
+language. And you know you can trigger the garbage collection by doing runtime.gc. So
+
+24:01.880 --> 24:09.240
+when the time is 19 o'clock, I want you all to do runtime.gc and grab some waste you see
+
+24:09.240 --> 24:14.720
+around it and put it in any of our bins. But I think Eva wants to say something. Yes.
+
+24:14.720 --> 24:20.320
+Thank you. Thank everyone that has been here to help you. But without you this wasn't possible.
+
+24:20.320 --> 24:31.200
+So a big thank you to Marcia. And thank you for coming.
+
+24:31.200 --> 24:48.240
+Thank you.

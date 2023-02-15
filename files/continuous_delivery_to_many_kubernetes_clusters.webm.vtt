@@ -1,0 +1,505 @@
+WEBVTT
+
+00:00.000 --> 00:12.400
+Hello. Thank you for coming to my talk. It's not a TED talk, but it's just my talk. Continuous
+
+00:12.400 --> 00:17.560
+delivery to many Kubernetes clusters. My name is Carlos Sanchez and I'm here to talk to
+
+00:17.560 --> 00:25.320
+you about our live experience, real world. I'm not here to sell you anything. So at least
+
+00:25.320 --> 00:31.320
+I'll try to tell you if I have time some of the mistakes we made too. She's not all beautiful
+
+00:31.320 --> 00:38.160
+and wonderful. So I'm a principal scientist at Adobe Experience Manager Cloud Service.
+
+00:38.160 --> 00:46.600
+I'll talk a little bit about the product. On the open source side, I started the Jenkins
+
+00:46.600 --> 00:54.320
+Kubernetes plug-in. Anybody heard about Jenkins? Yes, some people probably, yeah. Okay. And I'm
+
+00:54.320 --> 01:00.240
+a Kubernetes. Anybody heard about Kubernetes? Yeah? Okay. Anybody using Kubernetes in production?
+
+01:00.240 --> 01:09.560
+So I'm a long time contributor to open source. There are multiple projects on Jenkins, Apache
+
+01:09.560 --> 01:16.520
+Foundation and all that. So a quick intro to what Adobe Experience Manager is because people,
+
+01:16.520 --> 01:29.160
+every time I say Adobe, people say Photoshop and PDF and Flash, yeah. So that's not any
+
+01:29.160 --> 01:36.000
+of those, right? So this is a content management system that you probably never heard of, but
+
+01:36.000 --> 01:43.080
+it's powering 80% of the 4100 and it's very, very enterprise. I'm not expecting people
+
+01:43.080 --> 01:52.360
+to know, but this is widely used because it's based in a lot of open source. It's a distributed
+
+01:52.360 --> 01:58.000
+OSGI application that was started many years ago and uses a lot of components of open source
+
+01:58.000 --> 02:04.840
+from the Apache Foundation and we contribute back to those components like Felix, Apache
+
+02:04.840 --> 02:11.800
+Felix, Sling and a few things about content management there. And it has a huge market
+
+02:11.800 --> 02:17.640
+of extension developers, people that are writing their own Java code that then runs on Adobe
+
+02:17.640 --> 02:26.120
+Experience Manager and AM. So when I joined Adobe, the goal was, let's move this into
+
+02:26.120 --> 02:33.680
+a cloud service and this is running AM on Kubernetes. We're running currently on Azure
+
+02:33.680 --> 02:40.640
+and we have 35 clusters and growing very quickly because this is a content management. We run
+
+02:40.640 --> 02:47.400
+it in multiple regions, right now 11, so multiple ones in the US, Europe, Australia, Singapore,
+
+02:47.400 --> 02:56.160
+Japan, whatever, because people want to have low latency between their users and the content.
+
+02:56.160 --> 03:02.800
+And then another interesting fact is that we have the Kubernetes clusters. We don't
+
+03:02.800 --> 03:07.320
+run them directly. We build stuff on top of them and we have a different team at Adobe
+
+03:07.320 --> 03:15.120
+that manages Kubernetes for us. Some curiosities is like customers can run their own code,
+
+03:15.120 --> 03:22.640
+so we are running this for them and we take their code and run it inside our processes.
+
+03:22.640 --> 03:28.560
+So we have to limit clusters permissions for security and we have several security concerns
+
+03:28.560 --> 03:37.720
+because this is a very multi-tenant setup. Each customer can have multiple environments,
+
+03:37.720 --> 03:44.560
+multiple copies and they can self-service, so they can deploy new environments whenever
+
+03:44.560 --> 03:49.640
+they want, they can update them and do a few things, so it's not just us controlling what
+
+03:49.640 --> 03:54.680
+is running, it's also the customers. Each customer can have three or more Kubernetes
+
+03:54.680 --> 04:01.800
+namespaces where these environments run and this, I like to call this a micromanolith.
+
+04:01.800 --> 04:08.960
+So we don't run a big service that spans like thousands of instances, we run slightly
+
+04:08.960 --> 04:17.360
+different versions of the same service over a thousand, ten thousand times. So micromanolith
+
+04:17.360 --> 04:24.400
+defines it very well. And then we use namespace Kubernetes namespaces to provide the scope
+
+04:24.400 --> 04:28.840
+on network isolation, quotas, permissions and so on.
+
+04:28.840 --> 04:36.840
+Now internally we have multiple teams building services, so different services have different
+
+04:36.840 --> 04:42.240
+requirements, they have people can use different languages and we are more in a philosophy
+
+04:42.240 --> 04:50.160
+of you build it, you run it. And we are basically doing each services post as an API or we follow
+
+04:50.160 --> 04:54.440
+the Kubernetes operator patterns.
+
+04:54.440 --> 05:01.280
+We also use to split the monolith, we use a lot of init containers and sidecars, if
+
+05:01.280 --> 05:07.280
+you know in Kubernetes you can run multiple containers at the same time, so the main application
+
+05:07.280 --> 05:12.920
+runs in one container and then we have to apply division of concern, many sidecars that
+
+05:12.920 --> 05:20.600
+do different things. And it's an easy way to split separate concerns without having
+
+05:20.600 --> 05:28.440
+to rewrite your whole architecture to go to a fully network-based, micro-service oriented
+
+05:28.440 --> 05:31.160
+architecture.
+
+05:31.160 --> 05:37.640
+So on the continuous delivery side, which is probably what you are interested in here,
+
+05:37.640 --> 05:44.560
+we are running, we are moving to a, from a generally release to, I mean we are pushing
+
+05:44.560 --> 05:52.480
+changes daily multiple times, right? Not only, not just the application, the application
+
+05:52.480 --> 05:59.560
+may be slower to move, but on the operational side and all the services and operators, micro-service,
+
+05:59.560 --> 06:06.200
+all these things, all of them together, any of them at any point in time, any day can
+
+06:06.200 --> 06:09.640
+receive changes.
+
+06:09.640 --> 06:17.640
+So we use Jenkins for CI CD in some places, we have Tecton, you heard about that in one
+
+06:17.640 --> 06:24.440
+of the talks before, it's another open source project to do workflows on Kubernetes, to
+
+06:24.440 --> 06:32.840
+orchestrate some pipelines and we also started using Argo CD for some new micro-services.
+
+06:32.840 --> 06:39.560
+We follow a GitOps process, so where most of the configuration is a storing Git and
+
+06:39.560 --> 06:46.760
+it's reconciling each commit, right? And we use a pull versus push model to scale. And
+
+06:46.760 --> 06:50.760
+I'll go through this in a bit.
+
+06:50.760 --> 06:57.680
+We have a combination of multiple things being deployed to the clusters. We have the AM application
+
+06:57.680 --> 07:04.240
+that is deployed with a Helm chart. We have operation services that are on operators and
+
+07:04.240 --> 07:10.480
+services and all the other things that are not the application. These are deployed using
+
+07:10.480 --> 07:17.080
+Kubernetes files but templatized. And we are also using customized and Argo CD for some
+
+07:17.080 --> 07:20.800
+new micro-services.
+
+07:20.800 --> 07:28.800
+On the Helm side, we use the Helm operator. So in each namespace, we use the Helm operator
+
+07:28.800 --> 07:39.920
+CRDs to do a more state-based installation of Helm. So we create the CRD and the Helm
+
+07:39.920 --> 07:45.320
+operator is going to install the application based on the parameters on the CRD. A word
+
+07:45.320 --> 07:54.960
+of advice is don't mix application and infrastructure, infrastructural configuration on the same package
+
+07:54.960 --> 08:01.520
+because if you cannot enforce the same Helm chart for old tenants. For example, as I mentioned
+
+08:01.520 --> 08:08.040
+before, customers can decide when to update things, right? So we have some customers in
+
+08:08.040 --> 08:12.880
+older releases and some once in newer releases. This is something that we want to change.
+
+08:12.880 --> 08:18.920
+But in the meantime, if we want to update a specific version of something in an old
+
+08:18.920 --> 08:29.560
+release, it's hard when this is already packaged on Helm. So we built a solution for this.
+
+08:29.560 --> 08:35.640
+So from the platform level, we can go and manipulate this Helm chart. So we can have
+
+08:35.640 --> 08:44.560
+overrides and this is easy to do when you have the Helm operator. So you can inject,
+
+08:44.560 --> 08:50.800
+whenever there's a request to install a new Helm chart, we change parameters. So we change
+
+08:50.800 --> 08:57.560
+both Helm values. This is easy. Instead of passing some values, you pass different ones.
+
+08:57.560 --> 09:02.840
+Or you can use customized patches. And this is also support from the Helm operator. This
+
+09:02.840 --> 09:07.400
+is also support for customized patches. And customized patches are very interesting because
+
+09:07.400 --> 09:14.680
+they allow you to patch any Kubernetes resource. So even if there was no previous Helm value
+
+09:14.680 --> 09:21.760
+defined for it. So if we want to change a sidecar container image version across the
+
+09:21.760 --> 09:28.200
+whole fleet, we just have to change the patch. And this patch is going to be applied to all
+
+09:28.200 --> 09:34.840
+the clusters, all the namespaces. And all the Helm charts that were installed are going
+
+09:34.840 --> 09:40.440
+to get reinstalled with the right version that we want. So we do this combination of both
+
+09:40.440 --> 09:48.480
+Helm chart and then operational values on the other hand.
+
+09:48.480 --> 09:55.120
+Very important for us was the shift left mentality, right? Detecting problems as soon as possible.
+
+09:55.120 --> 10:02.360
+Not waiting for developers to push things to production because the cost increases.
+
+10:02.360 --> 10:09.280
+So we run checks as soon as we can on pull requests. So this is still fresh in your memory
+
+10:09.280 --> 10:15.680
+when you make a change and something is broken. You want to catch it as soon as possible.
+
+10:15.680 --> 10:22.400
+And we do this by generating all these templates. We have some tests that generate these templates
+
+10:22.400 --> 10:29.760
+and then apply tests, multiple tests on them.
+
+10:29.760 --> 10:36.560
+The most basic check that you can run is the apply QCTL, apply the right run. This will
+
+10:36.560 --> 10:44.200
+tell you if the manifest is wrong in some very obvious way. So if it's valid or it's
+
+10:44.200 --> 10:52.520
+not valid. Cube conform is a tool that will allow you to validate the Kubernetes schemas.
+
+10:52.520 --> 10:59.160
+So this is the successor of Kubeval. Anybody heard about Kubeval or Kubeconform? Okay.
+
+10:59.160 --> 11:08.240
+So this is very useful for if you have custom CRDs or just to make sure typical problems
+
+11:08.240 --> 11:14.320
+are you, you miss the jammer indentation and now it's not valid anymore and then you catch
+
+11:14.320 --> 11:18.880
+this on a PR. You just run this and it will tell you, you know, this property is missing
+
+11:18.880 --> 11:26.000
+or this is property is in the wrong place because everybody loves jammer, right?
+
+11:26.000 --> 11:32.880
+Conf test is another tool for open policy agents. Any people familiar with open policy
+
+11:32.880 --> 11:48.080
+agents? Open policy, OPA. So OPA allows you to write policies where you can go and pretty
+
+11:48.080 --> 11:54.640
+much check anything in any structure file. In the case of Kubernetes, you could say,
+
+11:54.640 --> 12:02.680
+I don't know, don't mount, don't run the pod as root. Make sure you don't mount secrets
+
+12:02.680 --> 12:08.760
+as environment variables or with files. Make sure, enforce that all the pods have some
+
+12:08.760 --> 12:16.560
+labels. Any random thing that you can think of, you can do it. And like, don't pull from
+
+12:16.560 --> 12:24.600
+Docker Hub, pull from the internal registry. You can do that with Conf test and OPA policies.
+
+12:24.600 --> 12:29.240
+The only problem is that it uses the regular language that if you haven't heard of, it's
+
+12:29.240 --> 12:39.640
+very painful to work with, but it works great once you try to figure out.
+
+12:39.640 --> 12:45.360
+We added another tool which is called Pluto. Pluto is just a CLI that will tell you what
+
+12:45.360 --> 12:50.960
+API versions have been deprecated or removed. So if you are running, if you are thinking
+
+12:50.960 --> 12:56.280
+about upgrading Kubernetes, you run Pluto and it will tell you, you know, this is deprecated,
+
+12:56.280 --> 13:04.040
+it's going to be removed in this version and so on. So you can enforce that.
+
+13:04.040 --> 13:10.960
+We built a tool that we call Git init, which is our own version of a GitOps pool. So we
+
+13:10.960 --> 13:15.360
+have the Kubernetes definitions storing Git and we deploy these to blob stores across
+
+13:15.360 --> 13:23.360
+regions. So they are pulled in each cluster. And Git init is a deployment that runs continuously
+
+13:23.360 --> 13:31.360
+on each namespace. We have around 10,000 namespaces in our fleet. So it basically pulls the blob,
+
+13:31.360 --> 13:39.760
+applies the changes and does this thing every so often. And an example of why we do a pool
+
+13:39.760 --> 13:45.560
+versus pool, because pushing to all the clusters, we have a job that does this and it runs in
+
+13:45.560 --> 13:52.520
+parallel, like in 20 threads or something, and still takes like five hours to run. So
+
+13:52.520 --> 14:01.720
+we cannot push things when we want. On Argo CD, we have a newcast platform that allows
+
+14:01.720 --> 14:11.960
+you to do Argo CD-based microservices. Argo CD, basically, this would create a new Git
+
+14:11.960 --> 14:16.280
+repo, it would come with some templates and that would get deployed with Argo CD to the
+
+14:16.280 --> 14:23.800
+cluster. And this is for us, we are thinking about moving this way and each team will have
+
+14:23.800 --> 14:29.040
+their own Git repo, because right now we have mostly centralized operators and everything.
+
+14:29.040 --> 14:33.440
+And this is good for the, okay, you go on your own direction, you do whatever you want,
+
+14:33.440 --> 14:38.160
+you build it, you run it. On the other hand, it's a bit tricky because when we decide or
+
+14:38.160 --> 14:44.400
+figure out something is problematic, we cannot just centrally say, you know, on this Git
+
+14:44.400 --> 14:53.880
+repo tell me who is doing this and let's change it. But we are moving towards that direction.
+
+14:53.880 --> 15:03.440
+Let me skip this and talk a bit about progressive delivery. So progressive delivery is a way,
+
+15:03.440 --> 15:07.320
+well, it's something that, it's a name for something that you've probably heard of, which
+
+15:07.320 --> 15:16.840
+is canary rollouts and doing percentage-based rollouts, feature flags, blue ring, so basically
+
+15:16.840 --> 15:22.880
+don't update everybody at the same time because you can break everybody.
+
+15:22.880 --> 15:27.960
+So we can do rollouts to different customer groups in separate waves and we can also do
+
+15:27.960 --> 15:35.800
+rollouts to percentage of customers. By default, we have a time-based rollout that goes from
+
+15:35.800 --> 15:41.320
+dev to stage to prod candidate after a period of time. And this is running on Jenkins and
+
+15:41.320 --> 15:46.480
+ensures that things have been running on dev on stage before we merge them to prod. I mean,
+
+15:46.480 --> 15:54.480
+this is very basic. What we built was feature flags at the namespace level. We have 10,000
+
+15:54.480 --> 16:02.640
+namespaces and then the Kubernetes definition templates. So what we allow developers to
+
+16:02.640 --> 16:11.200
+do is for each namespace, they can decide, I want to roll out this change to this environment,
+
+16:11.200 --> 16:17.120
+dev, stage, or prod, or I want to deploy this change to a specific cluster or by template
+
+16:17.120 --> 16:25.080
+namespace type of, yeah, type of namespace or a percentage. And this is just using templates
+
+16:25.080 --> 16:33.640
+on Kubernetes objects. So an example is, in this case, a rule, sorry, a Kubernetes definition
+
+16:33.640 --> 16:41.800
+where you can have a template that is as full version or bar version, or you can enable
+
+16:41.800 --> 16:46.240
+a container, a sidecar container, or disable it. And then at the bottom, you can see the
+
+16:46.240 --> 16:52.800
+rules. So by default, we want full version to be 1.0, but for the namespace, all the
+
+16:52.800 --> 16:58.840
+namespaces on the dev environment, we want that to be 1.1. So this allows us to quickly
+
+16:58.840 --> 17:05.480
+roll out changes, but progressively. We can also do it for percentiles. So in this case,
+
+17:05.480 --> 17:11.240
+we could say, I want all the namespaces in dev and all the namespaces in a stage to have
+
+17:11.240 --> 17:17.600
+this full version 1.1 and enable matter rule true, but for prod, I only want 5%. So I roll
+
+17:17.600 --> 17:27.120
+out a change to 5% of prod, and then I can continue after that. So this has proven really
+
+17:27.120 --> 17:35.200
+useful for developers to test in safely, increases development in speed, PRs are much faster,
+
+17:35.200 --> 17:44.240
+so it's all great. And we are thinking about, well, we're thinking, we are working on getting
+
+17:44.240 --> 17:49.560
+ARGOR rollouts also at the deployment level. ARGOR rollouts allows you to do blue-green
+
+17:49.560 --> 17:59.920
+and canary rollouts, where you can say, progress the number of pods over a period of time,
+
+17:59.920 --> 18:04.760
+so instead of changing, I don't know, 10 pods at the same time, because one by one, and
+
+18:04.760 --> 18:10.120
+if you have a service mesh, you can go even more fine-grained and say, I want 5% of the
+
+18:10.120 --> 18:14.920
+traffic to go to the old version, to the new version, everything else to the old version,
+
+18:14.920 --> 18:24.600
+and keep progressing that and do automatic rollbacks. So, yes. So, yeah. With the service
+
+18:24.600 --> 18:30.560
+mesh, you can fine-tune the traffic percentages, but with Kubernetes services, you can still
+
+18:30.560 --> 18:35.040
+do it. It's just that we are limited with the number of pods.
+
+18:35.040 --> 18:42.960
+So to sum up, Shift left on Garrail, so keeping people safe on what they are doing, this increases
+
+18:42.960 --> 18:49.080
+development speed, reduces the issues that you are going to have in production, and you're
+
+18:49.080 --> 18:56.960
+never going to prevent having issues in production. What you can prevent is how many customers
+
+18:56.960 --> 19:04.720
+are affected and how fast you can fix them, right? So for us, what was very useful is
+
+19:04.720 --> 19:09.440
+the progressive delivery techniques, like canaries, percent of rollouts, or automated
+
+19:09.440 --> 19:17.120
+rollbacks, and the automation to do this, control and progressive rollout, pays off
+
+19:17.120 --> 19:28.320
+over time. So I think we have one minute for questions. Or you can find me afterwards.
+
+19:28.320 --> 19:39.760
+Thank you.

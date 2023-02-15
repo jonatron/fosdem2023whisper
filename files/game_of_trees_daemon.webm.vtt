@@ -1,0 +1,919 @@
+WEBVTT
+
+00:00.000 --> 00:12.360
+Hello. Can you see my slides? Yeah. I have only wide background, so the light at the
+
+00:12.360 --> 00:23.520
+top shouldn't be a big issue. And yeah, we're good to go. Okay. Hi, I'm Stefan. I work on
+
+00:23.520 --> 00:28.040
+generally open source stuff as a freelancer, and I'm here to present something I've been
+
+00:28.040 --> 00:35.960
+working on as a site project in the last few months. This is part of the Game of Trees project,
+
+00:35.960 --> 00:43.360
+which I started in November 2017 at an OpenBSD hackathon in Berlin. It's compatible with
+
+00:43.360 --> 00:49.560
+Git repositories and the Git network protocol, but apart from that, it's not trying to replicate
+
+00:49.560 --> 00:55.520
+Git specifically, but it's just the idea to reuse these formats because they're very widely used.
+
+00:55.520 --> 01:03.440
+And they're fairly okay and well designed, so we can just keep using them and not make up our
+
+01:03.440 --> 01:12.040
+own. And yeah, because it's written on OpenBSD, it uses a lot of OpenBSD specific APIs. There's
+
+01:12.040 --> 01:18.520
+actually a portable version that's maintained by Thomas Adam, who also does the T-Max terminal
+
+01:18.520 --> 01:26.640
+multiplexer portable version, and you can install this on various systems. And I think Thomas always
+
+01:26.640 --> 01:31.400
+likes to also explore more options for other systems. If you're interested, if yours is not
+
+01:31.400 --> 01:37.240
+listed, you can talk to him. And yeah, it's ISC licensed because it aims to be basically as
+
+01:37.240 --> 01:43.840
+pleasing to OpenBSD developers as possible. That's the whole idea. Now, what we currently have
+
+01:43.840 --> 01:51.280
+is what's working really well is the client side. And this is basically sort of feature complete at
+
+01:51.280 --> 01:56.600
+this point. You might want to have some more convenience things, but all the basics are there.
+
+01:56.600 --> 02:03.400
+Everything is working. You have several frontends which I'll present in the following slides. You
+
+02:03.400 --> 02:08.040
+have a lot of code that's shared by these frontends, which I've labeled library here because it's in
+
+02:08.040 --> 02:13.320
+the lib directory of the source tree. One thing that this program does, which is very specific,
+
+02:13.320 --> 02:20.360
+is that it will not touch repository data outside of programs that are separate and are called
+
+02:20.360 --> 02:27.800
+lib exec helpers. From the programs point of view, if you use the library, you don't see this. You
+
+02:27.800 --> 02:32.520
+just like say open a repository and fetch me some objects and so on. But internally, it will
+
+02:32.520 --> 02:38.480
+actually start other programs that restricts themselves a lot using pledge and unveil and so
+
+02:38.480 --> 02:45.920
+on. And those will actually pass the repository data. This is the current list of commands. And
+
+02:45.920 --> 02:51.320
+I'm quite happy with this set actually. I've been working with this set for the last five years or
+
+02:51.320 --> 02:58.480
+so. They've slowly been added over time. But I feel very productive with these. And I don't miss
+
+02:58.480 --> 03:02.920
+anything. I know that some people would like some additional things. But at this point,
+
+03:02.920 --> 03:07.480
+we're mostly like fine tuning. And you can read the manual page on this URL if you like.
+
+03:07.480 --> 03:12.640
+You can actually read it from start to finish in order to get a good idea of how the system works
+
+03:12.640 --> 03:19.120
+and how it's supposed to be used. There's also a got admin utility which sort of mirrors CVS
+
+03:19.120 --> 03:24.760
+admin or SVN admin in the sense that if you're doing something that only requires like specific
+
+03:24.760 --> 03:30.520
+things where you do something with a repository specifically, you would use that command. This
+
+03:30.520 --> 03:35.040
+isn't complete. There are some things that I would still like to add here, which we'll go into
+
+03:35.040 --> 03:41.240
+later. But it's already prepared a lot of code for the server that I'll talk about. Because
+
+03:41.240 --> 03:47.240
+for example, dealing with pack files is necessary for the server as well as this tool. We have a
+
+03:47.240 --> 03:55.240
+curses command line, a base terminal browser thing. You can read commits with that and look at
+
+03:55.240 --> 04:01.880
+diffs and blame files and so on. It's working really well. And most recently, there's a developer
+
+04:01.880 --> 04:06.400
+Mark Jamsak who added a lot of convenience to this like vertical scrolling, diff stat display and
+
+04:06.400 --> 04:11.960
+all sorts of nice things. It doesn't work quite well on repositories that have a lot of merge
+
+04:11.960 --> 04:18.400
+commits. I found that some repositories are hard to browse if they use a lot of merges. But for
+
+04:18.400 --> 04:22.880
+simple repositories, it's really good. And if something is missing and you feel like you would
+
+04:22.880 --> 04:27.600
+like to use this on a repository with lots of merges, you can please make suggestions as to
+
+04:27.600 --> 04:33.280
+what we could improve there. You also have a web front end, which is sort of like CVS web or
+
+04:33.280 --> 04:41.440
+VUVC. And it's also using the God code internally to show you files on a web browser and commits
+
+04:41.440 --> 04:47.160
+and logs and so on. That's written by Tracy Emery. And most recently, Omar Polo has been doing a
+
+04:47.160 --> 04:52.400
+lot of refactoring there and added a templating mechanism, for example, to deal with generating
+
+04:52.400 --> 04:58.480
+the HTML, not from printf, but with something more generic. And it's quite nice. It also has
+
+04:58.480 --> 05:03.440
+RSS feeds for tags, which is probably rarely outdated, but I think it's kind of nice. You can
+
+05:03.440 --> 05:15.560
+be notified of new releases that way. Okay, so about the server. So the goal of one of the major
+
+05:15.560 --> 05:20.320
+milestones for any version control system that's ever been developed is that eventually you want
+
+05:20.320 --> 05:26.320
+to be self hosting. And so far, we've been using a Gitulite setup for this project. And that's
+
+05:26.320 --> 05:31.960
+working well, but I would really like to be able to run this on an OpenBSD server using my own
+
+05:31.960 --> 05:37.400
+code. So after putting this off for a long time, because I always thought it would be a lot of
+
+05:37.400 --> 05:42.200
+work, I finally ran out of things to do on the client side and said, okay, I'm going to look into
+
+05:42.200 --> 05:48.760
+several things now and started talking to people at Hackathons in September and summer last year,
+
+05:48.760 --> 05:55.720
+basically, and started working in September. By now, you can install it on OpenBSD current. It's
+
+05:55.720 --> 06:02.720
+not yet in the portable version. Thomas and Omar were going to look at that, but it might take
+
+06:02.720 --> 06:12.200
+some time still, but eventually it should arrive there. Now, the main use cases I want to support
+
+06:12.200 --> 06:17.440
+with this are exactly two. One is, of course, I want to be self hosting for my own open source
+
+06:17.440 --> 06:23.320
+projects and maybe also private repositories. And the other is I want to enable what OpenBSD is
+
+06:23.320 --> 06:29.440
+using now with CVS, which is anonymous distribution of source code over SSH, where you know that the
+
+06:29.440 --> 06:35.320
+server you talk to is genuine and should have the right source code for you, but the client doesn't
+
+06:35.320 --> 06:42.280
+need to authenticate. And every time I want to get source code from a platform like GitHub or
+
+06:42.280 --> 06:49.640
+GitLab or other forages that exist with God, I have to upload an SSH key because they will not
+
+06:49.640 --> 06:56.000
+accept my SSH connection. And because God only uses SSH, it doesn't implement HTTP support. This
+
+06:56.000 --> 07:02.960
+is really annoying. And it's not really a technical problem to do this. It's just basically that in
+
+07:02.960 --> 07:09.080
+their software, they didn't foresee this use case. But I think it's very nice. And you can actually
+
+07:09.080 --> 07:15.680
+go and try this now if you like. This is the code that I'm talking about running on a server and
+
+07:15.680 --> 07:23.200
+it's serving God code and God portable. You have the Husky fingerprints, which you can not take a
+
+07:23.200 --> 07:29.680
+photo of or whatever. It's also on the website. And yeah, if all of you all at the same time would
+
+07:29.680 --> 07:37.280
+now go and trigger this, you'd probably trap my SSH rate limiter, especially if HostM is behind
+
+07:37.280 --> 07:43.640
+that, which I hope not. But yeah, be gentle. Maybe if you want to clone from this repo,
+
+07:43.640 --> 07:48.520
+pick a slide number in your head from between 10 and 37. And when the slide comes up,
+
+07:48.520 --> 07:57.720
+you start your clone, then you'll be fine. So yeah, I'd like to explain a bit what the
+
+07:57.720 --> 08:03.520
+Git protocol is doing because without knowing this, you will not understand what a server should be
+
+08:03.520 --> 08:11.200
+doing. And it turns out that if you leave out HTTP and all this stuff and just concentrate on the
+
+08:11.200 --> 08:16.560
+playing it protocol, it's actually really quite simple. If you don't, if you also ignore some
+
+08:16.560 --> 08:20.120
+protocol extensions, which we haven't implemented yet. So this is like really a bare bone clone
+
+08:20.120 --> 08:25.640
+that that we will go through. It's not very complicated. The main thing to understand is
+
+08:25.640 --> 08:31.640
+that when you're using SSH, the Git client will actually go and run the login shell of the user
+
+08:31.640 --> 08:37.520
+and then give that a command to run. And Git basically hardcoded the names of these executables
+
+08:37.520 --> 08:43.840
+in its protocol. So you cannot be a Git protocol without calling Git upload pack on the server
+
+08:43.840 --> 08:50.080
+when you log in, right? Also there's Git receive pack for the other side when you're when you're
+
+08:50.080 --> 08:57.920
+when you're sending something. Anyway, if you run God clone with the dash v flag, you will see a
+
+08:57.920 --> 09:06.160
+trace that is very similar to what I'm showing now. It's I've left out a few bits. But initially,
+
+09:06.160 --> 09:13.040
+so this is only Git protocol version zero slash one Git protocol version two changed a bit some
+
+09:13.040 --> 09:18.400
+things in a good way. But I haven't implemented that. So we're seeing a version one trace.
+
+09:18.400 --> 09:26.960
+Initially, the server just sends one message which says I have one of the branches I have has this
+
+09:26.960 --> 09:32.280
+comment hash and this name. And oh, I also have some capabilities. You can see in the trace,
+
+09:32.280 --> 09:39.040
+these are hidden behind a null byte. Because I suppose very old versions of Git clients didn't
+
+09:39.040 --> 09:43.520
+really understand the capabilities yet and the null byte made them not read that part of the
+
+09:43.520 --> 09:48.240
+message. So they and also for version two, they did the same thing, hiding a version
+
+09:48.240 --> 09:52.480
+announcements behind two null bytes, because then the next kind, you know, this is a bit
+
+09:52.480 --> 09:58.800
+hacky, but seems to work. Don't worry about the capability capabilities. It's not important what
+
+09:58.800 --> 10:04.160
+they are. What's important to understand also is that each message is wrapped in a packet line,
+
+10:04.160 --> 10:10.880
+they call it. And that's simply a length plus data framing format for these messages.
+
+10:10.880 --> 10:18.120
+So then the server keeps sending messages for every branch it has. And here's one more,
+
+10:18.120 --> 10:23.840
+its main branch happens to be the same as had, because had is a similar to main, but you know,
+
+10:23.840 --> 10:29.480
+not important. And the client just keeps storing these. And eventually the server sends a flush
+
+10:29.480 --> 10:36.120
+packet, which is just a zero length packet and says, okay, I'm done. And in response to which
+
+10:36.120 --> 10:41.120
+the client will tell the server what it wants. So the client sends similar messages also includes
+
+10:41.120 --> 10:45.280
+its capabilities in the first message it's sending. And basically says, oh, yeah, I want this
+
+10:45.280 --> 10:49.800
+commit and this commit and this commit. And eventually it also sends a flush packet to
+
+10:49.800 --> 10:57.960
+terminate that list. Now if we're doing a clone, right? So we have nothing. But if we already
+
+10:57.960 --> 11:03.520
+had commits, we could now tell the server what we have by sending half lines, which look just
+
+11:03.520 --> 11:08.920
+the same as the want lines with more commit IDs. And the server then builds a second set of commits
+
+11:08.920 --> 11:13.360
+in its memory to say like, oh, okay, the client has all of these already, I don't need to send
+
+11:13.360 --> 11:18.320
+those and don't need to send any objects that are hanging off these commits. It's basically just an
+
+11:18.320 --> 11:22.960
+optimization to keep the pack file small that will be sent next, right? So you're not doing a full
+
+11:22.960 --> 11:27.080
+clone every time you do a full clone initially. And then once you have something, you tell the
+
+11:27.080 --> 11:33.280
+server what you already have. So you only fetch the new stuff. And yeah, because we're doing a clone,
+
+11:33.280 --> 11:38.640
+we're just setting a server we're done. And now the client's protocol is already finished. So this
+
+11:38.640 --> 11:44.360
+is basically the last message the client will ever send. And the server sends one more message in
+
+11:44.360 --> 11:49.200
+response, which is in this case, a knack, not acknowledged. I don't know why they chose these
+
+11:49.200 --> 11:56.280
+words, aka knack. But essentially what these do is for a knack, the server keeps sending knacks
+
+11:56.280 --> 12:00.720
+while the clients are sending half lines to say like, I haven't found a common ancestor yet,
+
+12:00.720 --> 12:07.120
+please send me more. Because without a common ancestor, the server cannot determine a subset
+
+12:07.120 --> 12:12.520
+of the commit graph to use for the pack file. Because if the client sends totally unrelated
+
+12:12.520 --> 12:17.120
+commit hashes, the server doesn't know, then the server cannot use this to optimize the pack
+
+12:17.120 --> 12:23.000
+file. So it keeps sending knack. And in another case where you would have a common ancestor,
+
+12:23.000 --> 12:27.960
+the server would send an act and commit hash. And the client would then stop sending half lines
+
+12:27.960 --> 12:36.960
+for this branch. The exact details of this part of the protocol are a bit complicated. And they
+
+12:36.960 --> 12:44.360
+kept adding extensions to this behavior. So the actual knack and act processing depends on various
+
+12:44.360 --> 12:50.240
+options that you can set in the protocol, which are all documented in the Git docs. But it's not
+
+12:50.240 --> 12:55.240
+important for us here now. Basically, the server just tells us, well, I have no common ancestors
+
+12:55.240 --> 13:02.520
+because you don't have any commits. That's fine. And then the server starts calculating the set of
+
+13:02.520 --> 13:09.800
+objects it wants to put in the pack file. And what Sony has colored, Git calls us something else.
+
+13:09.800 --> 13:15.840
+It calls us like counting and enumerate. I don't know which step does what. But what we do is we
+
+13:15.840 --> 13:21.400
+have the whole graph and we keep coloring nodes in the graph. It's kind of like mine or theirs or
+
+13:21.400 --> 13:25.520
+something like this. And then eventually we have a subsection, which in this case would be all of
+
+13:25.520 --> 13:31.800
+it. And of all the commits first, and then you go through these commits and traverse all the trees
+
+13:31.800 --> 13:37.160
+and collect all the trees and blobs that you need to include for the client. And then you have a
+
+13:37.160 --> 13:44.480
+lot of objects. And you sort them in a certain way. And you go through and check whether you
+
+13:44.480 --> 13:49.320
+already have a delta for any of these objects and whether the delta base will also be included in
+
+13:49.320 --> 13:55.080
+the packet sending so that you can avoid creating a delta for this object. You just reuse the delta
+
+13:55.080 --> 13:58.440
+that you already have somewhere, which is an optimization for performance and very important.
+
+13:58.440 --> 14:03.160
+If you don't do that, your server is going to be super slow. And then you deltify some of the
+
+14:03.160 --> 14:08.280
+rest of the objects and you're good to go. Now you know what you need to know to start
+
+14:08.280 --> 14:14.360
+generating a pack file stream. And you start sending this out to the client. And the client
+
+14:14.360 --> 14:21.640
+downloads it. Once it has everything indexes the pack, which is a step where you have the pack file,
+
+14:21.640 --> 14:26.800
+which is full of compressed and deltified objects. You don't know what's in it because the server
+
+14:26.800 --> 14:31.200
+didn't tell you anything about the objects. You just told the server, send me this. The server
+
+14:31.200 --> 14:36.240
+sends you something. Now you don't know what's in there. And to use the pack file, you always need
+
+14:36.240 --> 14:41.840
+to have an index for it, which tells you which object ID is at which offset in the pack file.
+
+14:41.840 --> 14:47.600
+So you just read the whole thing. And because Git uses intrinsic object identifiers, you can
+
+14:48.240 --> 14:52.720
+calculate the IDs yourself based on the contents of the blobs and the trees and the commits and so on.
+
+14:52.720 --> 15:00.000
+So you build that up. And then for any of the deltified objects, you also need to make sure
+
+15:00.000 --> 15:05.440
+that you can actually combine all the deltas to get the right content. And that's the last step.
+
+15:06.080 --> 15:09.600
+That takes quite a while. And then once you're done with that on a big pack anyway,
+
+15:09.600 --> 15:12.960
+it takes a long time. And then once you have that, you know, okay, I have this pack.
+
+15:13.760 --> 15:18.000
+The commit I want it is in there. All the objects that are hanging off of it are,
+
+15:18.000 --> 15:23.200
+you know, by nature of the hashing structure that Git is using are there. So that's fine,
+
+15:23.200 --> 15:30.240
+we're going to use this. Then you just create a reference for the Git client to find its initial
+
+15:30.240 --> 15:36.560
+commit and you can use the repository. In the push case, it works slightly differently.
+
+15:38.240 --> 15:44.160
+You still have this reference list announcement at the beginning. And instead of saying what it
+
+15:44.160 --> 15:49.280
+wants, the client proposes reference updates to say, oh, I would like to change the main branch
+
+15:49.280 --> 15:53.920
+to point to this commit. And I would like to change or add this tag or something like this.
+
+15:54.640 --> 15:58.320
+And then it just sends a pack file. And then the server has to index this and
+
+15:58.960 --> 16:03.760
+figure out that everything is fine. And whether it wants to change these references or not.
+
+16:04.400 --> 16:06.880
+And give feedback to the client to say, like, yes, okay, I've,
+
+16:07.760 --> 16:13.200
+you have changed this branch or you've added this tag and so on. So that's it for the protocol
+
+16:13.200 --> 16:17.600
+overview. You can find a lot of documentation in Git source tree about this.
+
+16:19.600 --> 16:22.160
+They moved the files recently. So if you have an older
+
+16:23.040 --> 16:27.040
+Git source checkout, it might still be in documentation slash technical,
+
+16:27.680 --> 16:31.200
+but in the current version, it's in documentation slash Git protocol
+
+16:31.920 --> 16:35.680
+dash packed attack system is the main one for this, but there are also others,
+
+16:35.680 --> 16:39.520
+similarly named files, which you can also read if you want to know more.
+
+16:39.520 --> 16:47.600
+Okay, another thing we need to talk about, because this is important to understand why
+
+16:48.640 --> 16:53.040
+we would need to write our own server in the first place, because there are already several
+
+16:53.040 --> 16:59.520
+server implementations, right? Why do we want our own? Well, when you write server software,
+
+16:59.520 --> 17:04.000
+especially an open BSD, there are a few design patterns that we use that are not
+
+17:04.720 --> 17:08.880
+commonly used elsewhere, I would say. I mean, I've never really seen them used widely outside
+
+17:08.880 --> 17:15.040
+this project, so it's a bit unique in that way and the way it does things, but these things
+
+17:15.040 --> 17:20.720
+are important to us. So for example, you know that SSH recently had a release where they had a
+
+17:20.720 --> 17:25.760
+double free and advisory products like yesterday, I think, or two days ago said like, oh, this is
+
+17:25.760 --> 17:31.840
+not believed to be exploitable. That is because of this. It's not because SSH code is generally
+
+17:31.840 --> 17:36.880
+great or something. It's because of the design patterns. And so we want these design patterns
+
+17:36.880 --> 17:44.720
+to be used. And so one of the things you do is that you split your program into several processes
+
+17:44.720 --> 17:51.520
+that have different tasks. And for each task, you decide what kind of system calls does this task
+
+17:51.520 --> 18:01.760
+need? And how can I make sure that a process that has network access isn't also able to
+
+18:01.760 --> 18:07.280
+start new programs or open files and so on. There's unveil which restricts the view of the file
+
+18:07.280 --> 18:12.480
+system and allows you to completely hide like your dot SSH directory, for example. And other
+
+18:12.480 --> 18:16.640
+things, basically, it says the program, for example, the God client says, I need the repository,
+
+18:16.640 --> 18:21.040
+I need the work tree, I need slash temp, that's all I need to see. And I don't need to see anything
+
+18:21.040 --> 18:27.440
+else. When you start new programs, you always fork an exec, which means that when you do the
+
+18:27.440 --> 18:32.720
+exec, the program will be restarted from scratch and OpenBSD's memory randomization will kick in
+
+18:32.720 --> 18:36.880
+and load all the code segments and text segments and stuff in different locations again,
+
+18:38.320 --> 18:42.800
+which you do for every request so that when somebody learns information about the outer space
+
+18:42.800 --> 18:48.800
+from an info league, they cannot use it on the next request. You have messages over pipes to
+
+18:48.800 --> 18:53.520
+communicate between these programs. And of course, you will have to have access to files
+
+18:53.520 --> 18:58.240
+and networks somehow, right, especially in isolated contexts. And there what you do is you pass
+
+18:58.240 --> 19:04.000
+file descriptors over these pipes so that one process opens resources and the other
+
+19:04.000 --> 19:08.560
+less privileged one is using them. So these are the these are the patterns we use.
+
+19:11.040 --> 19:16.320
+Okay, and so basically, this is what this is. It's a Git server that runs as this kind of
+
+19:16.320 --> 19:23.680
+multi process program. It only supports SSH. Git user account I mapped to regular shell accounts
+
+19:23.680 --> 19:28.000
+because I didn't want to reimplement user management. You can have a special purpose
+
+19:28.000 --> 19:32.560
+login shell for these users to restrict them, if you want. And access permissions are said
+
+19:32.560 --> 19:36.720
+per repository. I don't want to go very complicated and make it like per branch or something. It's
+
+19:36.720 --> 19:40.880
+just like, no, if you have access to the repo, you have access, which is good enough, for example,
+
+19:40.880 --> 19:44.240
+for OpenBSD's model where you get an account and you can commit anywhere.
+
+19:44.240 --> 19:50.160
+And when you configure this thing, this is basically what you need to do. You create your
+
+19:50.160 --> 19:55.920
+repositories, make sure they're owned by the right user that you run the demon as. And you have at
+
+19:55.920 --> 20:02.320
+least one repository in your configuration file, which has a path, but the repository is and access
+
+20:02.320 --> 20:06.880
+permissions for either, in this case, the example would be a group of developers, which you have
+
+20:06.880 --> 20:15.360
+in ETC groups and an anonymous user, which we can only read. Now, my initial implementation
+
+20:15.360 --> 20:22.000
+of this looked something like this. It was functional and I could write a test suite for
+
+20:22.000 --> 20:31.280
+it, which was the main part. This could actually be used to fetch and push changes. But the design
+
+20:31.280 --> 20:37.440
+wasn't very good in terms of this multiprocess aspect because the parent started, then it
+
+20:37.440 --> 20:42.080
+started a reader process and a writer process and that was it. And then all these processes were
+
+20:42.080 --> 20:48.160
+always used for every connection. It did allow us to at least get this up and running, though.
+
+20:48.800 --> 20:54.080
+And I don't know, I asked for a bit of review and got shocked responses to say like, no,
+
+20:54.080 --> 20:58.080
+you're doing this all wrong. Fork and X needs to be done per request and so on. So yeah, okay.
+
+20:58.080 --> 21:06.240
+But at least functionally, it was already quite okay. And the repository code there is
+
+21:06.240 --> 21:11.760
+reusing a lot of the code that I already had for like God admin and so on. So I mostly had to
+
+21:11.760 --> 21:23.280
+rewrite a lot of code for the parent process from scratch, which was all of this. This is
+
+21:23.280 --> 21:27.920
+what it looks now. So the parent basically encompasses or used to encompass all of this
+
+21:27.920 --> 21:34.000
+functionality and we'll go through each one by one. So right now, in this current implementation,
+
+21:34.000 --> 21:40.720
+you have the parent when it starts up, must start as root in order to be able to do certain things
+
+21:40.720 --> 21:49.440
+like open, like start the listener process as root, for example. And it uses pledge as
+
+21:49.440 --> 21:54.000
+standard IO proc exact, which means basically standard is you always want that it's like
+
+21:54.000 --> 21:58.960
+printf and stuff like this. Then you have proc and exact, which allows you to fork and execute
+
+21:58.960 --> 22:03.840
+programs. And you can also send and receive file descriptors. And that's it what it can do.
+
+22:04.480 --> 22:10.080
+It also currently does an unveil on itself. So with an X permission, so it can re execute itself
+
+22:10.080 --> 22:15.200
+with different option flags to start other versions of itself, basically that we will start later.
+
+22:15.200 --> 22:21.600
+I'm not sure if this is really sound because it used to be said that unveil would inherit to child
+
+22:21.600 --> 22:27.600
+processes. And I'm not sure what happened to this. Currently, it does not. So it does not inherit,
+
+22:27.600 --> 22:32.720
+so I can do this and not lose access to, for example, the slash temp directory in the processes I'm
+
+22:32.720 --> 22:37.040
+starting next. But if that ever changes, we would have to adapt this, but it's not a big deal.
+
+22:37.040 --> 22:43.920
+You start a listen process, which opens the actual Unix socket that this demon accepts connections on.
+
+22:43.920 --> 22:48.080
+So basically, if you're a local user on the system, you can always access it through the socket,
+
+22:48.080 --> 22:53.360
+but you would normally run this shell that we have to, which does this for you and speaks the
+
+22:53.360 --> 23:00.720
+appropriate protocol. It then drops privileges. And the listen process runs as just standard IO
+
+23:00.720 --> 23:11.440
+synaptic Unix. Unix is needed to operate on the Unix socket. It also does an unveil because
+
+23:12.640 --> 23:17.520
+the Unix pledge allows you to bind other sockets and bind would create other sockets for you
+
+23:17.520 --> 23:24.720
+somewhere. And we wanted to prevent that. So by unveiling everything, basically hiding everything
+
+23:24.720 --> 23:33.520
+with unveil, there's no way to create additional Unix sockets for this process. And this process
+
+23:33.520 --> 23:40.160
+is also, as an initial kind of dust prevention mechanism, this enforces a connection limit
+
+23:40.160 --> 23:45.040
+per UID so that not one user can just connect to the socket and spam it and prevent access for
+
+23:45.040 --> 23:53.200
+everyone else. Now, the shell is one of the most sensitive parts because this is where users log
+
+23:53.200 --> 23:58.960
+in and you actually confine them to this program. So you want this to be reasonably secure. It starts
+
+23:58.960 --> 24:04.640
+out with standard IO, receive FDN Unix to be able to connect to the Unix socket. But once it's
+
+24:04.640 --> 24:09.520
+connected, it drops that capability so it can no longer open new ones or do other things related
+
+24:09.520 --> 24:14.960
+to that. It only has a file of scripture it can talk on. And that's it. And then it starts
+
+24:14.960 --> 24:20.080
+demonstrating these packet lines that we saw to messages that are internal to the program
+
+24:20.080 --> 24:30.880
+and go over the pipe to the parent. The parent will then start an authorization process which
+
+24:30.880 --> 24:40.960
+only runs once. And what this does is it gives itself access to the password database of the
+
+24:40.960 --> 24:50.400
+system using the SCAT-PW syscall and also hides all the file system. And I think this is, this
+
+24:50.400 --> 24:55.600
+shows something very nice about Pledge and Unveil when used in combination because I'm actually
+
+24:55.600 --> 25:01.920
+reading ETC password and ETC group files, right? But Unveil, as per Unveil, I shouldn't be able to
+
+25:01.920 --> 25:08.000
+access those. But because I declared that I want to use the password database, the kernel knows
+
+25:08.000 --> 25:13.680
+that this process is okay. It's okay for this process to access those files. So it bypasses
+
+25:13.680 --> 25:18.400
+Unveil in that specific case. Which means I don't have to worry about how the security mechanism
+
+25:18.400 --> 25:23.520
+is implemented. I don't have to go and say, oh, is my libc when I ask for users going to open this
+
+25:23.520 --> 25:28.000
+file? Well, maybe I should add an exception for that. Or is it going to do this and such and such
+
+25:28.000 --> 25:33.680
+syscall? I don't have to worry. I just say like, Pledge, I will do that. And Unveil, I will do
+
+25:33.680 --> 25:37.440
+that. And they take care of it, which is great for a programmer. It's really nice to program
+
+25:37.440 --> 25:43.920
+against this. So what this process then does, of course, is matches the users that are logged in
+
+25:43.920 --> 25:48.640
+against the access rules in the config file you saw earlier and reports the result to the parent
+
+25:48.640 --> 25:54.640
+and just exits because that's all it needs to do. It's just a one-shot thing. Now, the parent
+
+25:55.920 --> 26:01.840
+starts two processes if authorization has succeeded. And the shell is kind of waiting
+
+26:01.840 --> 26:05.440
+because it's like, hey, I sent a message, but you haven't responded yet. But yeah, we're busy,
+
+26:05.440 --> 26:13.920
+we're setting up. So we start two things right now, a session process and a repository read or
+
+26:13.920 --> 26:20.080
+write process. Currently, the naming of these is horribly bad. It just was the best I could come
+
+26:20.080 --> 26:25.360
+up with. And it kind of grew organically from the initial setup with those three processes you saw
+
+26:25.360 --> 26:30.320
+earlier. But for example, the repository write process is not actually writing to the repository,
+
+26:30.320 --> 26:36.240
+which you'll see later. So I'm not very happy about this. And also, the session process is
+
+26:36.240 --> 26:42.480
+basically the most powerful component of the system right now. It's the only one that can
+
+26:42.480 --> 26:46.960
+actually read, write, the repository and create files in there. It can also do the same as slash
+
+26:46.960 --> 26:52.240
+temp. And for that, it needs all these pledges with like read path, write path, create path.
+
+26:52.800 --> 26:57.200
+And it also needs file attributes and file locking because when it changes references for
+
+26:57.200 --> 27:01.680
+clients, it needs to make sure that they get locked so that you don't have file system races
+
+27:01.680 --> 27:06.400
+where two clients commit at the same time and then you end up with a reference that's been
+
+27:06.400 --> 27:13.680
+overwritten. It also creates temporary files, which the repository process needs and gives it
+
+27:13.680 --> 27:19.440
+the file descriptors. It handles installing of the pack files and so on. And it has the
+
+27:19.440 --> 27:27.120
+git protocol state machine in it. So that's a bit, I would like to continue work there to split
+
+27:27.120 --> 27:32.240
+this up more, but because I had to have a functional implementation and I had to, like,
+
+27:32.240 --> 27:36.480
+I wanted to have something functional to clone from, which is there now, which is on the internet.
+
+27:36.480 --> 27:40.640
+That's fine. But going forward, this needs to be revisited for sure.
+
+27:44.160 --> 27:48.640
+The repository read and write process is apart from the name for repo write. I'm okay with
+
+27:48.640 --> 27:56.800
+how that's worked out. Both of them can only read from the repository. And what the reader does is
+
+27:57.520 --> 28:03.120
+it is responsible for creating a pack file and streaming the result to the God shell over
+
+28:03.120 --> 28:08.880
+a pipe that is created by the session process and handed to both the shell and the reader.
+
+28:08.880 --> 28:18.880
+And the writer is responsible for receiving a pack file and indexing it. So the indexing
+
+28:18.880 --> 28:27.280
+is almost done. So the indexing is done there. Okay. I have one minute left, one minute and
+
+28:27.280 --> 28:32.640
+a half. I quickly go through some implementation improvements. It's still like to do. So we should
+
+28:32.640 --> 28:37.440
+verify what the client has uploaded. Currently we trust it, what to do. The config file is
+
+28:37.440 --> 28:41.280
+parsed every time a process starts, which isn't ideal, which works, but it's bad if you're changing
+
+28:41.280 --> 28:47.440
+the file while the process is running. Yeah, session I already mentioned. And the state machines
+
+28:47.440 --> 28:51.120
+have some funny bugs. So these really need to be rewritten. They're basically like switch statements
+
+28:51.120 --> 28:55.520
+and if and so on. And I'd like to properly separate that out with tables and state transition
+
+28:55.520 --> 29:00.560
+functions and so on. But it was just a quick way of getting things working. But we already saw
+
+29:00.560 --> 29:06.160
+like thousands of flash packets flying through this process because an end of file on a socket
+
+29:06.160 --> 29:11.680
+triggered a flash packet and that was kind of stupid. This has been fixed, but there will still
+
+29:11.680 --> 29:20.640
+be other bugs like that. We should have some built-in checks so that commits can be verified
+
+29:20.640 --> 29:25.600
+according to project policies and things like denying merge commits if you don't want them
+
+29:25.600 --> 29:33.040
+or binary files and so on, preventing a forced push. I'd like to have commit notifications
+
+29:33.040 --> 29:37.360
+where you, for example, send an email or you can send an arbitrary HTTP request so that
+
+29:37.360 --> 29:40.640
+if you really want to have a post-commit hook script, you run it somewhere else and we'll
+
+29:40.640 --> 29:48.640
+give you information and trigger it. Yeah, also it should really keep track of what this space
+
+29:48.640 --> 29:54.800
+it has when it accepts pack files and not fill the disk and fail. We should be able to remove
+
+29:54.800 --> 30:00.080
+redundant pack files that have accumulated over time. I'd like to add SHA2 support
+
+30:00.080 --> 30:06.400
+and enable it by default once that works so that we use the SHA2 because we have zero
+
+30:06.400 --> 30:11.280
+production deployments right now and unlike it, so we can just use the new format they've already
+
+30:11.280 --> 30:17.040
+defined. Service at rebasing is another thing. I'm out of time, so I'm not going to go into that,
+
+30:17.040 --> 30:31.120
+but I think this is it. Sorry for the quick part of you. Thank you very much. I
+
+30:31.120 --> 30:47.920
+encourage you to ask a question about the hallway. Okay, good.

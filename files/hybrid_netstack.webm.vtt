@@ -1,0 +1,898 @@
+WEBVTT
+
+00:00.000 --> 00:29.960
+Okay, ready for our next talk?
+
+00:29.960 --> 00:31.960
+Next talk is by Mariam and she's going to talk about,
+
+00:31.960 --> 00:34.960
+I'll give us a hybrid networking stack demo.
+
+00:34.960 --> 00:35.960
+Thank you.
+
+00:35.960 --> 00:36.960
+Hi, everyone.
+
+00:36.960 --> 00:37.960
+My name is Mariam Tahan.
+
+00:37.960 --> 00:39.960
+I'm a software engineer at Red Hat.
+
+00:39.960 --> 00:41.960
+And today I'm going to talk to you about a concept
+
+00:41.960 --> 00:44.960
+I've been researching, and I've coined hybrid networking stacks.
+
+00:44.960 --> 00:46.960
+So if anybody has better names as well,
+
+00:46.960 --> 00:48.960
+I'm open to the suggestion.
+
+00:48.960 --> 00:52.960
+So what I'm going to do is I'm actually going to introduce
+
+00:52.960 --> 00:54.960
+what a hybrid networking stack is.
+
+00:54.960 --> 00:58.960
+We're going to talk a little bit about an open source project
+
+00:58.960 --> 01:00.960
+called Cloud Native Data Plane or CNDP
+
+01:00.960 --> 01:03.960
+that gives us an example of such a networking stack
+
+01:03.960 --> 01:05.960
+or at least some components of it.
+
+01:05.960 --> 01:07.960
+We're going to have a live demo with a star there
+
+01:07.960 --> 01:09.960
+because we're going to cross our fingers and toes
+
+01:09.960 --> 01:11.960
+and pray that it all goes to plan.
+
+01:11.960 --> 01:14.960
+After that, I will try and sum up what we discussed
+
+01:14.960 --> 01:19.960
+and hopefully there will be some time for Q&A at the end.
+
+01:19.960 --> 01:22.960
+Okay, so what is a hybrid networking stack?
+
+01:22.960 --> 01:25.960
+Well, it's actually a networking stack for applications
+
+01:25.960 --> 01:29.960
+that want to take advantage of the XDP hook and AFXDP in particular
+
+01:29.960 --> 01:32.960
+without having to reimplement the full networking stack
+
+01:32.960 --> 01:37.960
+in user space, but rather lean on the existing Linux stack.
+
+01:37.960 --> 01:41.960
+It relies very heavily on the concept of control plane
+
+01:41.960 --> 01:43.960
+and user plane separation.
+
+01:43.960 --> 01:48.960
+So parts of the stack can run in user space
+
+01:48.960 --> 01:50.960
+and other parts of the stack can run in the kernel.
+
+01:50.960 --> 01:52.960
+And even if they're part of the control plane,
+
+01:52.960 --> 01:55.960
+they can run either in kernel or user space
+
+01:55.960 --> 01:57.960
+and the same for the user plane aspect.
+
+01:57.960 --> 01:59.960
+You can run stuff either in the kernel
+
+01:59.960 --> 02:04.960
+or in user space as part of that networking stack concept.
+
+02:04.960 --> 02:08.960
+This concept relies very heavily on the principle
+
+02:08.960 --> 02:13.960
+of classifying traffic into application-specific traffic
+
+02:13.960 --> 02:15.960
+and non-application-specific traffic.
+
+02:15.960 --> 02:18.960
+And application-specific traffic is redirected
+
+02:18.960 --> 02:21.960
+to the user plane and non-application-specific traffic
+
+02:21.960 --> 02:24.960
+is redirected to the control plane to be handled.
+
+02:24.960 --> 02:26.960
+So in that way, applications only really need to process
+
+02:26.960 --> 02:29.960
+the types of traffic that they're interested in.
+
+02:29.960 --> 02:34.960
+And what's really important then is that you filter
+
+02:34.960 --> 02:36.960
+this type of traffic as early as possible
+
+02:36.960 --> 02:38.960
+in your networking stack.
+
+02:38.960 --> 02:40.960
+So if your NIC hardware supports that filtering,
+
+02:40.960 --> 02:42.960
+you can take advantage of that.
+
+02:42.960 --> 02:45.960
+If it doesn't, then you can always rely on
+
+02:45.960 --> 02:48.960
+EBPF at the XDP hook to be able to do
+
+02:48.960 --> 02:50.960
+that level of filtering for you.
+
+02:50.960 --> 02:55.960
+So in the example I'm showing here on the slide,
+
+02:55.960 --> 03:00.960
+you can probably consider FRR and the Linux Networking Stack,
+
+03:00.960 --> 03:01.960
+the control plane.
+
+03:01.960 --> 03:04.960
+FRR is just an open-source routing protocol suite
+
+03:04.960 --> 03:06.960
+that's for Linux.
+
+03:06.960 --> 03:09.960
+And then on the user plane side,
+
+03:09.960 --> 03:14.960
+you would consider the CNET graph from CNDP,
+
+03:14.960 --> 03:19.960
+your data plane or user plane for this demo.
+
+03:19.960 --> 03:24.960
+The CNET stack that comes with CNDP,
+
+03:24.960 --> 03:26.960
+I'll just talk about it for a minute before we dive into
+
+03:26.960 --> 03:32.960
+the next topic, is based on the graph architecture from VPP.
+
+03:32.960 --> 03:36.960
+So with VPP, the concept was that you could build
+
+03:36.960 --> 03:38.960
+your whole application or parts of the stack
+
+03:38.960 --> 03:41.960
+that you want to leverage using a graph.
+
+03:41.960 --> 03:43.960
+And then your packets are processed by traversing
+
+03:43.960 --> 03:45.960
+each node in this graph.
+
+03:45.960 --> 03:47.960
+And they're processed in batches as well to keep
+
+03:47.960 --> 03:49.960
+your instruction cache relatively warm,
+
+03:49.960 --> 03:51.960
+and you got all the performance benefits from doing
+
+03:51.960 --> 03:53.960
+all of that good stuff.
+
+03:53.960 --> 04:00.960
+So the CNET stack is based on the exact same concept as that.
+
+04:00.960 --> 04:05.960
+And obviously, as your packets traverse the nodes,
+
+04:05.960 --> 04:08.960
+they're either terminated as part of that stack,
+
+04:08.960 --> 04:10.960
+they're either forwarded on, or they're dropped,
+
+04:10.960 --> 04:14.960
+depending on the decision that was determined previously
+
+04:14.960 --> 04:18.960
+by the control plane piece for your application.
+
+04:18.960 --> 04:22.960
+So let me introduce CNDP to you folks.
+
+04:22.960 --> 04:25.960
+CNDP, our cloud native data plane,
+
+04:25.960 --> 04:29.960
+is an open source framework for cloud native packet
+
+04:29.960 --> 04:31.960
+processing applications.
+
+04:31.960 --> 04:34.960
+It's actually built on the performance principles of VPP
+
+04:34.960 --> 04:37.960
+and DPDK, but it doesn't have any of the resource
+
+04:37.960 --> 04:40.960
+demands or constraints as it's completely abstracted
+
+04:40.960 --> 04:43.960
+from the underlying infrastructure.
+
+04:43.960 --> 04:45.960
+It actually is completely written
+
+04:45.960 --> 04:47.960
+using standard Linux libraries also.
+
+04:47.960 --> 04:51.960
+So what CNDP gives you is really three things.
+
+04:51.960 --> 04:55.960
+The first thing it gives you is a set of user space libraries
+
+04:55.960 --> 04:58.960
+for accelerating packet processing for your application,
+
+04:58.960 --> 05:00.960
+cloud application or service.
+
+05:00.960 --> 05:05.960
+The second thing that CNDP gives you is that CNET graph
+
+05:05.960 --> 05:07.960
+is part of the hybrid networking stack,
+
+05:07.960 --> 05:11.960
+and also a net link agent that's capable of communicating
+
+05:11.960 --> 05:13.960
+with the kernel to retrieve relevant information,
+
+05:13.960 --> 05:15.960
+like routing information and so on.
+
+05:15.960 --> 05:19.960
+And the last thing that CNDP gives you
+
+05:19.960 --> 05:23.960
+are the Kubernetes components to be able to provision
+
+05:23.960 --> 05:26.960
+and manage actually more so an AFXDP deployment
+
+05:26.960 --> 05:28.960
+than just a CNDP one.
+
+05:28.960 --> 05:32.960
+Those components are the AFXDP device plugin,
+
+05:32.960 --> 05:38.960
+which provisions the net devs that you want to use
+
+05:38.960 --> 05:41.960
+for AFXDP and advertises them up to Kubernetes
+
+05:41.960 --> 05:44.960
+as a resource pool that your pods can then request
+
+05:44.960 --> 05:46.960
+when they come up.
+
+05:46.960 --> 05:49.960
+And then you have the AFXDP CNI,
+
+05:49.960 --> 05:52.960
+which essentially plums your AFXDP net dev
+
+05:52.960 --> 05:55.960
+from the host network namespace
+
+05:55.960 --> 05:58.960
+into the pod network namespace.
+
+05:58.960 --> 06:02.960
+So just one last point on CNDP before we move on
+
+06:02.960 --> 06:06.960
+is that it actually supports multiple IO, packet IO backends,
+
+06:06.960 --> 06:08.960
+not just AFXDP,
+
+06:08.960 --> 06:11.960
+but for the purposes of this hybrid networking stack
+
+06:11.960 --> 06:15.960
+we've focused in on AFXDP itself.
+
+06:15.960 --> 06:17.960
+Okay, so it's nearly demo time.
+
+06:17.960 --> 06:21.960
+So, excuse me.
+
+06:21.960 --> 06:23.960
+So what am I going to show you?
+
+06:23.960 --> 06:28.960
+I'm actually going to show you CNDP FRR vRouter
+
+06:28.960 --> 06:30.960
+that we built.
+
+06:30.960 --> 06:33.960
+Originally, I set out to see, you know,
+
+06:33.960 --> 06:37.960
+could I build some sort of a hybrid networking stack application
+
+06:37.960 --> 06:40.960
+that could accomplish, you know, DPDK-like speeds,
+
+06:40.960 --> 06:44.960
+but leverage completely, you know, cardinal smarts.
+
+06:44.960 --> 06:47.960
+And so the scenario we came up with was that we would have
+
+06:47.960 --> 06:50.960
+two clients, client one and client two,
+
+06:50.960 --> 06:52.960
+residing in two different networks,
+
+06:52.960 --> 06:55.960
+network one and network three,
+
+06:55.960 --> 06:58.960
+and they're interconnected via a pair of vRouters,
+
+06:58.960 --> 07:02.960
+which learn routes using OSPF.
+
+07:02.960 --> 07:06.960
+So what the demo is going to be
+
+07:06.960 --> 07:09.960
+is we're actually going to bring up four Docker containers,
+
+07:09.960 --> 07:13.960
+client one, CNDP FRR one.
+
+07:13.960 --> 07:16.960
+We actually call this container CNDP FRR two,
+
+07:16.960 --> 07:18.960
+but for the purposes of the demo,
+
+07:18.960 --> 07:21.960
+I'm only going to run FRR in it, just to show it full interworking.
+
+07:21.960 --> 07:26.960
+And client two will then be our last Docker container.
+
+07:26.960 --> 07:29.960
+At the start of the demo, we're just going to bring everything up.
+
+07:29.960 --> 07:32.960
+No FRR will be running, no CNET stack will be running.
+
+07:32.960 --> 07:35.960
+And so when we try to bring from client two to client one,
+
+07:35.960 --> 07:37.960
+we're going to see nothing happen.
+
+07:37.960 --> 07:40.960
+And then we're going to bring up all the components in part,
+
+07:40.960 --> 07:42.960
+see the routes being learned,
+
+07:42.960 --> 07:45.960
+hopefully have a successful ping,
+
+07:45.960 --> 07:48.960
+and maybe even, you know, run an IPerf session
+
+07:48.960 --> 07:50.960
+between client one and client two also.
+
+07:50.960 --> 07:54.960
+So if we just zoom into this CNDP FRR node for one second,
+
+07:54.960 --> 07:58.960
+I just want to show you one thing, I guess.
+
+07:58.960 --> 08:01.960
+So we can see here it's going to have two vEath interfaces,
+
+08:01.960 --> 08:03.960
+one connected to net one and the other connected to net two,
+
+08:03.960 --> 08:04.960
+and these are here.
+
+08:04.960 --> 08:07.960
+We're going to inject an EBPF program on the XDP hook
+
+08:07.960 --> 08:11.960
+that's going to filter all UDP traffic to CNET graph
+
+08:11.960 --> 08:14.960
+and non-UDP traffic to the Linux networking stack.
+
+08:14.960 --> 08:17.960
+So actually one of the other things I'm going to show you
+
+08:17.960 --> 08:20.960
+is that we're not going to see ICMP traffic
+
+08:20.960 --> 08:22.960
+traverse through CNET.
+
+08:22.960 --> 08:24.960
+And then when we run IPerf with UDP traffic,
+
+08:24.960 --> 08:27.960
+we're going to see the actual traffic flow through CNET also.
+
+08:27.960 --> 08:32.960
+So here we go.
+
+08:32.960 --> 08:36.960
+Let's just check that we have nothing running.
+
+08:36.960 --> 08:37.960
+Yep, that's fine.
+
+08:37.960 --> 08:40.960
+And I presume everybody can see the text.
+
+08:40.960 --> 08:41.960
+Okay, cool.
+
+08:41.960 --> 08:46.960
+Okay.
+
+08:46.960 --> 08:48.960
+So all the script is doing is setting up the four containers
+
+08:48.960 --> 08:53.960
+and the relevant networking between them right now.
+
+08:53.960 --> 08:55.960
+We can ignore the permission denied,
+
+08:55.960 --> 08:58.960
+but we didn't see that for now.
+
+08:58.960 --> 09:01.960
+So we actually see we have four Docker containers here,
+
+09:01.960 --> 09:06.960
+Client 1, Client 2, CNDP FR1, and CNDP FR2.
+
+09:06.960 --> 09:18.960
+And if we try to ping Client 1 from Client 2,
+
+09:18.960 --> 09:22.960
+essentially nothing happens.
+
+09:22.960 --> 09:29.960
+Okay, so let's start up our FRR agent on CNDP FR1
+
+09:29.960 --> 09:56.960
+as well as the CNET graph.
+
+09:56.960 --> 10:07.960
+So, sorry about the formatting.
+
+10:07.960 --> 10:09.960
+It looked a lot better when I was presenting.
+
+10:09.960 --> 10:13.960
+But the key part here is if we try and check the routes,
+
+10:13.960 --> 10:20.960
+what we see is the two net devs that are attached to CNDP,
+
+10:20.960 --> 10:23.960
+or the CNDP FR1 vRouter,
+
+10:23.960 --> 10:26.960
+but most importantly we just see Network 1 and Network 2.
+
+10:26.960 --> 10:43.960
+So let's start up the FRR agent on this node.
+
+10:43.960 --> 10:51.960
+So if we have a look at the information that's been set up so far,
+
+10:51.960 --> 10:53.960
+we can see this vRouter has an IP address.
+
+10:53.960 --> 10:57.960
+It's adding Network 1 and Network 2 to the same OSPF area.
+
+10:57.960 --> 11:01.960
+And if we try to show IP OSPF neighbor at this point,
+
+11:01.960 --> 11:03.960
+it hasn't learned anything
+
+11:03.960 --> 11:06.960
+because we haven't started FRR on the other vRouter.
+
+11:06.960 --> 11:22.960
+So let's go ahead and do that.
+
+11:22.960 --> 11:24.960
+And here this vRouter has my IP address
+
+11:24.960 --> 11:29.960
+and is adding Network 2 and Network 3 to the same OSPF area.
+
+11:29.960 --> 11:39.960
+And if we show the OSPF neighbor, it's picked up its opposite end
+
+11:39.960 --> 11:41.960
+of the vRouter.
+
+11:41.960 --> 11:46.960
+And if we do the same on the CNDP FR1,
+
+11:46.960 --> 11:52.960
+it's also learned about the other route via OSPF as well.
+
+11:52.960 --> 11:58.960
+So at this point, if we actually try to ping again from client 2 to client 1,
+
+11:58.960 --> 12:00.960
+we can ping.
+
+12:00.960 --> 12:04.960
+And actually, if we check the routes on CNDP,
+
+12:04.960 --> 12:08.960
+we have the new Network 3 added in.
+
+12:08.960 --> 12:13.960
+And just to show you that no traffic is flowing through CNDP yet,
+
+12:13.960 --> 12:16.960
+this is ETH0 stats for RX and TX.
+
+12:16.960 --> 12:20.960
+We see they're still 0 and the same for ETH1.
+
+12:20.960 --> 12:23.960
+So let's kill that off for the moment
+
+12:23.960 --> 12:27.960
+and try and run an IPerFUDP session between client 1 and client 2.
+
+12:27.960 --> 12:39.960
+And this time we should see traffic flow through the CNET graph.
+
+12:39.960 --> 12:47.960
+And if we check here, you can see an increment in the stats.
+
+12:47.960 --> 12:52.960
+And this doesn't show as nice as I hope.
+
+12:52.960 --> 13:01.960
+And this kills the app.
+
+13:01.960 --> 13:05.960
+Let's try it one more time.
+
+13:05.960 --> 13:09.960
+Unfortunately, I won't be able to get this right just yet.
+
+13:09.960 --> 13:14.960
+Oh, there we go.
+
+13:14.960 --> 13:18.960
+OK, let's try and run it one more time.
+
+13:18.960 --> 13:24.960
+OK, folks, bear with me.
+
+13:24.960 --> 13:29.960
+So we can see sort of IP4 input node at the top here,
+
+13:29.960 --> 13:33.960
+an IP4 forward node,
+
+13:33.960 --> 13:36.960
+and they're passing UDP traffic through those nodes.
+
+13:36.960 --> 13:39.960
+Now, we're not going to the UDP nodes that are listed there
+
+13:39.960 --> 13:42.960
+because obviously traffic isn't destined for the CNDP,
+
+13:42.960 --> 13:48.960
+FRR, V-Router, they're destined for the client attached to it.
+
+13:48.960 --> 13:52.960
+And that's why they're forwarded on.
+
+13:52.960 --> 13:55.960
+Applications can also hook on to the CNET graph
+
+13:55.960 --> 13:58.960
+via a socket-like architecture.
+
+13:58.960 --> 14:01.960
+All the function calls look exactly the same like a socket,
+
+14:01.960 --> 14:03.960
+except it's just called a channel,
+
+14:03.960 --> 14:07.960
+and you prefix all of your normal socket calls with channel underscore
+
+14:07.960 --> 14:10.960
+before hooking up into the CNET graph.
+
+14:10.960 --> 14:16.960
+So that's the demo.
+
+14:16.960 --> 14:21.960
+So the next step was to essentially take that CNDP FRR-Router
+
+14:21.960 --> 14:24.960
+and put it through a heck of a lot of permutations
+
+14:24.960 --> 14:28.960
+in terms of interfaces that we hooked it up to,
+
+14:28.960 --> 14:30.960
+leveraging things like XDP redirects
+
+14:30.960 --> 14:32.960
+between the two V-Router instances and so on
+
+14:32.960 --> 14:35.960
+to try and see what kind of levels of performance
+
+14:35.960 --> 14:37.960
+could we push this to.
+
+14:37.960 --> 14:40.960
+And so what we noticed was for AF-XDP,
+
+14:40.960 --> 14:45.960
+the performance is completely dependent on the deployment scenario.
+
+14:45.960 --> 14:49.960
+So for north-south traffic that was coming in on a physical interface
+
+14:49.960 --> 14:53.960
+or out of a physical interface with AF-XDP in native mode,
+
+14:53.960 --> 14:55.960
+so hooked in at the XDP hook,
+
+14:55.960 --> 15:01.960
+we actually had this example yielded comparable performance to DPDK.
+
+15:01.960 --> 15:05.960
+However, while we moved to something that was completely local to a node,
+
+15:05.960 --> 15:09.960
+so east-west type traffic with all virtual interfaces and AF-XDP,
+
+15:09.960 --> 15:13.960
+while the performance was still better than vanilla V-Eat
+
+15:13.960 --> 15:15.960
+for AF-XDP in native mode,
+
+15:15.960 --> 15:18.960
+it wasn't what we had expected it to be.
+
+15:18.960 --> 15:21.960
+So there's definitely some level of optimization
+
+15:21.960 --> 15:25.960
+that we need to look into on that front.
+
+15:25.960 --> 15:29.960
+And then we tried one other thing which is AF-XDP in generic mode,
+
+15:29.960 --> 15:32.960
+so that's your program hooked in at the TC hook,
+
+15:32.960 --> 15:36.960
+and that actually yielded a better performance than native mode.
+
+15:36.960 --> 15:42.960
+But again, that goes into some optimization requirements are needed on that front.
+
+15:42.960 --> 15:44.960
+So just to sum up, I guess,
+
+15:44.960 --> 15:49.960
+we set out to show it was it possible to build some sort of a hybrid networking stack.
+
+15:49.960 --> 15:52.960
+I think the building blocks are there for sure.
+
+15:52.960 --> 15:57.960
+I think we've demonstrated that it is possible to do something like that,
+
+15:57.960 --> 16:02.960
+especially for these high-performance use cases that want to take advantage
+
+16:02.960 --> 16:08.960
+of internal fast paths and essentially XDP and AF-XDP.
+
+16:08.960 --> 16:12.960
+There's obviously an opportunity as well to make sure that we hook in
+
+16:12.960 --> 16:16.960
+EBPF a lot more into the puzzle,
+
+16:16.960 --> 16:18.960
+especially from the user plane aspect,
+
+16:18.960 --> 16:21.960
+not everything has to go into user space and so on.
+
+16:21.960 --> 16:25.960
+So I just want to summarize in terms of generic challenges
+
+16:25.960 --> 16:30.960
+that we have noted for AF-XDP.
+
+16:30.960 --> 16:34.960
+The first one is that we still can't take advantage of hardware offloads.
+
+16:34.960 --> 16:41.960
+It's been great to see the XDP hence K-funk support getting merged into the Linux kernel,
+
+16:41.960 --> 16:45.960
+or at least agreed on as model and then merged, which has been fantastic,
+
+16:45.960 --> 16:48.960
+and it will form a great cornerstone for a lot of this work.
+
+16:48.960 --> 16:54.960
+The only thing that I would ask is that we make sure that for the containerized environment,
+
+16:54.960 --> 16:59.960
+we put the onus on the infrastructure to lifecycle manage the BPF programs
+
+16:59.960 --> 17:05.960
+and to take that level of responsibility and privilege out of the scope of the application.
+
+17:05.960 --> 17:09.960
+So the application doesn't need to know any special formats or have to,
+
+17:09.960 --> 17:13.960
+especially if they're using AF-XDP, they don't need to know any special formats
+
+17:13.960 --> 17:18.960
+or have to do special compilations of BPF programs or anything along those lines.
+
+17:18.960 --> 17:22.960
+That should all be managed on the infrastructure side.
+
+17:22.960 --> 17:28.960
+The next thing that's been a gap was really jumbo frame or multi-buffer support for AF-XDP,
+
+17:28.960 --> 17:33.960
+but we've seen lots of activity on that in the last couple of months on the mailing list,
+
+17:33.960 --> 17:37.960
+so hopefully that's something that we can take off the list very, very soon.
+
+17:37.960 --> 17:42.960
+And lastly, there's going to be some need for some level of optimization of AF-XDP
+
+17:42.960 --> 17:48.960
+in native mode for VEATs, and just some links for folks if they're interested
+
+17:48.960 --> 17:53.960
+on some of the stuff that we used for this talk, sorry.
+
+17:53.960 --> 17:56.960
+So thank you very much folks for your time, I really appreciate it.
+
+17:56.960 --> 17:59.960
+And it's been a pleasure presenting on my first podcast.
+
+17:59.960 --> 18:03.960
+It's like a bucket list I should have ticked off there, so thanks a lot.
+
+18:03.960 --> 18:13.960
+Thank you for the talk. We do have ample time for questions.
+
+18:25.960 --> 18:27.960
+Thank you for the presentation.
+
+18:27.960 --> 18:35.960
+I have a question about XDP, so does it run on hardware or is it in software?
+
+18:35.960 --> 18:40.960
+The XDP hook itself is typically supported by the drivers,
+
+18:40.960 --> 18:45.960
+so actually I think there's a good host of drivers that support them right now,
+
+18:45.960 --> 18:49.960
+most of the Intel ones, a good few of the Melanox ones as well.
+
+18:49.960 --> 18:55.960
+The thing with AF-XDP is if the hook isn't natively supported by the driver,
+
+18:55.960 --> 19:00.960
+it automatically falls back to the TC hook, which is what we call generic mode,
+
+19:00.960 --> 19:04.960
+and it'll still work there except that you don't get the raw buffer from the driver,
+
+19:04.960 --> 19:08.960
+you will essentially be working with the equivalent of an SKV.
+
+19:08.960 --> 19:14.960
+So there's some level of allocation and copy that happens there before you can process the package.
+
+19:14.960 --> 19:16.960
+Okay understood, thank you.
+
+19:16.960 --> 19:25.960
+More questions.
+
+19:31.960 --> 19:34.960
+Okay then, thank you for the talk.
+
+19:34.960 --> 19:36.960
+Thank you for being here.
+
+19:36.960 --> 19:46.960
+Thank you very much, really appreciate it.

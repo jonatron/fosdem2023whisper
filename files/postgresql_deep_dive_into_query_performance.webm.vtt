@@ -1,0 +1,1369 @@
+WEBVTT
+
+00:00.000 --> 00:07.920
+So, welcome to the Post-Quest Girl Dev Room.
+
+00:07.920 --> 00:13.920
+If you weren't here before, can I please ask you to silence your phones and extend a very
+
+00:13.920 --> 00:17.920
+warm welcome to Peter Zaitsev.
+
+00:17.920 --> 00:27.000
+Okay, well, thank you.
+
+00:27.000 --> 00:30.640
+We are going to talk about query performance today.
+
+00:30.640 --> 00:35.760
+But before that, let me understand a little bit who do we have here.
+
+00:35.760 --> 00:43.200
+Now, which of you would mostly see yourself as DBA, SRE, CSADMIN, kind of on the operations
+
+00:43.200 --> 00:44.200
+side?
+
+00:44.200 --> 00:45.800
+Just, you know, can we have a...
+
+00:45.800 --> 00:46.800
+Okay.
+
+00:46.800 --> 00:49.080
+Now, which of you are developers?
+
+00:49.080 --> 00:51.680
+Ooh, lots of developers.
+
+00:51.680 --> 00:52.680
+Okay.
+
+00:52.680 --> 00:58.760
+Now, in terms of developers, right, now if you do it again, but now for sort of like
+
+00:58.760 --> 01:03.040
+a front-end developers, right, something not, you know, database kernel or something, you
+
+01:03.040 --> 01:07.120
+know, other complicated stuff, but something more simple.
+
+01:07.120 --> 01:08.120
+Front-end developers.
+
+01:08.120 --> 01:09.120
+Any?
+
+01:09.120 --> 01:10.120
+Yeah!
+
+01:10.120 --> 01:11.120
+Hello!
+
+01:11.120 --> 01:12.120
+Okay.
+
+01:12.120 --> 01:22.840
+Well, anyway, so one of the good points of this talk for me, right, is really to try to
+
+01:22.840 --> 01:29.520
+bridge the gap what I see a lot between how their operations people, right, the people
+
+01:29.520 --> 01:39.440
+who are deeply vested in a databases, right, development, think about them versus people
+
+01:39.440 --> 01:44.640
+who are just happened to use those databases for the application, right?
+
+01:44.640 --> 01:50.360
+And often their relationship to the database is, well, really quite different, right?
+
+01:50.360 --> 01:55.960
+As a database kernel developers, we often deeply care about all those kind of internal
+
+01:55.960 --> 02:01.120
+algorithms, have a, you know, discussion, what is the best way to implement these and
+
+02:01.120 --> 02:02.720
+that cases.
+
+02:02.720 --> 02:08.720
+But for many developers writing applications, well, you know, we think about databases, you
+
+02:08.720 --> 02:13.440
+know, as you think about like a plumbing, right, well, it just got to work, you don't
+
+02:13.440 --> 02:20.240
+want to think about it, well, it just, if it doesn't, then that becomes a problem, right?
+
+02:20.240 --> 02:24.320
+They think about database in many cases as a black box.
+
+02:24.320 --> 02:31.160
+And I think that is increasingly happening now, especially when we have so many databases
+
+02:31.160 --> 02:35.640
+which are deployed in a cloud as a database as a service, right?
+
+02:35.640 --> 02:43.120
+Because in this case, especially, well, you just have a database and somebody else focuses
+
+02:43.120 --> 02:44.120
+on the other stuff.
+
+02:44.120 --> 02:48.040
+So what does that database mean from developer standpoint in many cases?
+
+02:48.040 --> 02:52.400
+Well, that means you get some sort of service point, you should use in your application,
+
+02:52.400 --> 02:58.520
+right, you can connect to that service point and get that quickly with no problem, right?
+
+02:58.520 --> 03:04.720
+And then you run the queries you need to run, right, of a database or maybe even what
+
+03:04.720 --> 03:09.400
+your RAM framework, right, or something generates.
+
+03:09.400 --> 03:11.440
+Now what do you want from those queries?
+
+03:11.440 --> 03:17.160
+Well, as a selfish developer, you want those queries to run with no errors.
+
+03:17.160 --> 03:21.160
+You want to make sure they get your correct results, right?
+
+03:21.160 --> 03:30.600
+And you want to make sure you run them within response time, which is appropriate for your
+
+03:30.600 --> 03:35.240
+application and for query time and for query kind.
+
+03:35.240 --> 03:41.920
+And I think that is very important to understand here what if I am looking as a developer and
+
+03:41.920 --> 03:48.960
+a database from performance standpoint, I understand that as how quickly that database
+
+03:48.960 --> 03:53.640
+responds to my queries, right?
+
+03:53.640 --> 04:00.000
+Now if you think about their software design in general, right, and I think especially maybe
+
+04:00.000 --> 04:04.200
+not developers, but architects often have to care about a whole bunch of other things
+
+04:04.200 --> 04:06.480
+beyond just the performance.
+
+04:06.480 --> 04:10.720
+For example, we often have to care about security, right?
+
+04:10.720 --> 04:14.640
+And typically security costs stuff, right?
+
+04:14.640 --> 04:20.840
+It comes with overhead, both in terms of performance overhead and, you know, organizational overhead
+
+04:20.840 --> 04:22.080
+and so on and so forth, right?
+
+04:22.080 --> 04:26.600
+That's done to factor authentication always takes another couple of seconds, right?
+
+04:26.600 --> 04:30.840
+But that makes us more secure.
+
+04:30.840 --> 04:36.280
+Availability is also important, as well as things like costs.
+
+04:36.280 --> 04:41.760
+I think that is especially important, again, in the modern age when they have a lot of
+
+04:41.760 --> 04:45.120
+cloud, which is elastic, right?
+
+04:45.120 --> 04:49.120
+But that elasticity comes also with spend, right?
+
+04:49.120 --> 04:53.720
+You often can say, hey, you know what, if I just need my queries to run faster, I can
+
+04:53.720 --> 04:57.400
+blow up my instant size, right, or something else.
+
+04:57.400 --> 05:04.640
+But well, guess what, that also will be expensive, right, if you're not doing efficiently.
+
+05:04.640 --> 05:10.160
+And there is, let's say, a bunch of other things you want to consider about, right?
+
+05:10.160 --> 05:15.520
+So I don't want to simplify that, let's say, to what everything is also only about query
+
+05:15.520 --> 05:22.640
+performance, but that is what I am going to focus in my talk.
+
+05:22.640 --> 05:30.320
+Now when you think about response time from the database standpoint, we often think about
+
+05:30.320 --> 05:33.840
+that from a query context, right?
+
+05:33.840 --> 05:39.400
+Well I see my database responds to the queries XYZ, you know, in average or something, right?
+
+05:39.400 --> 05:41.240
+You think about that query basics.
+
+05:41.240 --> 05:45.520
+But if you really look at from a business standpoint, right, how your boss or boss is
+
+05:45.520 --> 05:51.600
+boss is boss, right, where it thinks about that, it's mostly about the users which are
+
+05:51.600 --> 05:53.560
+using your applications, right?
+
+05:53.560 --> 05:59.860
+And I typically would define it what really folks are after is what the users of your
+
+05:59.860 --> 06:05.800
+applications, right, and all users, right, have outstanding experience in terms of performance
+
+06:05.800 --> 06:08.760
+for all their interactions.
+
+06:08.760 --> 06:12.600
+Because in application, you often may have different interactions, right, and I want
+
+06:12.600 --> 06:17.440
+to make sure I have a search which is fast and place in an order which is fast, right,
+
+06:17.440 --> 06:23.240
+and whatever other things all working quickly.
+
+06:23.240 --> 06:30.280
+Now as database engineers, we often want to talk about performance and availability as
+
+06:30.280 --> 06:35.840
+a different thing, right, like saying, well, no, no, no, the database was up, it just was
+
+06:35.840 --> 06:42.120
+overloaded, so that query took 15 seconds, oh, 15 minutes, right, or something like that,
+
+06:42.120 --> 06:43.120
+right?
+
+06:43.120 --> 06:49.360
+But the reality is for the user, their very bad performance is really indistinguishable
+
+06:49.360 --> 06:57.800
+from downtime, because, well, A, people have a limited experience, right, and if something
+
+06:57.800 --> 07:03.600
+is taking too long, we'll just go into closer page, and even if you have some, something
+
+07:03.600 --> 07:07.040
+of unlimited patience, there is going to be a whole bunch of timeouts, including your
+
+07:07.040 --> 07:13.600
+browser timeouts which will, you know, show you what the page cannot load well before
+
+07:13.600 --> 07:15.760
+15 minutes, right?
+
+07:15.760 --> 07:24.080
+So I think that is another important thing which I find also important talking to some,
+
+07:24.080 --> 07:29.840
+maybe business people about why spend resources on performance, query performance optimization,
+
+07:29.840 --> 07:33.720
+and so on and so forth, right, because, well, you know what, if it doesn't perform, it is
+
+07:33.720 --> 07:38.680
+down, right?
+
+07:38.680 --> 07:49.480
+Another thing what I would point out, right, is in many cases, you see people talking about
+
+07:49.480 --> 07:56.560
+the averages, right, while the query performance was so many, you know, milliseconds or something
+
+07:56.560 --> 08:03.680
+in average, right, and while it may be helpful for comparison standpoint compared to yesterday,
+
+08:03.680 --> 08:14.920
+really, it is not very helpful, right, because, well, the average maybe what you're looking
+
+08:14.920 --> 08:21.200
+for may be way too many queries which are too slow, right, just balanced by the queries
+
+08:21.200 --> 08:31.720
+which are high, right, and as I wrote here, I really like this saying, we won't leave
+
+08:31.720 --> 08:39.240
+the man who tried to cross a river in average one meter deep, right, where once leave the
+
+08:39.240 --> 08:44.440
+man.
+
+08:44.440 --> 08:51.560
+So in this regard, I think it's very helpful to look at things like a percentile response
+
+08:51.560 --> 08:55.880
+time at the very least, right, if you want to look at one number because you're looking
+
+08:55.880 --> 09:03.520
+at simplicity, 99 percentile for query response time is much better than average response time.
+
+09:03.520 --> 09:08.320
+What is even better is, of course, is to look some sort of distribution, you know, query
+
+09:08.320 --> 09:12.120
+histogram distribution and how it changes over time.
+
+09:12.120 --> 09:16.840
+That often can give you a lot of insight.
+
+09:16.840 --> 09:25.880
+The thing from percentile, though, is it's interesting how it works as you go from that
+
+09:25.880 --> 09:32.800
+query to the user experience, right, you spoke about, because think about this, right, typically
+
+09:32.800 --> 09:40.920
+when you may have a single user interaction as a page view, it may require multiple sequential
+
+09:40.920 --> 09:46.400
+queries, right, or even maybe some queries run in parallel, right, which all need to
+
+09:46.400 --> 09:52.160
+be fast in order for user to get the outcome they're looking for, right, and then typically
+
+09:52.160 --> 10:00.160
+user through his session will have a multiple of those page views, right, so that 99 percentile
+
+10:00.160 --> 10:07.680
+being excellent may only translate to half the users having that kind of outstanding
+
+10:07.680 --> 10:15.000
+experience through all the session, right, that is why if you look at companies which
+
+10:15.000 --> 10:24.640
+have a large number of users, they would either have some very high percentiles, like 99.9
+
+10:24.640 --> 10:33.120
+percentile response time as a goal, right, or would have those tolerances, you know,
+
+10:33.120 --> 10:41.360
+rather high, right, so there is a, well, additional sort of accommodation for if there's going
+
+10:41.360 --> 10:48.560
+to be many, many queries, and I think to consider when you measure query performance is how
+
+10:48.560 --> 10:53.960
+you relate to errors, right, in certain cases I've seen people saying, well, you know,
+
+10:53.960 --> 10:59.560
+we only go into either measure response time for only successful queries, or we're going
+
+10:59.560 --> 11:05.600
+to put successful queries and queries which are completed with errors in the same bucket,
+
+11:05.600 --> 11:12.880
+right, which really can really, you know, change a picture for you a lot.
+
+11:12.880 --> 11:13.880
+Why is that?
+
+11:13.880 --> 11:20.720
+Well, because actually if you think about the errors, they can be both fast errors and
+
+11:20.720 --> 11:27.120
+slow errors, right, imagine, for example, table was dropped for some reason, well, then
+
+11:27.120 --> 11:31.200
+all the queries hitting that table will return the error and vary very quickly, right, because
+
+11:31.200 --> 11:36.560
+well, there's nothing they can do, on the other hand, if there is something, let's say
+
+11:36.560 --> 11:44.400
+some data is locked, right, and some timeouts happen, that may take quite a while before
+
+11:44.400 --> 11:51.640
+error is returned, right, and you better not to mix those with the rest of your successful
+
+11:51.640 --> 11:59.120
+queries but to be able to, you know, look at that separately.
+
+11:59.120 --> 12:06.200
+You also want to look at the query performance not just as an overall number but how it changes
+
+12:06.200 --> 12:10.840
+over response time with a reasonably high resolution.
+
+12:10.840 --> 12:13.000
+Why is that important?
+
+12:13.000 --> 12:20.480
+One thing is what in many cases you would see query performance kind of slowly drops
+
+12:20.480 --> 12:29.440
+before it goes so bad what that seems like downtime or really, you know, really incident
+
+12:29.440 --> 12:34.240
+for all kind of reasons, right, maybe you have some application which has a bad query,
+
+12:34.240 --> 12:39.480
+right, and then you had the one instance of that query running, two, three, four, five,
+
+12:39.480 --> 12:44.360
+now you have a hundred instances of that bad query running, right, so saturating all the
+
+12:44.360 --> 12:49.960
+system resources, guess what, all the other query performance, right, is going down.
+
+12:49.960 --> 12:56.400
+If you are able to, if you are going to notice that what some queries are out of bounds,
+
+12:56.400 --> 13:03.080
+right, and maybe alert on it or something, you are able to take an action before the
+
+13:03.080 --> 13:08.600
+small problem becomes, basically because of downtime.
+
+13:08.600 --> 13:14.120
+The other reason, of course, there is shit that is always going on, right, there is something
+
+13:14.120 --> 13:18.280
+that database doesn't have a background, if you have a cloud there is so sort of other
+
+13:18.280 --> 13:23.960
+things happening which you may not even know anything about it.
+
+13:23.960 --> 13:30.120
+Like for example, block, elastic block storage, right, similar stuff, right, well, guess what,
+
+13:30.120 --> 13:35.480
+it doesn't always have uniform performance, you know, sometimes something is happening
+
+13:35.480 --> 13:40.760
+at like Amazon back end but you know what, you don't really know anything about that.
+
+13:40.760 --> 13:45.520
+They don't tell you each time they have to replace a hard drive, right, somewhere, right,
+
+13:45.520 --> 13:50.880
+or, you know, rebalance the load for some reason, right, but those things they can pop
+
+13:50.880 --> 13:51.880
+up.
+
+13:51.880 --> 13:56.480
+Often you may see something like, oh, I have that like a spike in a query response time
+
+13:56.480 --> 14:02.240
+which I can see for all queries on my, all instances, and wow, that's very likely like
+
+14:02.240 --> 14:09.120
+something is environmental.
+
+14:09.120 --> 14:14.800
+Now when you look at the query instrumentation, one of the questions I see people asking is
+
+14:14.800 --> 14:20.600
+where do you want to instrument the query, right, and we can instrument the query on
+
+14:20.600 --> 14:25.600
+the application data point, right, an application issues that query, right, and we often have
+
+14:25.600 --> 14:30.520
+some, you know, tools like, you know, new relic insights which are doing, you know, just
+
+14:30.520 --> 14:31.520
+that.
+
+14:31.520 --> 14:37.040
+And hey, that query took this amount of response time and this is very good data because it
+
+14:37.040 --> 14:42.360
+actually includes real response time as application observed it.
+
+14:42.360 --> 14:49.080
+If there was some, let's say, network delay, right, or for whatever reason, that is included
+
+14:49.080 --> 14:55.000
+in that response time where if you just measure from the time database received the query
+
+14:55.000 --> 15:00.080
+since it pushed the result in the network, right, that is not included.
+
+15:00.080 --> 15:04.440
+But measuring on a database gives you a lot of other valuable stuff like you can get a
+
+15:04.440 --> 15:09.560
+lot more insight about what has been going on on the database size right while the query
+
+15:09.560 --> 15:10.960
+was executed.
+
+15:10.960 --> 15:16.040
+Most typically when you get the query result and you get response time, maybe, you know,
+
+15:16.040 --> 15:20.480
+some other little additional information like, oh, this query returns so many rows, so many
+
+15:20.480 --> 15:26.560
+bytes, right, but not specifically, you know, how much CPU it uses, right, and all the other
+
+15:26.560 --> 15:31.080
+important things you may want to use, okay.
+
+15:31.080 --> 15:37.840
+So let's go back to our definition of a response time from a business point of view, right,
+
+15:37.840 --> 15:42.680
+and we can say, well, what we are looking for have our old users to have an outstanding
+
+15:42.680 --> 15:46.840
+experience of all of their applications, right, great.
+
+15:46.840 --> 15:53.840
+Now how do we translate that to the database, right, and kind of maybe breed that gap without
+
+15:53.840 --> 15:58.200
+what the boss wants and what DBA is able to answer.
+
+15:58.200 --> 16:04.560
+Now I think there is some great work in this regard done by Google which have been working
+
+16:04.560 --> 16:10.960
+on this L-square commenter project which allows to pass a lot of metadata, right, from your
+
+16:10.960 --> 16:15.360
+application all the way down to your query.
+
+16:15.360 --> 16:21.040
+The cool thing they've done is also integrating that directly with some of the frameworks,
+
+16:21.040 --> 16:25.600
+right, so it's kind of, hey, you know, you need to do nothing, right, and you just get
+
+16:25.600 --> 16:30.560
+that automatic information.
+
+16:30.560 --> 16:40.360
+What could be valuable query metadata possibilities, right, if you ask me, well, here is a bunch,
+
+16:40.360 --> 16:49.440
+right, there is this actual user and tenant which we can do application or functionality,
+
+16:49.440 --> 16:53.640
+right, often single database is used by a lot of applications, right, and we want to
+
+16:53.640 --> 16:56.800
+know where the query comes from, right.
+
+16:56.800 --> 17:02.120
+I see a lot of DBAs, especially from a large company, say, well, you know what, here is
+
+17:02.120 --> 17:03.880
+this nasty query came in.
+
+17:03.880 --> 17:10.480
+It was not here yesterday, but it's very hard to figure out who is responsible for introducing
+
+17:10.480 --> 17:16.040
+that and how you can come and hit his head with something heavy, right.
+
+17:16.040 --> 17:24.760
+That's maybe hard, right, without proper instrumentation.
+
+17:24.760 --> 17:30.520
+You also, as a primary breakdown, want to look at the query, and I mean by query in
+
+17:30.520 --> 17:36.520
+this case, query of all parameters, you know, normalized, because often you would see the
+
+17:36.520 --> 17:40.720
+different queries responsible for different functions, and through that have a different
+
+17:40.720 --> 17:44.880
+response time tolerances, right, let's say some very quick lookup queries, you often
+
+17:44.880 --> 17:50.920
+want them to complete in a fraction of millisecond as acceptable stuff, while some of you search
+
+17:50.920 --> 17:55.600
+queries write to some reports, well, may take a few seconds, and that will be quite
+
+17:55.600 --> 18:02.600
+acceptable, and it's good not to mix those all together, right, in this case.
+
+18:02.600 --> 18:08.760
+In many cases, when you have the SAS applications, we would have a multiple user, so what often
+
+18:08.760 --> 18:15.720
+calls like multiple tenants, like one of the ways you split them is to have a different
+
+18:15.720 --> 18:21.920
+schemas or different databases for all of them, and that is also, I find, very helpful to
+
+18:21.920 --> 18:28.680
+being able to separate that, so you can see, oh, this query is not slow for everybody,
+
+18:28.680 --> 18:37.120
+but when we drill down, we can see only that particular tenant is slow, and vice is slow,
+
+18:37.120 --> 18:43.320
+because unlike other, he has five million images in his album, right, if you would think about
+
+18:43.320 --> 18:53.960
+some, you know, for the hosting application, so that's just an example.
+
+18:53.960 --> 19:00.040
+Another thing what we find very helpful is being able to go for a query, right, or to
+
+19:00.040 --> 19:07.840
+look to understand what tables it touches and reverse to find out all the queries which
+
+19:07.840 --> 19:10.920
+touches specific table.
+
+19:10.920 --> 19:12.800
+Why is that helpful?
+
+19:12.800 --> 19:19.560
+Well in many cases, our database operations are table specific, right, you may think,
+
+19:19.560 --> 19:27.280
+hey, you know what, I'm dropping this index, as I don't need it, or maybe I add an index,
+
+19:27.280 --> 19:32.160
+I add a column, right, you do some sort of maybe kind of partition table, right, you
+
+19:32.160 --> 19:37.240
+can do a lot of things with a table in scope, right, and then it would be very interesting
+
+19:37.240 --> 19:44.000
+to understand how that particular, how all the queries which touch that table have been
+
+19:44.000 --> 19:49.160
+affected, because we are much likely to be affected by that change compared to everybody
+
+19:49.160 --> 19:55.000
+else, right, I find that's a pretty, pretty cool feature.
+
+19:55.000 --> 19:57.680
+Database user is another one.
+
+19:57.680 --> 20:03.880
+If you do not have something like a squirrel command to enable, you often do not really
+
+20:03.880 --> 20:09.440
+see very well from what application given query comes in.
+
+20:09.440 --> 20:13.280
+But one of the practice you may follow at least is having a different application touching
+
+20:13.280 --> 20:20.160
+the same database using different user names, right, different users with different privileges,
+
+20:20.160 --> 20:28.200
+right, if nothing else that is a very good security practice, right, and that is where
+
+20:28.200 --> 20:33.680
+filtering and breakdown allows that.
+
+20:33.680 --> 20:40.600
+In a large, large, short environment, we also want to make sure we aggregate the data from
+
+20:40.600 --> 20:45.360
+a many database hosts, right, and can compare between each other.
+
+20:45.360 --> 20:49.400
+Typically when you have a short application, you want the load and hence response time
+
+20:49.400 --> 20:53.240
+between different database hosts to be kind of similar.
+
+20:53.240 --> 20:58.760
+But often it is not, right, it's often hard to achieve a perfect balance in between the
+
+20:58.760 --> 21:06.240
+nodes as one cause of the differences, but also things may just, you know, happen, you
+
+21:06.240 --> 21:11.800
+know, like you may have a settings which drift away on different nodes, you may have
+
+21:11.800 --> 21:18.320
+some, you know, differences, right, in the performance, especially in the cloud, which,
+
+21:18.320 --> 21:24.080
+you know, happen virtually from nowhere, right, I mean, I know a lot of people work
+
+21:24.080 --> 21:27.440
+in the cloud, you know, you know, sometimes you just get a lemon, right, or just like
+
+21:27.440 --> 21:32.440
+a bad node, which for some reason doesn't perform as well as its peers, right, and just
+
+21:32.440 --> 21:38.080
+want to, you know, maybe toss it and get another one, better one, right, but to do that you
+
+21:38.080 --> 21:44.800
+better understand what that is not performing particularly well.
+
+21:44.800 --> 21:49.600
+And the same also applies to their application server or web server.
+
+21:49.600 --> 21:55.000
+Again, like if you deploy application on, let's say, 100 application servers or web
+
+21:55.000 --> 21:58.320
+nodes, right, you may say, well, it's all should be the same.
+
+21:58.320 --> 22:02.280
+I have my, you know, automation which takes care of that.
+
+22:02.280 --> 22:09.360
+But again, well, things are not always as they should be.
+
+22:09.360 --> 22:13.560
+In many cases, you have something which doesn't work out.
+
+22:13.560 --> 22:17.720
+I have seen so many cases when people say, well, you know what, I already fixed that
+
+22:17.720 --> 22:20.360
+nasty query and I deployed the fix.
+
+22:20.360 --> 22:25.800
+When you look at that, well, it's actually was not deployed all the instances for whatever
+
+22:25.800 --> 22:26.800
+reason.
+
+22:26.800 --> 22:31.360
+Or you may say, well, you know what, my, I'm using a caching to reduce the query load
+
+22:31.360 --> 22:37.400
+on the database, but that caching is misconfigured to otherwise inaccessible on some of their
+
+22:37.400 --> 22:38.800
+web nodes, right.
+
+22:38.800 --> 22:41.560
+A lot of stuff can happen.
+
+22:41.560 --> 22:47.040
+Or maybe you're lucky and one of your web nodes was actually hacked and is also getting
+
+22:47.040 --> 22:54.760
+some additional queries to, you know, download your data and send it to someone.
+
+22:54.760 --> 23:01.120
+So I find making sure you can look at the query patterns separated by the different
+
+23:01.120 --> 23:05.800
+client hosts very, are something very valuable.
+
+23:05.800 --> 23:12.840
+I already mentioned with a SQL commenter which allows you to extend some additional
+
+23:12.840 --> 23:16.600
+metadata, which I think can be quite cool, right.
+
+23:16.600 --> 23:20.800
+And you can find the usage for custom tags in many cases.
+
+23:20.800 --> 23:25.480
+I've seen people, for example, tagging different instance types when I'm saying, well, you
+
+23:25.480 --> 23:30.200
+know what, this kind of new generation instance looks good.
+
+23:30.200 --> 23:33.720
+So let me put some of them in production and being able to compare.
+
+23:33.720 --> 23:35.680
+Well, is it actually working better?
+
+23:35.680 --> 23:37.520
+Sometimes yes.
+
+23:37.520 --> 23:41.160
+Sometimes, you know, no.
+
+23:41.160 --> 23:46.520
+The database version, right, maybe you're running out when you, minor Postgres release, you
+
+23:46.520 --> 23:54.160
+want to do it like on some subset of the nodes and to make sure there's no, no regressions,
+
+23:54.160 --> 23:55.160
+right.
+
+23:55.160 --> 24:00.680
+I mean, I think it's always good in this case to practice, you know, trust by verify, right,
+
+24:00.680 --> 24:07.800
+because sometimes you do run into unexpected changes, you know, you can validate the configuration
+
+24:07.800 --> 24:13.560
+changes this way and so on and so forth.
+
+24:13.560 --> 24:18.360
+Query plan is another area which I think is quite, quite interesting.
+
+24:18.360 --> 24:22.920
+In many cases, you'll find the same query depending on the parameters, right, or some
+
+24:22.920 --> 24:26.200
+other situations will have different plans.
+
+24:26.200 --> 24:32.320
+And if that different plans may have different query performance, and it is a very helpful
+
+24:32.320 --> 24:39.680
+if you can break down the performance by the different plans a query has, so you can understand
+
+24:39.680 --> 24:42.200
+if that is a plan issue or not, right.
+
+24:42.200 --> 24:45.080
+Otherwise, you may be looking at the query and say, well, you know what, something is
+
+24:45.080 --> 24:53.240
+fast, something is slow, you know, why is that, not very clear, their plans give us
+
+24:53.240 --> 24:57.360
+a very good information.
+
+24:57.360 --> 25:07.520
+Now when you find the query and see that as a problematic and you need to make it go fast,
+
+25:07.520 --> 25:14.400
+in this case, it's very good to understand there is that response time developers care
+
+25:14.400 --> 25:19.320
+so much about is coming from.
+
+25:19.320 --> 25:24.720
+And there are quite a few possibilities here.
+
+25:24.720 --> 25:29.880
+Some of them are instrumented better than others.
+
+25:29.880 --> 25:35.800
+For example, if you're looking at data crunch and disk IO, right, those are typically pretty
+
+25:35.800 --> 25:43.520
+well instrumented, you can find how much, you know, of CPU query consumes or that does.
+
+25:43.520 --> 25:48.840
+In terms of contention, that is typically more problematic, right, to say, hey, you
+
+25:48.840 --> 25:56.040
+know, what exactly those kind of internal synchronization object query had to wait,
+
+25:56.040 --> 26:00.040
+right, that is more tricky.
+
+26:00.040 --> 26:08.080
+You know, waits on CPU availability is even more tricky, right.
+
+26:08.080 --> 26:15.000
+And what I mean by this is this, right, so if you have a system which has much more
+
+26:15.000 --> 26:21.280
+runnable threads, runnable processes, right, than available CPU, then they will spend a
+
+26:21.280 --> 26:31.080
+lot of time waiting for available CPU, right, and that is very hard to see on its impact
+
+26:31.080 --> 26:32.680
+to the query response time.
+
+26:32.680 --> 26:39.120
+You typically can see that from the general node stats, like, hey, my CPU is back, I have
+
+26:39.120 --> 26:50.360
+like a ton of runnable CPU, right, CPU is also in recent kernels, you can see the information
+
+26:50.360 --> 26:57.840
+about their run queue latency, which is very cool, right, that tells you how long the processes
+
+26:57.840 --> 27:06.840
+had to wait to be scheduled on CPU after they are ready to start running.
+
+27:06.840 --> 27:14.960
+So a whole bunch of stuff here, some of them are easy, some of their work is still remaining.
+
+27:14.960 --> 27:25.200
+Now, from our standpoint, with all this kind of view on approach to the query monitor,
+
+27:25.200 --> 27:37.280
+we have been working at the extension for my square, oh, for Postgres, sorry, called
+
+27:37.280 --> 27:49.360
+the PgStat monitor, well, and look, we specifically built it for Postgres, not for MySQL, even
+
+27:49.360 --> 27:55.680
+though we had a lot more experience with MySQL, because Postgres SQL extension interface is
+
+27:55.680 --> 28:05.680
+awesome and much more powerful than MySQL, right, so you can read a little bit about
+
+28:05.680 --> 28:13.080
+this here, and this is extension which allows a lot more insights and getting kind of such
+
+28:13.080 --> 28:19.020
+slicing and dicing, which I mentioned, right, if you think about the traditional Postgres
+
+28:19.020 --> 28:26.760
+SQL extension PgStats statements, it really aggregates all the data from the start, right,
+
+28:26.760 --> 28:32.120
+which is very helpful to be used directly, what we look at the modern observability system
+
+28:32.120 --> 28:39.600
+through where we expect to have many Postgres SQL instances anyway, right, and some system
+
+28:39.600 --> 28:44.760
+getting that stuff constantly and considerate at that, so that means we are capturing a
+
+28:44.760 --> 28:53.840
+lot of information but keep it only on for a relatively short time in a Postgres SQL
+
+28:53.840 --> 29:01.600
+instance, right, and that allows to get much more granular information without requiring
+
+29:01.600 --> 29:07.760
+a huge amount of resources, which would be required if you would have it for a time,
+
+29:07.760 --> 29:13.320
+so you can, you know, read more about what that does on the web pages.
+
+29:13.320 --> 29:21.360
+Now some folks asked me, saying, well, folks, like, why do you work on a separate extension
+
+29:21.360 --> 29:28.640
+of the PgStats monitors, and my answer to that is we really wanted to experiment with
+
+29:28.640 --> 29:32.720
+different approaches, right, to find what works, what doesn't, how users do, and that
+
+29:32.720 --> 29:44.360
+is always easy to do in a separate extension, right, and then if something is liked by the
+
+29:44.360 --> 29:52.120
+community, then we can see how we can get that in an official list of extensions, so
+
+29:52.120 --> 29:56.040
+that is their feedback, is very valuable.
+
+29:56.040 --> 30:01.320
+And also if you look in this case while we are providing PgStats statements compatibility,
+
+30:01.320 --> 30:07.160
+right, so you can get that view from the same extension instead of getting another two extensions
+
+30:07.160 --> 30:14.360
+with additional overhead, PgStat monitor has kind of different ways to aggregate and present
+
+30:14.360 --> 30:23.360
+the data, right, which kind of, well, you cannot get in the same, in the same view.
+
+30:23.360 --> 30:32.240
+Okay, now as I spoke about the query performance, I wanted to highlight a couple of other things
+
+30:32.240 --> 30:39.320
+which are quite interesting to consider when you are looking at the queries where I see
+
+30:39.320 --> 30:42.000
+a number of issues.
+
+30:42.000 --> 30:48.440
+One is what I would call the bad queries versus victims, right.
+
+30:48.440 --> 30:55.680
+In certain cases, or like in many cases, right, you may see even your otherwise good queries
+
+30:55.680 --> 31:04.920
+like, hey, this is just a lookup by the primary key starting to be a lot slower than it usually
+
+31:04.920 --> 31:09.840
+is, not because something changes the relation to that query, but because of some other bad
+
+31:09.840 --> 31:12.280
+queries, right, have been running in parallel.
+
+31:12.280 --> 31:17.600
+And imagine that if you will oversaturate your node, right, the hundreds of bad queries
+
+31:17.600 --> 31:21.040
+running at the same time, right, well, then everything will become slow.
+
+31:21.040 --> 31:26.480
+And I think that's important to understand what if you are seeing some query being slow,
+
+31:26.480 --> 31:39.960
+you cannot just think about that as that query problem, it may be entirely something else.
+
+31:39.960 --> 31:47.880
+The next thing to consider is currently running queries.
+
+31:47.880 --> 31:52.840
+That is also rather interesting, right, because they may not be reflected in the log, right,
+
+31:52.840 --> 31:59.120
+or something which say, oh, that query completed and it was, you know, five minutes response
+
+31:59.120 --> 32:02.200
+time or 15 seconds, whatever, right.
+
+32:02.200 --> 32:06.640
+But running queries can be a problem.
+
+32:06.640 --> 32:12.440
+And in many cases, that is actually how things start to snowball, right, you have some application
+
+32:12.440 --> 32:17.160
+or even kind of user starts a lot of, you know, bad queries, you know, forgot like
+
+32:17.160 --> 32:23.360
+a where clause and a join, right, or something like that, and they just, you know, run for
+
+32:23.360 --> 32:29.960
+a long time, right, so you want to make sure you're paying attention to that as well.
+
+32:29.960 --> 32:38.240
+The next is to consider what not all activities are directly visible from a query standpoint.
+
+32:38.240 --> 32:44.320
+The database often tend to do a bunch of background activities, right.
+
+32:44.320 --> 32:49.240
+Additionally you may have something else, like maybe you are taking a snapshot, right,
+
+32:49.240 --> 32:54.040
+or taking a backup in the other way, which use also the system resources, right, which
+
+32:54.040 --> 32:58.800
+are not seen from query standpoint, but same important.
+
+32:58.800 --> 33:04.800
+You also have a lot of things which can be happening on the cloud level, right, again,
+
+33:04.800 --> 33:09.840
+which can be, you know, completely invisible for us.
+
+33:09.840 --> 33:15.840
+And wherever you are looking, again, at the query performance, it's important to consider
+
+33:15.840 --> 33:21.640
+where, you know, maybe something going on, right, additionally what those queries tell
+
+33:21.640 --> 33:23.600
+you.
+
+33:23.600 --> 33:29.800
+Next question is about, or last thing I would say, is about sampling.
+
+33:29.800 --> 33:35.960
+In certain cases I see people saying, well, you know what, let us only capture queries
+
+33:35.960 --> 33:39.440
+over X time.
+
+33:39.440 --> 33:44.400
+A lot of APM frameworks, right, for example, you know, like New Relics and such may be very
+
+33:44.400 --> 33:49.240
+focused on that, saying, hey, you know what, we are going to also give you some examples
+
+33:49.240 --> 33:53.640
+of the queries which take more than, you know, one second or whatever execution time.
+
+33:53.640 --> 33:54.800
+So focus on those.
+
+33:54.800 --> 34:00.080
+Well, and yes, looking at those queries may make sense, right, if they take a long time,
+
+34:00.080 --> 34:11.320
+that may be a problem, but it is often what your medium of performance queries, right,
+
+34:11.320 --> 34:16.360
+I would say are creating a whole bunch of load on your system, and they contribute the
+
+34:16.360 --> 34:22.600
+greatest response time to user application, right, and ignoring those can be problematic.
+
+34:22.600 --> 34:33.680
+Well, that is the main overview, right, I hope, what that was, that was helpful, right,
+
+34:33.680 --> 34:39.200
+and my main goal here is to make sure maybe to give you some thinking tools, right, as
+
+34:39.200 --> 34:44.960
+you noticed, that is not like particularly technical talk, right, which tells you how
+
+34:44.960 --> 34:50.880
+exactly to find out which indexes to create or something, but hopefully you get some tools
+
+34:50.880 --> 34:58.160
+in this case, how to start, how to approach that, which can prevent you from tuning by
+
+34:58.160 --> 35:05.720
+the credit card, you know, scaling the instances to inappropriate sizes, because hey, that
+
+35:05.720 --> 35:12.640
+is good for both your wallet as well as good for environment, right, we do not need those
+
+35:12.640 --> 35:17.520
+servers generating more heat than absolutely needed.
+
+35:17.520 --> 35:25.960
+Well, with that, it is all I have, and I would be happy to take some questions.
+
+35:25.960 --> 35:51.400
+Hey, thank you very much for your talk, my question is about when do you have to increase
+
+35:51.400 --> 35:58.120
+the box, as a developer, you are in front of a situation where you need to decide between
+
+35:58.120 --> 36:04.840
+optimizing or asking the CEO to just pay more, because you have a time constraint, so do
+
+36:04.840 --> 36:11.440
+you have the thumb rules where in front of a problem you would say, okay, better to optimize
+
+36:11.440 --> 36:16.320
+or better to increase the box, you know, when, how can you decide with me?
+
+36:16.320 --> 36:22.920
+The question is to, like, wherever it is better to increase the box size, right, or optimize
+
+36:22.920 --> 36:23.920
+the query.
+
+36:23.920 --> 36:28.040
+Well, and I think it is interesting, right, that it is not often either a question, right,
+
+36:28.040 --> 36:32.720
+I think the time in this case is also often essence, and many cases I have seen people
+
+36:32.720 --> 36:39.600
+saying if they have a problem, right, in this case, and they absolutely need to get like
+
+36:39.600 --> 36:47.480
+a application up, scale the box, right, and then kind of can currently work on the query
+
+36:47.480 --> 36:52.080
+optimization, right, and to bring it back and scale down.
+
+36:52.080 --> 36:56.960
+I think that is a very, very reasonable approach, right, because, well, it gives you kind of
+
+36:56.960 --> 36:58.280
+more briefing room.
+
+36:58.280 --> 37:03.880
+What is important in this case, as in many things in life, is not to be lazy, right,
+
+37:03.880 --> 37:07.600
+like you don't want to just, you know, scale the box and forget about that, you want to
+
+37:07.600 --> 37:11.280
+scale the box, optimize the queries and so on, right.
+
+37:11.280 --> 37:17.600
+Now I often, when I look at the queries, right, as you look at that, you can see which
+
+37:17.600 --> 37:24.200
+of them are low-hanging fruits, right, or when a query is already optimized pretty well,
+
+37:24.200 --> 37:25.200
+right.
+
+37:25.200 --> 37:30.840
+If you are saying, well, you know what, actually, majority of a workload is driven by lookups
+
+37:30.840 --> 37:36.320
+for, by the primary key for a table which is already in memory, you can say, well, you
+
+37:36.320 --> 37:39.760
+know what, there is very little I can do to optimize this thing, right.
+
+37:39.760 --> 37:45.240
+If you are saying, oh, that is a query which does massive join, if no indexes, well, totally
+
+37:45.240 --> 37:49.560
+different store, right, you may be able to make that to run thousand times faster, right,
+
+37:49.560 --> 37:55.360
+with relatively easy index add.
+
+37:55.360 --> 38:02.360
+Any other question?
+
+38:02.360 --> 38:19.560
+Hi, so as part of your slice and dice approach to monitoring queries, would you advise that
+
+38:19.560 --> 38:26.640
+concurrently queries in the, on the application side are never written as dynamic queries
+
+38:26.640 --> 38:32.600
+or as like anonymous prepared statements and only follow, say, named prepared statements
+
+38:32.600 --> 38:38.920
+so that you know we have a fixed set of queries that are always the same?
+
+38:38.920 --> 38:44.960
+Well, the question is, I would say, like it's kind of like a cart in the horse, right, like
+
+38:44.960 --> 38:51.120
+from, from my standpoint, right, like you can of course talk about those kind of practices,
+
+38:51.120 --> 38:56.840
+but developers like to do what is there, what keeps them productive, right, and in many
+
+38:56.840 --> 39:01.600
+cases saying, well, you know what, oh, you don't use like, or and frameworks, right,
+
+39:01.600 --> 39:05.440
+on the device and that, that is complicated, right.
+
+39:05.440 --> 39:13.080
+Now even if you're using dynamic queries, typically, they're still going to be at the,
+
+39:13.080 --> 39:17.240
+relate to a limited number of variations, right, and especially limited number of most
+
+39:17.240 --> 39:22.160
+important for variations which are going to be generated, you will still see that from
+
+39:22.160 --> 39:23.640
+the query type, right.
+
+39:23.640 --> 39:28.480
+So in many cases, like if you look at that, I would say like a whole set of queries,
+
+39:28.480 --> 39:36.440
+you would find, well, this application has, let's say, 10,000 of the distant queries,
+
+39:36.440 --> 39:44.600
+but if I look at top 20, that will be responsible like for 90, 99 percent response time, right,
+
+39:44.600 --> 39:49.760
+and that of course can change, right, but often focusing on those firsts, right, as well
+
+39:49.760 --> 39:55.240
+as maybe taking care of outliers, right, is a good kind of practice, how then you deal
+
+39:55.240 --> 40:00.440
+with that information that you have, makes sense.
+
+40:00.440 --> 40:17.880
+Any other question?
+
+40:17.880 --> 40:19.880
+Hello, thank you for the talk.
+
+40:19.880 --> 40:26.480
+What is the overhead of, to collect this statistic, because if you have, like, very, very much
+
+40:26.480 --> 40:34.040
+of, that is a good question, right, of course there is, I would say it varies, right, typically
+
+40:34.040 --> 40:38.320
+there is more overhead if you have like this, like a very simple fast queries, right, if
+
+40:38.320 --> 40:44.520
+you have like a logic queries for, which takes, you know, many seconds for them, it's
+
+40:44.520 --> 40:52.520
+less like, our design goal, right, which we are able to get is being similar to PGSTAT
+
+40:52.520 --> 41:00.960
+statements, right, and, you know, be a couple of percent or so, right, which I think in
+
+41:00.960 --> 41:05.600
+my opinion, right, many people when they think about that observability, you will tend to
+
+41:05.600 --> 41:13.600
+obsess about the overhead, right, but really often having that insights, right, often allow
+
+41:13.600 --> 41:24.560
+you to get so many things optimized when they matter, right, what the benefits are far outweighed.
+
+41:24.560 --> 41:30.920
+Do you have any advice for catching bad queries before they reach production and kind of like
+
+41:30.920 --> 41:31.920
+guarding these things?
+
+41:31.920 --> 41:32.920
+Oh yeah, absolutely.
+
+41:32.920 --> 41:34.880
+Like missing indexes or whatever, before they even.
+
+41:34.880 --> 41:38.360
+That is a very good question, right, so I didn't talk about this, but it's also a question
+
+41:38.360 --> 41:46.560
+where, right, in my opinion, and I think that's also what is very helpful with the open source
+
+41:46.560 --> 41:52.600
+solution, right, what you can really deploy it everywhere in, including your kind of CI,
+
+41:52.600 --> 41:57.280
+CD environment, right, because what I often see people saying, well, you know what, data
+
+41:57.280 --> 42:04.160
+dog, right, is expensive, it's only in production, right, what you want to do is make sure you
+
+42:04.160 --> 42:11.880
+have solutions in development so you can catch bad queries before they hit in production,
+
+42:11.880 --> 42:16.280
+but also assume you're not going to catch all the bad queries, right, some queries
+
+42:16.280 --> 42:22.400
+will only maybe misbehave in production, right, the other good practice which comes to that
+
+42:22.400 --> 42:27.680
+is you make sure you're like a test environment is good, right, so you can test a variety
+
+42:27.680 --> 42:34.840
+of queries relevant to your application and you have a good data set, right, for that.
+
+42:34.840 --> 42:40.360
+I think in this regard, there is like some cool features coming out from Neon, for example,
+
+42:40.360 --> 42:45.120
+like giving like branches, branching, right, then you can get like, oh, the full copy of
+
+42:45.120 --> 42:51.200
+production database, you know, mess with it, run tests on it on a full-size data set, right,
+
+42:51.200 --> 42:56.080
+instead of testing on, you know, table with 100 rows, right, which is kind of useless.
+
+42:56.080 --> 43:03.080
+Cool. Any other question? Okay, thank you very much.
+
+43:03.080 --> 43:04.080
+Okay, thank you.
+
+43:04.080 --> 43:30.080
+Thank you very much.

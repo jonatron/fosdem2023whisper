@@ -1,0 +1,646 @@
+WEBVTT
+
+00:00.000 --> 00:17.320
+All right. Let's get started again. So, welcome back, everyone. The next talk is from Dylan
+
+00:17.320 --> 00:20.200
+about eBPF loader deep dive.
+
+00:20.200 --> 00:28.400
+Yes. Hello, everyone. Thank you for attending. Before we start, I have to make a quick confession.
+
+00:28.400 --> 00:39.920
+I'm only 80% done with my talk. No, but really, today I'm going to talk about eBPF loaders
+
+00:39.920 --> 00:44.880
+and while I'll do my best to go as deep as I can within the time constraints, there is
+
+00:44.880 --> 00:54.400
+of course so much more to go through. So, let's start with what is a loader for those
+
+00:54.400 --> 01:03.960
+of you who are not in the know. So, the term can be used in multiple contexts, but for
+
+01:03.960 --> 01:09.280
+the purpose of this talk, I will refer to a loader as any program that interacts with
+
+01:09.280 --> 01:18.600
+the kernel via syscalls. Or what you more commonly see is a program that uses eBPF loader
+
+01:18.600 --> 01:26.760
+library to do most of that work for it. So, examples of loaders are IP and TC, which can
+
+01:26.760 --> 01:32.480
+be used to load XDP programs or TC programs, for example, but also BPF tool, which can
+
+01:32.480 --> 01:40.560
+do the same or BPF trace, or even your own app if you decide to use a loader library
+
+01:40.560 --> 01:50.840
+and make something great. Loader libraries are basically obstructions on the eBPF syscalls
+
+01:50.840 --> 01:59.600
+and to make it easier to use, kind of like Lipsy, but for BPF, which is where the name
+
+01:59.600 --> 02:05.000
+for the first example comes from, the BPF. But of course, there are many others like
+
+02:05.000 --> 02:11.960
+Aya, where we had to talk before this on this day, or BCC, or CELUM, eBPF, for all examples
+
+02:11.960 --> 02:22.800
+of loader libraries, libraries that load BPF programs into the kernel. So, why do we need
+
+02:22.800 --> 02:32.320
+loaders? This is an example, this is the program example we're working with today. It's
+
+02:32.320 --> 02:38.960
+quite simple. So, if we, on the left side, I declare a map, which we will be using to
+
+02:38.960 --> 02:46.080
+store flow data, so packets and bytes per second, for combination of source address
+
+02:46.080 --> 02:52.760
+and destination address, and on the right is a bit of logic that checks that we have
+
+02:52.760 --> 03:01.280
+the correct, that we have enough data interpreted as IPv4. Now, there's a handle IPv4 function
+
+03:01.280 --> 03:06.720
+mentioned here, but it doesn't fit on a slide, so we'll get to that later. When I compile
+
+03:06.720 --> 03:17.000
+my program, I get what's called an ELF, an executable and linkable format, or linkable
+
+03:17.000 --> 03:23.960
+matter, I think about it, whatever. If you, a normal C program, if I were to pull any
+
+03:23.960 --> 03:30.360
+random Hello World C program from the internet, compile it like I showed in the above command,
+
+03:30.360 --> 03:36.360
+we'll get out an executable, and you can use it out of the box, no need for trickery or
+
+03:36.360 --> 03:41.880
+things. You make it executable, and you execute it, and you get Hello World on the command
+
+03:41.880 --> 03:50.040
+line. If you, if you get an EBPF program, and you try to compile it with commands you
+
+03:50.040 --> 03:55.560
+found on the internet, you'll get a relocatable. Now, if you try to execute it, you'll get
+
+03:55.560 --> 04:04.200
+an error, so it doesn't work. What you need is a loader. The executable that we have is
+
+04:04.200 --> 04:11.440
+like a, is like a premade IKEA furniture, but the relocatable we get for EBPF is two
+
+04:11.440 --> 04:17.320
+pieces, and perhaps if you're lucky, a guide on how to put them together. And this is the
+
+04:17.320 --> 04:23.720
+job of the loader, putting the pieces together and making it, and providing the guide to
+
+04:23.720 --> 04:34.080
+make it easy for you to use it. Now, an ELF as we generated has the following structure.
+
+04:34.080 --> 04:38.920
+So we have this large file, we start with an ELF header, which contains information like,
+
+04:38.920 --> 04:48.120
+this contains EBPF, and it's this many bits, this machine, but, and it has a bunch of segments,
+
+04:48.120 --> 04:58.160
+sorry. These sections have names, have names, and each of them can have a different format.
+
+04:58.160 --> 05:03.320
+So the string type has a bunch of strings. Our programs have a bunch of program code
+
+05:03.320 --> 05:10.680
+in them, et cetera, et cetera. But they also refer to each other. So you have all the arrows,
+
+05:10.680 --> 05:18.000
+and they point to each other, and they link to, they link to each other. But in this form,
+
+05:18.000 --> 05:27.360
+it's not that usable. Because the kernel only understands SysCalls and EBPF programs, it
+
+05:27.360 --> 05:33.680
+doesn't know how to handle such an ELF. So how does, but the, the BPF SysCall looks
+
+05:33.680 --> 05:38.640
+like, it's like this, if you, if you pull up the man page, we have a bunch of commands,
+
+05:38.640 --> 05:45.280
+each command has a, has attributes, and in the kernel they're defined in a very big union,
+
+05:45.280 --> 05:51.680
+and every command has its own set of attributes that you can use to, to instruct the kernel,
+
+05:51.680 --> 05:57.000
+to ask the kernel to do something for you. I can't go on over all of them because of
+
+05:57.000 --> 06:01.840
+time constraints, but the most important ones are loading your program, creating a map,
+
+06:01.840 --> 06:08.360
+loading BPF, and of course, interacting with that map, attaching it somewhere, et cetera.
+
+06:08.360 --> 06:14.920
+There are quite a few commands, each of them does slightly different things, and may, and
+
+06:14.920 --> 06:21.600
+the loaders, in most cases, provide functions that either call multiple of these to do a
+
+06:21.600 --> 06:26.200
+batch, like a big operation, a high-level operation, or they provide small wrappers for
+
+06:26.200 --> 06:33.640
+you to do your low-level operations yourself. There are also links, which is a newer concept,
+
+06:33.640 --> 06:40.080
+and you can pin, pin your objects to the file system, so they live longer than your program.
+
+06:40.080 --> 06:45.920
+And we have a few other miscellaneous functions for doing measurement statistics, iteration,
+
+06:45.920 --> 06:51.000
+et cetera, but I can't go in that, in this talk, unfortunately.
+
+06:51.000 --> 06:59.760
+So back to our program. When we write a program, we have a macro here that says SAC. We, that's
+
+06:59.760 --> 07:07.560
+quite unique for BPF. Every BPF program needs to have this section tag there, and this tells
+
+07:07.560 --> 07:13.920
+the compiler to put all of the program code in the specific section that we named. And
+
+07:13.920 --> 07:20.760
+the name of this section is for also convention, which can be used by the loader to inform
+
+07:20.760 --> 07:28.000
+it that this is an XDP program, so it should be interpreted as such.
+
+07:28.000 --> 07:34.800
+Now we can dump this section, so if we dump this section with LLVM object dump, then we
+
+07:34.800 --> 07:43.440
+get out this, which is hard to read if it's not annotated, but it's a bunch of BPF instructions
+
+07:43.440 --> 07:51.520
+starting with the opcode, so the actual opcode that tells it if it's add, subtract, whatever.
+
+07:51.520 --> 07:57.600
+Source and destination registers where these opcodes act on with offsets for jumps. These
+
+07:57.600 --> 08:05.600
+are relative, and intermediate data for, to say, load some data into a register like
+
+08:05.600 --> 08:11.800
+a constant value. And sometimes we can use two of them together to represent a 64-bit
+
+08:11.800 --> 08:18.640
+number, but we'll get to that later. We can also ask object dump to decompile this for
+
+08:18.640 --> 08:25.840
+us, and we'll get the decompiled BPF program. So the bytes on the left side and the actual
+
+08:25.840 --> 08:31.200
+program on the right side, but you'll notice that there's a call here. So one thing that
+
+08:31.200 --> 08:36.640
+I didn't tell you before is that the handle IPv4 function that we have is marked in such
+
+08:36.640 --> 08:44.560
+a way that it won't be inline, so it's a separate program, and BPF can do BPF to BPF function
+
+08:44.560 --> 08:51.760
+calls, and if you do that, it puts out this instruction, a function call instruction, but
+
+08:51.760 --> 08:58.200
+with minus zero. Where do we call to? Well, currently nowhere, because we haven't assembled
+
+08:58.200 --> 09:07.200
+the pieces of our furniture yet. So what actually, what also happens is that the compiler will
+
+09:07.200 --> 09:13.400
+emit relocation information, which we can, again, visualize, and it says, all right,
+
+09:13.400 --> 09:19.320
+we have a certain instruction that is given offset, and you should put it in relative
+
+09:19.320 --> 09:26.480
+address of this other function in here. Then we can go to the symbol table and we can look
+
+09:26.480 --> 09:34.880
+up this name, and it says, oh, that function lives in the.txt section, where for BPF programs,
+
+09:34.880 --> 09:42.560
+all of the function to function calls, all of the functions live together. So we have
+
+09:42.560 --> 09:51.080
+these two separate pieces of the puzzle, and they refer to each other. But the kernel
+
+09:51.080 --> 09:57.280
+only has one pointer for our instructions. It expects that every program we give it is
+
+09:57.280 --> 10:03.600
+one contiguous piece of memory with instructions, and it all should work. So we have some work
+
+10:03.600 --> 10:08.520
+to do. We need to figure out, or the loader rather, needs to figure out how it wants to
+
+10:08.520 --> 10:13.480
+lay out our programs, so piece all of the puzzles together, find all of these references,
+
+10:13.480 --> 10:19.880
+and then put in the correct offset. All of this happens in user space before we even
+
+10:19.880 --> 10:27.880
+go to the kernel. Now, second fun thing is that we can define our map. So again, we have
+
+10:27.880 --> 10:37.560
+the sec part,.maps, put it in the.maps section, and if we, and this is the function, this
+
+10:37.560 --> 10:43.680
+is the part that I have been hiding from you until now. It's also quite simple in terms
+
+10:43.680 --> 10:55.160
+of BPF programs. We get an IPv4 header, check that we can use it, and we write, or we get
+
+10:55.160 --> 10:59.880
+a value from the map, and if it doesn't exist, we write a new one and increment the values
+
+10:59.880 --> 11:06.480
+every time this happens to account for some information. So keep this program in mind,
+
+11:06.480 --> 11:11.080
+and then if we go look at the instructions again, the disassembled version this time,
+
+11:11.080 --> 11:17.320
+we see that we have two of these long lines which are zero at the end. So these are the
+
+11:17.320 --> 11:24.240
+64-bit intermediate values that I was talking about, and they are just long to keep, to
+
+11:24.240 --> 11:32.440
+pre-allocate room for actual memory addresses later, instead of relative jumps. But they
+
+11:32.440 --> 11:38.040
+are zero, and these should be references to our map, and later on these will become pointers
+
+11:38.040 --> 11:45.320
+when the kernel gets its way with it. And in our case, we again need to figure out what
+
+11:45.320 --> 11:51.480
+to put in here. So same routine. We have relocation information. The relocation information points
+
+11:51.480 --> 11:59.080
+to the instructions that we had. It says you need to plug in a flow map here. We go to
+
+11:59.080 --> 12:06.960
+the symbol table, and there it says we have a.map section, and there lives a flow map.
+
+12:06.960 --> 12:13.320
+In this case, we handle it slightly differently, so we then have to go load this flow map first,
+
+12:13.320 --> 12:18.040
+get a file descriptor, which is our unique identifier for the map, and we need to actually
+
+12:18.040 --> 12:27.440
+put in that file descriptor into these empty values, so the kernel knows where to go.
+
+12:27.440 --> 12:35.880
+Mapping maps also is also a command, so we have the map create command, and it takes
+
+12:35.880 --> 12:40.960
+these arguments. I cut out a bit of the later ones, but these are the essential type, how
+
+12:40.960 --> 12:49.120
+big are my values, et cetera. Give it a nice name. And there are two ways to define these.
+
+12:49.120 --> 12:56.600
+We have the new way of doing it, which are called BTF maps, colloquially, on the left.
+
+12:56.600 --> 13:03.000
+But there's also the old way of doing it, using a BTF map definition on the right. Don't
+
+13:03.000 --> 13:11.440
+use it if you go into libbpf in the part of the libbpf, which is used during ebpf construction.
+
+13:11.440 --> 13:17.240
+It will warn you that you shouldn't use it and go for the left side. But the odd thing
+
+13:17.240 --> 13:22.280
+is that if you use these newer BTF maps on the left, and you go look at what's actually
+
+13:22.280 --> 13:27.520
+then written to your.map section, it's all zero. There's no information. It still keeps,
+
+13:27.520 --> 13:32.640
+it still allocates room for your map, but it will, but they'll all be zero, and there's
+
+13:32.640 --> 13:41.800
+no information. All information, instead, is in the type information of the flow map.
+
+13:41.800 --> 13:50.440
+So we have to get in what is BTF. BTF stands for BPF type format. It's derived from the
+
+13:50.440 --> 13:58.920
+actual dwarf debug symbols that already are used for normal C programs. But as a way compact
+
+13:58.920 --> 14:04.400
+or smaller version of it, which only really is concerned about type information and not
+
+14:04.400 --> 14:10.560
+about where and at which moment a variable lives. And these are used because ebpf itself
+
+14:10.560 --> 14:18.200
+is just too limiting, and we want to do more, especially in the verifier. So we have, for
+
+14:18.200 --> 14:25.040
+example, features like spinlocks, which should only be used on maps that have spinlock values
+
+14:25.040 --> 14:33.680
+in them. Or we have callback functions, so we can define these BPF functions, but instead
+
+14:33.680 --> 14:39.760
+give them to a helper function. But this helper needs to then know that it's the correct number
+
+14:39.760 --> 14:44.600
+of arguments and the correct type. So all of this type information we can give to the
+
+14:44.600 --> 14:50.160
+kernel. And that's why it's, especially if you want to use these new fancy features,
+
+14:50.160 --> 14:56.520
+it's important to use the BTF information. It also allows for flexible map arguments.
+
+14:56.520 --> 15:01.800
+So for example, if I go back, we have the definition. And one of the things you'll notice
+
+15:01.800 --> 15:09.520
+is that we have pinning as an attribute here. But you will not find it in the Cisco attributes.
+
+15:09.520 --> 15:16.800
+This is purely something that we communicate to the loader library in this case, that we
+
+15:16.800 --> 15:26.160
+communicate to the loader library, not just libbpf, but that's the name that it has currently.
+
+15:26.160 --> 15:30.640
+And we can do a lot of different cool things with that. It also provides debug information
+
+15:30.640 --> 15:36.720
+for us. So if we go look at loader programs, it will be annotated with the line information
+
+15:36.720 --> 15:42.800
+and from rich file we can read. And perhaps one of the coolest features is compile once
+
+15:42.800 --> 15:52.240
+run everywhere, which allows the loader and or the kernel to modify our program slightly.
+
+15:52.240 --> 15:59.000
+So it will run on multiple versions of the kernel, even if the internals have changed.
+
+15:59.000 --> 16:05.520
+So if we dump this BTF that we have from our example program, it looks like this. Features
+
+16:05.520 --> 16:12.800
+to note are the numbers on the left and square brackets. Those are the type ID. Besides it's
+
+16:12.800 --> 16:19.080
+actual type. So we have pointers, integers, arrays. You can basically represent every C
+
+16:19.080 --> 16:26.240
+type in BTF this way. There's an optional name and then there's a lot of information
+
+16:26.240 --> 16:31.880
+about the specific type. And they refer to each other. So you'll notice a lot of type
+
+16:31.880 --> 16:39.360
+ID is something else. So you can also visualize it by nesting it. I've done this manually.
+
+16:39.360 --> 16:45.440
+By the way, there's no comment on this, but this is how you can do it yourself. So we
+
+16:45.440 --> 16:50.840
+have, for example, a map section with a flow map in it. And you can see that we have the
+
+16:50.840 --> 16:56.000
+type, the key, the value. And we have this very detailed description of exactly how it
+
+16:56.000 --> 17:03.320
+structured at which offsets, which things live and names for it which are used to check
+
+17:03.320 --> 17:10.800
+all of these certain things. And also to create a loader bill, we use this to infer the actual
+
+17:10.800 --> 17:17.400
+value and key sizes to give to the kernel. This BTF is structured in, so it lives in
+
+17:17.400 --> 17:23.880
+the dot BTF section. And it's sort of structured like this. So we have this header, then types
+
+17:23.880 --> 17:29.840
+and a lot of strings. And each type starts with the same three fields. So we have a name
+
+17:29.840 --> 17:36.120
+offset, so an offset into the strings. We have information and a size or type depending
+
+17:36.120 --> 17:42.640
+on what the information says. This translates into the name and the type of the BTF information
+
+17:42.640 --> 17:47.440
+and then the last part is specific to that type. So encoding for ins or a list of fields
+
+17:47.440 --> 17:57.920
+for a structure, et cetera. We also have the dot BTF.ext, the extended version of it.
+
+17:57.920 --> 18:04.360
+And this contains function information, line information, and optionally core relocations.
+
+18:04.360 --> 18:11.720
+So the line information contains a bunch of lines. So it will annotate this instruction
+
+18:11.720 --> 18:18.040
+as part of this line of your original source program and functions to label every one of
+
+18:18.040 --> 18:27.400
+these BTF functions that you have defined. Loading the BTF itself is quite simple. You
+
+18:27.400 --> 18:33.120
+use the load BTF command in the BTF syscall or the BTF syscall, give it the blob that
+
+18:33.120 --> 18:39.720
+we have. It needs to be slightly changed, especially for the data size, the data section
+
+18:39.720 --> 18:49.280
+type, but that's more details to explain exactly why, and a bunch of logging information.
+
+18:49.280 --> 18:53.400
+Once you have it, we get a file descriptor of the BTF object, and of course we have
+
+18:53.400 --> 19:00.480
+all of these type IDs. So when we are loading our map again, there are these fields where
+
+19:00.480 --> 19:05.160
+you can say, this is my BTF object, which contains all of my types, and this is the
+
+19:05.160 --> 19:11.680
+type of my key, this is the type of my value, that's how we wire everything together.
+
+19:11.680 --> 19:16.600
+The same goes for programs. So we give it the program, the BTF of the program uses,
+
+19:16.600 --> 19:24.320
+and then we give it these file, these func information, line information blobs, which
+
+19:24.320 --> 19:30.240
+will make sure that everything is nice and annotated in the kernel. So we end up with
+
+19:30.240 --> 19:36.160
+a sort of hierarchy that looks like this. So we start by loading the BTF, we can then
+
+19:36.160 --> 19:40.760
+load our maps, which use it, and then once we have our map file descriptors, we can load
+
+19:40.760 --> 19:46.920
+our programs after we have of course assembled all of the pieces of our program. And that
+
+19:46.920 --> 19:52.080
+all happens, can happen within one call to a loader library.
+
+19:52.080 --> 19:59.000
+Now for the last part, the core, which I touched on a little bit earlier, like I said, compile
+
+19:59.000 --> 20:05.320
+once, run everywhere. There's this really good blog post for, which I encourage everyone
+
+20:05.320 --> 20:12.960
+who wants to use the feature, which contains information on how to actually use it. But
+
+20:12.960 --> 20:20.840
+what it boils down to is there are in LibBPF, there are these macros to make your life easier,
+
+20:20.840 --> 20:26.880
+and they boil down to a bunch of compiler built-ins. And they're basically, they're basically
+
+20:26.880 --> 20:34.720
+questions to ask the loader just before, or the kernel just before, or while loading
+
+20:34.720 --> 20:39.800
+the program. Like, where does, where is, what is the offset of this field? Where does this
+
+20:39.800 --> 20:48.000
+type even exist? Do I have this enum value? I have this small program that writes, that
+
+20:48.000 --> 20:54.640
+writes values to, or that captures a certain, or the cookie value of a socket when it closes.
+
+20:54.640 --> 21:02.760
+Not useful at all, but it does help us to illustrate the point. When this macro resolves,
+
+21:02.760 --> 21:09.960
+it looks like this, and the important part to notice here is that we do a helper call,
+
+21:09.960 --> 21:15.680
+and where the arrow starts, we have the socket pointer, and we have an offset, and we add
+
+21:15.680 --> 21:23.960
+an offset, which we get from this built-in function. This offset is then encoded, gets
+
+21:23.960 --> 21:29.080
+encoded in the 104 that we see here. This is this offset that we add to the pointer in
+
+21:29.080 --> 21:35.400
+the actual code. But the compiler will also emit this relocation, which will tell us that
+
+21:35.400 --> 21:41.600
+this might be a piece of the code that we want to tweak, depending on if the structure changes.
+
+21:41.600 --> 21:46.720
+So if we again look at this relocation, there, unfortunately, as far as I'm aware, is not
+
+21:46.720 --> 21:54.600
+a good command line tool to visualize or to decode this, so I decoded one manually. It
+
+21:54.600 --> 21:58.160
+looks like this, so it says, okay, instruction number two, which is the instruction that
+
+21:58.160 --> 22:04.720
+we were, that we were at. Instruction number two refers to type ID 18, and it has this
+
+22:04.720 --> 22:09.000
+accessor string. And this accessor string is a bunch of numbers, which is basically
+
+22:09.000 --> 22:15.440
+offsets like the field number that it tries to access. So the socket, then the second
+
+22:15.440 --> 22:24.880
+field would be sk-common, and then cookie, and so forth. Now, this type information that
+
+22:24.880 --> 22:30.680
+we knew when we created the program is included in the btf section. But the kernel also has
+
+22:30.680 --> 22:40.560
+btf types for all of its types it has. So we can do a comparison and see that, for example,
+
+22:40.560 --> 22:48.040
+it changed position, or we can't find a certain field. And our loader can do this, can resolve
+
+22:48.040 --> 22:55.200
+this, see it, and then patch our code, change this offset value right before we actually
+
+22:55.200 --> 23:00.640
+load it, which makes it possible to use it on so many different kernel versions. I'm
+
+23:00.640 --> 23:08.360
+out of time. That's everything I can offer you for now. Are there any questions? And
+
+23:08.360 --> 23:24.120
+thank you. Thank you. Any questions? There's one in the back. All right, okay. It's difficult
+
+23:24.120 --> 23:38.400
+now. Can you pass this on? Hey, thanks for the great talk. So I haven't
+
+23:38.400 --> 23:44.640
+dealt that much with btf, but since we have those binaries that we cannot really launch
+
+23:44.640 --> 23:50.600
+because we have to load them in another elf, right? At least as I understand. Would it make
+
+23:50.600 --> 23:58.760
+any sense to make either a loader that would just work out of the box for those binaries
+
+23:58.760 --> 24:09.120
+or use the bnfmtm-misk feature from the kernel to be able to load those btf elf files and
+
+24:09.120 --> 24:15.120
+use some kind of generic or general interface and just load them and run them?
+
+24:15.120 --> 24:24.640
+Yeah, but I think it does make sense to some extent. For example, the IP tool doesn't have
+
+24:24.640 --> 24:31.800
+anything additional, so it takes this elf and just loads it as best as it can. And there
+
+24:31.800 --> 24:38.120
+is probably some way to use the interpreter in the elf itself, just like we do for dynamically
+
+24:38.120 --> 24:43.840
+loaded executables. As far as I know, no one has tried it so far, but I think it could
+
+24:43.840 --> 24:50.600
+work at least for a limited use case where you don't have to, where you would only load
+
+24:50.600 --> 24:56.800
+something and pin it and then allow some other application to actually work with it afterwards.
+
+24:56.800 --> 25:00.160
+Thank you. All right, thanks. We are out of time.
+
+25:00.160 --> 25:15.040
+If you have more questions, you can find Dylan in the hallway. And yeah, thanks again.

@@ -1,0 +1,631 @@
+WEBVTT
+
+00:00.000 --> 00:14.240
+Good afternoon, everyone. I'm Mamta. I work as a software engineer at Leica Geosystems
+
+00:14.240 --> 00:29.980
+and I work mostly in embedded domain. So this is the outline of my talk. So just to keep
+
+00:29.980 --> 00:35.480
+everyone on the same page, I'll be giving a brief introduction about LLVM and Clank
+
+00:35.480 --> 00:42.160
+and so that the terminologies next I'm using are clear. Then I'll talk about compiler RT
+
+00:42.160 --> 00:49.640
+sanitizers, what they are, how you can build them and how exactly they work and then my
+
+00:49.640 --> 00:58.240
+final thoughts about sanitizers. So this is a typical compiler pipeline which most of you
+
+00:58.240 --> 01:05.680
+are aware of and they call it as a textbook diagram as well. So whenever you write a source
+
+01:05.680 --> 01:13.280
+or a code in any language to produce a binary executable for your machine it has to go through
+
+01:13.280 --> 01:19.320
+multiple stages. So mostly the most important ones are the front end, middle end and the
+
+01:19.320 --> 01:28.400
+back end and the front end actually does all the lexical analysis, semantic analysis, it
+
+01:28.400 --> 01:34.560
+checks the syntax and then it generates an intermediate representation. Then it is passed
+
+01:34.560 --> 01:41.400
+to the middle end which does optimizations independent of the target and then it is passed
+
+01:41.400 --> 01:49.440
+to the back end which generates executable and it has more optimizations depending on
+
+01:49.440 --> 01:56.200
+the target you are building it for and sometimes if there are multiple object files then comes
+
+01:56.200 --> 01:59.720
+in the picture linker.
+
+01:59.720 --> 02:10.600
+So how does LLVM fits in our pipeline? So basically the same, it is a modular and useable
+
+02:10.600 --> 02:18.960
+compiler framework and it provides front end, back end and LLVM core which is the LLVM optimizer.
+
+02:18.960 --> 02:26.240
+So if we map it to our compiling pipeline, so for depending on the language you are trying
+
+02:26.240 --> 02:33.040
+to build or use this compiling tool chain you have compile sorry you have LLVM front end
+
+02:33.040 --> 02:41.000
+that is the clang for C languages and Rust, Rust C for Rust and then depending upon the
+
+02:41.000 --> 02:53.320
+target it will use the target as x86, 32 bit or 64 and the main part which is most reusable
+
+02:53.320 --> 02:58.200
+from the LLVM perspective it is the LLVM optimizer and the core.
+
+02:58.200 --> 03:05.800
+So if I have to develop a new compiler tool chain I can easily reuse LLVM I just have
+
+03:05.800 --> 03:13.360
+to write my own front end and if there is a new hardware back end maybe. So in short
+
+03:13.360 --> 03:21.920
+I can say LLVM is like a Lego of compiler tool chains. Next focusing a bit more on one
+
+03:21.920 --> 03:31.640
+of the LLVM front end clang which is for targeting mostly C, C++ and C like languages.
+
+03:31.640 --> 03:39.000
+And here it whenever you provide your source code it performs some lexical analysis generates
+
+03:39.000 --> 03:46.920
+tokens for parsing then it does semantic analysis and generates abstract syntax tree and the
+
+03:46.920 --> 03:55.160
+end goal should be LLVM intermediary presentation. So just to summarize LLVM is a collection
+
+03:55.160 --> 04:02.120
+of all modular and reusable compiler technologies and there is much more to it because it provides
+
+04:02.120 --> 04:08.320
+now with static analyzers, sanitizers and more libraries so it comes under an umbrella
+
+04:08.320 --> 04:17.040
+project as LLVM.org and clang is a compiler front end which is mostly for C, C++ and
+
+04:17.040 --> 04:25.840
+C like languages but when we say clang executable it is more than a front end. So when you build
+
+04:25.840 --> 04:31.880
+LLVM you have clang executable as well and it is like a compiler driver.
+
+04:31.880 --> 04:40.160
+So for example if you have a static compiler and we have to tell it which directives to
+
+04:40.160 --> 04:47.480
+use or to use this hyphen i option where is the standard library path for example for
+
+04:47.480 --> 04:55.160
+C, C++. So clang as a driver does most of the housekeeping for all this task and it
+
+04:55.160 --> 05:02.200
+helps this compiling pipeline to tell you where to look for the libraries and also provide
+
+05:02.200 --> 05:11.880
+some OS related features and how your OS is. So that was just a brief introduction about
+
+05:11.880 --> 05:13.880
+clang and LLVM.
+
+05:13.880 --> 05:22.080
+So now I will talk about compiler RT sanitizers it is one of the sub projects in LLVM but
+
+05:22.080 --> 05:29.080
+before that I will highlight about the runtimes. So LLVM comes with compiler RT runtimes it
+
+05:29.080 --> 05:37.520
+is pretty much equivalent of libGCC for LLVM pipeline and it provides target specific support
+
+05:37.520 --> 05:44.200
+for some low level functionalities which hardware itself cannot do. So it consists of three
+
+05:44.200 --> 05:52.400
+main components built-ins, sanitizer runtimes and profilers. So built-ins provide implementation
+
+05:52.400 --> 05:57.520
+for target specific hooks which hardware itself cannot do.
+
+05:57.520 --> 06:07.760
+So just to simplify it a bit more for example if the 32 bit system cannot do 64 bit division
+
+06:07.760 --> 06:15.920
+so here you can see a code snippet and if I try to compile it using clang. So first
+
+06:15.920 --> 06:23.880
+we do a normal compilation on x86 machine which is a 64 bit and here on left you can
+
+06:23.880 --> 06:31.800
+see it directly calls this diff cube which means it performs the division itself but
+
+06:31.800 --> 06:40.400
+when I use hyphen m32 which is I am forcing it to compile for 32 bit machine it depends
+
+06:40.400 --> 06:47.320
+on another call it actually calls this udiff i3 which is basically a built-in implementation
+
+06:47.320 --> 06:55.360
+in compiler RT. So this is an overall picture of compiler RT runtimes.
+
+06:55.360 --> 07:02.000
+So talking about the sanitizers, sanitizers are like runtime checks which it is like adding
+
+07:02.000 --> 07:10.560
+a code probe in your code to verify if there are any memory bugs or to sanitize the code
+
+07:10.560 --> 07:19.280
+or to find any security flaws. So in case of LLVM it is provided by compiler RT and called
+
+07:19.280 --> 07:27.040
+as compiler RT sanitizers and there are multiple kind of sanitizers available. First is address
+
+07:27.040 --> 07:33.440
+sanitizer which you can use to detect use after free buffer overflow and memory leaks
+
+07:33.440 --> 07:39.120
+as well. Then you have undefined behavior sanitizers, memory sanitizers to identify
+
+07:39.120 --> 07:45.920
+if there is some uninitialized memory and threat sanitizer to detect some race conditions
+
+07:45.920 --> 07:51.320
+and dead locks. So here it is just an example of how sanitizer
+
+07:51.320 --> 08:00.480
+looks. So here is a very simple code where I am allocating some memory in heap and then
+
+08:00.480 --> 08:05.560
+I am trying to I am freeing it and then I am trying to access it after free. So if you
+
+08:05.560 --> 08:12.400
+build this code with your sanitizer flag on and try to run it immediately it will complain
+
+08:12.400 --> 08:19.440
+that you are trying to access some memory after free. So that is how it looks like when
+
+08:19.440 --> 08:25.960
+it is built with address sanitizer and I will talk in more detail about how what goes behind
+
+08:25.960 --> 08:33.720
+the scene. But before that how to build compiler RT sanitizers. So there are lot of documentation
+
+08:33.720 --> 08:38.480
+around as well and it is very easy to follow as well but sometimes it works, sometimes
+
+08:38.480 --> 08:47.160
+it does not. So you can build first compiler RT with LLVM it is easy you can directly
+
+08:47.160 --> 08:55.360
+enable it with LLVM enable projects when you are building your complete LLVM tool chain
+
+08:55.360 --> 09:01.360
+and you can do a separate build as well if you have your LLVM config and use generator
+
+09:01.360 --> 09:09.880
+of your choice. To enable the sanitizers so if I am doing a build along with the complete
+
+09:09.880 --> 09:19.360
+LLVM tool chain I just have to use this flag compiler RT build sanitizers to on and when
+
+09:19.360 --> 09:26.840
+you do this and here I am using Ninja as a generator you can see we get a config out
+
+09:26.840 --> 09:35.000
+of CMake and you can see it is enabling different sanitizers as address sanitizer, leak sanitizers,
+
+09:35.000 --> 09:39.560
+memory sanitizer, thread and undefined behavior.
+
+09:39.560 --> 09:45.360
+And same you can do for and after sorry after the installation and build you can get these
+
+09:45.360 --> 09:51.920
+set of libraries. You can do the same for the standalone build as well with the same
+
+09:51.920 --> 10:00.080
+similar flag and this is the config generated when I am doing a compiler RT standalone build
+
+10:00.080 --> 10:06.760
+and then it is also possible to cross compile RT sanitizers you have to provide lot of flags
+
+10:06.760 --> 10:12.720
+and you need to have your arms this route as well and I personally do not prefer this
+
+10:12.720 --> 10:19.360
+way but there is a talk today in the end from Peter about building embedded tool chain
+
+10:19.360 --> 10:27.280
+using LLVM. So, to make it a bit easier for all the embedded
+
+10:27.280 --> 10:34.440
+developers there is a in Yachto project there is an open embedded layer called Meta Clang.
+
+10:34.440 --> 10:40.160
+It makes it bit easy because it provides everything for building your tool chain and you just
+
+10:40.160 --> 10:49.280
+have to include this layer if people are aware of Yachto builds. And just few configurations
+
+10:49.280 --> 10:57.160
+are needed like you have to enable the SDK, you have to use LLVM runtimes and then either
+
+10:57.160 --> 11:02.440
+you can write in your package groups or in local conf to include compiler RT and compiler
+
+11:02.440 --> 11:10.080
+RT sanitizers. And this actually generates a SDK and it is very easy to distribute this
+
+11:10.080 --> 11:18.600
+SDK to other developers or like in our case I used to send it to the application team
+
+11:18.600 --> 11:25.120
+so that they can use this and the people who are developing C++ code they can run their
+
+11:25.120 --> 11:29.840
+code they can compile their code and run sanitizers on it.
+
+11:29.840 --> 11:36.800
+So this was actually while contributing to Meta Clang I came to became more aware about
+
+11:36.800 --> 11:47.040
+compiler RT sanitizers and also now it is available for arm 32 bit and arm 64 bit and x86 of course
+
+11:47.040 --> 11:55.040
+and you can easily test it also on KMU arm as well just specifying your sys route and
+
+11:55.040 --> 12:02.080
+running your test code to see how it behaves on your actual target.
+
+12:02.080 --> 12:09.680
+So that was all about what is compiler RT sanitizers, how we build it but what exactly
+
+12:09.680 --> 12:19.400
+goes behind the scene. So here I am using an example of address sanitizer to use and
+
+12:19.400 --> 12:26.960
+here is a very basic code where we are taking some arguments and converting into integer
+
+12:26.960 --> 12:34.880
+but here you can see we are using argument counter and the value for this can be very
+
+12:34.880 --> 12:44.560
+large as well. So first time when I try to compile it with Clang it compiles and when
+
+12:44.560 --> 12:51.720
+you run it after like as you can see easily and it is very easy to spot here I have defined
+
+12:51.720 --> 13:00.240
+the size of buffer to be just 2 and if I provide input more than 2 it should fail actually
+
+13:00.240 --> 13:06.360
+that is the case but it is very the crux here is like it is difficult for some machine it
+
+13:06.360 --> 13:14.840
+will fail for 3 and for some machine it will fail with the 4 input and leads to the segmentation
+
+13:14.840 --> 13:22.600
+fault and we do not know what happened exactly behind the scene. Second when you try to build
+
+13:22.600 --> 13:30.240
+it with address sanitizer enabled or link it with compiler RT and with your address sanitizer
+
+13:30.240 --> 13:37.760
+flag as well and the output is actually a bit large this is the first part of it.
+
+13:37.760 --> 13:45.440
+So it can easily spot that there was a stack overflow stack buffer overflow and it also
+
+13:45.440 --> 13:55.760
+points out if you build it with hyphen g option it also points out at work line it is failing
+
+13:55.760 --> 14:03.800
+but what exactly led to generation of this kind of error. So in very simple term when
+
+14:03.800 --> 14:09.600
+address sanitizers adding sanitizer is like adding an additional code to your actual code
+
+14:09.600 --> 14:15.360
+to just check when it is going to fail and report the error. So here it looks very easy
+
+14:15.360 --> 14:21.960
+okay if my buffer size is more than 2 or sorry if the input size for the buffer is more than
+
+14:21.960 --> 14:28.640
+2 just notify it is an error but behind the scene for address sanitizer it is much more
+
+14:28.640 --> 14:37.560
+and it can adopt multiple strategies to implement it. So here address sanitizer uses memory
+
+14:37.560 --> 14:45.040
+mapping so memory that should not be accessed is called as poisoned memory.
+
+14:45.040 --> 14:50.320
+So behind the scene it is implemented like to check whether this is getting poisoned
+
+14:50.320 --> 14:59.040
+or not so here poison means either it is referring to some deallocated memory or some already
+
+14:59.040 --> 15:06.280
+allocated memory or there is getting some overflow or not and just report the error
+
+15:06.280 --> 15:15.320
+but there is much more how this memory is mapped. So for any code built with any application
+
+15:15.320 --> 15:21.640
+that you build the virtual address space is divided into two kind of memories one is
+
+15:21.640 --> 15:28.960
+shadow memory and one is application memory. So for address sanitizer it is more important
+
+15:28.960 --> 15:36.320
+to implement this is poisoned and report error in a very compact and fast way then talking
+
+15:36.320 --> 15:39.840
+about shadow memory and the application memory.
+
+15:39.840 --> 15:47.680
+So application memory is the main memory of the code and shadow memory is a copy of application
+
+15:47.680 --> 15:54.880
+memory but here 8 bytes of your application map memory is mapped as 1 byte in shadow
+
+15:54.880 --> 16:02.680
+memory and when the sanitizer checks whether this memory is poisoned or not it is mapped
+
+16:02.680 --> 16:11.440
+to either 0 or 1. So here it is a small portion of shadow memory of our example and you can
+
+16:11.440 --> 16:18.840
+see the memory which is accessible and which is in good condition is marked as 0.
+
+16:18.840 --> 16:28.240
+But here when we are allocating we are checking the buffer here you can see after it is marked
+
+16:28.240 --> 16:34.760
+as so the memory which is like more when we are trying to access more than the allocated
+
+16:34.760 --> 16:41.560
+buffer size it is marked as 1 and these and here you can see in the square brackets it
+
+16:41.560 --> 16:48.640
+is it is marking that hello this here you are supposed not to access this it is getting
+
+16:48.640 --> 16:54.360
+out of the range of the buffer. So that is how this application memory and shadow memory
+
+16:54.360 --> 17:01.600
+is used and then you can see here we restrict it as the red zones.
+
+17:01.600 --> 17:08.880
+So if you have anything greater than these than the allocated one so that one gets marked
+
+17:08.880 --> 17:16.760
+as 1 and you can see f 1 f 3 around and so that is how the address sanitizer works by
+
+17:16.760 --> 17:24.680
+using this shadow memory and application memory and knowing about your shadow memory and whenever
+
+17:24.680 --> 17:31.200
+it spots it is 1 then it says okay there is a problem. So that is all about the address
+
+17:31.200 --> 17:35.280
+sanitizer and how it works.
+
+17:35.280 --> 17:42.040
+So here are my final thoughts about using sanitizers it is a very great tool to find
+
+17:42.040 --> 17:51.320
+bugs and memory issues and in run time for complex applications. So by using sanitizers
+
+17:51.320 --> 17:58.040
+you can improve your development and you can spot the errors very quickly and since we
+
+17:58.040 --> 18:03.240
+had a very simple example but when the code gets more complex it is more difficult to
+
+18:03.240 --> 18:12.600
+find what is the problem. And though with the sanitizers it is more like a tool to check
+
+18:12.600 --> 18:19.280
+not to be used in your production it increases the code size but the sanitizers are comparatively
+
+18:19.280 --> 18:26.720
+more faster than Valgrind the existing one and still there are not all the architectures
+
+18:26.720 --> 18:33.600
+are supported uniformly like for example for arm 32 we do not have threat sanitizer completely
+
+18:33.600 --> 18:41.760
+implemented so I hope we see a better implementation later and it supports threat sanitization
+
+18:41.760 --> 19:08.120
+on 32 bit machines as well questions. Yes it works sorry the question here is like
+
+19:08.120 --> 19:17.080
+I am using the optimization flag for building with address sanitizer enabled yes it can
+
+19:17.080 --> 19:36.720
+be enabled to up to 3 as well and you get similar kind of log.
+
+19:36.720 --> 19:42.560
+So the question is where I am placing the instrumentation to identify whether my buffer
+
+19:42.560 --> 19:52.720
+is overflowing or not to use assertion here I am not sure I can answer that well but the
+
+19:52.720 --> 19:59.840
+strategy of this one is using more with this memory mapping one and also here since this
+
+19:59.840 --> 20:26.000
+buffer size is very small so may be assertion might work here.
+
+20:26.000 --> 20:47.440
+This I am also not much aware of so the question is like if I can sanitize it for a very specific
+
+20:47.440 --> 20:57.720
+portion of the code right yeah you can no I am sorry I am not much aware of it you can
+
+20:57.720 --> 21:02.760
+reverse it you can prevent some specific code from being instrumented either by annotating
+
+21:02.760 --> 21:08.400
+the code or by using a blacklist. Yeah there is this blacklist address sanitizers
+
+21:08.400 --> 21:13.840
+options as well yeah. Have you you say that sanitizers are primarily
+
+21:13.840 --> 21:18.640
+a development tool and yes they mostly are but have you ever looked into using some of
+
+21:18.640 --> 21:25.640
+them for actual production executables for hardening for example UV sun has a fairly
+
+21:25.640 --> 21:31.440
+minimal overhead so it can be used in production especially if you make a strap or if you make
+
+21:31.440 --> 21:39.360
+it if you use the minimal runtime or also there is GWP ASAN which is like a lightweight
+
+21:39.360 --> 21:44.360
+sampling version of other sanitizers which can be used in runtime I think Android is
+
+21:44.360 --> 21:49.240
+using it actually. Okay so does it support some of the embedded
+
+21:49.240 --> 21:56.320
+platforms as well like ARM32 or 64? It supports I believe it does well UV sun works pretty
+
+21:56.320 --> 22:04.160
+much everywhere almost everywhere GWP ASAN works I think almost everywhere but it is
+
+22:04.160 --> 22:12.720
+also dependent on like external function for unwinding so it might not be great in all
+
+22:12.720 --> 22:24.600
+scenarios it really depends. I was wondering if you can use this for kernel ring zero code
+
+22:24.600 --> 22:34.640
+as well. Yes you can but like there's like. But there's a. While there are no if you don't
+
+22:34.640 --> 22:41.600
+have like the runtime it's not in the NPM it's actually offered by the kernel and you
+
+22:41.600 --> 22:48.120
+infer the checks but the hooks themselves are implemented in the kernel. Well some sanitizers
+
+22:48.120 --> 22:56.680
+don't require any runtime. So for ASAN you need instrumentation. Yeah you can use kernel
+
+22:56.680 --> 23:05.560
+address sanitizer for it. But like ASAN also needs like the ASAN best point like the IRF.
+
+23:05.560 --> 23:10.480
+I think it's just a level implementation of the stuff. There's other sanitizers in kernel
+
+23:10.480 --> 23:22.920
+which are implemented this way. I think that it's GACFI. Yeah. Yes. Do you know where the
+
+23:22.920 --> 23:28.640
+code lives currently that does the hooking to malloc and free like the C library? Like
+
+23:28.640 --> 23:33.960
+how does the interaction with the C library work do you know because like I could have
+
+23:33.960 --> 23:39.360
+that for example have a muscle instead of the C library and I guess the code has to be
+
+23:39.360 --> 23:44.240
+adapted somehow or there must be some book infrastructure. So do you know how that works
+
+23:44.240 --> 23:52.400
+and where the code lives that books malloc and free for example. It's in compiler RT
+
+23:52.400 --> 24:11.400
+instance if I'm right. So if you change the version of library you have. Yeah the F on
+
+24:11.400 --> 24:26.160
+runtime has to be for malloc and free. Okay. So outside of the C library. Yeah. For ASAN
+
+24:26.160 --> 24:33.400
+yes but for example for ASAN for leak sanitizer which is enabled by ASAN you need to be aware
+
+24:33.400 --> 24:46.280
+of things like PLS layout and so on. But the runtime in LVM does implement both. Yes. Are
+
+24:46.280 --> 24:54.440
+the sanitizers shared between GCC and LLVM or does each have its own implementation?
+
+24:54.440 --> 25:06.040
+They are shared. Yes. I noticed that one shadow byte corresponds to eight actual bytes. However
+
+25:06.040 --> 25:10.360
+considering that there are special values for it. Does it mean that there could be situations
+
+25:10.360 --> 25:15.320
+where there could be some bytes which are not protected necessarily? Yeah there can be
+
+25:15.320 --> 25:21.320
+some cases where you can call it as a false positive kind of thing or sometimes it is
+
+25:21.320 --> 25:27.960
+checking very much in the end. So it was a very small example but it can happen that
+
+25:27.960 --> 25:34.400
+you get these square brackets at the very end and it's an overrun case. So that can
+
+25:34.400 --> 25:57.240
+happen. Yes. Could you get a false negative in some sense in the sense that if you have
+
+25:57.240 --> 26:05.360
+two almost adjacent blocks of advocated application memory and you access a pointer from one to
+
+26:05.360 --> 26:10.680
+the other could you get a false negative in this sense? So because that would not be
+
+26:10.680 --> 26:16.840
+a point and it would still be part of the application but for example what an address
+
+26:16.840 --> 26:40.160
+could you get? Yeah it can be. It can be a false positive case maybe. Yes. Okay. I think
+
+26:40.160 --> 26:47.160
+it was already partially answered before but I am not sure. So I am just going to ask it.
+
+26:47.160 --> 26:53.160
+So for example I am also working on an embedded scenario and we don't use, I think we don't
+
+26:53.160 --> 26:55.160
+use glpc or muscle like we have our own set of routines for malloc and free. Yes. Would
+
+26:55.160 --> 27:00.160
+it also work in that case or is that then something that you would need to, are there
+
+27:00.160 --> 27:06.720
+more requirements before you can use these sanitizers on those devices? For my experience
+
+27:06.720 --> 27:13.520
+I have been just using this meta-clang layer included and for testing with like or for
+
+27:13.520 --> 27:20.720
+just doing on the SDKs and emulator it was perfectly fine. So not on the actual devices
+
+27:20.720 --> 27:44.720
+because it is just meant for testing.
+
+27:44.720 --> 28:11.720
+All right. Thank you Manta. Thank you.
+
+28:14.720 --> 28:21.720
+Thank you.

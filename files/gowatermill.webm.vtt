@@ -1,0 +1,1015 @@
+WEBVTT
+
+00:00.000 --> 00:15.720
+Okay, this speaker claims that in 20 minutes, Robert is going to build an event-driven application.
+
+00:15.720 --> 00:18.160
+Well to be kind, I gave him 25 minutes.
+
+00:18.160 --> 00:20.200
+So start your countdown clocks.
+
+00:20.200 --> 00:21.200
+Hello.
+
+00:21.200 --> 00:33.200
+So my name is Robert, and yes, I would like to show you today that we can build an event-driven
+
+00:33.200 --> 00:38.320
+application in Go, and it can be as simple as building a simple HTTP server.
+
+00:38.320 --> 00:41.160
+And I actually decided to put the bar a bit higher.
+
+00:41.160 --> 00:47.440
+I think that I can do it within 15 minutes.
+
+00:47.440 --> 00:53.480
+All right, at the beginning, a couple of words about myself.
+
+00:53.480 --> 00:58.320
+So during the day, I work in a company named SlashID, so I work there as a principal engineer,
+
+00:58.320 --> 01:03.280
+and we are creating some identity and we're onboarding from a solution that is a bit more
+
+01:03.280 --> 01:07.480
+frictionless than a solution available now on the market.
+
+01:07.480 --> 01:12.840
+And during the night, I'm blogging at 3.0.tech blog, where we are writing some blog posts
+
+01:12.840 --> 01:19.600
+that are covering how to create Go applications that are business applications, but are also
+
+01:19.600 --> 01:21.920
+maintainable in the long term.
+
+01:21.920 --> 01:26.160
+I know maybe some of you had a chance to read at least one article there, there are some
+
+01:26.160 --> 01:27.160
+people.
+
+01:27.160 --> 01:28.160
+Nice.
+
+01:28.160 --> 01:31.160
+I will have something special for you later.
+
+01:31.160 --> 01:36.440
+You can find me on Twitter, GitHub, Mastodon, there's also my email if you would like to
+
+01:36.440 --> 01:40.600
+write to me and ask about something, but what's the most important for today?
+
+01:40.600 --> 01:44.720
+I'm Oselton of Watermill Library, and how everything started with Watermill, because
+
+01:44.720 --> 01:47.560
+I think that this is pretty important context.
+
+01:47.560 --> 01:53.800
+So a couple of years ago, I worked in a company where we are creating products that were not
+
+01:53.800 --> 02:00.080
+doing something super unusual, but the idea was that each user was able to add some content
+
+02:00.080 --> 02:06.280
+and he should be able to, we were storing it to MySQL, plus we wanted to have some more
+
+02:06.280 --> 02:14.320
+advanced search, plus have ability to create fit for other users with some magic machine
+
+02:14.320 --> 02:17.280
+learning models that they were doing personalization.
+
+02:17.280 --> 02:21.240
+And usually if you are building such kind of system in a synchronous way, there's one
+
+02:21.240 --> 02:22.240
+problem.
+
+02:22.240 --> 02:28.400
+So this part may be sometimes slow, because elastic search is under high load, or magic
+
+02:28.400 --> 02:32.600
+machine learning model so that this day it will not work.
+
+02:32.600 --> 02:36.120
+Not nice, but it happens in work, unfortunately.
+
+02:36.120 --> 02:42.040
+And yeah, or even worse, for example, some part is not working, and it's not best user
+
+02:42.040 --> 02:46.560
+experience if it's working slowly, or it's, so for example, you can imagine that you're
+
+02:46.560 --> 02:51.160
+adding some tweet and you're waiting for 10 seconds, because I know elastic search need
+
+02:51.160 --> 02:56.200
+to index something or machine learning model is working slowly, or even you are not able
+
+02:56.200 --> 02:57.680
+to add this content.
+
+02:57.680 --> 03:03.920
+And it doesn't make sense, because everything what is done on this other part of the diagram
+
+03:03.920 --> 03:09.280
+could be done asynchronously, because okay, it's not a problem if, for example, the search,
+
+03:09.280 --> 03:14.440
+some content that was added cannot be searched, for example, for one minute after it's added,
+
+03:14.440 --> 03:15.440
+if something is done.
+
+03:15.440 --> 03:18.960
+It's much better than not allowing people to add anything.
+
+03:18.960 --> 03:26.880
+So by the book, the default solution for such problems is using some kind of pop-up and
+
+03:26.880 --> 03:28.560
+doing it asynchronously.
+
+03:28.560 --> 03:35.160
+So in this case, we decided to use Kafka, because it's scalable, it's nice, but as usually
+
+03:35.160 --> 03:39.400
+with some concepts that you're reading in the books or listening on the conferences,
+
+03:39.400 --> 03:41.520
+it's not that simple in practice.
+
+03:41.520 --> 03:44.000
+And it was also the case here.
+
+03:44.000 --> 03:48.880
+The first problem was that the big part of the team wasn't actually working in asynchronous
+
+03:48.880 --> 03:50.040
+architectures earlier.
+
+03:50.040 --> 03:54.240
+That kind of makes sense, because if you're starting to learn to code, you're not starting
+
+03:54.240 --> 03:59.520
+with building some event-driven application, you're rather creating some REST API or website.
+
+03:59.520 --> 04:09.840
+So it makes sense that it was a big entry point for people that didn't use that.
+
+04:09.840 --> 04:16.280
+And it was not the only problem, because event-driven architecture has a lot of concepts that you
+
+04:16.280 --> 04:23.840
+need to know, like customer groups, partitioning, message ordering, at least one's delivery,
+
+04:23.840 --> 04:26.400
+acknowledge negative, acknowledge poison queue.
+
+04:26.400 --> 04:29.320
+And with all of that, you need to be sure that you didn't miss an event.
+
+04:29.320 --> 04:31.400
+And it's pretty important in some domains.
+
+04:31.400 --> 04:34.960
+In some cases, okay, it's fine, you're missing some event and okay.
+
+04:34.960 --> 04:39.720
+But for example, I used to work in the financial domain, and losing one event may, for example,
+
+04:39.720 --> 04:41.800
+mean that somebody will be not paid out.
+
+04:41.800 --> 04:42.800
+Not nice.
+
+04:42.800 --> 04:47.640
+In general, I believe that as engineers, we should be responsible, because sometimes the
+
+04:47.640 --> 04:52.640
+code that we are building has a really big impact to the real life.
+
+04:52.640 --> 04:57.520
+And after thinking for a while, I actually started to wonder, is it maybe something that
+
+04:57.520 --> 05:02.960
+I can do to making, to building some kind of applications in Go simpler?
+
+05:02.960 --> 05:03.960
+And here we are.
+
+05:03.960 --> 05:06.160
+This is how WaterMill was created.
+
+05:06.160 --> 05:10.880
+So far, we have more than 5,000 stars in the Github.
+
+05:10.880 --> 05:14.920
+We have more than 50 contributors across multiple WaterMill repositories.
+
+05:14.920 --> 05:24.640
+We are supporting 12 different PubSupp implementations, like Kafka, like Google Cloud PubSupp, like
+
+05:24.640 --> 05:30.320
+NATS JetStream, Rabbit and Q, but we have also some more strange implementations, like
+
+05:30.320 --> 05:35.240
+MySQL, for example, if you don't have infrastructure for some real PubSupp, or for example, would
+
+05:35.240 --> 05:38.840
+like to avoid to face commits problem.
+
+05:38.840 --> 05:44.480
+If you are doing some more fun projects, you can have just Go channel implementation
+
+05:44.480 --> 05:46.480
+or BoldDB, for example.
+
+05:46.480 --> 05:51.080
+But there is one more important thing than that, WaterMill has logo, and it is a logo
+
+05:51.080 --> 05:57.680
+with Go for Vomiting to Gobernati's logo, not as Muai.
+
+05:57.680 --> 06:03.720
+And you can think about WaterMill, like, so let's go back to this HTTP server example.
+
+06:03.720 --> 06:08.600
+So you can think about WaterMill, like something that makes your life simpler, like standard
+
+06:08.600 --> 06:09.600
+library for HTTP.
+
+06:09.600 --> 06:14.600
+So, for example, if you are implementing an HTTP server, you don't care about TLS, layers
+
+06:14.600 --> 06:18.880
+of network, you can start connection pooling and all this stuff, you are just implementing
+
+06:18.880 --> 06:19.880
+the logic in most cases.
+
+06:19.880 --> 06:24.120
+Sometimes, of course, you may have some specific scenarios that you care about that, but in
+
+06:24.120 --> 06:29.360
+most cases, you should just implement your handlers and don't care about everything around.
+
+06:29.360 --> 06:37.320
+And as you already, some of you shown, so I sometimes wrote the article that I think
+
+06:37.320 --> 06:43.080
+that frameworks are probably not working best in Go, and WaterMill is also, for example,
+
+06:43.080 --> 06:45.760
+that's the case why WaterMill is actually a library.
+
+06:45.760 --> 06:48.960
+And it's pretty good to upside.
+
+06:48.960 --> 06:52.920
+So the first one is that if you already have some system and you would like to migrate
+
+06:52.920 --> 06:57.760
+to WaterMill, it's kind of simple, because WaterMill doesn't add anything super custom
+
+06:57.760 --> 07:02.760
+and it can be integrated with any existing system, and vice versa.
+
+07:02.760 --> 07:07.560
+See, for example, for some reason, you decide that you don't like WaterMill, but you will
+
+07:07.560 --> 07:08.560
+not.
+
+07:08.560 --> 07:11.560
+So you can migrate from WaterMill to some different library.
+
+07:11.560 --> 07:12.720
+So this is the good thing.
+
+07:12.720 --> 07:16.880
+And I think what's pretty important, so how everything is done, because, okay, in theory
+
+07:16.880 --> 07:22.480
+it may sound nice, but it's helping, but how WaterMill is built.
+
+07:22.480 --> 07:29.200
+And in the heart of WaterMill, I would say that you can see in multiple places something
+
+07:29.200 --> 07:30.440
+that is named UNIX philosophy.
+
+07:30.440 --> 07:34.600
+And it's kind of old philosophy, because it's from 1978.
+
+07:34.600 --> 07:38.960
+And it's saying us to write programs that do one thing and do it well, write programs
+
+07:38.960 --> 07:44.320
+to work together, and write programs to handle, in our case, message.
+
+07:44.320 --> 07:46.640
+Because that is a universal interface.
+
+07:46.640 --> 07:48.640
+And some small question now.
+
+07:48.640 --> 07:53.640
+Do you know who's that?
+
+07:53.640 --> 07:54.640
+So it's Ken Thompson.
+
+07:54.640 --> 07:57.000
+So he's the author of this philosophy.
+
+07:57.000 --> 08:01.800
+And what's also interesting, he's one of the authors of Go programming language.
+
+08:01.800 --> 08:06.440
+Actually it makes sense, because if you look on the Go, for example, to IO Reader or our
+
+08:06.440 --> 08:09.240
+writer, this is pretty nicely visible there.
+
+08:09.240 --> 08:13.880
+And I know that for a lot of people didn't know about UNIX philosophy.
+
+08:13.880 --> 08:18.080
+And sometimes when I have too much time to think, I have some impression that, no, sometimes
+
+08:18.080 --> 08:23.880
+we forgot about some good old ideas and we're trying to reinvent the wheel, even if some
+
+08:23.880 --> 08:26.560
+problems were already solved.
+
+08:26.560 --> 08:32.000
+And you know, it's maybe something like in Dark Ages that it was some old nice ideas,
+
+08:32.000 --> 08:34.040
+but it was a bit forgotten.
+
+08:34.040 --> 08:36.200
+And OK, maybe I'm thinking too much.
+
+08:36.200 --> 08:38.400
+Let's go back to the watermill.
+
+08:38.400 --> 08:42.840
+So there are a couple important times in watermill.
+
+08:42.840 --> 08:44.600
+So the first one is message.
+
+08:44.600 --> 08:48.520
+So if you compare it to HTTP server, so it's something similar to HTTP request.
+
+08:48.520 --> 08:51.840
+So in message we have UID, that is pretty useful for debugging.
+
+08:51.840 --> 08:52.840
+We have metadata.
+
+08:52.840 --> 08:56.800
+So metadata is something like headers request plus payload.
+
+08:56.800 --> 09:01.680
+So this is the place where you are storing your event, for example.
+
+09:01.680 --> 09:07.160
+The two next important parts of watermill are publisher and subscriber.
+
+09:07.160 --> 09:09.920
+So publisher, you can publish those messages.
+
+09:09.920 --> 09:12.000
+And with subscriber, you're right.
+
+09:12.000 --> 09:17.160
+You can subscribe for those messages from the provided topic and receive that by the
+
+09:17.160 --> 09:18.160
+channel.
+
+09:18.160 --> 09:21.360
+You usually are not using these interfaces because it's used somewhere internally in
+
+09:21.360 --> 09:23.000
+watermill.
+
+09:23.000 --> 09:27.000
+But for example, if you would like to add a new implementation of PubSub, this is something
+
+09:27.000 --> 09:28.000
+that you're implementing.
+
+09:28.000 --> 09:30.840
+And each PubSub implementation is implementing this interface.
+
+09:30.840 --> 09:32.560
+That's why I actually pretty like this interface.
+
+09:32.560 --> 09:38.160
+Because it's making some constraint on the implementers that, OK, they need to implement
+
+09:38.160 --> 09:39.600
+that in that way.
+
+09:39.600 --> 09:47.600
+But it's also not good because it's making each of them pretty compatible with themselves.
+
+09:47.600 --> 09:51.040
+And the last but not least type is hender function.
+
+09:51.040 --> 09:56.760
+Hender function is something like HTTP handler that you are implementing in your HTTP server
+
+09:56.760 --> 10:00.320
+with the small difference that instead of receiving HTTP request, you are receiving
+
+10:00.320 --> 10:01.320
+a message.
+
+10:01.320 --> 10:03.000
+And optionally, you can receive the message.
+
+10:03.000 --> 10:09.600
+So the idea is that you can react on some message, do something, and emit some other
+
+10:09.600 --> 10:11.640
+messages so you can do some kind of changing later.
+
+10:11.640 --> 10:14.600
+I will show shortly an example.
+
+10:14.600 --> 10:19.040
+And everything is magically connected, sorry, it may be small, but you need to trust me
+
+10:19.040 --> 10:22.000
+that in the middle there is a router here.
+
+10:22.000 --> 10:23.640
+And this is connecting everything.
+
+10:23.640 --> 10:28.840
+So the message is going from some publisher, it doesn't need to be WaterMill, it's going
+
+10:28.840 --> 10:33.800
+to the queue by subscriber, the router.
+
+10:33.800 --> 10:35.720
+Router is passing it through middleware.
+
+10:35.720 --> 10:40.840
+Middleware works in WaterMill like HTTP, so another thing that is pretty similar.
+
+10:40.840 --> 10:43.400
+And it's processed by handlers.
+
+10:43.400 --> 10:48.000
+And later, if we want, we can publish some other messages.
+
+10:48.000 --> 10:49.600
+Not super complex.
+
+10:49.600 --> 10:54.480
+So do you know the first rule of live coding?
+
+10:54.480 --> 10:55.480
+Don't do live coding.
+
+10:55.480 --> 10:57.480
+So do live coding.
+
+10:57.480 --> 11:00.480
+What can go wrong?
+
+11:00.480 --> 11:01.480
+All right.
+
+11:01.480 --> 11:28.120
+Like to change sharing settings, so on second, it's probably not this one.
+
+11:28.120 --> 11:34.120
+This is why you are not doing live coding.
+
+11:34.120 --> 11:36.120
+Yes.
+
+11:36.120 --> 11:38.120
+Okay.
+
+11:38.120 --> 11:57.520
+So something does work, that's good, but I'm not really like, I want it.
+
+11:57.520 --> 11:59.800
+This is something that I wanted to have.
+
+11:59.800 --> 12:03.280
+So I prepared a simple application here.
+
+12:03.280 --> 12:04.840
+And what does application does?
+
+12:04.840 --> 12:09.280
+So if you're not from Brussels, so this may be something familiar to you.
+
+12:09.280 --> 12:12.480
+So it allows you to book a room in hotel.
+
+12:12.480 --> 12:18.160
+So you can provide room ID, pass guest counts, and let's see if it works.
+
+12:18.160 --> 12:19.160
+Okay.
+
+12:19.160 --> 12:21.120
+It seems that it's not working sometimes.
+
+12:21.120 --> 12:22.800
+Sometimes it's working.
+
+12:22.800 --> 12:25.880
+Sometimes it's not working.
+
+12:25.880 --> 12:30.840
+Sometimes it's working slowly, slowly, slowly, slowly.
+
+12:30.840 --> 12:32.240
+Sometimes it's even not working slowly.
+
+12:32.240 --> 12:33.600
+So it's even worse.
+
+12:33.600 --> 12:38.600
+So let's check the source code of that application.
+
+12:38.600 --> 12:39.600
+So okay.
+
+12:39.600 --> 12:46.400
+So here we are running HTTP, so boring, signals handling boring, but this is probably not
+
+12:46.400 --> 12:47.400
+boring.
+
+12:47.400 --> 12:51.280
+This is usually when the most interesting part of the application lives.
+
+12:51.280 --> 12:52.280
+Let's check our handler.
+
+12:52.280 --> 12:59.000
+So okay, so we are unmartialing stuff, to book room request, we have some advanced algorithm
+
+12:59.000 --> 13:02.680
+of calculation of room price, and we are taking payment.
+
+13:02.680 --> 13:04.800
+What can go wrong here?
+
+13:04.800 --> 13:10.840
+And okay, as we can see, our payment provider, it's not super stable, but okay, I don't know,
+
+13:10.840 --> 13:15.440
+let's imagine that it's our boss colleague and we cannot change that, no, politics.
+
+13:15.440 --> 13:16.440
+It happens.
+
+13:16.440 --> 13:17.440
+It's okay.
+
+13:17.440 --> 13:18.440
+What we can do?
+
+13:18.440 --> 13:25.280
+We can do like that, go, fang, okay, done, it works now, but it's one problem with that.
+
+13:25.280 --> 13:31.720
+So if our server will die, there is a chance that we'll not take payment, and it doesn't
+
+13:31.720 --> 13:33.000
+like that as the best idea.
+
+13:33.000 --> 13:34.800
+So what will be my idea?
+
+13:34.800 --> 13:40.440
+So instead of doing it synchronously with this HTTP handler, I would like to emit some
+
+13:40.440 --> 13:46.400
+event, listen to that event, and take payment asynchronously.
+
+13:46.400 --> 13:49.120
+So let's do that, and let's do that with watermill, of course.
+
+13:49.120 --> 13:56.120
+So at the beginning, we need to get rid of that, and we need to have our publisher here.
+
+13:56.120 --> 14:04.160
+Message publisher, so this is the interface that you should remember, all right.
+
+14:04.160 --> 14:09.040
+And I also can prepare some code snippets to not lose time on some boring stuff like
+
+14:09.040 --> 14:10.040
+room booked.
+
+14:10.040 --> 14:28.080
+Well, we have our event, so room booked, all right, guest count, and price, room, price.
+
+14:28.080 --> 14:32.840
+All right, now we need to marshal that, because we are sending bytes between our processes
+
+14:32.840 --> 14:38.040
+through our PAPS app, so JSON, because JSON is kind of common and it's pretty easy to
+
+14:38.040 --> 14:39.040
+debug.
+
+14:39.040 --> 14:50.240
+So let's marshal that, payload error, room booked.
+
+14:50.240 --> 14:58.800
+Don't do such error handling at home, please.
+
+14:58.800 --> 15:01.120
+And now let's publish that.
+
+15:01.120 --> 15:09.320
+The H publisher, publish topic, so let's use bookings, and we need our message.
+
+15:09.320 --> 15:17.000
+Let's remember we need to have UID, so it doesn't matter actually what format of UID
+
+15:17.000 --> 15:23.560
+it can be, I know, it can be even empty for some plantations, but good luck with debugging,
+
+15:23.560 --> 15:25.400
+and room booked payloads.
+
+15:25.400 --> 15:33.640
+All right, and it returns error, so we need to handle that in not a nice way, but it's
+
+15:33.640 --> 15:35.040
+live coding, so it's fine.
+
+15:35.040 --> 15:37.080
+All right, so we have the first part.
+
+15:37.080 --> 15:44.280
+So we have our room booked event, we're publishing that to the topic bookings, and, okay, so
+
+15:44.280 --> 15:46.280
+we just need to inject now the publisher.
+
+15:46.280 --> 15:50.640
+So let's check where it's created, okay, we no longer need payments.
+
+15:50.640 --> 15:53.480
+I heard that Kafka is nice and scalable, so let's use Kafka.
+
+15:53.480 --> 15:58.760
+I have also snippet for that, it's nothing magical here, it's just this and the water
+
+15:58.760 --> 16:02.160
+mid-documentation, and let's use this publisher.
+
+16:02.160 --> 16:06.160
+We don't need subscriber yet, but probably we'll need it later.
+
+16:06.160 --> 16:12.480
+All right, by the way, I'm running some nice Docker Compos under the hood that is recompiling
+
+16:12.480 --> 16:15.560
+the project each time when I'm putting changes there.
+
+16:15.560 --> 16:20.320
+At the end of the presentation, I will give you materials with all the source code, and
+
+16:20.320 --> 16:25.200
+with the description of how it's done, that it's automatically reloading after each change.
+
+16:25.200 --> 16:29.960
+All right, so we have our publisher, we are publishing our event, so let's check if it
+
+16:29.960 --> 16:30.960
+works.
+
+16:30.960 --> 16:37.000
+Hopefully it will work, okay, so you can see that our API is pretty stable, and let's check
+
+16:37.000 --> 16:40.560
+if our event is really published.
+
+16:40.560 --> 16:46.680
+So we'll use mule tool, so mule is part of water mule, as you can guess, and we'll consume
+
+16:46.680 --> 16:48.400
+from bookings from Kafka.
+
+16:48.400 --> 16:53.520
+Mule is allowing you to consume messages from multiple Pub-Sub types that are supported
+
+16:53.520 --> 16:54.520
+in water mule.
+
+16:54.520 --> 17:00.320
+I know that there is tool for that in Kafka, but it's not mine, so.
+
+17:00.320 --> 17:04.000
+And yeah, with mule, you can use multiple Pub-Sub types, and okay, as you can see, now
+
+17:04.000 --> 17:06.400
+we have event here, so it seems to work.
+
+17:06.400 --> 17:08.560
+Okay, so done, thank you.
+
+17:08.560 --> 17:09.560
+Not really.
+
+17:09.560 --> 17:16.560
+We are not taking payments, so probably if our company will go bankrupt pretty quickly,
+
+17:16.560 --> 17:19.400
+so we'll need to start to take payments.
+
+17:19.400 --> 17:29.920
+So for that, we already have our subscriber, that's good, so let's uncomment that, okay.
+
+17:29.920 --> 17:44.080
+We need to have water mule router, so message router error, router config, water mule logger,
+
+17:44.080 --> 17:47.120
+router handling, and now we need to add a handler.
+
+17:47.120 --> 17:53.480
+So we'll use addHander, so we'll need to provide handler name, so it will be payments.
+
+17:53.480 --> 17:58.960
+It doesn't matter really what is the handler name, but again, pretty useful for debugging.
+
+17:58.960 --> 17:59.960
+Subscribe topic.
+
+17:59.960 --> 18:07.040
+So we're subscribing to the topic that we published this message, so this is bookings.
+
+18:07.040 --> 18:12.640
+Bookings, we need to use subscriber, and we need to publish the topic.
+
+18:12.640 --> 18:25.960
+So we'll publish event when we succeed to take payments, so payments, publisher, and
+
+18:25.960 --> 18:26.960
+handler function.
+
+18:26.960 --> 18:31.480
+So hopefully you remember handler function signature, so yeah, we are receiving message
+
+18:31.480 --> 18:38.400
+and we are returning message, but we'll do it in a bit more fancy way, payments handler,
+
+18:38.400 --> 18:46.240
+because we can inject some dependencies earlier, I need to fix that, and that, all right.
+
+18:46.240 --> 18:52.040
+So we have our payments handler, so we'll receive message, and we'll take payment and
+
+18:52.040 --> 18:53.400
+emit some event.
+
+18:53.400 --> 19:01.840
+So we need to have our payment provider, and what?
+
+19:01.840 --> 19:20.080
+We need to have room booked, we need to have our shoulder, so message payload to room booked.
+
+19:20.080 --> 19:26.840
+And compared to standard library HTTP handler, you can return errors from a water new handler,
+
+19:26.840 --> 19:30.240
+so I don't need to panic.
+
+19:30.240 --> 19:35.760
+And all right, so we should have the payload that we published here, so that's good, so
+
+19:35.760 --> 19:46.320
+we can now use that to take payment for room booked price, great, great.
+
+19:46.320 --> 19:49.720
+And as I said, so I would like to also, I need some event, so it may be useful, so if
+
+19:49.720 --> 19:54.360
+you're an intimate event that we took the payment, we can have some BI or we can, I
+
+19:54.360 --> 19:57.760
+don't know, do something else, I mean, I don't know, we can send beer to this person
+
+19:57.760 --> 20:01.120
+after he booked room, because why not?
+
+20:01.120 --> 20:18.840
+And, okay, so we need the second event, payment taken, payment taken, filled, filled, room
+
+20:18.840 --> 20:27.640
+booked, room booked as well as price, and we need to marshal it again to JSON.
+
+20:27.640 --> 20:28.640
+Error.
+
+20:28.640 --> 20:47.160
+Cool, okay, and the last thing that we need to do is returning message, message as new,
+
+20:47.160 --> 20:54.840
+message new, UID new string, and payment taken payload.
+
+20:54.840 --> 21:01.320
+I hope that I'm not writing too fast or too slow, all right, so in there, there is a chance
+
+21:01.320 --> 21:05.920
+that it may work, so what we are doing, so we are receiving our room booked event, we
+
+21:05.920 --> 21:11.720
+are marshaling that, we are taking payment, and when we succeed, we are emitting another
+
+21:11.720 --> 21:12.720
+event.
+
+21:12.720 --> 21:18.560
+Sounds like a done, so the only thing that we need to do is to reuse that handler, so
+
+21:18.560 --> 21:29.640
+we have that one, and handler, cool, let's check if it compiles, it even compiles, so
+
+21:29.640 --> 21:36.200
+let's check if it's working, so let's book a couple rooms, and the idea is that by default
+
+21:36.200 --> 21:48.520
+WaterMe handler will try if the payment provider failed, so in there we should see some information
+
+21:48.520 --> 21:54.520
+that payment was taken, and we don't see that, I don't, I know why we don't see that, because
+
+21:54.520 --> 22:06.280
+we didn't start at router, run, context, error, it's a bit naive implementation because it's
+
+22:06.280 --> 22:12.120
+not really graceful shutdown, but what in the documentation, as I remember, we have
+
+22:12.120 --> 22:18.840
+examples with real graceful shutdown, so, okay, and let's see, okay, so we have some
+
+22:18.840 --> 22:28.400
+random error, and you can see payment taken, hooray, our company is saved, all right, so
+
+22:28.400 --> 22:34.560
+this is working, but there's one problem with that, so now we figure out that, okay, actually
+
+22:34.560 --> 22:40.760
+Kafka is a bit hard to run, and we are on GCP, so maybe we can just Google it, so I think
+
+22:40.760 --> 22:45.840
+that I can change Kafka implementation to Google, it pops up in one minute, I'm rewriting
+
+22:45.840 --> 22:58.760
+the bar today, hi, but I think that I can do that, let's start the timer, one, two,
+
+22:58.760 --> 23:21.720
+three, okay, let's check, I think I did that, so let's book, and okay, payment taken, we
+
+23:21.720 --> 23:38.000
+can double check, so let's use meal, and let's consume bookings, you see, it works, all right,
+
+23:38.000 --> 23:44.200
+so it will be that from live coding, one last thing that I would like to show you, because
+
+23:44.200 --> 23:49.400
+you may notice that, okay, it's a lot of boring JSON there, et cetera, et cetera, you may
+
+23:49.400 --> 23:53.800
+notice that I don't like boring stuff, because probably there are more interesting things
+
+23:53.800 --> 24:00.840
+to do than marshalling to JSON, so that's because of that we created a component that
+
+24:00.840 --> 24:07.480
+is named CQRS component, and the idea is that instead of doing this JSON-marshall and all
+
+24:07.480 --> 24:12.600
+that stuff, you can provide configuration to which format you would like to marshall everything,
+
+24:12.600 --> 24:17.680
+and under the hood it would be done, so you can use JSON, you can use Protobuf, Avro,
+
+24:17.680 --> 24:22.120
+I don't know, even something custom if you really want, the idea is that you're only
+
+24:22.120 --> 24:27.000
+implementing this interface, so you're providing the name of the handler, you are providing
+
+24:27.000 --> 24:33.560
+the event that you are expecting to receive, so in that case it will be room-booked, and
+
+24:33.560 --> 24:38.440
+you may notice that it was pre-generic, so we have the interface here, but we are working
+
+24:38.440 --> 24:45.720
+on the newer version, and you are just receiving this event, zero, un-marshalling, or whatever,
+
+24:45.720 --> 24:51.800
+and the same is going when you are publishing an event, so you are just providing the struct
+
+24:51.800 --> 24:55.880
+and watermill under the hood is doing all the marshalling stuff.
+
+24:55.880 --> 25:03.080
+Okay, so I think that will be all for live coding, it looks that I was lucky this time
+
+25:03.080 --> 25:09.200
+that everything worked, and yeah, of course it's still not production-grade implementation,
+
+25:09.200 --> 25:14.720
+I mean it's even hard to create a production-grade implementation of HTTP server, so it's more
+
+25:14.720 --> 25:19.440
+kind of inspiration to look deeper and see that, okay, it's not that scary, but you need
+
+25:19.440 --> 25:24.360
+to take into consideration that there are things like Kafka and Google Cloud pops-up
+
+25:24.360 --> 25:29.200
+internals, what is once delivery, actually shown the secure component, but I didn't
+
+25:29.200 --> 25:35.920
+call that, but it's helping a bit, so where you should start, because okay, it may be
+
+25:35.920 --> 25:40.760
+a lot of sources for you, and a lot of stuff to check, so I heard that we have pretty nice
+
+25:40.760 --> 25:46.720
+documentation, so we don't have any consulting or whatever for watermill, so we kind of don't
+
+25:46.720 --> 25:52.240
+care to have bad documentation, so yeah, I heard that we have pretty good documentation,
+
+25:52.240 --> 26:00.200
+so at the end of the presentation it will be in the link, what else, we have also a
+
+26:00.200 --> 26:09.600
+lot of examples in watermill, so I will encourage you to, it's black, oh, live coding, okay,
+
+26:09.600 --> 26:14.400
+it's not live coding, not only live coding, it's risky, so yeah, we have a lot of examples
+
+26:14.400 --> 26:18.400
+that probably you cannot see because it's on the black, but you need to believe me that
+
+26:18.400 --> 26:23.840
+this is on the watermill repository, at this point I wanted to say a big thank you to all
+
+26:23.840 --> 26:30.040
+watermill contributors, because without you it wouldn't be like it's now, and it's not
+
+26:30.040 --> 26:35.120
+an announcement that we actually released watermill 1.2 after having too many release
+
+26:35.120 --> 26:39.640
+candidates, so yeah, finally it's released, and you are all invited to an online release
+
+26:39.640 --> 26:45.200
+party, and we will say what are the new features, and it will be on March 1st, on the last link
+
+26:45.200 --> 26:50.440
+it will be also linked for that, and I think that will be also, this is the, again it's
+
+26:50.440 --> 26:54.880
+not working, oh, yeah, so this is the link that I promised to give you, the bonus that
+
+26:54.880 --> 27:00.600
+I have, I have super fancy holographic sticker notes, I'm sure that you don't have sticker
+
+27:00.600 --> 27:04.360
+notes, laptop stickers, so I'm sure that you don't have holographic ones, so if you don't
+
+27:04.360 --> 27:09.320
+have, so I have a lot of them, and yeah, I think that would be all, so thank you very
+
+27:09.320 --> 27:10.320
+much for your attention.
+
+27:10.320 --> 27:11.320
+Thank you.
+
+27:11.320 --> 27:37.320
+Thank you.

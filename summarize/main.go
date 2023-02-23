@@ -101,9 +101,13 @@ func main() {
 		// Link in HTML
 		// Replace `<a href="files/foo.webm.json">JSON</a>`
 		// with `<a href="files/foo.webm.summary.txt">Summary</a> <a href="files/foo.webm.json">JSON</a>`
-		old := `<a href="files/` + entry.Name() + `">JSON</a>`
-		new := `<a href="files/` + strings.TrimSuffix(entry.Name(), ".json") + ".summary.txt" + `">Summary</a> ` + old
-		linksString = strings.Replace(linksString, old, new, -1)
+		// But only if the summary link doesn't exist yet (to allow re-running this CLI multiple times).
+		summaryLink := `<a href="files/` + strings.TrimSuffix(entry.Name(), ".json") + ".summary.txt" + `">Summary</a>`
+		if !strings.Contains(linksString, summaryLink) {
+			old := `<a href="files/` + entry.Name() + `">JSON</a>`
+			new := summaryLink + " " + old
+			linksString = strings.Replace(linksString, old, new, -1)
+		}
 	}
 
 	err = os.WriteFile(*dir+"/../links.html", []byte(linksString), 0644)

@@ -84,9 +84,15 @@ func main() {
 			log.Println("Couldn't create GPT-3 completion:", err)
 			continue
 		}
+		summary := resp.Choices[0].Text
+		summary = strings.TrimSpace(summary)
+		if summary == "" {
+			log.Println("Empty summary, skipping.")
+			continue
+		}
 
 		summaryFilePath := strings.TrimSuffix(filePath, ".json") + ".summary.txt"
-		err = os.WriteFile(summaryFilePath, []byte(resp.Choices[0].Text), 0644)
+		err = os.WriteFile(summaryFilePath, []byte(summary), 0644)
 		if err != nil {
 			log.Println("Couldn't write summary file:", err)
 			continue

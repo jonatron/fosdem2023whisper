@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	gogpt "github.com/sashabaranov/go-gpt3"
+	"github.com/sashabaranov/go-openai"
 )
 
 var (
@@ -36,7 +36,7 @@ func main() {
 	}
 	linksString := string(linksContent)
 
-	c := gogpt.NewClient(*apiToken)
+	c := openai.NewClient(*apiToken)
 
 	promptPrefix := "The following text is the transcript of a talk given at the FOSDEM conference in 2023. FOSDEM is about free and open source software development. Because the transcript was created by a speech-to-text machine learning model, there might be some errors and typos. There might also be a Questions and Answers section at the end. Please summarize the talk in a few sentences, while leaving out the Q&A section."
 
@@ -64,7 +64,7 @@ func main() {
 			continue
 		}
 
-		// OpenAPI GPT-3's Davinci 003 model only allows 4000 tokens, which is around 3000 words.
+		// OpenAPI gpt-3.5-turbo model only allows 4000 tokens, which is around 3000 words.
 		// Splitting in chunks will make the model lose context, so we skip long transcripts.
 		// With the prompt prefix and summary completion, let's check for 2700 words.
 		if len(strings.Fields(transcript.Text)) > 2700 {
@@ -74,17 +74,21 @@ func main() {
 
 		fmt.Println("Summarizing", entry.Name())
 
-		req := gogpt.CompletionRequest{
-			Model:     gogpt.GPT3TextDavinci003,
-			MaxTokens: 256,
-			Prompt:    promptPrefix + "\n\n" + transcript.Text,
+		req := openai.ChatCompletionRequest{
+			Model: openai.GPT3Dot5Turbo,
+			Messages: []openai.ChatCompletionMessage{
+				{
+					Role:    openai.ChatMessageRoleUser,
+					Content: promptPrefix + "\n\n" + transcript.Text,
+				},
+			},
 		}
-		resp, err := c.CreateCompletion(ctx, req)
+		resp, err := c.CreateChatCompletion(ctx, req)
 		if err != nil {
-			log.Println("Couldn't create GPT-3 completion:", err)
+			log.Println("Couldn't create gpt-3.5-turbo completion:", err)
 			continue
 		}
-		summary := resp.Choices[0].Text
+		summary := resp.Choices[0].Message.Content
 		summary = strings.TrimSpace(summary)
 		if summary == "" {
 			log.Println("Empty summary, skipping.")

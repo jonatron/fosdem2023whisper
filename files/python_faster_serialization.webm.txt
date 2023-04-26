@@ -1,0 +1,177 @@
+[00:00.000 --> 00:12.480]  Hello, everybody, and welcome to the second talk of the Python Dev Room, where Vadim
+[00:12.480 --> 00:18.160]  Markovstev will be talking to you about accelerating object serialization using constraints.
+[00:18.160 --> 00:25.280]  I'm really happy to welcome him here, and I hope you will enjoy this talk.
+[00:25.520 --> 00:29.520]  Thank you.
+[00:32.560 --> 00:39.120]  So let's start with a short bio. I'm a backend developer. I'm also a machine learning engineer.
+[00:39.120 --> 00:43.040]  Used to be a Google developer expert in machine learning before the COVID.
+[00:44.160 --> 00:50.320]  I call it in quite a few languages in the last 12 months, mostly in Python and Go, a bit of cc++.
+[00:51.040 --> 00:57.200]  And I work in Athenian. This is a startup. It does a software service product for engineering
+[00:57.200 --> 01:05.120]  leaders. So the talk will be divided into two parts. The first will be about some custom binary
+[01:05.120 --> 01:12.000]  serialization that I had to do in my daily job. And the second will be about speeding up JSON dump.
+[01:12.960 --> 01:19.760]  So the first is about how I coded something that was working faster than people by
+[01:19.760 --> 01:26.880]  many, many times. And why I had to do that? Well, apparently because I had a use case that
+[01:27.520 --> 01:33.760]  didn't really fit well into regular, pickling into regular serialization of pandas data frames.
+[01:34.480 --> 01:40.640]  And it's not necessarily a best practice to materialize a huge pandas data frame
+[01:40.640 --> 01:46.880]  while you're serving a request. But nevertheless, I had to do that. And it was really big,
+[01:46.880 --> 01:53.920]  a few megabytes at least. And I noticed that according to the traces, picking it just took
+[01:53.920 --> 01:59.040]  too much time. And we really needed to put it into distributed cache. Otherwise,
+[01:59.040 --> 02:05.760]  you would spend extra time recomputing it in every request. And that data frame was quite
+[02:05.760 --> 02:12.480]  special. I mean, it's not a usual bunch of integers and floating points. No, it was quite
+[02:12.480 --> 02:19.280]  complex. It contained strings, it contained daytime columns, could be numpy daytime,
+[02:19.280 --> 02:27.280]  could be just regular Python objects, contained nested lists and digs, and even nested numpy
+[02:27.280 --> 02:33.440]  arrays. So it was quite complex. And this was mostly the reason why regular serialization,
+[02:33.440 --> 02:42.000]  arrow and everything worked too slow in serializing it. So I came up with a custom binary format.
+[02:43.040 --> 02:50.480]  And although it's not really open, it's also public and everyone can study the source code.
+[02:50.480 --> 02:56.960]  It's not universal. Really, it only supports the types inside the pandas data frame that
+[02:57.600 --> 03:04.800]  we had to serialize at work. It's not backward compatible. It's not portable at all. It doesn't
+[03:04.800 --> 03:10.640]  fit well into different CPU architectures or it always assumes Linux and it always
+[03:10.640 --> 03:16.640]  assumes CPython 3.11. And this is quite important. I'll talk about it a little bit later.
+[03:17.360 --> 03:23.040]  So this is generally a really, really bad idea. And you only do that when you don't have any other
+[03:23.040 --> 03:30.320]  options. And you need to squeeze a lot of performance in the backend. However, on the bright side,
+[03:31.360 --> 03:38.800]  it was quite compact code. Cytan, because performance. It's a single pass serializer
+[03:39.680 --> 03:45.440]  really, really, really fast. And also it releases Jill. This is something that regular people or
+[03:45.440 --> 03:54.480]  arrow cannot do for the constraint that they had to be universal and pickle everything, any object.
+[03:55.920 --> 04:00.000]  As soon as you have an assumption of what kind of object you can serialize,
+[04:00.000 --> 04:04.960]  you can call it in Cytan in such a way that you release Jill and it works even faster.
+[04:05.680 --> 04:12.720]  And also other code to execute in parallel. And releasing Jill is probably the hardest
+[04:12.720 --> 04:19.840]  feature in this serializer because it was more labor intensive that I initially thought.
+[04:19.840 --> 04:30.640]  You see Cytan offers C API wrapper for a lot of APIs inside CPython API. And they are great.
+[04:30.640 --> 04:36.160]  However, as soon as you release the Jill, you cannot use them. Just Cytan doesn't compile it.
+[04:36.160 --> 04:43.280]  And this is a good thing because to use these wrappers without Jill, you need to be absolutely
+[04:43.280 --> 04:47.520]  sure that you are doing the right thing, that you are not using the heap, that you're not writing
+[04:47.520 --> 04:53.760]  to any Python objects, also that those Python objects are not mutated somewhere else. This is
+[04:53.760 --> 05:01.840]  all true for our backend, but it can be different in other use cases. So this is what happens.
+[05:02.720 --> 05:10.080]  And what if there is no C API at all or some C API wrapper missing?
+[05:11.360 --> 05:18.320]  You have to re-inclimate it from scratch in Cytan. And this is what we had to do quite much.
+[05:19.280 --> 05:27.120]  Final note is that, for example, PyPy has a garbage collector that can relocate objects
+[05:27.120 --> 05:34.560]  from time to time. So the pointer to the object can change. And this is why this serializer just
+[05:34.560 --> 05:40.160]  doesn't work with PyPy even in Siri because it always assumes that as soon as you have a pointer
+[05:40.160 --> 05:50.080]  to Python object, it never changes. Anyway, this is how the high-level serialization of
+[05:50.080 --> 05:58.320]  pandas works. And this is not really specific to my serializer or your pickling or this
+[05:58.320 --> 06:05.280]  suggests how it works. So every pandas data frame currently in 1.x has a block manager that maps
+[06:05.280 --> 06:12.880]  column names to different blocks. Every block has the same data type. And this is a two-dimensional
+[06:12.880 --> 06:21.760]  non-PRA underneath. This 2D non-PRA doesn't know anything about what columns are, what are they
+[06:21.760 --> 06:30.640]  named. It's just the internal storage, let's say. And whenever you reach a column in the
+[06:31.600 --> 06:37.440]  in the data frame, you use the block manager to access them and do some operations. It works
+[06:37.440 --> 06:45.360]  fast, yes, and it's also memory efficient. Every operation on a single column executes
+[06:45.360 --> 06:55.200]  on a non-PRA underneath, so it's really efficient. And it also allows us to read this pandas data
+[06:55.200 --> 07:01.840]  frame and serialize it as a bunch of non-PRAs without Jill. So this is great for us. One thing
+[07:01.840 --> 07:13.200]  that we had to re-sync properly is how do we serialize object data type in non-PRAs. And we,
+[07:13.200 --> 07:20.320]  again, don't support all use cases, only those that we know exist in our backend. This is some
+[07:20.320 --> 07:30.080]  site on pseudo code that shows some general idea how we do this serialization. There is a
+[07:30.880 --> 07:37.280]  function called PyArrayData that returns you a row pointer to underlying data in the non-PRA.
+[07:37.920 --> 07:44.560]  Then you iterate by lengths. We only support one-dimensional arrays so far, like every column,
+[07:45.360 --> 07:52.400]  and we serialize each PyObject independently. And this PyObject can be in Siri arbitrarily,
+[07:52.400 --> 07:58.640]  but, again, in our backend, there is a predefined list of things that can be stored like a string,
+[07:58.640 --> 08:07.200]  a daytime, an integer, and so on. When we have to iterate standard library containers,
+[08:07.200 --> 08:14.160]  such as a list or dictionary, it turned out, again, quite simple. You use PyListGetSize or
+[08:14.240 --> 08:25.280]  PyListGetItem. For Dict, you use PyDictNextIterator. This is so great. If you didn't have to release
+[08:25.280 --> 08:33.920]  the JIL, you would just use list or Dict type and site. And site would generate somewhat similar
+[08:33.920 --> 08:38.800]  code, also efficient. But, again, since we released the JIL, we have to do, let's say,
+[08:38.800 --> 08:46.560]  heavy lifting from scratch. For serializing integers and floats, you just convert PyObject to
+[08:47.360 --> 08:54.640]  C type, like double or long. If it's a non-P scalar, a non-P scalar is usually a structure,
+[08:54.640 --> 09:02.480]  you use a special non-PC API for extracting the scalar value, and you just memory copy it
+[09:02.480 --> 09:08.880]  to your output stream. So, this is why we are not portable in the CPU, for example, because
+[09:09.760 --> 09:16.640]  the order of bytes in the integer, this endianness, can be whatever. For Intel, it's little endian.
+[09:16.640 --> 09:24.080]  For ARM, it can be little or big. So, since our backend always works on the same kind of CPU,
+[09:24.080 --> 09:31.200]  and we are really sure about that, we can do these things without caring about endianness and
+[09:31.200 --> 09:36.640]  converting to some other order, network order, and so on. And there's also the reason why it
+[09:36.640 --> 09:46.320]  works so fast. To serialize a string, it's also nothing special. I have to say a few words about
+[09:46.320 --> 09:52.960]  how strings are stored in C Python internally. It's quite smart, and I'm honestly really impressed
+[09:53.040 --> 10:03.440]  how C Python does it. It stores strings in three different ways, in one byte encoding,
+[10:03.440 --> 10:08.320]  in two byte encoding, and four byte encoding. And it dynamically chooses the encoding based on the
+[10:08.320 --> 10:15.120]  maximum number of the character that has to be stored in the string. So, let's say if you only
+[10:15.120 --> 10:21.040]  have ASCII characters, you choose one byte encoding and you're super memory efficient. If you have
+[10:21.040 --> 10:28.400]  some crazy emojis, then you choose four byte encoding. And yes, if there are other characters,
+[10:28.400 --> 10:34.400]  it's not so memory efficient. At the same time, when you address a string by an index, it works
+[10:34.400 --> 10:39.200]  super fast because every character is guaranteed to have the same number of bytes underneath.
+[10:40.000 --> 10:49.680]  Anyway, to copy a string to binary output format, you just take the row pointer to the string
+[10:49.680 --> 10:56.400]  contents. And for the size, you get the number of bytes per character and multiply it by the
+[10:56.400 --> 11:04.000]  length of the string. So, again, nothing special in Siri, but you have to be aware of the internals.
+[11:04.720 --> 11:14.640]  To serialize daytime and time delta, C Python provides a special C API as well. It's worth
+[11:14.640 --> 11:20.560]  mentioning that internal representation of daytime and time delta in Python is not a timestamp.
+[11:20.560 --> 11:26.960]  It's not a single integer like in other programming languages. It's really a struct that contains the
+[11:26.960 --> 11:35.040]  number of year, the number of months, the number of days, seconds, and so on. So, you just use
+[11:35.040 --> 11:42.480]  these getters and you serialize each integer to the output. Worse fast. The same for time delta,
+[11:42.480 --> 11:51.280]  you get days and seconds. All of that allowed us to speed up pandas array, pandas data frame
+[11:51.280 --> 11:58.880]  serialization by roughly 20x. And, of course, the speed up can be really different depending on the
+[11:58.880 --> 12:05.040]  nature of the data frame. If it only contains integers and floating points, the speed up will
+[12:05.040 --> 12:14.000]  be marginal. Pickle actually is working quite fast, so it works well for strongly typed numpy
+[12:14.000 --> 12:22.240]  arrays, actually. So, does it mean that we kind of managed to beat Pickle? Well, yes and no, because
+[12:22.960 --> 12:29.040]  Pickle is universal and it can do all things at once. And it's way harder to be fast at all
+[12:29.040 --> 12:35.120]  possible use cases than be super fast at one particular use case. So, I don't know how to say.
+[12:35.120 --> 12:42.640]  Maybe yes, maybe no. But, however, there is also an elephant in the room. Can you see it?
+[12:46.640 --> 12:53.280]  So far, I only talked about how fast we were at serializing objects, serializing data frames.
+[12:53.280 --> 13:00.000]  But supposedly, this is not what you do. Only that you do, you also need to deserialize them back.
+[13:01.040 --> 13:06.800]  Otherwise, that will be this anecdote for a compressor that compresses everything to one byte,
+[13:06.800 --> 13:14.320]  just kind of decompress back. And decompressing back from this format is also complex, but since
+[13:15.200 --> 13:24.000]  I don't have much time to talk about it, I'd rather leave it for next time. But in brief,
+[13:24.000 --> 13:35.520]  this is the place where I had to do some extra actions to stay performing. So, yeah. The second
+[13:35.520 --> 13:41.440]  part of the talk, how we solved a similar problem, but for Jason's serialization
+[13:42.400 --> 13:50.960]  in the backend, this is what we had. A lot of models like a data class with some fields inside,
+[13:52.000 --> 14:00.640]  strings, floating points, nested lists, nested models. It could be several levels deep. If you
+[14:00.640 --> 14:08.160]  work with a first API that can seem familiar, if I'm not mistaken, by-identic, can offer
+[14:08.240 --> 14:12.320]  similar structure. So, it's not really about using data class or something else.
+[14:15.280 --> 14:23.440]  A lot of us saw that. And the problem was we had thousands of such objects. And we needed to cache
+[14:23.440 --> 14:33.200]  them and surf pagination. Again, this is probably an anti-pattern in a way, because you would ideally
+[14:33.200 --> 14:38.400]  push down all the filters in the backend so that you don't have to materialize the whole
+[14:38.400 --> 14:48.880]  list of objects to return. But in our case, we really had to do that. So, we loaded all the models
+[14:48.880 --> 14:55.760]  from cache. Then we deserialized the bytes to the actual Python objects, these data classes.
+[14:56.560 --> 15:03.440]  We took on a dose that corresponded to the pagination and we converted them to Jason's string.
+[15:03.440 --> 15:11.360]  So, two things went wrong here. Deserializing everything was super slow and also converting
+[15:11.360 --> 15:19.600]  to Jason was also slow. Our first attempt to fix it was actually lightweight. Let's just
+[15:20.400 --> 15:32.000]  pre-convert all data classes to atomic objects, like dictionaries and lists. C Python is really,
+[15:32.000 --> 15:39.120]  really, really fast. It is working with Dx and lists. So, we assumed that that would help.
+[15:40.000 --> 15:47.360]  Then you just store the cache, those atomic basic objects, and you return those that's
+[15:47.360 --> 15:53.120]  requested in the pagination. So, that was for the first call, where you create the cache.
+[15:53.760 --> 15:59.440]  For the next call, you just serve those objects that are corresponding to the pagination.
+[16:01.120 --> 16:06.560]  However, it was still slow. It was slow because conversion from data classes to
+[16:07.920 --> 16:13.600]  basic objects through data classes to dict was really slow and painfully slow.
+[16:14.560 --> 16:19.840]  And serializing basic objects to Jason was also kind of slow.
+[16:21.520 --> 16:30.720]  And just for the subsequent calls, we had problems with deserializing all the objects.
+[16:30.720 --> 16:37.040]  It was not great. Materializing a lot of Python objects requires you to do a lot of rev count
+[16:37.040 --> 16:42.080]  increments and it just cannot work fast. There is no way it can work fast.
+[16:43.040 --> 16:49.120]  So, we had to be inventive and add this to Jason extra value function
+[16:49.920 --> 16:58.960]  that pre-serializes all the objects to Jason and also produces the index where each object begins.
+[17:00.480 --> 17:07.920]  And this table of contents can be used in the future. When you have pagination calls, you just
+[17:08.640 --> 17:15.760]  select the part of this huge Jason blob corresponding to the pagination and you return
+[17:15.760 --> 17:25.440]  it. And since you only work with strings, this works fast. However, it really depends on the
+[17:25.440 --> 17:31.440]  performance of this function that converts data classes to this huge Jason string with a table
+[17:31.440 --> 17:40.960]  of contents. And, yeah, this can be skipped really. This function had to be implemented
+[17:40.960 --> 17:48.000]  from scratch, unfortunately, because Jason dumps doesn't specify the table of contents and it cannot
+[17:48.000 --> 17:53.360]  do that. Also, to convert data classes to Jason, you still need to convert them to basic objects
+[17:53.360 --> 18:01.760]  first using 2D. Jason dumps cannot convert data classes directly. And the only way for us to
+[18:01.760 --> 18:10.160]  move on was to really write our own serializer. And this serializer works using a so-called
+[18:10.160 --> 18:18.640]  specification of the serialization. The thing is these data classes are typed and you can scan
+[18:18.640 --> 18:24.560]  these types to build some plan, how you should perform this serialization, how you should iterate
+[18:24.560 --> 18:31.440]  the objects and how you should write them to Jason. Apart from that, we had to implement
+[18:32.320 --> 18:37.520]  iterating lists and dicks. Well, we kind of already covered that. Converting integers and
+[18:37.520 --> 18:45.200]  floating points to a string. This is really basic. Into stir, float to stir and others. We just don't
+[18:45.280 --> 18:50.000]  think about it when you work with them in Python. You just convert them to string, problem solved.
+[18:50.560 --> 18:59.600]  However, since it works with HIP and it touches the internal sort of Python, you cannot use it
+[18:59.600 --> 19:06.240]  inside and you have to reimplement it from scratch. The same is daytime. Finally, for strings,
+[19:06.240 --> 19:12.240]  you need to escape them. If you have a double column inside a string, you need to escape it,
+[19:12.240 --> 19:22.400]  the same about new line. And since Jason is UTF-8 and internal binary encoding of Python strings
+[19:22.400 --> 19:30.880]  can be one byte, two byte, four byte, we also need to do this conversion. So this is quite interesting.
+[19:31.600 --> 19:40.080]  So the main trick to serialize is if you have slots in your data class, these slots are stored as
+[19:40.160 --> 19:48.640]  pointers inside the PyObject structure. You take the type of data class, you get the slot members
+[19:48.640 --> 19:54.240]  through C API, and each member contains the byte offset where the pointers exist.
+[19:55.040 --> 20:02.320]  You just read these pointers and you serialize the objects. Therefore, the serialization spec
+[20:02.320 --> 20:08.160]  is recursive. You have the data type that you need to convert to JSON and you have a list
+[20:09.120 --> 20:18.800]  of nested specifications with some slot offset. We only support predefined types like lists,
+[20:18.800 --> 20:25.040]  floating points, strings, boolean values, times, not everything. We are not universally have
+[20:25.040 --> 20:31.200]  constraints, but it allows us to perform faster. Oh, the code listing didn't load for some reason.
+[20:31.760 --> 20:38.000]  Anyway, I don't have time for that. This serializer appeared to be 100x faster,
+[20:38.000 --> 20:43.680]  really, really, really fast, so fast that we just don't see it in our traces and profile
+[20:43.680 --> 20:49.520]  anymore. So the goal was achieved. And it can be improved in the future by pre-computing the
+[20:50.080 --> 21:02.240]  serialization spec inside the data class member. Final advice is doing less is doing more. I think
+[21:02.240 --> 21:08.640]  it's also mentioned in Zen of Python, probably. Know your tools. It's always a great idea to
+[21:08.640 --> 21:15.040]  know your tools and learn the internals, how they work, because it will allow you to write
+[21:15.040 --> 21:21.120]  more performance programs. Going low level when you learn the internals is your super
+[21:21.120 --> 21:27.280]  weapon that allows you to do many things. You can break the rules and you can do magic. However,
+[21:27.280 --> 21:32.960]  you should only do that if you've got your architecture right. Otherwise, it's just stupid.
+[21:32.960 --> 21:38.480]  You optimize the place that shouldn't be optimized in the first place. And also,
+[21:38.560 --> 21:44.560]  with great power comes consequences, because when we release the GIL, we cannot use
+[21:45.360 --> 21:49.440]  almost all the standard library and we have to implement crazy things like
+[21:49.440 --> 22:05.440]  UTF conversions. This is annoying and you need to be prepared for that. Thanks.
+[22:08.480 --> 22:09.860]  you

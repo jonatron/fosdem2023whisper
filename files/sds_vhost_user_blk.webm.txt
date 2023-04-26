@@ -1,0 +1,336 @@
+[00:00.000 --> 00:12.200]  Hi, my name is Stefan Heinze and I work on QMU and Linux and today I want to talk about
+[00:12.200 --> 00:16.820]  Vhost User Block, a fast user space block IO interface.
+[00:16.820 --> 00:18.800]  So what is Vhost User Block?
+[00:18.800 --> 00:24.400]  Vhost User Block allows an application to connect to a software defined storage system
+[00:24.400 --> 00:27.700]  that is running on the same node.
+[00:27.700 --> 00:31.900]  So in software defined storage or in storage in general, there are three popular storage
+[00:31.900 --> 00:32.900]  models.
+[00:32.900 --> 00:36.100]  There's block storage, file storage and object storage.
+[00:36.100 --> 00:38.860]  And Vhost User Block is about block storage.
+[00:38.860 --> 00:43.660]  So for the rest of this presentation, we're going to be talking about block storage.
+[00:43.660 --> 00:49.140]  And block storage interfaces, they have a common set of functionality.
+[00:49.140 --> 00:53.220]  First of all, there's the core IO reads, writes and flushes.
+[00:53.220 --> 00:57.620]  These are the common commands that are used in order to store and retrieve data from the
+[00:57.620 --> 00:59.260]  block device.
+[00:59.260 --> 01:01.140]  Then there's data management commands.
+[01:01.140 --> 01:04.700]  These are used for mapping and allocation of blocks.
+[01:04.700 --> 01:08.660]  Discard and write zeros are examples of these kinds of commands.
+[01:08.660 --> 01:13.660]  There are also auxiliary commands like getting the capacity of the device.
+[01:13.660 --> 01:18.780]  And then finally, there can be extensions to the model like zone storage that go beyond
+[01:18.780 --> 01:22.060]  the traditional block device model.
+[01:22.060 --> 01:29.060]  Vhost User Block supports all of these things and it's at a similar level of abstraction
+[01:29.060 --> 01:33.140]  to NVMe or to SCSI.
+[01:33.140 --> 01:38.860]  So let's start by looking at how Vhost User Block is a little bit different from things
+[01:38.860 --> 01:44.300]  like NVMe or SCSI, things that are network protocols or hardware storage interfaces.
+[01:44.300 --> 01:49.380]  Vhost User Block is a software user space interface.
+[01:49.380 --> 01:54.940]  So let's begin by imagining we have a software defined storage system that is running a user
+[01:54.940 --> 01:59.740]  space and it wants to expose storage to applications.
+[01:59.740 --> 02:04.140]  So if we're using the kernel storage stack, what will happen is we'll need some way to
+[02:04.140 --> 02:13.180]  connect our software defined storage to the kernel and present a block device.
+[02:13.180 --> 02:21.380]  These of doing that might be NVMe over TCP or as an iSCSI LAN or maybe as an NBD server
+[02:21.380 --> 02:22.780]  and so on.
+[02:22.780 --> 02:29.220]  And so that's how a software defined storage system might expose its storage to the kernel.
+[02:29.220 --> 02:35.060]  And when our application opens a block device, it gets a file descriptor and then it can
+[02:35.060 --> 02:39.340]  read or write using system calls from that file descriptor.
+[02:39.340 --> 02:45.420]  And what happens is execution goes into the kernel's file system and block layers and
+[02:45.420 --> 02:49.860]  they will then talk to the software defined storage system.
+[02:49.860 --> 02:55.380]  Now that can be somewhat convoluted because if we've attached say using NVMe over TCP,
+[02:55.380 --> 02:57.780]  the network stack might be involved and so on.
+[02:57.780 --> 03:02.340]  And at the end of the day, all we're trying to do is communicate between our application
+[03:02.340 --> 03:07.500]  and the software defined storage processes that are both on the same node, they're both
+[03:07.500 --> 03:11.300]  running on the same operating system.
+[03:11.300 --> 03:17.100]  User space storage interfaces, they leave out this kernel storage stack and instead
+[03:17.100 --> 03:23.860]  they allow the application to talk directly to the software defined storage process.
+[03:23.860 --> 03:29.140]  Now there are a number of pros and cons to using a user space interface.
+[03:29.140 --> 03:30.780]  And I'll go through them here.
+[03:30.780 --> 03:35.180]  So I've already kind of alluded to the fact that if you have a user space interface and
+[03:35.180 --> 03:42.100]  you don't go through the kernel storage stack, then you can bypass some of that long path
+[03:42.100 --> 03:46.740]  that we discussed, for example, going down into the kernel, coming back out using something
+[03:46.740 --> 03:52.340]  like NBD or iSCSI in order to connect to another process on the same node.
+[03:52.340 --> 03:55.180]  There must be a faster way of doing that, right?
+[03:55.180 --> 04:00.420]  So with VO's user block, it turns out we can actually get rid of system calls entirely
+[04:00.420 --> 04:05.620]  from the data path, so reads and writes and so on from the device don't require any system
+[04:05.620 --> 04:06.620]  calls at all.
+[04:06.620 --> 04:10.540]  And we'll have a look at how that's possible later on in this talk.
+[04:10.540 --> 04:17.580]  But speed is one of the reasons why a peer user space interface for BlockIO is an interesting
+[04:17.580 --> 04:19.140]  thing.
+[04:19.140 --> 04:22.900]  Another reason is for security.
+[04:22.900 --> 04:28.420]  Typically in order to connect a block device to the kernel, you need to have privileges
+[04:28.420 --> 04:34.420]  because it can be a security risk to connect untrusted storage to your kernel.
+[04:34.420 --> 04:38.500]  And the reason for that is that there's a bunch of code in the storage stack that's
+[04:38.500 --> 04:42.420]  going to run and it's going to process and be exposed to this untrusted data.
+[04:42.420 --> 04:47.020]  If you think about a file system and all its metadata, that can be complex.
+[04:47.020 --> 04:52.140]  And so there's a security risk associated with that and therefore privileges are required
+[04:52.140 --> 04:53.700]  to create block devices.
+[04:53.700 --> 04:59.660]  An ordinary unprovedged process cannot attach and mount a block device.
+[04:59.660 --> 05:05.140]  So in a scenario where you do have an untrusted block device and you would like to remove
+[05:05.140 --> 05:12.300]  the attack surface there, then using a user space interface allows you to avoid that.
+[05:12.300 --> 05:17.300]  Also if you don't have permissions, if you simply don't have permissions, then you won't
+[05:17.300 --> 05:19.260]  be able to create a kernel block device.
+[05:19.260 --> 05:23.780]  So then a user space interface is beneficial as well.
+[05:23.780 --> 05:25.180]  Now those were the pros.
+[05:25.180 --> 05:29.900]  Of course there are drawbacks to having a user space interface.
+[05:29.900 --> 05:32.460]  First of all, it's complex.
+[05:32.460 --> 05:37.540]  Compared to simply opening a file and reading and writing from the file descriptor, you're
+[05:37.540 --> 05:42.060]  going to have to do a lot more because all the logic for actually doing IO and communicating
+[05:42.060 --> 05:47.460]  is now the responsibility of the application and not the kernel.
+[05:47.460 --> 05:48.780]  So there's that.
+[05:48.780 --> 05:52.740]  In addition, if you think about existing programs that you might want to use to access your
+[05:52.740 --> 05:58.540]  storage, they won't have support for any new interface that is user space only.
+[05:58.540 --> 06:03.900]  They are probably using the POSIX system calls and read and write and so on and that's what
+[06:03.900 --> 06:04.900]  they expect.
+[06:04.900 --> 06:09.780]  So you'll have to port those applications in order to access your software defined storage
+[06:09.780 --> 06:14.340]  system if you rely on a user space interface.
+[06:14.340 --> 06:20.140]  Another disadvantage is that if you have a user space interface, then the kernel storage
+[06:20.140 --> 06:22.100]  stack isn't involved.
+[06:22.100 --> 06:27.220]  So if you decide you need a feature from the kernel storage stack, whatever that may be,
+[06:27.220 --> 06:34.020]  or if you have a legacy application that you cannot port and that needs to talk to a kernel
+[06:34.020 --> 06:39.260]  block device, then again you have a problem because your software defined storage system
+[06:39.260 --> 06:45.100]  is isolated, its block devices aren't connected to the kernel.
+[06:45.100 --> 06:49.100]  What we're going to do today is we're going to look at both these pros and cons and we're
+[06:49.100 --> 06:54.780]  going to also see how with VHOS user block we can actually overcome these cons.
+[06:54.780 --> 07:01.140]  So let's start a little bit looking at some of the performance aspects, how this can be
+[07:01.140 --> 07:02.140]  fast.
+[07:02.140 --> 07:06.300]  I said no system calls are required, so how does that even work if the software defined
+[07:06.300 --> 07:09.700]  storage system and the application need to communicate?
+[07:09.700 --> 07:13.260]  How can they communicate without system calls?
+[07:13.260 --> 07:21.820]  Alright so one of the important concepts in IO is how to wait for the completion of IO.
+[07:21.820 --> 07:27.820]  When you submit an IO request, maybe you have no more work for your process to do.
+[07:27.820 --> 07:33.180]  Maybe the CPU is essentially idle until that IO request completes and at that point you'll
+[07:33.180 --> 07:35.340]  be able to do more work.
+[07:35.340 --> 07:41.740]  The normal thing to do in that case is to then de-schedule your application and let
+[07:41.740 --> 07:45.500]  other threads, other tasks on the system run.
+[07:45.500 --> 07:49.740]  And maybe if there are no other tasks then the kernel will just put the CPU into power
+[07:49.740 --> 07:50.740]  saving mode.
+[07:50.740 --> 07:55.260]  It will put it into some kind of low power state and it will awake once the completion
+[07:55.260 --> 07:57.260]  interrupt comes in.
+[07:57.260 --> 08:02.140]  And you can see that at the top of this slide, at the top diagram, you can see that there's
+[08:02.140 --> 08:06.740]  a green part where we submit the IO and at that point we run out of things to do because
+[08:06.740 --> 08:08.500]  we're going to wait for completion.
+[08:08.500 --> 08:11.980]  So then there's this gray part where other tasks are running, power saving is taking
+[08:11.980 --> 08:18.500]  place and during that time the first portion is spent with the IO actually in flight.
+[08:18.500 --> 08:22.860]  That's where we're legitimately waiting for the IO request to complete so that we can
+[08:22.860 --> 08:24.580]  proceed.
+[08:24.580 --> 08:29.860]  But then what happens is that the IO request completes and we need to somehow get back to
+[08:29.860 --> 08:31.820]  our de-scheduled process.
+[08:31.820 --> 08:37.300]  Now depending on what other tasks are running, their priorities, the scheduler and so on,
+[08:37.300 --> 08:40.220]  our task might not get woken up immediately.
+[08:40.220 --> 08:44.980]  Or maybe if the CPU is in a low power state it will just take some time to wake up, handle
+[08:44.980 --> 08:51.540]  that interrupt, restore the user space process and resume execution.
+[08:51.540 --> 08:56.980]  So this leads to a wake up latency, an overhead that is added.
+[08:56.980 --> 09:04.700]  And so this is why notifications or also sometimes called interrupts can be something
+[09:04.700 --> 09:09.060]  that actually slows down your IO processing.
+[09:09.060 --> 09:11.500]  An alternative is to use polling.
+[09:11.500 --> 09:15.980]  So polling is an approach where once you have no more work to do instead of de-scheduling
+[09:15.980 --> 09:19.740]  you repeatedly check whether the IO is complete yet.
+[09:19.740 --> 09:24.620]  And by doing that you're not giving up the CPU so you keep running and you keep consuming
+[09:24.620 --> 09:29.420]  the CPU, the advantage is that you don't have this wake up latency, instead your process
+[09:29.420 --> 09:33.820]  will respond immediately once the IO is complete.
+[09:33.820 --> 09:38.220]  The drawback of course is that you're hogging the CPU and you're wasting power while there's
+[09:38.220 --> 09:40.160]  nothing to do.
+[09:40.160 --> 09:43.180]  So these are two techniques and I think we're going to keep them in mind because we'll
+[09:43.180 --> 09:47.020]  see how they come into play later.
+[09:47.020 --> 09:50.940]  The next performance aspect I wanted to mention that's kind of important to understanding
+[09:50.940 --> 09:56.620]  how the host user block is different from maybe using a network protocol or an existing
+[09:56.620 --> 10:02.100]  storage interface is message passing versus zero copy.
+[10:02.100 --> 10:07.140]  As programmers we learn that when we have a large object in our program we shouldn't
+[10:07.140 --> 10:12.340]  pass it around by value because it will be copied and that will be inefficient.
+[10:12.340 --> 10:17.460]  And instead what we do is we use references or we use pointers allowing the function that
+[10:17.460 --> 10:23.220]  receives the object to just go and access it in place rather than taking copies.
+[10:23.220 --> 10:28.020]  And in inter process communication and in networking there's similar concepts.
+[10:28.020 --> 10:30.580]  By default things are message passing.
+[10:30.580 --> 10:36.460]  We build a message, it gets copied through various buffers along the network path, eventually
+[10:36.460 --> 10:41.780]  the receiver receives it into its buffer and then it parses it.
+[10:41.780 --> 10:46.420]  And so that model is the traditional networking model, it's also the IPC model, it has strong
+[10:46.460 --> 10:51.740]  isolation so for security it's great because it means that the sender and the receiver don't
+[10:51.740 --> 10:56.900]  have access to each other's memory therefore they cannot interfere or crash each other and
+[10:56.900 --> 10:58.700]  do various things.
+[10:58.700 --> 11:03.740]  But the downside is that we have these intermediate copies and that consumes CPU cycles and it's
+[11:03.740 --> 11:05.700]  inefficient.
+[11:05.700 --> 11:10.820]  So the zero copy approach is an approach where the sender and receiver they've somehow agreed
+[11:10.820 --> 11:15.740]  on the memory buffer where the data to be transferred lives.
+[11:15.740 --> 11:20.580]  And that way the sender for example can simply place the data directly into the receiver's
+[11:20.580 --> 11:24.180]  buffer and all it then has to do is let the receiver know, hey there's some data there
+[11:24.180 --> 11:28.860]  for you, it doesn't actually have to copy the data.
+[11:28.860 --> 11:34.340]  So these are, this is another important concept that we're going to see with vhost user block.
+[11:34.340 --> 11:38.100]  So now that we've got those things out of the way, let's look at vhost user block.
+[11:38.100 --> 11:39.100]  What is it?
+[11:39.100 --> 11:45.580]  It's a local block IO interface so it only works on a single node, on a single machine.
+[11:45.860 --> 11:48.380]  It is not a network protocol.
+[11:48.380 --> 11:54.260]  Two, it's a user space interface, it's not a kernel solution in itself.
+[11:54.260 --> 11:59.940]  It's a pure user space solution that means it's unprivileged, it doesn't require any
+[11:59.940 --> 12:05.140]  privileges for two processes to communicate in this way.
+[12:05.140 --> 12:10.620]  It's also a zero copy solution and the way it does that is it uses shared memory.
+[12:10.620 --> 12:15.740]  And finally, vhost user block supports both notifications and polling.
+[12:15.740 --> 12:21.340]  So depending on your performance requirements, you can choose whether you want to deschedule
+[12:21.340 --> 12:27.100]  your process and receive a wake up when it's time to process an IO completion or you can
+[12:27.100 --> 12:32.940]  just pull and consume CPU and have the lowest possible latency.
+[12:32.940 --> 12:38.500]  And vhost user block is available on Linux, BSD and on Mac OS and the implementations
+[12:38.500 --> 12:43.180]  of this started around 2017.
+[12:43.180 --> 12:49.660]  Now it's used, it came from SPDK and working together with QEMU, so those communities,
+[12:49.660 --> 12:52.620]  they implemented vhost user block.
+[12:52.620 --> 12:58.140]  But there are also implementations in other hypervisors like cross VM and cloud hypervisor.
+[12:58.140 --> 13:03.140]  So primarily this kind of came from virtualization, from this problem of how do we do software
+[13:03.140 --> 13:06.900]  to find storage and let a virtual machine connect to it.
+[13:06.900 --> 13:11.500]  But that's not all that vhost user is good for, it's actually a general storage interface.
+[13:11.500 --> 13:17.460]  It's generic, just like NVMe or SCSI is.
+[13:17.460 --> 13:22.460]  So you could use vhost user block if you had some kind of data intensive application that
+[13:22.460 --> 13:27.500]  needs to do a lot of storage IO and needs high performance or needs to be unprivileged.
+[13:27.500 --> 13:31.140]  And that's why I'm talking about vhost user block today.
+[13:31.140 --> 13:33.880]  So let's have a look at the protocol.
+[13:33.880 --> 13:40.840]  So the way that this is realized is that there is a Unix domain socket for our user space
+[13:40.840 --> 13:46.840]  storage interface and we speak the vhost user protocol over the socket.
+[13:46.840 --> 13:51.480]  What the socket does and the vhost user protocol allows us to do is it lets us set up access
+[13:51.480 --> 13:57.920]  to a virtual block device, so a block device that lives in the software defined storage
+[13:57.920 --> 13:59.160]  process.
+[13:59.160 --> 14:03.120]  So when we have two processes running on a system, a software defined storage process
+[14:03.120 --> 14:09.120]  and an application, the application is using vhost user in order to communicate with the
+[14:09.120 --> 14:14.720]  Verdeo block device and that's how it does its IO.
+[14:14.720 --> 14:15.880]  So what is Verdeo block?
+[14:15.880 --> 14:18.880]  Verdeo block is a standard.
+[14:18.880 --> 14:20.720]  You can check out the Verdeo specification.
+[14:20.720 --> 14:25.320]  Verdeo has a number of other devices, but it includes Verdeo block.
+[14:25.320 --> 14:29.160]  Some of the other devices are Verdeo net or Verdeo SCSI and so on.
+[14:29.200 --> 14:34.440]  But Verdeo block is one we'll focus on here and it consists of one or more request queues
+[14:34.440 --> 14:36.840]  where you can place IO requests.
+[14:36.840 --> 14:39.000]  And each one of these has a little structure.
+[14:39.000 --> 14:42.960]  You can do all the requests I mentioned in the beginning of the talk, reads, writes,
+[14:42.960 --> 14:47.280]  flushes, discard, write zero and so on.
+[14:47.280 --> 14:51.080]  And you have multiple queues, so if you want to do multi queue, say you're multi threaded,
+[14:51.080 --> 14:53.640]  you can do that as well.
+[14:53.640 --> 14:58.240]  And it has a config space that describes the capabilities of the device.
+[14:58.240 --> 15:01.920]  Like disk size, the number of queues and so on.
+[15:01.920 --> 15:05.480]  So that's what you can think of Verdeo block as, that's the model we have here and that's
+[15:05.480 --> 15:09.880]  the block device that our application can interact with.
+[15:09.880 --> 15:13.520]  If you think of any other storage interfaces or network protocols that you're familiar
+[15:13.520 --> 15:17.680]  with, this should be more or less familiar.
+[15:17.680 --> 15:20.600]  Most of the existing protocols also work in this way.
+[15:20.600 --> 15:24.960]  You can inquire about a device to find out its size and so on and then you can set up
+[15:24.960 --> 15:29.720]  queues and you can submit IO.
+[15:29.720 --> 15:33.200]  So underneath Verdeo block, we have the VHOS user protocol.
+[15:33.200 --> 15:37.680]  And the VHOS user protocol is this Unix domain socket protocol that allows the two processes
+[15:37.680 --> 15:40.280]  to communicate.
+[15:40.280 --> 15:41.760]  But it's not the data path.
+[15:41.760 --> 15:47.600]  So VHOS user is not how the application actually does IO, instead it's a control path that
+[15:47.600 --> 15:52.520]  is used to set up access to these queues, these request queues that I've mentioned.
+[15:52.520 --> 15:57.880]  And the IO buffer memory and the queue memory actually belongs to the application.
+[15:57.880 --> 16:01.720]  And the application sends it over the Unix domain socket.
+[16:01.720 --> 16:07.480]  It sends that shared memory over so that the software defined storage process has access
+[16:07.480 --> 16:10.600]  to the IO buffer memory and the queue memory.
+[16:10.600 --> 16:15.320]  The application and the software defined storage process, they share access to that memory.
+[16:15.320 --> 16:18.040]  That way we can do zero copy.
+[16:18.040 --> 16:21.920]  So this is going back to the message passing versus zero copy thing.
+[16:21.920 --> 16:27.600]  We don't need to transfer entire IO buffers between the two processes.
+[16:27.600 --> 16:33.120]  Instead, the software defined storage process can just read the bytes out of the IO buffer
+[16:33.120 --> 16:41.600]  that live in the application process and it can write the result into a buffer as well.
+[16:41.600 --> 16:46.360]  So if you want to look at the specification and the details of how VHOS user works, I've
+[16:46.360 --> 16:49.680]  put a link on this slide.
+[16:49.680 --> 16:53.920]  But really, if you're writing an application, I think the way to do it is to use LibBlockIo.
+[16:53.920 --> 17:00.440]  LibBlockIo is a library that has both C and Rust APIs that allows you to connect to VHOS
+[17:00.440 --> 17:03.520]  user block as well as other storage interfaces.
+[17:03.520 --> 17:08.160]  So VHOS user block is not the only thing, but for the purposes of this talk, we'll just
+[17:08.160 --> 17:10.760]  focus on that.
+[17:10.760 --> 17:13.760]  LibBlockIo is not a framework, it's a library.
+[17:13.760 --> 17:18.760]  It allows you to integrate it into your application regardless of what your architecture is.
+[17:18.760 --> 17:24.960]  That means it supports blocking IO, it supports event-driven IO, and it also supports polling.
+[17:24.960 --> 17:29.840]  So no matter how you've decided you want to do your application, you can use LibBlockIo.
+[17:29.840 --> 17:36.440]  You won't have to change the architecture of your application just to integrate LibBlockIo.
+[17:36.440 --> 17:39.600]  I have given a full talk about LibBlockIo.
+[17:39.600 --> 17:43.160]  So if you want to understand the details and also some of the background and everything
+[17:43.160 --> 17:52.000]  it can do, then please check out that talk, I put a YouTube link on this slide for you.
+[17:52.000 --> 17:54.720]  I'll give you a short code example here.
+[17:54.720 --> 18:00.600]  So this shows how to connect to a VHOS user block socket using LibBlockIo.
+[18:00.600 --> 18:04.840]  And this is pretty straightforward, we essentially just need to give it the path of the Unix
+[18:04.840 --> 18:10.640]  domain socket and then we connect and start the block IO instance.
+[18:10.640 --> 18:14.200]  And then in order to do IO, we can submit a read request.
+[18:14.200 --> 18:17.840]  That's just a function call, that's straightforward as well.
+[18:17.840 --> 18:22.160]  A notice here that we do get the queue, we call the get queue function in order to grab
+[18:22.160 --> 18:23.160]  a queue.
+[18:23.160 --> 18:26.360]  That's because LibBlockIo is a multi-queue library.
+[18:26.360 --> 18:30.800]  If you have a multi-threaded application, you could create one dedicated queue for each
+[18:30.800 --> 18:34.600]  thread and then avoid any kind of locking and synchronization.
+[18:34.600 --> 18:38.080]  All the threads can do IO at the same time.
+[18:38.080 --> 18:42.120]  So for completion, what this example shows is it shows blocking completion.
+[18:42.120 --> 18:48.920]  So here the program is actually going to wait in the do IO function until the IO is complete.
+[18:48.920 --> 18:53.320]  But as I mentioned, the library also supports event-driven IO and it also supports polling.
+[18:53.320 --> 18:59.520]  So whatever you like, you'll be able to do that.
+[18:59.520 --> 19:03.320]  If you develop your application, you'll need something to test against.
+[19:03.320 --> 19:09.120]  And I think the easiest way to test against the VOC user block device is to use the QEMU
+[19:09.120 --> 19:10.360]  storage daemon.
+[19:10.360 --> 19:16.760]  It's packaged for all the main Linux distros as part of the QEMU packages.
+[19:16.760 --> 19:21.440]  And you can just run the storage daemon, you can give it a raw image file and tell it the
+[19:21.440 --> 19:27.800]  name of a VOC user block UNIX domain socket that you want to have and then you can connect
+[19:27.800 --> 19:29.560]  your application to it.
+[19:29.560 --> 19:32.800]  All right, so that's how you can do that.
+[19:32.800 --> 19:39.040]  If you want to implement a server, if you're already in the SPDK ecosystem and you're using
+[19:39.040 --> 19:45.800]  Intel's software performance development kit in order to write your software defined
+[19:45.800 --> 19:52.960]  storage system, then it's very easy because VOC user block support is already built in.
+[19:52.960 --> 19:55.800]  So I've put a link to the documentation.
+[19:55.800 --> 19:59.960]  There are also RPCs if you want to invoke it from the command line.
+[19:59.960 --> 20:07.680]  And just for testing, you can create a VOC user block server using this.
+[20:07.680 --> 20:15.160]  Now if you're not using SPDK, instead you're writing your own C daemon, your own process,
+[20:15.160 --> 20:20.960]  then one way of using VOC user block is to use the libvhostuser library.
+[20:20.960 --> 20:26.960]  So this is a C library that implements the VOC user protocol, the server side of it.
+[20:26.960 --> 20:30.760]  So this will allow you to accept VOC user connections.
+[20:30.760 --> 20:32.840]  It doesn't actually implement verdioblock.
+[20:32.840 --> 20:33.840]  That's your job.
+[20:33.840 --> 20:36.640]  That's the job of the software defined storage system.
+[20:36.640 --> 20:40.820]  But verdioblock consists of basically just processing the IO requests like reads and
+[20:40.820 --> 20:49.400]  writes and so on, and also setting the configuration space so that the disk size is reported there.
+[20:49.400 --> 20:54.840]  And you can find an example of a C program that implements VOC user block using the VOC
+[20:54.840 --> 20:55.840]  user.
+[20:55.840 --> 20:58.920]  I've put a link on the slide here for you.
+[20:58.920 --> 21:06.080]  So that's how you can do it in C. In Rust, similarly, there is a library available for
+[21:06.080 --> 21:07.080]  you.
+[21:07.080 --> 21:12.560]  So there's the VOC user backend Rust crate, and it plays a similar role to the libvhostuser
+[21:12.560 --> 21:19.360]  library for C. So this allows you to easily implement whatever VOC user device you want.
+[21:19.360 --> 21:25.400]  And in this case, it's your job to implement the verdioblock, just as I mentioned.
+[21:25.400 --> 21:32.640]  Okay, now I still wanted to touch on one con that we hadn't covered yet, because we've
+[21:32.640 --> 21:38.720]  explained how although a user space interface is complex and is more work than just using
+[21:38.720 --> 21:45.360]  file descriptors and read and write, I think that the libvhostuser block and so on, these
+[21:45.360 --> 21:49.440]  libraries that are ready for you to integrate into your applications or software find storage
+[21:49.440 --> 21:56.600]  systems, they take away that complexity, and they make the integration easier as well.
+[21:56.600 --> 21:59.160]  You don't need to duplicate code or write a lot of stuff.
+[21:59.160 --> 22:01.720]  But we're still left with one of the disadvantages.
+[22:01.720 --> 22:07.600]  How do we connect this back to the kernel if it turns out we want to use some functionality
+[22:07.600 --> 22:13.680]  from the kernel storage stack, or if we have a legacy application that we can't port to
+[22:13.680 --> 22:17.200]  use the user space interface.
+[22:17.200 --> 22:21.200]  So for VOC user block, there is a solution here.
+[22:21.200 --> 22:26.720]  There's a Linux VD use feature, which is relatively new.
+[22:26.720 --> 22:33.760]  And what it does is it allows a VOC like device to be attached to the kernel.
+[22:33.760 --> 22:37.840]  So even though your software defined storage system is in user space, this gives you a
+[22:37.840 --> 22:41.240]  way of attaching your block device to the kernel.
+[22:41.240 --> 22:48.840]  And then in the kernel, the VerdiO block driver will be used to communicate with your device.
+[22:48.840 --> 22:54.800]  And what happens is that a devvda or devvdb block device node will appear, and your application
+[22:54.800 --> 23:00.280]  can open that like any other block device, and it can read and write and do everything
+[23:00.280 --> 23:02.280]  through there.
+[23:02.280 --> 23:08.440]  One of the nice features of this is that because it's quite similar to VOC user block, the
+[23:08.440 --> 23:11.640]  code can be largely shared.
+[23:11.640 --> 23:16.320]  I think the only difference would be that instead of having the V host user code, you
+[23:16.320 --> 23:21.800]  would have the VD use code, which opens this character device that the VD use driver in
+[23:21.800 --> 23:24.960]  the kernel offers instead of a Unix domain socket.
+[23:24.960 --> 23:27.560]  And the setup and the control path is a little bit different.
+[23:27.560 --> 23:32.220]  But the actual data path in the VerdiO block is still the same, so you can reuse that code.
+[23:32.220 --> 23:36.480]  So that's an effective way of doing it.
+[23:36.760 --> 23:41.960]  There's another new Linux feature that I wanted to mention that is interesting here, and also
+[23:41.960 --> 23:45.960]  a little bit more general, even outside of VOC's user block, and that's U block.
+[23:45.960 --> 23:51.360]  U block is a new Linux interface for user space block IO, so that your software defined
+[23:51.360 --> 23:58.760]  storage system can present host kernel block devices.
+[23:58.760 --> 24:04.880]  So you can have your block device and process it in user space.
+[24:04.880 --> 24:07.120]  And it uses IO U ring.
+[24:07.120 --> 24:10.960]  It's an exciting feature, and it's pretty interesting, so I've left the link here.
+[24:10.960 --> 24:16.720]  The only thing with this is that compared to VD use, it does not reuse or share any
+[24:16.720 --> 24:19.040]  of the V host user block stuff.
+[24:19.040 --> 24:23.280]  So if you already have V host user block support in your software defined storage system, or
+[24:23.280 --> 24:27.960]  you just want to streamline things, then U block is kind of a whole different interface
+[24:27.960 --> 24:29.040]  that you have to integrate.
+[24:29.040 --> 24:33.600]  So that's the only disadvantage, but I think it's pretty exciting too.
+[24:34.520 --> 24:41.000]  Okay, so to summarize, if you need a user space block IO interface for the performance,
+[24:41.000 --> 24:47.440]  or because you need to be able to do unprivileged IO, or for security, then implement VOC's
+[24:47.440 --> 24:48.440]  user block.
+[24:48.440 --> 24:51.520]  There are open specs, code, and community.
+[24:51.520 --> 24:54.520]  Please let me know if you have any questions, and thank you.
+[24:54.520 --> 24:55.200]  Have great FOS-DAM!
+[25:03.600 --> 25:04.600]  Thanks for watching.
+[25:04.600 --> 25:05.600]  I'll see you in the next video.
+[25:05.600 --> 25:05.600]  Bye!

@@ -1,0 +1,447 @@
+[00:00.000 --> 00:09.640]  I'm David Wilson from the System Crappers YouTube channel, and I'm here today to give
+[00:09.640 --> 00:13.000]  a talk called an Introduction to Geeks Home.
+[00:13.000 --> 00:15.080]  Here's some links where you can find me online.
+[00:15.080 --> 00:18.920]  Definitely subscribe to the System Crappers channel on YouTube or Odyssey if you're interested
+[00:18.920 --> 00:22.720]  in learning more about GNU Geeks, GNU Emacs, and other related tools, especially if you're
+[00:22.720 --> 00:25.680]  interested in learning more about Geeks Home because I will be making more videos about
+[00:25.680 --> 00:27.240]  it this year.
+[00:27.240 --> 00:32.400]  And definitely check me out on the FETIverse, I'm on faucedon.org at David Will.
+[00:32.400 --> 00:36.360]  So in this talk, I'm going to show you how to manage your user-level configuration, often
+[00:36.360 --> 00:41.400]  called your .files, in Scheme using a futuristic package manager and system configuration tool
+[00:41.400 --> 00:43.920]  called GNU Geeks.
+[00:43.920 --> 00:48.600]  So when you start to care more about configuration, the applications that you use for projects
+[00:48.600 --> 00:52.400]  or for your day-to-day work, you inevitably have to find a way to store those configuration
+[00:52.400 --> 00:55.440]  files so that, number one, you don't lose them.
+[00:55.440 --> 00:59.640]  And number two, you can use them on more than one machine or after, perhaps you have to
+[00:59.640 --> 01:04.800]  do a reinstallation because your machine got destroyed somehow or whatever, tends to happen.
+[01:04.800 --> 01:09.560]  So it's pretty common for people to use tools to sync their configuration files across machines
+[01:09.560 --> 01:14.080]  like Git or some other file synchronization tool and then place those files in their home
+[01:14.080 --> 01:18.360]  directory using GNU Sto or maybe even a bespoke shell script.
+[01:18.360 --> 01:21.120]  But there are some subtle problems with this approach.
+[01:21.120 --> 01:24.680]  First of all, how do you reliably install the software that your configuration depends
+[01:24.680 --> 01:25.680]  on?
+[01:25.680 --> 01:29.360]  There's probably a number of tools that you need to be installed before you can actually
+[01:29.360 --> 01:30.560]  start using your configuration.
+[01:30.560 --> 01:34.120]  So maybe you have a shell script that sets those things up, but then what happens if
+[01:34.120 --> 01:38.600]  you start using your systems package manager to install more programs and then you forget
+[01:38.600 --> 01:42.000]  to add those to your installation script, then next time you have to install your config
+[01:42.000 --> 01:45.760]  somewhere else, you just forget which programs you ever had installed to begin with.
+[01:45.760 --> 01:48.640]  Definitely something I've had happen before.
+[01:48.640 --> 01:52.800]  So how do you customize your configuration files for each of the machines that you use
+[01:52.800 --> 01:55.240]  without it all becoming a mess?
+[01:55.240 --> 01:59.680]  One thing that I've run into many times is that if I do have my .file stored in a Git
+[01:59.680 --> 02:03.840]  repository, maybe on each of the machines I use, I have like subtle tweaks, like maybe
+[02:03.840 --> 02:08.400]  font settings or DPI settings that I have locally that I never check in because there's
+[02:08.400 --> 02:12.680]  not a good way to delineate those settings between different machines.
+[02:12.680 --> 02:16.800]  So that does become a problem whenever you have multiple machines sharing the same .files
+[02:16.800 --> 02:19.680]  repository or share configuration.
+[02:19.680 --> 02:25.040]  Also how do you fix your configuration after syncing a broken or half committed change?
+[02:25.040 --> 02:29.760]  So maybe you are in the middle of making some major changes to your configuration and then
+[02:29.760 --> 02:33.560]  you sync it to another machine and then you start using it and you realize that either
+[02:33.560 --> 02:36.960]  your Emacs configuration doesn't load all the way or maybe your shell doesn't work right
+[02:36.960 --> 02:38.040]  anymore.
+[02:38.040 --> 02:39.040]  Things like that.
+[02:39.040 --> 02:41.560]  How do you fix that whenever it happens?
+[02:41.560 --> 02:45.400]  Definitely something that you have to consider while sharing your configuration on multiple
+[02:45.400 --> 02:46.400]  machines.
+[02:46.400 --> 02:50.440]  So I'm here to tell you today that Geeks is the answer to this problem.
+[02:50.440 --> 02:52.440]  Yes, I can say that.
+[02:52.440 --> 02:53.440]  Blanket across the board.
+[02:53.440 --> 02:55.240]  I'm being a little bit sarcastic.
+[02:55.240 --> 02:58.560]  So if this is your first time hearing about Geeks or perhaps you haven't experimented
+[02:58.560 --> 03:00.960]  with it yet, here's a quick primer.
+[03:00.960 --> 03:05.000]  Geeks is a functional package manager and declarative system configuration tool written
+[03:05.000 --> 03:07.480]  with Guile Scheme.
+[03:07.480 --> 03:11.360]  That probably sounds a little bit vague or maybe not too easy to understand.
+[03:11.360 --> 03:16.640]  So more plainly, Geeks manages the installation and configuration of the software that you
+[03:16.640 --> 03:20.560]  use in a highly repeatable and resilient way.
+[03:20.560 --> 03:25.720]  First of all, both the software that you install and your configuration is installed in a transactional
+[03:25.720 --> 03:28.440]  way, which means no broken half upgrades.
+[03:28.440 --> 03:34.280]  Whenever Geeks installs an update to your configuration on your machine, it builds it all and only
+[03:34.280 --> 03:38.680]  applies it whenever it knows that the build of the configuration is successful and that
+[03:38.680 --> 03:42.800]  all the applications can be installed successfully, which is great because it means that you don't
+[03:42.800 --> 03:46.920]  have like a half upgraded program or maybe your configuration files, if they're not going
+[03:46.920 --> 03:52.480]  to be applied correctly, then at least they won't get written out to your system.
+[03:52.480 --> 03:56.720]  Also every update that you make to your configuration is remembered and you can roll back.
+[03:56.720 --> 04:01.520]  So whenever you install updates to your configuration with Geeks, they are installed as something
+[04:01.520 --> 04:06.640]  called Generations, where each time you update your configuration, the previous configuration
+[04:06.640 --> 04:10.160]  you have is still saved so that in case of any problems, you can always roll back to
+[04:10.160 --> 04:12.640]  it very easily with a single command at the command line.
+[04:12.640 --> 04:13.640]  It's really, really helpful.
+[04:13.640 --> 04:15.840]  It saved me a number of times.
+[04:15.840 --> 04:21.200]  So when you use Geeks to manage your system or user level configuration, you write the
+[04:21.200 --> 04:24.360]  configuration as scheme code using a declarative format.
+[04:24.360 --> 04:30.000]  In other words, you declare what your system should look like and then Geeks makes it so.
+[04:30.000 --> 04:33.840]  It's really nice to have this capability because it means that your configuration becomes pretty
+[04:33.840 --> 04:37.080]  readable because it's code, but it also looks like a document.
+[04:37.080 --> 04:41.880]  But you can also use the power of scheme to automate some certain parts of your config
+[04:41.880 --> 04:42.880]  where you need to.
+[04:42.880 --> 04:46.400]  So if you're a Lisp enthusiast like I am, it's really cool to be able to use scheme
+[04:46.400 --> 04:48.520]  to configure your system.
+[04:48.520 --> 04:52.360]  So you can gain these benefits either by installing Geeks on your Linux distribution of choice
+[04:52.360 --> 04:57.560]  or by using the Geeks system distribution to manage your entire machine.
+[04:57.560 --> 05:02.320]  But for the purpose of learning Geeks or Geeks Home, I would definitely recommend installing
+[05:02.320 --> 05:05.840]  it on your existing Linux distribution before you try to jump into installing the full Geeks
+[05:05.840 --> 05:08.560]  system because it can be quite challenging.
+[05:08.560 --> 05:13.040]  However, I do have a video on the system crap YouTube channel that goes through the entire
+[05:13.040 --> 05:17.440]  process, both for installing Geeks, the package manager and the entire system.
+[05:17.440 --> 05:22.160]  So if you want to learn more about that, definitely check out the videos that I made for those.
+[05:22.160 --> 05:25.480]  So you can learn more about Geeks by reading the reference manual, which is really good
+[05:25.480 --> 05:28.480]  and really thorough and the official website for the project.
+[05:28.480 --> 05:32.280]  I've also made a number of videos about Geeks on the on my channel.
+[05:32.280 --> 05:36.560]  So if you want the links to the homepage and reference manual, they're here in the slides,
+[05:36.560 --> 05:39.400]  which will be available on the page for this talk.
+[05:39.400 --> 05:43.240]  And also the link to my playlist for the Geeks videos that I've made so far.
+[05:43.240 --> 05:44.800]  I think I've made about five or six videos.
+[05:44.800 --> 05:49.680]  So there's a lot of useful stuff in there in case you've never tried Geeks yet.
+[05:49.680 --> 05:52.000]  So let's talk about Geeks Home.
+[05:52.000 --> 05:56.000]  Geeks Home is the feature of Geeks, which enables you to apply a complete configuration
+[05:56.000 --> 06:00.640]  to your home folder for managing your user level programs and services.
+[06:00.640 --> 06:04.000]  For instance, it enables you to configure important things like your shell, whether you
+[06:04.000 --> 06:10.280]  use bash or Z shell, maybe fish programs that you use regularly, like maybe Emacs or other
+[06:10.280 --> 06:12.560]  things for maybe your desktop environment.
+[06:12.560 --> 06:17.000]  And also background services like sync things or sync thing or many other programs that
+[06:17.000 --> 06:21.920]  maybe you want to run as a user level service, not a system level service.
+[06:21.920 --> 06:24.800]  Maybe it's something that's only useful for you as a user.
+[06:24.800 --> 06:29.000]  It's much more powerful than other .files management programs like Shea Mua, RCM or
+[06:29.000 --> 06:33.280]  YATM because it also installs the software that you need for your configuration because
+[06:33.280 --> 06:37.480]  it knows which packages are needed for the different parts of your configuration that
+[06:37.480 --> 06:42.280]  you're using and also enables you to easily roll back to previous working configurations,
+[06:42.280 --> 06:46.680]  which is a big deal whenever you're sharing your configuration across multiple machines.
+[06:46.680 --> 06:49.760]  There's always a chance that something can go wrong or maybe if you install a newer version
+[06:49.760 --> 06:53.840]  of a program, even programs you install can be rolled back to previous versions.
+[06:53.840 --> 06:57.880]  So there's lots of ways where this rollback functionality can really help you whenever
+[06:57.880 --> 07:00.200]  you're trying to manage your system with Geeks.
+[07:00.200 --> 07:04.160]  So you can find the documentation for Geeks Home specifically in the Geeks Reference Manual
+[07:04.160 --> 07:05.960]  at this link.
+[07:05.960 --> 07:11.880]  Geeks Home actually is a new feature of Geeks that just got released as part of Geeks 1.4,
+[07:11.880 --> 07:16.800]  which maybe was like a month ago that that came out, but it's always evolving.
+[07:16.800 --> 07:21.720]  So this isn't a link to the standard manual, but you would probably also want to take a
+[07:21.720 --> 07:29.440]  look at the development manual as well for the latest details on configuring Geeks Home.
+[07:29.440 --> 07:34.240]  So to get started with Geeks Home, the first thing you need to do is install Geeks.
+[07:34.240 --> 07:38.720]  And like I mentioned before, I have a couple of videos that explain to you how to install
+[07:38.720 --> 07:39.720]  Geeks.
+[07:39.720 --> 07:42.360]  Definitely check out either of these to get started.
+[07:42.360 --> 07:45.520]  The installing Geeks in your Linux distribution is kind of the one you probably should use
+[07:45.520 --> 07:48.520]  if you've never used Geeks before because it will allow you to just install the Geeks
+[07:48.520 --> 07:54.880]  command in your existing distro and the demo I'll do today is actually using Geeks inside
+[07:54.880 --> 07:55.880]  of Ubuntu.
+[07:55.880 --> 07:59.680]  So that is certainly one way to do that.
+[07:59.680 --> 08:03.680]  And you can easily get started with Geeks Home by generating a home configuration from your
+[08:03.680 --> 08:10.000]  existing home folder with the following command, Geeks Home Import, and then a folder path
+[08:10.000 --> 08:14.040]  where it will write out this new home configuration for you.
+[08:14.040 --> 08:17.340]  So what it will do is take a look at your home folder.
+[08:17.340 --> 08:23.020]  And if it notices that you're using Bash as your primary shell, it will take all of your
+[08:23.020 --> 08:28.100]  sort of Bash configuration files and take a look at them and then create a section in
+[08:28.100 --> 08:30.140]  your Geeks Home config based on that.
+[08:30.140 --> 08:33.700]  It also, if you've already been using Geeks to install packages on your machine, it will
+[08:33.700 --> 08:37.460]  take a look at all the installed packages that you have and then put them together into
+[08:37.460 --> 08:39.020]  a list in your home configuration.
+[08:39.020 --> 08:44.100]  At the end, which is running, I believe this is Ubuntu 2204 and I've already installed
+[08:44.100 --> 08:45.100]  Geeks.
+[08:45.180 --> 08:48.780]  It's actually kind of nice in Ubuntu 22 and also the latest versions of Debian.
+[08:48.780 --> 08:49.780]  I think Debian Bullseye.
+[08:49.780 --> 08:52.420]  You can install Geeks from the app repository.
+[08:52.420 --> 08:54.980]  So this is another easy way to get Geeks installed.
+[08:54.980 --> 08:56.180]  But I have Geeks installed here.
+[08:56.180 --> 09:04.820]  So what I'm going to do is run Geeks, if I can type, Geeks Home Import, home dash configuration
+[09:04.820 --> 09:05.820]  or home config.
+[09:05.820 --> 09:07.180]  Let's put it that way.
+[09:07.180 --> 09:11.380]  And it's really quickly just looked over my home folder, my Geeks profile and created
+[09:11.380 --> 09:13.580]  a configuration file for me.
+[09:13.580 --> 09:16.860]  So I'm going to pull up Emacs so we can take a look at what it created.
+[09:16.860 --> 09:18.540]  In fact, let's just look at the folder first.
+[09:18.540 --> 09:25.220]  So home config, let's do LSAL because I know there's some other files in here.
+[09:25.220 --> 09:30.340]  So in this folder, what it actually did is it copied the batch logout and batch RC files
+[09:30.340 --> 09:34.260]  that were installed originally by Ubuntu in my home folder.
+[09:34.260 --> 09:36.380]  And then it also created this home configuration file.
+[09:36.380 --> 09:43.140]  So now I can use Emacs NW and then look at the home config slash home configuration.sem
+[09:43.140 --> 09:44.140]  file.
+[09:44.140 --> 09:47.700]  So like I said before, this is all written in scheme.
+[09:47.700 --> 09:49.900]  And this is, you know, normal guile scheme code.
+[09:49.900 --> 09:53.380]  If you've ever looked at guile before, it's a very nice scheme of application.
+[09:53.380 --> 09:57.700]  So this use module section just pulls in the relevant modules from Geeks that we need for
+[09:57.700 --> 09:59.540]  writing our home config.
+[09:59.540 --> 10:03.780]  And then we have this one home environment expression at the top.
+[10:03.780 --> 10:09.940]  This is a special syntax provided by Geeks, which lets you describe your home environment,
+[10:09.940 --> 10:13.900]  which would be applied to your home folder.
+[10:13.900 --> 10:19.380]  It's made out of, I guess the two constituent parts are the, well, I keep hitting escape
+[10:19.380 --> 10:23.340]  because of my configuration, but I'm used to anyway.
+[10:23.340 --> 10:25.660]  It has two parts, packages and services.
+[10:25.660 --> 10:28.740]  So here it's got the packages list.
+[10:28.740 --> 10:30.860]  And you can see here there's a list of two packages.
+[10:30.860 --> 10:35.500]  There's Htop and Emacs, and that's because I had already used Geeks install to install
+[10:35.500 --> 10:38.540]  those packages after I set up Geeks on this machine.
+[10:38.540 --> 10:42.820]  If you've never used Geeks before, this list may be empty, but if you've already been using
+[10:42.820 --> 10:47.060]  Geeks and you will see the packages you already have installed listed here.
+[10:47.060 --> 10:48.260]  Also there's the services list.
+[10:48.260 --> 10:53.700]  And this is the more interesting part of the configuration because it is where the various
+[10:53.700 --> 10:57.860]  different parts or programs that you use get configured.
+[10:57.860 --> 11:01.900]  But usually these sections all have their own special configuration types.
+[11:01.900 --> 11:07.620]  So like here we have one service called the home bash service type, and then it has its
+[11:07.620 --> 11:09.660]  own home bash configuration.
+[11:09.660 --> 11:14.020]  And this configuration has its own fields, like the aliases that you want to set in your
+[11:14.020 --> 11:19.300]  bash configuration, your bash RC file, your bash logout file, et cetera.
+[11:19.300 --> 11:22.700]  So we have a list of aliases here already.
+[11:22.700 --> 11:27.860]  And that's because the geeks home import command scanned over our existing files and found
+[11:27.860 --> 11:31.140]  all these aliases that were there and just added it to this list.
+[11:31.140 --> 11:35.340]  One thing I'm going to do here though, this alert alias that gets added to the Ubuntu profile
+[11:35.340 --> 11:38.940]  by default seems to result in some buggy behavior.
+[11:38.940 --> 11:43.260]  So I'm just going to delete that one really quick and then just pull this line up.
+[11:43.260 --> 11:45.660]  But you can see that it did put some things in here already.
+[11:45.660 --> 11:50.220]  It's very easy for you to go ahead and add more aliases if you want to.
+[11:50.220 --> 11:56.100]  Also for the bash RC and bash logout files, it has a local file reference to those files
+[11:56.100 --> 11:59.300]  that it copied over for us from our home directory.
+[11:59.300 --> 12:04.300]  So I recommend definitely keeping these files in your home config if you're using an existing
+[12:04.300 --> 12:09.220]  Linux distribution like Ubuntu, because sometimes those profile files have important things
+[12:09.220 --> 12:14.940]  that might make geeks home sort of break your desktop session.
+[12:14.940 --> 12:20.680]  So make sure that you sort of keep whatever is put here from the existing bash files.
+[12:20.680 --> 12:23.860]  So that's a quick look at what a home configuration looks like.
+[12:23.860 --> 12:28.300]  I definitely recommend taking a look at the geeks reference manual for more in-depth detail
+[12:28.300 --> 12:30.460]  about what all this stuff means.
+[12:30.460 --> 12:34.980]  But the last thing I'll say is that there are a number of services that you can use
+[12:34.980 --> 12:38.820]  that already exist in geeks that you can try out, you know, different programs and features
+[12:38.820 --> 12:40.660]  that you may want to pull into your configuration.
+[12:40.660 --> 12:43.500]  I'll show you a way to find more of those in just a little bit.
+[12:43.500 --> 12:47.700]  One more important thing to mention here, this concept of a service actually does not
+[12:47.700 --> 12:52.020]  correlate directly to like a background service or a daemon that's installed.
+[12:52.020 --> 12:57.700]  A service is actually a combination of different configuration aspects.
+[12:57.700 --> 13:03.180]  Like for instance, the programs that need to be installed for a particular feature,
+[13:03.180 --> 13:06.300]  the actual configuration files that need to be written out to the machine.
+[13:06.300 --> 13:12.580]  And also it could be background services as well, but an individual service can provide
+[13:12.580 --> 13:17.220]  multiple things to your configuration, not just a background service.
+[13:17.220 --> 13:21.120]  So we could try out this configuration right now without actually harming our home folder
+[13:21.120 --> 13:25.700]  by using the following command, geeks home container, and then the path to that home
+[13:25.700 --> 13:30.780]  configuration.scm file that geeks home import had written out for us.
+[13:30.780 --> 13:34.900]  Now the nice thing about this is that this allows you to take a look at what files and
+[13:34.900 --> 13:39.020]  programs that geeks home will apply to your home folder before you ever actually apply
+[13:39.020 --> 13:40.020]  it to your home folder.
+[13:40.020 --> 13:44.900]  You can just go into a shell environment and explore what files are there, what programs
+[13:44.900 --> 13:48.100]  are there to make sure that the configuration that you're going to write to your machine
+[13:48.100 --> 13:50.020]  is actually what you expect it to be.
+[13:50.020 --> 13:54.140]  So let's go jump into the folder really quickly or sorry, jump into the VM and we'll give
+[13:54.140 --> 13:55.140]  that a shot.
+[13:55.140 --> 14:06.580]  So I'm going to run geeks home container, a home config, home configuration.scm.
+[14:06.580 --> 14:10.100]  And this may take just a second because it has to take a look at that configuration file
+[14:10.100 --> 14:13.300]  and build everything up, but it seems to be done already.
+[14:13.300 --> 14:15.900]  So now we are in this container environment.
+[14:15.900 --> 14:18.940]  The only way you can really tell that the shell is different is because the original
+[14:18.940 --> 14:23.060]  shell has a color prompt and this one doesn't, not really a big deal, but if we were to use
+[14:23.060 --> 14:29.060]  LSAL, we can see now that there are a number of files here that are linked to or symbolic
+[14:29.060 --> 14:33.060]  links to paths under slash GNU slash store.
+[14:33.380 --> 14:39.660]  slash GNU slash store is the store location for all of the files and programs that geeks
+[14:39.660 --> 14:41.420]  installs for your system.
+[14:41.420 --> 14:48.020]  It's just a huge folder with a bunch of these folders that have hashes for the first part
+[14:48.020 --> 14:53.220]  of the path and then the name of the file or folder that is being placed there.
+[14:53.220 --> 14:56.660]  And this is part of what makes geeks a functional package manager.
+[14:56.660 --> 15:02.740]  For every file or program needs to install, it creates a derivation which creates an output
+[15:02.740 --> 15:06.900]  that goes into this store and anytime you update your configuration, if you've changed
+[15:06.900 --> 15:10.020]  the configuration file or maybe updated a program that you're using, there will be
+[15:10.020 --> 15:15.020]  a new folder that gets produced in this GNU store folder and then your actual configuration
+[15:15.020 --> 15:19.580]  will be linked to whatever the newer version of the folder in GNU store relevant to the
+[15:19.580 --> 15:22.180]  configuration file or the program that you're using.
+[15:22.180 --> 15:25.940]  It's a little bit hard to understand without more detail, which I'm not going to go into
+[15:25.940 --> 15:30.300]  right now, but I will make a lot more videos about this and also the new geeks reference
+[15:30.300 --> 15:32.020]  manual does a pretty good job of explaining it.
+[15:32.020 --> 15:34.860]  So take a look at that too if you want to learn more.
+[15:34.860 --> 15:40.740]  But we can see that we do have the bash logout and bash RC files, which we did mention directly
+[15:40.740 --> 15:42.100]  in our home configuration.
+[15:42.100 --> 15:45.540]  We also have bash profile, which is being placed there by something else, which we can take
+[15:45.540 --> 15:47.300]  a look at in a bit.
+[15:47.300 --> 15:52.500]  We have a geeks home folder, which is related to our home profile, which is in the GNU store.
+[15:52.500 --> 15:56.100]  That's not something you really need to deal with directly, but we can take a look at that
+[15:56.100 --> 15:57.260]  too.
+[15:57.260 --> 15:59.380]  And then a profile file.
+[15:59.380 --> 16:05.100]  There's also some other things probably in the dot config folder, if I do ls al.
+[16:05.100 --> 16:08.620]  Yeah, there's a lot config also gets generated.
+[16:08.620 --> 16:12.140]  So lots of things are being generated by geeks home, and we can take a look at what all those
+[16:12.140 --> 16:13.660]  files have in them.
+[16:13.660 --> 16:18.380]  Let's look at what's in the bash RC file.
+[16:18.380 --> 16:22.420]  So the bash RC file is basically the same contents as it had before, but I believe some
+[16:22.420 --> 16:25.620]  of the stuff at the very beginning is actually being generated by geeks home.
+[16:25.620 --> 16:29.340]  All these early aliases here, they believe these are all coming from those aliases.
+[16:29.340 --> 16:31.740]  These are the lines that we have in our geeks home configuration.
+[16:31.740 --> 16:36.300]  And the rest of this comes from the file that originally was there in our home directory.
+[16:36.300 --> 16:40.540]  So the other interesting thing to note about these files is that they're actually read
+[16:40.540 --> 16:41.540]  only.
+[16:41.540 --> 16:45.380]  If I were to open up Emacs for bash RC, let's see if this works.
+[16:45.380 --> 16:50.500]  Okay, let's use control X controller bash RC.
+[16:50.500 --> 16:52.620]  Now I can't actually edit this file.
+[16:52.620 --> 16:54.740]  Yes, it says it's read only.
+[16:54.740 --> 17:00.380]  And that's another interesting thing about geeks home is that whenever you apply a configuration
+[17:00.380 --> 17:04.020]  with geeks home into your home folder, any of the files that are placed there are read
+[17:04.020 --> 17:09.260]  only because they are meant to be immutable in the sense that you should only be able
+[17:09.260 --> 17:13.220]  to make changes to those files whenever you're using geeks home to do it.
+[17:13.220 --> 17:20.460]  If we were to look at the geeks home folder, and I believe it's a profile slash bin, you
+[17:20.460 --> 17:22.260]  can see what programs get installed.
+[17:22.260 --> 17:24.020]  So this is the only programs that have been installed.
+[17:24.020 --> 17:27.460]  We have Emacs and we have some other things that are sort of just basic things that are
+[17:27.460 --> 17:32.500]  needed for fonts and desktop environment, et cetera, your bash as well.
+[17:32.500 --> 17:36.540]  So this list obviously will be longer if you have more programs installed, but you can see
+[17:36.540 --> 17:39.660]  that it did set up all these programs in your home path.
+[17:39.660 --> 17:44.220]  And with a geeks home setup, these will just be accessible like any other program in your
+[17:44.220 --> 17:45.220]  system.
+[17:45.220 --> 17:50.420]  Okay, now that we've taken a look at our configuration applied to this container environment, and
+[17:50.420 --> 17:53.660]  we've made sure that everything that we see there is what we expected to see.
+[17:53.660 --> 17:58.420]  We could actually apply this to our home folder using the geeks home reconfigure command,
+[17:58.420 --> 18:02.460]  just pointing it at that same home configuration.scm file.
+[18:02.460 --> 18:07.420]  So once we do that, we're going to end up seeing a .geeks home folder in our home directory,
+[18:07.420 --> 18:10.620]  especially since this is the first time we're going to run geeks home reconfigure on this
+[18:10.620 --> 18:14.900]  machine, and then it will store your profile information there, and then you will be able
+[18:14.900 --> 18:17.340]  to use geeks home from that point forward.
+[18:17.340 --> 18:22.780]  So let's jump back into our VM and we can run this command geeks home re oops, actually
+[18:22.780 --> 18:30.060]  let's get out of the container environment first geeks home reconfigure home config home
+[18:30.060 --> 18:33.580]  configuration.scm.
+[18:33.580 --> 18:39.220]  And this will run the same profile that we had just used in the container environment
+[18:39.220 --> 18:41.740]  doesn't take any extra time because it's already been built.
+[18:41.740 --> 18:47.100]  And now we can take a look at our own home folder to see that our batch RC batch profile
+[18:47.100 --> 18:51.500]  and batch logout files have been linked into the GNU store.
+[18:51.500 --> 18:55.780]  We also have this new geeks home folder that I mentioned before geeks profile was the original
+[18:55.780 --> 19:00.500]  profile whenever I was installing emacs and htop myself before I started using geeks home.
+[19:00.500 --> 19:04.060]  So that will also still be there but geeks all the geeks home related things are in this
+[19:04.060 --> 19:05.500]  geeks home folder.
+[19:05.500 --> 19:08.260]  And also the profile file is there as well.
+[19:08.260 --> 19:13.660]  So what happens to my old files like when you do this the first time you already had
+[19:13.660 --> 19:19.780]  that dot batch RC file dot batch profile dot batch logout what happens to those files.
+[19:19.780 --> 19:23.860]  So if you're applying a geeks home configuration for the first time you will probably overwrite
+[19:23.860 --> 19:27.340]  existing files in your home directory specifically those batch files.
+[19:27.340 --> 19:33.540]  But don't panic though geeks home actually made a backup of any file that it replaces.
+[19:33.540 --> 19:38.140]  And this happens anytime that you run geeks home whenever you run geeks home and a file
+[19:38.140 --> 19:42.060]  exists where geeks home would be placing a file it will create a folder for you in your
+[19:42.060 --> 19:46.020]  home directory called.
+[19:47.020 --> 19:51.540]  Well it has a time stamp at the at the beginning where this is the time stamp when the profile
+[19:51.540 --> 19:56.100]  was applied geeks home legacy configs backup and if you were to go look at that folder
+[19:56.100 --> 20:01.940]  ls al let's see that's the one we can see there's this batch logout batch RC and dot
+[20:01.940 --> 20:08.380]  profile files that it has saved for you so that if in any case that you know geeks has
+[20:08.380 --> 20:12.420]  broken your configuration and you really need to get your original files back you can go
+[20:12.420 --> 20:14.260]  find them in one of these folders.
+[20:14.260 --> 20:20.020]  So definitely nice to know that you won't lose things that you have painstakingly put
+[20:20.020 --> 20:23.340]  together on your system or things that might cause your configure configuration to break
+[20:23.340 --> 20:27.220]  once you start using geeks home.
+[20:27.220 --> 20:31.460]  Also what if I made a change that broke my configuration well geeks was built to solve
+[20:31.460 --> 20:34.220]  this problem and geeks home is no different.
+[20:34.220 --> 20:38.540]  You can run the following command to inspect your old home configuration generations and
+[20:38.540 --> 20:42.540]  like I said before the generation is like one point in time of your configuration or
+[20:42.540 --> 20:47.660]  one execution of geeks home reconfigure and then you can roll back to an earlier generation
+[20:47.660 --> 20:53.020]  with the geeks home well you use geeks home list generations to list all the generations
+[20:53.020 --> 20:56.940]  of your configuration and then geeks home switch generation to go to a specific generation
+[20:56.940 --> 21:01.980]  number and also you can just use geeks home rollback to go back to the previous one.
+[21:01.980 --> 21:05.580]  So let's just try it out really fast I don't know if it's going to work the way that we
+[21:05.580 --> 21:12.060]  hope for if we run it just with a single change but let's just see what happens let's let's
+[21:12.260 --> 21:19.620]  look at the geeks home list generations first and you'll see that there's only one it says
+[21:19.620 --> 21:23.980]  when I installed it and then it says where all the files are basically what the channels
+[21:23.980 --> 21:25.580]  were time etc.
+[21:25.580 --> 21:29.580]  If you had other times we ran geeks home reconfigure this list would be even longer let's see what
+[21:29.580 --> 21:36.300]  happens when I type geeks home rollback okay cannot switch to home environment generation
+[21:36.300 --> 21:39.540]  negative one that makes sense because this is the first one but we will make another
+[21:39.620 --> 21:42.740]  change in just a second when you'll be able to see what that might look like so let's
+[21:42.740 --> 21:47.060]  try making a change to our home configuration to see what it does let's say we want to set
+[21:47.060 --> 21:51.940]  an environment variable in our bash profile that gets applied to all future sessions we
+[21:51.940 --> 21:57.260]  can do that by adding an environment variables entry to our home bash configuration I've
+[21:57.260 --> 22:02.100]  got an example here where we already have a home bash service type with our home bash
+[22:02.100 --> 22:06.340]  configuration we have the aliases part that we've seen already we have batch RC bash profile
+[22:06.660 --> 22:10.420]  things like that we've seen already but we've got this extra thing here called environment
+[22:10.420 --> 22:14.660]  variables now environment variables is a known field for the home bash configuration type
+[22:14.660 --> 22:20.500]  and what it expects to see is actually this is wrong as a an a list or an association list
+[22:20.500 --> 22:27.780]  of key value pairs for the environment variable and the value to be placed there and when we
+[22:27.780 --> 22:32.820]  put this here it should actually affect our bash profile to add more environment variables to that
+[22:32.820 --> 22:39.140]  list let's jump back over to our VM and give that a try we're going to jump back into the
+[22:40.500 --> 22:44.180]  home configuration file that we started with and I've already typed it out here we'll just
+[22:44.180 --> 22:48.820]  uncomment it but we we have this environment variables list we're going to set our editor to
+[22:48.820 --> 22:55.860]  emacs client I'll save this file jump back out of the console and then go back to run geeks home
+[22:55.860 --> 23:01.940]  reconfigure oh actually before I do that let's take a look at our dot bash profile file and you
+[23:01.940 --> 23:08.740]  can see that there is no editor environment variable in this list so now when we go run the
+[23:10.500 --> 23:14.340]  let's see geeks home reconfigure command I know I just keep rolling up in this list
+[23:15.540 --> 23:19.700]  then it will apply that new configuration change and then we should be able to go look at our batch
+[23:19.700 --> 23:24.420]  profile file and see that now we have the editor environment variable pointing to emacs client
+[23:24.420 --> 23:29.380]  and if we were to log in to a new batch login session in fact let's let's take a look now
+[23:30.260 --> 23:35.220]  it's actually kind of useful echo editor the change does not get applied to the current shell
+[23:35.220 --> 23:38.900]  you have to actually start a new batch session before you see this it has to actually be a new
+[23:38.900 --> 23:44.580]  login session otherwise in you know environments like ubuntu it doesn't actually load your profile
+[23:44.580 --> 23:50.020]  unless you log out log back in so let's run bash dash dash login and now that I do that I can use
+[23:50.020 --> 23:56.340]  echo editor and we can see that that emacs client variable is now set there correctly now like as
+[23:56.340 --> 24:03.540]  I was saying before you can say geeks let's see home list generations we see now that we have
+[24:03.540 --> 24:07.540]  two generations here and I can type geeks home rollback
+[24:10.020 --> 24:15.140]  and if I were to use cat on profile you'll see that that oops it was batch profile
+[24:15.700 --> 24:20.500]  batch profile that the environment variable that we added is now gone so it actually just rolled
+[24:20.500 --> 24:25.220]  back that to the old configuration that we had before we added that environment variable and
+[24:25.220 --> 24:29.940]  everything's just fine and the thing that we had there before is now gone so that's great we can
+[24:29.940 --> 24:35.060]  generate a configuration and apply it but how do you find more services to use thankfully there's a
+[24:35.060 --> 24:38.740]  nice command that you can use to find home services that you might be interested to try and that's
+[24:38.740 --> 24:43.700]  called geeks home search for instance if you want to find services that are relevant to your desktop
+[24:43.700 --> 24:49.220]  environment just run geeks home search desktop and that will give you back all the services that are
+[24:49.220 --> 24:54.020]  relevant to desktop environment so if I were to go back to the shell and typing let's see
+[24:55.620 --> 25:04.260]  once again geeks home search desktop we can see a few different services here redshift
+[25:04.260 --> 25:08.980]  debust and this xdg mime applications I think that one you don't use directly but this red
+[25:08.980 --> 25:13.060]  redshift one seems interesting it says run redshift a program that adjusts the color temperature of
+[25:13.060 --> 25:20.980]  display according to the time of day so how do we use it it doesn't really tell us much
+[25:20.980 --> 25:25.940]  except for the fact that you can go look at a location in the geeks code but we don't have
+[25:25.940 --> 25:30.100]  the repository cloned down ourselves or at least we don't think we do so we're not sure exactly
+[25:30.100 --> 25:35.300]  how to do that what you can actually do is use the geeks home edit command to
+[25:35.620 --> 25:44.020]  edit a particular service and actually it will open up the file relating to that service so
+[25:44.020 --> 25:48.420]  you can take a look at it so let's look at this home redshift service so we're going to use geeks
+[25:48.420 --> 25:56.900]  home edit home dash redshift and now it seems to have opened nano to look at this which is fine
+[25:56.900 --> 26:03.700]  but we can see that it's the home redshift service type and it has an extensions list now
+[26:03.700 --> 26:08.100]  we're not going to go into how exactly home services work but I will make a video about this soon
+[26:08.740 --> 26:14.260]  but you can see that it has one service extension which is the home shepherd service type shepherd
+[26:14.260 --> 26:19.220]  is a service management tool written in guile scheme and what this is basically telling us is
+[26:19.220 --> 26:24.260]  that this redshift service is actually going to have a background process that gets spawned inside
+[26:24.260 --> 26:29.380]  of your profile and also you can tell that there's this default value which says home redshift
+[26:29.380 --> 26:33.380]  configuration that actually tells us there's a configuration type that's been defined for
+[26:33.460 --> 26:38.180]  configuring redshift so if we would just kind of cruise up in this file a little bit we should be
+[26:38.180 --> 26:45.140]  able to see right here the define configuration home redshift configuration each field in this
+[26:45.140 --> 26:50.820]  configuration is going to tell you what the type of the field should be like a file like redshift
+[26:50.820 --> 26:56.180]  and then a documentation string that says what the field is for so this is one way to go see
+[26:56.180 --> 27:01.060]  what fields are available to configure for a given service but also a lot of this stuff gets
+[27:01.060 --> 27:05.860]  generated into the geeks reference manual so you can go take a look at the actual generated
+[27:05.860 --> 27:10.180]  documentation for these services and you might get some more information on how to use it but
+[27:10.180 --> 27:16.980]  what if we wanted to configure the home redshift service to have the latitude and longitude of
+[27:17.620 --> 27:24.020]  brushles so that we can have redshift change the color temperature relative to that location on
+[27:24.020 --> 27:28.340]  the planet whenever it gets dark outside so I've gone ahead and typed in the configuration for
+[27:28.340 --> 27:32.900]  the home redshift service so you don't have to sit here and watch me type two things to point out
+[27:32.900 --> 27:38.820]  one is that I had to pull in the GNU home services desktop module to find this we can actually take
+[27:38.820 --> 27:48.340]  a look at that by see the geeks home search desktop you can see that it's in the file path
+[27:48.340 --> 27:54.260]  GNU home services desktop it's actually the module path where this service is defined so that's how
+[27:54.260 --> 28:01.300]  I knew I had to go pull in this GNU home services desktop module path then we added to the front
+[28:01.300 --> 28:06.980]  of our services list this home redshift service type with our home redshift configuration I'm
+[28:06.980 --> 28:10.660]  telling it I want the location provider to be manual because I don't want it to try to use
+[28:10.660 --> 28:17.780]  GPS to find my location then I give it an explicit latitude and longitude for determining the time
+[28:17.780 --> 28:24.100]  of day and when it should change its color temperature so we can go back into our shell
+[28:24.100 --> 28:32.260]  and use geeks home reconfigure to run this new configuration change and then we can see here
+[28:32.260 --> 28:36.740]  at the very end service redshift has been started if I use the herd status command that will actually
+[28:36.740 --> 28:41.540]  tell me which shepherd services are currently running in my system oh it's not letting me do it
+[28:41.540 --> 28:49.940]  I let me let me do this actually bash dash dash login so herd status now it says that we have two
+[28:49.940 --> 28:54.260]  services that are started the root service which is just part of shepherd and then the redshift
+[28:54.260 --> 28:58.260]  service we didn't have to tell it what program to install we just said we want redshift and we
+[28:58.260 --> 29:01.940]  want to give these configuration variables and it just installed it installed it and started
+[29:01.940 --> 29:06.420]  up for us automatically and then every time you log into your system that service will be started
+[29:06.500 --> 29:11.780]  up again so once you try to use geeks home you'll quickly find that there aren't a whole lot of
+[29:11.780 --> 29:17.620]  home services in the geeks repo just yet and that's because geeks home is still relatively new
+[29:17.620 --> 29:21.860]  and it needs more user adoption so that we can have more people contributing new services
+[29:22.500 --> 29:26.820]  so please try geeks home and consider contributing new home services for the programs that you use
+[29:26.820 --> 29:31.300]  regularly because that's the only way that the set of services is going to grow so more information
+[29:31.300 --> 29:35.540]  on contributing to geeks can be found in the reference manual really good section there and
+[29:35.540 --> 29:38.980]  within the next couple months i'm going to publish a video explaining how to write your own home
+[29:38.980 --> 29:43.700]  services so make sure to subscribe to the system crapper channel on youtube or odyssey to me notify
+[29:43.700 --> 29:48.820]  when that gets released thank you very much for sitting through this talk i hope you learned
+[29:48.820 --> 29:54.020]  something about geeks home today i'll be available in the virtual chat for the talk to answer questions
+[29:54.020 --> 29:57.780]  so please feel free feel free to drop by and ask anything there or find me online i'll be happy
+[29:57.780 --> 30:02.100]  to answer your questions there as well thanks so much and we'll see you see you next time happy hacking
+[30:05.780 --> 30:06.260]  you
+[30:13.300 --> 30:15.460]  should be live now all right
+[30:18.180 --> 30:21.940]  hopefully that was a decent introduction to geeks home i don't know if we'll have many
+[30:21.940 --> 30:25.780]  much time to discuss anything but if there's any questions i could try to answer them
+[30:28.660 --> 30:33.700]  yeah i had a question about how how you synchronize the config across machines
+[30:34.260 --> 30:38.340]  yeah i definitely use git for that i just have a dot files repository i have all my get home
+[30:38.980 --> 30:43.460]  configuration files there and then i synchronize this between machines and the nice thing is that
+[30:43.460 --> 30:48.500]  geeks home makes it really easy to apply the same configuration after i've synced them across
+[30:48.500 --> 30:52.180]  machines it's a lot easier than having to make sure that i have all my files in the right place
+[30:53.140 --> 30:57.380]  if you try to use like gnu stow or something like that you have to make sure that you run gnu
+[30:57.380 --> 31:01.780]  stow every time after you sync obviously you have to run geeks home every time after you sync but at
+[31:01.780 --> 31:07.140]  least you know it's more obvious that you need to do that when using geeks home so it's been a
+[31:07.140 --> 31:12.820]  lot of fun i enjoy this approach yeah definitely i think geeks home is the truth so
+[31:18.580 --> 31:24.580]  okay i think uh yeah we're out there uh says your talk has ended so if people have any questions
+[31:24.580 --> 31:31.780]  they might come here and post it in this room cool so yeah um so that's for speaking in first
+[31:31.780 --> 31:39.860]  time yeah i'll i'll catch you later next time okay bye
+[31:54.580 --> 31:55.080]  you
+[32:24.580 --> 32:25.080]  you

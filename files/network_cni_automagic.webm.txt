@@ -1,0 +1,223 @@
+[00:00.000 --> 00:14.600]  Alright, thanks everybody for joining me today to talk about CNI automatic, making some use
+[00:14.600 --> 00:21.000]  of some of this bike discovery for semantic network attachment in Kubernetes.
+[00:21.000 --> 00:22.000]  My name is Doug.
+[00:22.000 --> 00:28.120]  I maintain something called multi-CNI, which is a way to attach multiple network interfaces
+[00:28.120 --> 00:38.120]  to causing Kubernetes, and I'm really interested in telco use cases for Kubernetes, especially.
+[00:38.120 --> 00:44.120]  And I am going to talk a little bit about some mappings to make this semantic.
+[00:44.120 --> 00:50.120]  So I thought I would show you a map of where I'm from, which is Vermont in the United States.
+[00:50.120 --> 00:56.120]  If you're not familiar with it, you might be familiar with our two most famous exports,
+[00:56.120 --> 01:00.120]  like our Bernie Sanders and Ben and Jerry's ice cream.
+[01:00.120 --> 01:06.120]  I'll also put in a little size reference here of the Adirondacks, which will come in as a trivia later,
+[01:06.120 --> 01:11.120]  and belt them, because they're all sort of similar sizes.
+[01:11.120 --> 01:18.120]  So, yeah, what we're going to look at today is a problem statement for what I discovered.
+[01:18.120 --> 01:25.120]  A tour of CNI plug-in that I developed to address that problem.
+[01:25.120 --> 01:32.120]  And along with that, we're going to look at kind of like it's what I made is really a proof of concept
+[01:32.120 --> 01:37.120]  to try to address that problem and what are the kind of limitations.
+[01:37.120 --> 01:46.120]  But most of all, I want to show how this kind of thought process that I used plays into what I think
+[01:46.120 --> 01:52.120]  is kind of some bigger picture of things that need to happen for the next version of CNI.
+[01:52.120 --> 01:59.120]  So as we look at the problem statement, keep that in mind that there's this problem
+[01:59.120 --> 02:04.120]  and there's a solution that I've got. It's a kernel of a solution.
+[02:04.120 --> 02:15.120]  But we also want to look at this thought process because I think that it is more important than the solution that I've got.
+[02:16.120 --> 02:25.120]  So, a lot of times in networking, we have these kind of ideals that everything's going to be mapped out
+[02:25.120 --> 02:28.120]  and it's going to be perfect, but once you get on the ground floor,
+[02:28.120 --> 02:37.120]  or maybe you've had this job before, sometimes your network really looks like this in the end.
+[02:37.120 --> 02:47.120]  And at least for me, it's usually that we try to make everything as uniform and perfect as we can.
+[02:47.120 --> 02:53.120]  In these diagrams, it'll look symmetrical. Everything will be like by a textbook.
+[02:53.120 --> 02:59.120]  However, once you go to implement it, you discover that not everything is the same.
+[02:59.120 --> 03:02.120]  Sometimes you have legacies in your systems.
+[03:02.120 --> 03:08.120]  You might need to have some kind of non-sequitur type of things in your network,
+[03:08.120 --> 03:15.120]  like a jump host, for example, or maybe you've got some vendor equipment that you've bought
+[03:15.120 --> 03:21.120]  that just doesn't exactly match everything that was going to be part of your plan.
+[03:21.120 --> 03:28.120]  And this is really where the problem starts for me is that I have people come to me and say,
+[03:28.120 --> 03:32.120]  yeah, well, this would work if it was the same on every machine,
+[03:32.120 --> 03:40.120]  but I've got one or two or 25 out of a thousand that just aren't the same.
+[03:40.120 --> 03:50.120]  So really what it is is, okay, hey, I'm adding a secondary network to my pods,
+[03:50.120 --> 03:54.120]  and I've got this definition of what it's supposed to be.
+[03:54.120 --> 03:59.120]  And it references specific interfaces on my hosts,
+[03:59.120 --> 04:05.120]  but in a non-uniform environment, it might just not match.
+[04:05.120 --> 04:15.120]  So in this particular CNI configuration, which is tiny on there, I'm sorry,
+[04:15.120 --> 04:23.120]  we have CNI configs that want to reference a specific interface that this is going to be created on.
+[04:23.120 --> 04:27.120]  And that's, say, for example, ETH0.
+[04:27.120 --> 04:34.120]  And sometimes we want to know, okay, yeah, it's ETH0, but what is actually the network that's behind that?
+[04:34.120 --> 04:41.120]  Because as much as we can reference that interface, there's like a greater world beyond that.
+[04:41.120 --> 04:46.120]  It's how it's connected to the rest of the network.
+[04:46.120 --> 04:57.120]  So if I have a non-uniform environment and I'm going to have these CNI configurations where I've got, say,
+[04:57.120 --> 05:06.120]  node1 has an ETH1, node2 has ENS2, ENS4, and those are all connected to green.
+[05:06.120 --> 05:15.120]  The way that, like, a network attachment definition is that's what multi-CNI uses for a secondary network.
+[05:15.120 --> 05:20.120]  When someone comes to me and says, I want to use this on this non-uniform network,
+[05:20.120 --> 05:26.120]  I've got to tell them to make a configuration for each thing that's different.
+[05:26.120 --> 05:32.120]  And then additionally, on top of that, again, it's too small and I apologize,
+[05:32.120 --> 05:37.120]  but I've got to tell them to, yeah, well, make one for each node,
+[05:37.120 --> 05:42.120]  but then make a pod that references that one and then uses a node selector.
+[05:42.120 --> 05:49.120]  And then that way you can get the right configuration for the right pod associated with the right node.
+[05:49.120 --> 05:54.120]  And it's just not a very Kubernetes way of doing things.
+[05:54.120 --> 06:06.120]  Like, we want to express intent at a higher level and get away to get these things attached in a, like, easier to express way
+[06:06.120 --> 06:11.120]  and not have to, like, baby it every little thing and say,
+[06:11.120 --> 06:17.120]  it's like this stack of three things and they have to be associated to this node and I have to label this node.
+[06:17.120 --> 06:21.120]  And I just wasn't happy with that.
+[06:21.120 --> 06:29.120]  So really what I wanted is to say, instead of all of this stuff that I'm configuring with a CNI config in the pod
+[06:29.120 --> 06:35.120]  and the nodes selector with the labeled node, I just want to say, I want it attached to the green network.
+[06:35.120 --> 06:38.120]  That's really what I want.
+[06:38.120 --> 06:48.120]  So I'm like, I want to, like, give some meaning to these network interfaces
+[06:48.120 --> 06:53.120]  and make it so that I can scale on a non-uniform environment.
+[06:53.120 --> 06:56.120]  So we use Kubernetes for scale.
+[06:56.120 --> 07:00.120]  It's a great way to deploy workloads at scale.
+[07:00.120 --> 07:06.120]  And we use CNI for plumbing our network interfaces in our pods.
+[07:06.120 --> 07:16.120]  So as a CNI developer and as a Kubernetes developer, this is how I approach this problem.
+[07:16.120 --> 07:21.120]  So I made something that I call Surveyor CNI.
+[07:21.120 --> 07:30.120]  And it essentially maps devices to network names using CRDs, which are custom resource definitions.
+[07:30.120 --> 07:41.120]  It's essentially a way to extend the Kubernetes API and to store data and have data that works in a way
+[07:41.120 --> 07:45.120]  that, like, other Kubernetes applications can talk to.
+[07:45.120 --> 07:50.120]  It's sort of like a lingua franca for CRDs.
+[07:50.120 --> 08:02.120]  And also, I have, like, a number of projects that I've, like, named after, kind of, like, outdoor related things in my area.
+[08:02.120 --> 08:09.120]  And I really was thinking of, like, this topographic engineer and, like, rad adventure guy named Verplank Colvin
+[08:09.120 --> 08:12.120]  that was famous in the Adirondacks for the first thing.
+[08:12.120 --> 08:17.120]  But the name Verplank Colvin doesn't flow off the tongue.
+[08:17.120 --> 08:20.120]  So I'm like, all right, I'll call it Surveyor CNI.
+[08:20.120 --> 08:26.120]  It essentially works in two phases.
+[08:26.120 --> 08:33.120]  When the, when it's installed, it starts up a daemon set.
+[08:33.120 --> 08:41.120]  And that daemon set has some go language scripts that just go and onto that node.
+[08:41.120 --> 08:48.120]  And I say, all right, give me the network interfaces that are on that particular node.
+[08:48.120 --> 09:02.120]  Then it creates an empty CRD that we can use to create a mapping association to go from network device name to network name itself.
+[09:02.120 --> 09:10.120]  So in essence, what it does is I can have those two nodes with these all different names for the green network.
+[09:10.120 --> 09:14.120]  And I can say, each one is green on node one.
+[09:14.120 --> 09:17.120]  ENS2 is green on node two.
+[09:17.120 --> 09:20.120]  And on node three, ENS4 is green.
+[09:20.120 --> 09:29.120]  So that way, I can just say, thank you, I can say, all right, we want to attach to network green.
+[09:29.120 --> 09:35.120]  In lieu of actually having a demo of this,
+[09:35.120 --> 09:40.120]  I will challenge you to bring up the code and run it yourself.
+[09:40.120 --> 09:48.120]  And I've got like a do it yourself kind of tutorial on the read me and I'll share the links with you.
+[09:48.120 --> 09:54.120]  Otherwise, you'll just see the frustration of how to do it.
+[09:54.120 --> 10:03.120]  So really, in a lot of ways, this is just sort of a like rolling chassis of a car
+[10:03.120 --> 10:06.120]  that doesn't have an engine in it yet.
+[10:06.120 --> 10:16.120]  Because it will make the custom resource for you and it will let you fill out those associations yourself.
+[10:16.120 --> 10:19.120]  But I don't think that that really scales either.
+[10:19.120 --> 10:32.120]  So I think that something that could really be improved here and because it uses custom resources is to have really an engine behind it,
+[10:32.120 --> 10:41.120]  to have other Kubernetes controllers that know something further about your network.
+[10:41.120 --> 10:46.120]  So for you to program some kind of intelligence into this, be able to do it.
+[10:46.120 --> 10:52.120]  So like a working group that I'm part of that we call Kubernetes Network Plumbing Working Group,
+[10:52.120 --> 10:59.120]  that comes up with all kinds of ideas about how to plumb your networks in Kubernetes.
+[10:59.120 --> 11:05.120]  One of our like sort of, what's the word for it?
+[11:05.120 --> 11:10.120]  I guess it's like the like holy grail kind of question is to ask the question,
+[11:10.120 --> 11:13.120]  what network am I attaching to?
+[11:13.120 --> 11:19.120]  And I think about that a lot and it makes me think of the question of,
+[11:19.120 --> 11:25.120]  okay, hey, if I have this messy physical network environment with cables all over the place
+[11:25.120 --> 11:33.120]  and I unplug a cable from one interface and into another in the physical world,
+[11:33.120 --> 11:36.120]  then everything changes.
+[11:36.120 --> 11:44.120]  And something that keeps coming up for me is this idea of can we listen to Netlink in Linux
+[11:44.120 --> 11:53.120]  and build some more intelligence that happens like over the lifetime of a pod.
+[11:53.120 --> 12:02.120]  And IPv6 usually comes up when we talk about this because in IPv6 you can have Slack,
+[12:02.120 --> 12:11.120]  you can have router advertisement, so your IP addresses can be assigned kind of on the fly,
+[12:11.120 --> 12:17.120]  your routes can change, your network can be changing, like these things are considered in IPv6.
+[12:17.120 --> 12:25.120]  And I don't think that they're very well covered in Kubernetes in general and I think about that.
+[12:25.120 --> 12:32.120]  I also was like, hey, if I have sort of this like high level way to express this,
+[12:32.120 --> 12:44.120]  I'm like, could I train something that might know about this to sort of figure it out for me like an AI?
+[12:44.120 --> 12:51.120]  If you haven't heard everyone talking about like the leaps and bounds in AI in the last like whatever,
+[12:52.120 --> 12:56.120]  bring up social media and just see everyone talking about it.
+[12:56.120 --> 13:00.120]  So I was like, yeah, maybe I could train like Chad GPT to do this.
+[13:00.120 --> 13:05.120]  I realized that at this point it will probably just confidently make up something about my network.
+[13:05.120 --> 13:09.120]  That's not actually true, but it seemed kind of sweet.
+[13:09.120 --> 13:16.120]  Another question that came up when I was socializing this idea was,
+[13:16.120 --> 13:23.120]  hey, why don't you just apply aliases to your network interfaces on the host?
+[13:23.120 --> 13:27.120]  And I'm like, yeah, that's probably fine.
+[13:27.120 --> 13:33.120]  And in fact, I would say if you have this problem today, this is probably what you should do
+[13:33.120 --> 13:41.120]  instead of using my demo software because it's a really reliable way to do it.
+[13:41.120 --> 13:46.120]  However, as a like CNI developer and as a Kubernetes developer,
+[13:46.120 --> 13:50.120]  it's just not the way that I approach the problem.
+[13:50.120 --> 14:01.120]  And it didn't really for me approach it in a way that exposes that data to something that can really be more of an engine behind this.
+[14:01.120 --> 14:03.120]  So I think it's a good approach.
+[14:03.120 --> 14:09.120]  I think that there's still something to be asked about scale here.
+[14:10.120 --> 14:18.120]  So given that, let's think about some of the possible pitfalls here.
+[14:18.120 --> 14:28.120]  Something in my space that gets brought up a lot when we talk about this variety of network tools is,
+[14:28.120 --> 14:35.120]  are we going to wind up creating some kind of network manager like a neutron in OpenStack?
+[14:35.120 --> 14:43.120]  And I think that there's a lot of problems that that exposes.
+[14:43.120 --> 14:52.120]  And I think that it might also sort of like give some tunnel vision to the problems.
+[14:52.120 --> 15:02.120]  And what I really like about how we approach networking in Kubernetes with CNI is we do this in a modular fashion.
+[15:02.120 --> 15:07.120]  So with something like this idea of my survey or CNI,
+[15:07.120 --> 15:14.120]  maybe it is a more of a modular way to approach it that's like, hey, here's one tool for this specific case.
+[15:14.120 --> 15:20.120]  So if you don't encounter this problem, well then don't use this thing, right?
+[15:20.120 --> 15:25.120]  And or if you do and you have a non-uniform environment,
+[15:25.120 --> 15:29.120]  use something like Surveyor and get it to work for you or whatever,
+[15:29.120 --> 15:35.120]  create Ansible scripts and make the aliases to your interfaces.
+[15:35.120 --> 15:51.120]  Another pitfall of this as well is it doesn't cover how the workloads would be scheduled to nodes that have those devices available, right?
+[15:51.120 --> 15:57.120]  So, you know, in my thing where I say network green,
+[15:57.120 --> 16:05.120]  I really assume you're going to have a device mapping and association to the green network on every node.
+[16:05.120 --> 16:16.120]  So if you have nodes that aren't attached to the green network, well, you need to know a way to approach that.
+[16:16.120 --> 16:28.120]  And the way that we approach this problem today with a resource being available on a specific node is with something called device plugins.
+[16:28.120 --> 16:38.120]  And what device plugins do is they give the Kubernetes scheduler awareness of consumable resources on a particular host.
+[16:38.120 --> 16:44.120]  So if you've got, say, SROV network interfaces that are for high performance,
+[16:44.120 --> 16:58.120]  your device plugin can know about that and tell Kubernetes that, hey, there are 15 virtual functions on this SROV card on this node.
+[16:58.120 --> 17:01.120]  And that's how we approach that.
+[17:01.120 --> 17:11.120]  So you could definitely extend my idea with adding device plugins, which are not super, super intuitive to use.
+[17:11.120 --> 17:15.120]  And I think it's an area that also needs help in this space.
+[17:15.120 --> 17:20.120]  But it would be a solution to work through that.
+[17:20.120 --> 17:32.120]  So all of that being said, I'm kind of on a campaign to try to give people more awareness of what's going to happen with CNI 2.0.
+[17:32.120 --> 17:46.120]  And if you are interested in this space at all, I encourage you to keep an eye on what's going on in the next version of CNI.
+[17:46.120 --> 17:51.120]  We've got a number of problems that we really want to address.
+[17:51.120 --> 18:00.120]  One of those is what happens to networking during a pod lifecycle.
+[18:00.120 --> 18:05.120]  So, you know, I was mentioning, like, hey, what happens if I unplug this network and plug it in somewhere else?
+[18:05.120 --> 18:09.120]  Like, can I detect that? Can I do something about that?
+[18:09.120 --> 18:16.120]  Because right now, CNI works in essentially two different operations, which is add and delete.
+[18:16.120 --> 18:23.120]  So when your network is added, CNI runs.
+[18:23.120 --> 18:26.120]  When your pod is added, CNI runs.
+[18:26.120 --> 18:29.120]  When your pod is deleted, CNI runs to clean it up.
+[18:29.120 --> 18:35.120]  We want to have something that goes further through the lifecycle there.
+[18:35.120 --> 18:40.120]  So, like, with IPv6 and ever-changing things, that can be covered.
+[18:40.120 --> 18:47.120]  Maybe you can improve how, like, a cleanup happens because CNI delete isn't necessarily guaranteed.
+[18:47.120 --> 18:59.120]  But the number one thing I think should happen with CNI 2.0 is that we have, like, more of a Kubernetes awareness for CNI 2.0.
+[18:59.120 --> 19:04.120]  CNI is Container Orchestration Agnostic, which is an awesome start for it.
+[19:04.120 --> 19:09.120]  But we only have one Container Orchestration Engine left, essentially, and it's Kubernetes.
+[19:09.120 --> 19:13.120]  And I think it's important.
+[19:13.120 --> 19:18.120]  So, yes, that being the case, this is how I approached it, right?
+[19:18.120 --> 19:23.120]  I took this problem and I approached it with Kubernetes and with CNI, right?
+[19:23.120 --> 19:33.120]  And I needed to kind of figure out how to, like, interact with all of these objects again when I made a new CNI plug-in.
+[19:33.120 --> 19:37.120]  So I sort of, like, took a look at where I spent my time.
+[19:37.120 --> 19:45.120]  And I spent it a lot during the, like, integration into Kubernetes.
+[19:45.120 --> 19:50.120]  So, you know, I'm a CNI developer, so I spent a good chunk of the time on that.
+[19:50.120 --> 19:56.120]  I spent a half-decent chunk on design, and I spent most of the time integrating it with Kubernetes.
+[19:56.120 --> 20:00.120]  And I think that that could be improved.
+[20:00.120 --> 20:06.120]  The X factor here was that I also used chatGBT to generate a bunch of my code.
+[20:06.120 --> 20:09.120]  So maybe that also wasted my time.
+[20:09.120 --> 20:14.120]  So there's that because it isn't always truthful of you.
+[20:14.120 --> 20:19.120]  But, yeah, I want CNI 2.0 to communicate with Kubernetes.
+[20:19.120 --> 20:21.120]  I think it's going to be a revolution in this phase.
+[20:21.120 --> 20:28.120]  And I want everyone here that's interested in it to, like, get involved in this effort.
+[20:28.120 --> 20:33.120]  And I think it's going to be, like, the next big thing for networking and Kubernetes.
+[20:33.120 --> 20:35.120]  So, yeah, if you want, try it out.
+[20:35.120 --> 20:37.120]  And that concludes what I've got.
+[20:37.120 --> 20:39.120]  I can open it up for questions.
+[20:39.120 --> 20:41.120]  Thank you.
+[20:49.120 --> 20:54.120]  Have you considered using Linklayer Detection Price Go?
+[20:54.120 --> 20:55.120]  Or Discovery, I can't remember.
+[20:55.120 --> 20:57.120]  It actually stands for...
+[20:57.120 --> 20:58.120]  Yeah, that's the one.
+[20:58.120 --> 20:59.120]  Love it.
+[20:59.120 --> 21:00.120]  I love that idea.
+[21:00.120 --> 21:06.120]  I hadn't thought of it, but I am going to put that right in line with a Netlink thing.
+[21:06.120 --> 21:08.120]  Yeah, I was just thinking about that as well.
+[21:08.120 --> 21:13.120]  But isn't the problem that it finds layer 2 devices, your adjacency with the layer 2 device, not the layer 3?
+[21:13.120 --> 21:18.120]  So I was wondering, would you be better to multi-cast from each, to also discover,
+[21:18.120 --> 21:22.120]  have each device multi-cast what it thought and what name it gave to this network?
+[21:22.120 --> 21:26.120]  The question then is how you ever assign the colors if you want to completely automate it.
+[21:26.120 --> 21:30.120]  And maybe you have chat GPT assigned the colors for you.
+[21:30.120 --> 21:31.120]  I like it.
+[21:31.120 --> 21:33.120]  No, I think that's really good.
+[21:33.120 --> 21:38.120]  Also, yeah, good consideration to the layer 2 versus layer 3.
+[21:38.120 --> 21:44.120]  And, yeah, I think depending on your use case, it might end with your network.
+[21:44.120 --> 21:49.120]  But I know in the telco world, there's a lot of LTE networks, for sure.
+[21:49.120 --> 21:50.120]  Yes.
+[21:51.120 --> 21:56.120]  Yeah, I think the next device T is going to block the LDP.
+[21:56.120 --> 21:58.120]  So you'll only see that neighbor.
+[21:58.120 --> 22:00.120]  You won't see the other nodes on that subnet.
+[22:00.120 --> 22:01.120]  That was more my issue.
+[22:01.120 --> 22:03.120]  That's what you want to find out, right?
+[22:03.120 --> 22:04.120]  Yeah.
+[22:04.120 --> 22:08.120]  It could give you the B line if that's your network separation.
+[22:08.120 --> 22:09.120]  Yeah, yeah, it could do.
+[22:09.120 --> 22:15.120]  Yeah, I think it merits consideration for sure.
+[22:16.120 --> 22:18.120]  Any other questions?
+[22:20.120 --> 22:21.120]  No?
+[22:21.120 --> 22:22.120]  Okay.
+[22:22.120 --> 22:23.120]  Thank you very much.
+[22:23.120 --> 22:24.120]  Thank you all.
+[22:24.120 --> 22:25.120]  Thank you.

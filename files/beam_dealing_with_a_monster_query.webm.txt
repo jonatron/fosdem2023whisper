@@ -1,0 +1,88 @@
+[00:00.000 --> 00:11.960]  And this is the last talk of the day room, and Mackenzie Morgan is going to talk to us
+[00:11.960 --> 00:14.000]  about dealing with a monster query.
+[00:14.000 --> 00:15.000]  Give it up.
+[00:15.000 --> 00:16.000]  So, hello.
+[00:16.000 --> 00:17.000]  I'm Mackenzie.
+[00:17.000 --> 00:22.000]  I actually work at Nextro now, and I did not put that on the thing, because it's kind of
+[00:22.000 --> 00:29.000]  weird, since this is about something that happened at a previous job.
+[00:30.000 --> 00:31.000]  Let's see.
+[00:31.000 --> 00:33.000]  Let's go over here in the spacebar.
+[00:33.000 --> 00:35.000]  There we go.
+[00:35.000 --> 00:42.000]  So, back in 2020, I learned Elixir because the company that I was working at, which is Axios,
+[00:42.000 --> 00:51.000]  it's a news company, they launched our new mobile app, and then it promptly crashed every
+[00:51.000 --> 01:02.000]  morning at 6 a.m., and I am not a morning person, so I did not want those pings.
+[01:02.000 --> 01:06.000]  And so, we needed to do something about this, and so there's a quick rewrite into Elixir.
+[01:06.000 --> 01:08.000]  I was not involved in the rewritings.
+[01:08.000 --> 01:10.000]  I didn't know Elixir yet.
+[01:10.000 --> 01:14.000]  They grabbed a couple of contractors and said, hey, learn Elixir, because we're going to
+[01:14.000 --> 01:15.000]  be handing this off to you.
+[01:15.000 --> 01:16.000]  Okay.
+[01:22.000 --> 01:27.000]  And everything worked out, worked really great, except that there was this one query.
+[01:35.000 --> 01:44.000]  So, we had this one query that had a whole lot of OR clauses in it, because, well, and
+[01:44.000 --> 01:47.000]  this was responsible for the majority of our database load.
+[01:47.000 --> 01:56.000]  And we also had the biggest day in U.S. politics coming up, the U.S. presidential election.
+[01:56.000 --> 02:02.000]  If you have dealt with news organizations, you know that politics, big political events
+[02:02.000 --> 02:05.000]  mean a ton of traffic, right?
+[02:05.000 --> 02:09.000]  And so, that is a huge day working in a news org, and this was the second newspaper I'd
+[02:09.000 --> 02:13.000]  worked for, so I knew how this went.
+[02:13.000 --> 02:19.000]  Usually, for advice for optimizing stuff is to move as much computation as possible out
+[02:19.000 --> 02:22.000]  of the code and into the database, right?
+[02:22.000 --> 02:27.000]  But this is the story of how refactoring the opposite direction was what actually saved us.
+[02:35.000 --> 02:40.000]  So, it's pretty standard in ACMS to have a structure that looks kind of like this, right,
+[02:40.000 --> 02:45.000]  where you've got, okay, you've got a post, and it can be in a category, and it can be
+[02:45.000 --> 02:49.000]  tagged, and it can be this, and it can be that, and you're trying to find posts in
+[02:49.000 --> 02:52.000]  any of these different ways.
+[02:52.000 --> 02:56.000]  So, we had four different taxonomies that we were using to decide what we were going to
+[02:56.000 --> 02:58.000]  show you in the mobile app.
+[02:58.000 --> 03:01.000]  You could subscribe to a channel, either tag or whatever.
+[03:01.000 --> 03:06.000]  And so, we had all these four ORs where you go get the post through taxonomy one,
+[03:06.000 --> 03:09.000]  one's the aggregator, two, three, four, all those things.
+[03:09.000 --> 03:14.000]  And that's where our four big OR queries came in.
+[03:14.000 --> 03:18.000]  Which looked like this.
+[03:18.000 --> 03:20.000]  And that's the simplified version.
+[03:20.000 --> 03:23.000]  That doesn't have the sorting, that doesn't have the time limits.
+[03:23.000 --> 03:25.000]  That's the simplified version.
+[03:25.000 --> 03:27.000]  But that's what that looks like, and it's ridiculous.
+[03:27.000 --> 03:33.000]  And so, AWS stats told us that this was going absolutely bonkers.
+[03:34.000 --> 03:42.000]  I did a Postgres explain, analyze on the query that the Ecto generated.
+[03:42.000 --> 03:50.000]  And Postgres said it was over 3,600, was like cost for the analyze, and that it would take
+[03:50.000 --> 03:53.000]  eight milliseconds to execute.
+[03:53.000 --> 03:59.000]  But that's like, just computing what it needed to run was the huge problem for it.
+[03:59.000 --> 04:03.000]  So, I'm going to go through how we factor this to be super fast.
+[04:12.000 --> 04:16.000]  So, okay, so we had four taxonomies, so four smaller queries.
+[04:16.000 --> 04:19.000]  So, really, they each look like that.
+[04:19.000 --> 04:21.000]  That's very simple.
+[04:21.000 --> 04:25.000]  And those each take one-eighth of a millisecond.
+[04:25.000 --> 04:28.000]  So, this is a good start.
+[04:28.000 --> 04:31.000]  It's still kind of ugly if you write that four times, though.
+[04:34.000 --> 04:40.000]  So, but what if we take advantage of Adams and the PIN operator in Elixir,
+[04:40.000 --> 04:44.000]  because Elixir's got some pretty cool syntax features.
+[04:47.000 --> 04:52.000]  And we make it into a query, sort of make a function that we can call four times,
+[04:52.000 --> 04:53.000]  passing those in.
+[04:53.000 --> 04:57.000]  And that's a bit better, but we're still calling it four times separately.
+[04:57.000 --> 05:01.000]  And so, if we go a little bit further and we take advantage of the concurrency
+[05:01.000 --> 05:06.000]  that we all know the beam has, we can pass in the list of what the taxonomies are
+[05:06.000 --> 05:09.000]  that we're going through and use the task async stream.
+[05:11.000 --> 05:15.000]  And now, we can make all four queries running at the same exact,
+[05:15.000 --> 05:21.000]  like running simultaneously, just by passing in that list, which makes it really easy
+[05:21.000 --> 05:23.000]  to, you know, instead of copying and pasting more and more code,
+[05:23.000 --> 05:26.000]  just adds the list when we add another taxonomy.
+[05:26.000 --> 05:27.000]  And guess what?
+[05:27.000 --> 05:30.000]  By the time I left the company, yes, there were five.
+[05:36.000 --> 05:42.000]  So, what did changing over from that big nasty block to this get us?
+[05:42.000 --> 05:46.000]  The database CPU utilization went down from 50% to 40%,
+[05:46.000 --> 05:49.000]  so that's a 20% drop because math.
+[05:49.000 --> 05:55.000]  I know it looks like 10, but, you know, you do 40s, 80% of 50, yeah.
+[05:57.000 --> 06:02.000]  The Postgres, remember I said the Postgres analyzes over 3,600?
+[06:02.000 --> 06:03.000]  It was 16 after that.
+[06:03.000 --> 06:06.000]  That was a much happier database server.
+[06:06.000 --> 06:11.000]  And the execution time, like I said, went from eight milliseconds to one eighth of a millisecond each,
+[06:11.000 --> 06:16.000]  so a total of a half a millisecond if you were to string them along continuously.
+[06:16.000 --> 06:22.000]  So, yeah, so much faster and our database overhead down by 20%.
+[06:22.000 --> 06:23.000]  Great.
+[06:26.000 --> 06:33.000]  We also had a seven times increase in the number of requests per second that we could handle according to our benchmarking scripts.
+[06:42.000 --> 06:45.000]  So, we got to have a stress free election night.
+[06:45.000 --> 06:52.000]  I did not have to be trying to restarting servers at two o'clock in the morning as we waited and waited for results.
+[06:53.000 --> 06:55.000]  So, that's it.
+[06:55.000 --> 06:57.000]  That's all I'm going to show you about.
+[06:57.000 --> 07:00.000]  And that's how to find me.

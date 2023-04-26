@@ -1,0 +1,222 @@
+[00:00.000 --> 00:11.760]  Thank you very much. So, before we get started, I would like to do a couple of introductions.
+[00:11.760 --> 00:19.520]  So first, I'd like to introduce Ashley. He's going to hate me for using this photo, but
+[00:19.520 --> 00:24.320]  he is one of the software developers on one of our engineering teams and he was heavily
+[00:24.320 --> 00:30.560]  involved in the actual physical move of our SDKs into Kotlin multi-platform. He's kind
+[00:30.560 --> 00:36.160]  of the brains behind this talk and also was with the company for many years, has a lot
+[00:36.160 --> 00:41.600]  of experience around the history of code share attempts and everything else. So I spent many
+[00:41.600 --> 00:46.840]  hours kind of bugging him to get information for this talk. So definitely need to thank
+[00:46.840 --> 00:53.360]  him for that. And then there's me. I was an Android developer for many years. I then moved
+[00:53.400 --> 00:59.720]  into developer relations as an Android developer advocate. And last summer, I turned to the
+[00:59.720 --> 01:07.600]  dark side and became a manager managing the client SDK, the DevRel team. You can find
+[01:07.600 --> 01:16.120]  me over on Mastodon or anywhere else as Dev with Zachary if you'd like to. So before we
+[01:16.120 --> 01:22.000]  get started, a couple of takeaways for this talk. Unfortunately, not pizza, but I hope
+[01:22.040 --> 01:28.480]  to have a major too hungry. I first want to start by saying this isn't a code talk. We've
+[01:28.480 --> 01:33.640]  had a lot of really great code talks today. I've certainly enjoyed them. But instead,
+[01:33.640 --> 01:41.160]  this is a kind of real world example of an engineering team who have built a library
+[01:41.160 --> 01:46.920]  in Kotlin multi-platform. And hopefully, with some good takeaways from that, you'll be able
+[01:46.960 --> 01:54.960]  to learn from some of our pains in doing that. Have a look at the history of the SDKs. So
+[01:55.480 --> 02:00.040]  hopefully that'll give you a good idea of kind of some of the previous pains that we've had
+[02:00.040 --> 02:05.560]  and probably you share if you've done any code share in the past. And also the past
+[02:05.560 --> 02:10.920]  code share attempts. Taking that, you should hopefully also see the success of where we
+[02:10.920 --> 02:17.200]  are now. The main changes that we have found outside of just the physical code, what's
+[02:17.200 --> 02:21.360]  actually changed about the engineering teams, what's changed about the structure of the
+[02:21.360 --> 02:27.360]  SDKs and kind of those more abstract things that have made a big difference moving into
+[02:27.360 --> 02:34.360]  Kotlin multi-platform. And also where the SDKs are now. Plus a few extras if we have
+[02:34.840 --> 02:39.760]  time for some surprise improvements that certainly on the team no one really considered
+[02:39.800 --> 02:46.000]  until it happened. So before we get kind of into that part of the talk, I need to give
+[02:46.000 --> 02:51.320]  you a little bit of background so you understand what the SDKs are that we've moved over.
+[02:51.320 --> 02:57.680]  And they are the Vonage Climb SDKs. So what are those? Well, Vonage does a huge range
+[02:57.680 --> 03:03.680]  of communication APIs, things like voice, video, SMS, and then services built on top
+[03:03.680 --> 03:08.800]  of that to factor authentication, all those sorts of things. And we have a range of SDKs
+[03:08.840 --> 03:15.840]  for a range of platforms. So when we say client SDKs, we mean specifically Android, iOS, and
+[03:16.080 --> 03:21.360]  JavaScript. We also have what we call server-side SDKs, things like PHP, Python, and all those
+[03:21.360 --> 03:27.960]  sorts of languages. Unfortunately, those aren't written in Kotlin. But all our SDKs really
+[03:27.960 --> 03:34.960]  are just wrappers for the APIs. All our APIs are RESTful APIs. They use WebRTC for voice
+[03:35.800 --> 03:42.640]  and video. You can just use the APIs if you want. All the open API specs are available.
+[03:42.640 --> 03:46.440]  That's an easy thing to do. But one thing that a lot of people want to be able to do
+[03:46.440 --> 03:53.440]  is use those APIs in a more native-friendly way. So if you're writing an Android application,
+[03:54.680 --> 04:00.960]  you want to be able to use a nice Kotlin library to call those APIs and you don't have to worry
+[04:00.960 --> 04:06.600]  about the JSON that gets returned or the different authentication headers you have to use or all
+[04:06.600 --> 04:13.600]  that sort of stuff. And that's kind of where I come in and our team comes in. Within the
+[04:14.280 --> 04:21.280]  developer relations, we build those SDKs. So to us, developers are our world. And that's
+[04:22.000 --> 04:27.240]  who we are thinking about. We try and kind of smooth over some of those issues that might
+[04:27.240 --> 04:32.760]  be existing in legacy APIs and all those sorts of things that we all know happen when it
+[04:32.760 --> 04:38.000]  comes to APIs. So the SDKs are a better way to do that.
+[04:38.000 --> 04:43.720]  And so if we're talking about that with that in mind, it's time for a little bit of a history
+[04:43.720 --> 04:50.720]  lesson. And a long time ago in a tech company far, far away, there was a startup called
+[04:51.080 --> 04:58.080]  Nexmo, which some of you may have heard of. It was a European startup that did communication
+[04:58.640 --> 05:05.640]  APIs. I'm sure you can see where this is going. They had three native SDKs for Android, iOS
+[05:06.440 --> 05:12.880]  and JavaScript. They were completely separate. There was no code share at all. And one of
+[05:12.880 --> 05:18.000]  the biggest gripes was that this was really incredibly difficult to test for. If there
+[05:18.040 --> 05:25.040]  was a new change in one of the APIs, all three SDKs had to support that. And you had to test
+[05:25.480 --> 05:31.680]  three times. You had to do everything three times. Any new feature was built by three
+[05:31.680 --> 05:38.180]  different people. So even if you had the perfect API spec, you had the perfect kind of design,
+[05:38.180 --> 05:42.760]  there were always going to be kind of small things that each of the teams did differently
+[05:42.760 --> 05:49.760]  for the respective platforms. And just purely from engineering power, it was three times
+[05:50.680 --> 05:57.680]  the work to implement anything. So fast forward a few more years, Nexmo was bought by Vonage.
+[05:58.560 --> 06:05.560]  Nexmo became the Vonage API platform. And this was the perfect opportunity for a rewrite.
+[06:05.960 --> 06:11.200]  It was time to kind of take that opportunity and make something better that started to
+[06:11.200 --> 06:18.200]  utilize code share. And this was in about 2018. So it was a few years ago. And actually
+[06:19.760 --> 06:24.440]  the JavaScript team thought, there's this cool new thing that's just been released.
+[06:24.440 --> 06:31.200]  It is Alpha. It is very early. But let's give it a go. Let's have a look at Kotlin multi-platform.
+[06:31.200 --> 06:36.760]  Very early stage. And the other issue was that the team really wanted to rebuild everything,
+[06:36.760 --> 06:43.760]  the whole SDK in Kotlin and in Kotlin multi-platform and leave no platform-specific code. This
+[06:44.360 --> 06:51.360]  was their goal. It failed very quickly. The combination of the Kotlin multi-platform just
+[06:52.640 --> 06:56.600]  not being where it needed to be to support a lot of the things that they wanted to be
+[06:56.600 --> 07:03.040]  able to do across all three platforms. And just the inherent design idea of having everything
+[07:03.080 --> 07:07.960]  in that proved incredibly difficult to the point where it failed. But we still really
+[07:07.960 --> 07:13.120]  wanted code share. We still wanted to at least reduce some of the effort that was involved
+[07:13.120 --> 07:20.120]  in supporting these SDKs. That's where C++ came in. And you can already see where the
+[07:21.120 --> 07:28.120]  pain is coming from. It allowed for code share, which is fair. And it was also obviously a
+[07:28.760 --> 07:35.760]  much more mature option in its way. And you could basically build a base level with platform-specific
+[07:37.640 --> 07:41.840]  code written on top. It had kind of all the fundamentals of what you'd like to see from
+[07:41.840 --> 07:48.840]  code share. We also had some internal resource around this. So we had people that knew how
+[07:48.840 --> 07:54.520]  to write C++, but not many of them. But this is where we went to. This is where it was
+[07:54.600 --> 08:01.600]  implemented. We got code share. It was great, right? I mean, no, no. No, it was actually,
+[08:02.040 --> 08:09.040]  it was not great. It was actually kind of the opposite of good to the extreme. What
+[08:09.040 --> 08:16.040]  we ended up with is kind of something like this diagram. And it doesn't take a mathematician
+[08:16.840 --> 08:22.960]  to realize that instead of trying to reduce the amount of code that was across the platforms
+[08:22.960 --> 08:27.960]  and, you know, we started with three SDKs, a JavaScript one and Android and iOS. And
+[08:27.960 --> 08:32.960]  we wanted to reduce the amount of code there was. Well, actually, we ended up increasing
+[08:32.960 --> 08:38.040]  it by adding a fourth layer, which was the C++ layer. And it didn't actually really
+[08:38.040 --> 08:45.040]  reduce much of the three other layers. So now instead of having three teams supporting
+[08:45.040 --> 08:52.040]  an SDK, we had four teams supporting SDKs. It also really wasn't accessible to everyone.
+[08:52.520 --> 08:59.520]  I don't know how many of you have had the pleasure of building in C++, but compared to things
+[08:59.520 --> 09:06.520]  like Kotlin and JavaScript, it certainly miles apart. And a lot of those developers just
+[09:06.520 --> 09:13.520]  didn't have the skill set to access that code and work on it. And that kind of meant that
+[09:14.520 --> 09:21.280]  we were very dependent on specific people working in that kind of C++ code share. And
+[09:21.320 --> 09:26.120]  therefore, if they were on holiday, well, we'd have to wait for a release. And it really
+[09:26.120 --> 09:30.280]  sort of slowed down the release cadence, which when you're building a library is incredibly
+[09:30.280 --> 09:37.280]  important. We want to be able to have reactive co-share, so reactive SDK builds. So when there's
+[09:40.520 --> 09:44.560]  a bug, we get a new release out. You know, when there's a new feature in the API, the
+[09:44.800 --> 09:51.800]  SDK follows quickly. That was very difficult to do like this. So let's do a rewrite for
+[09:52.320 --> 09:59.080]  the second time. But what were we going to do? Well, realistically, what we wanted is
+[09:59.080 --> 10:04.160]  at least something much closer to this diagram. We wanted a decent chunk of the code base
+[10:04.160 --> 10:11.160]  to be in the code share. And then the platform-specific stuff was kind of whatever just needed to be
+[10:11.400 --> 10:18.400]  platform-specific. Code share, but better. We kind of came on the conclusion that really
+[10:18.520 --> 10:25.520]  the best way to do that is keep all the business logic in the code share and leave the lower
+[10:25.520 --> 10:32.520]  level platform stuff to the platforms. So that was kind of the rough, very rough idea
+[10:33.400 --> 10:40.560]  of what we wanted to achieve. The next question was, what language could we achieve that with?
+[10:40.600 --> 10:47.600]  Based on the skills that we had available internally and the kind of maturity of the
+[10:48.640 --> 10:55.640]  options. So really we came up with three options within the team. The first being still C++.
+[10:59.360 --> 11:04.600]  It was a valid suggestion to actually just rewrite that and use it for the business logic
+[11:04.600 --> 11:10.680]  and be still written in C++. So that was presented to the team and actually kind of
+[11:10.680 --> 11:17.680]  unanimously there was a very quick answer that they gave. No, please, no. It just wasn't
+[11:19.920 --> 11:25.240]  viable because the fact that there was still going to be that dependency on specific people,
+[11:25.240 --> 11:31.120]  there wasn't the wider arching kind of support within the team. And also I think there was
+[11:31.200 --> 11:34.960]  also maybe a bit of trauma around having to kind of support that previously that they
+[11:34.960 --> 11:41.960]  just didn't want to do. So the second option actually was Rust. It was very powerful. I
+[11:41.960 --> 11:46.280]  mean, for those that have used Rust, they know that and will quite happily say that.
+[11:46.280 --> 11:50.640]  And it was also quite good for code share. We've had an example earlier today of how
+[11:50.640 --> 11:56.720]  you could go about using Rust with Kotlin Moj platform actually. But there were some issues
+[11:56.800 --> 12:01.760]  that they started to highlight. There was at the time the issue of kind of binding between
+[12:01.760 --> 12:07.760]  the Rust layer and then the native code, which would still need to be there to some level.
+[12:07.760 --> 12:13.440]  And within the team, the kind of tooling and the ability to actually make this thing happen
+[12:13.440 --> 12:17.960]  was quite unknown. And that was kind of a little bit scary because we didn't want to
+[12:17.960 --> 12:23.440]  fall into another C++ trap of being dependent on specific people and having to learn something
+[12:23.480 --> 12:30.480]  a lot. So in came Kotlin Moj platform. This was now sort of 2021 ish. COVID kind of skews
+[12:37.040 --> 12:42.320]  my perception of time, but somewhere around there. And there was obviously a much more
+[12:42.320 --> 12:46.400]  mature option than when it was previously looked at. It was also very good for shared
+[12:46.400 --> 12:53.400]  code base binding issues were a much cleaner and easier thing to achieve. So the engineering
+[12:53.440 --> 12:58.560]  team, who obviously also at least a third of them already had Kotlin knowledge because
+[12:58.560 --> 13:03.400]  they were building for Android, they said, right, let's prototype. Let's give it a go.
+[13:03.400 --> 13:09.240]  Let's see if we can achieve the thing that we wanted to achieve something like this.
+[13:09.240 --> 13:15.740]  So come December 2021. As we all know, as soon as you start getting close to the holidays,
+[13:15.740 --> 13:19.440]  no one wants to actually do any real work. No one wants to be fixing bugs. No one wants
+[13:19.480 --> 13:25.680]  to do anything like that. So instead, the team kind of hid away and built a prototype
+[13:25.680 --> 13:30.520]  instead did something a bit fun. And they were very careful even the prototype about
+[13:30.520 --> 13:36.000]  what was going into the shared code. This was definitely a mistake from C++. The Kotlin
+[13:36.000 --> 13:41.480]  Moj platform was only for the business logic platform specific stays out. And what do I
+[13:41.480 --> 13:47.160]  mean by the platform specific? What was platform specific for us? And really it was the networking
+[13:47.200 --> 13:54.200]  layer. We actually already had very good HTTP clients, WebSocket, WebRTC clients for Android
+[13:54.600 --> 13:59.360]  and iOS. And obviously a lot of stuff was already built into JavaScript and the browser.
+[13:59.360 --> 14:05.320]  So that was kind of what we wanted to keep out of the C++. And I think we did that quite
+[14:05.320 --> 14:11.960]  well. So that stuff would just be exposed behind interfaces back to Kotlin Moj platform.
+[14:12.000 --> 14:17.760]  And we'd let the platforms worry about that. So the prototype was worked on at the end
+[14:17.760 --> 14:24.040]  of the year into January. And it worked. It was successful. It was basically just taking
+[14:24.040 --> 14:29.400]  a few of our APIs. It wasn't a full SDK, but it proved that you could do the things we
+[14:29.400 --> 14:36.400]  needed to do in a much nicer way. Then we had drama. Like all good stories.
+[14:37.000 --> 14:44.000]  Ashley, absolutely, he dared to have a child, which obviously put a dampener on everything.
+[14:46.160 --> 14:50.720]  He went on paternity leave. Obviously it was a lovely thing and we were all very happy
+[14:50.720 --> 14:55.880]  for him. But it did kind of hold the project for a while because he was a big driving force
+[14:55.880 --> 15:02.880]  of this and it was a big kind of hit. We also had team members leave. It was the new year.
+[15:03.480 --> 15:10.240]  It happens. People leave the company. And what that meant is the team that was left
+[15:10.240 --> 15:15.400]  had to focus on fixing bugs in the current SDK. There wasn't the bandwidth to build something
+[15:15.400 --> 15:18.920]  new. They had to keep supporting this thing that people were already using in production.
+[15:18.920 --> 15:25.920]  It wasn't like we could just drop support and move on. But wait. By doing this, the
+[15:26.920 --> 15:32.240]  team are reminded of the painful process of supporting the current SDK, of how painful
+[15:32.320 --> 15:39.000]  it is to build new features, fixed bugs and all that sort of stuff. Just as they are starting
+[15:39.000 --> 15:46.000]  to really feel the pain, Ashley returns to triumphant fanfare. He has come back. He is
+[15:46.600 --> 15:51.960]  the saviour. The team kind of say that we really need to do something now. We really
+[15:51.960 --> 15:58.960]  need to come up with a plan for this year. We need to build something. In the inspiring
+[15:59.240 --> 16:06.240]  words from Ashley, solid, let's do it. It was time to build a new SDK. But what actually
+[16:07.240 --> 16:11.720]  needed to happen to make that possible? We had a prototype, but where did we need to
+[16:11.720 --> 16:17.440]  go from there? Well, we had already previously kind of focused on iOS and Android. We needed
+[16:17.440 --> 16:21.360]  to build something in JavaScript as well to make sure that it was going to be functional.
+[16:21.360 --> 16:26.640]  We needed to check that. But actually the process there was fairly smooth and that wasn't
+[16:26.680 --> 16:32.560]  a problem. So that was actually really all that changed. All that then happened is adding
+[16:32.560 --> 16:37.600]  in the new APIs and other stuff to build out a full SDK that was kind of feature parity
+[16:37.600 --> 16:44.600]  with the previous one. So that's when I kind of asked the team, what were the main changes
+[16:45.000 --> 16:52.000]  to your workflow, to the team's workflow, all those sorts of questions as opposed to
+[16:53.000 --> 16:58.600]  clearly what were the main changes to the code was, thing was rewritten. But what changed
+[16:58.600 --> 17:03.480]  in their process? And hopefully these are kind of some points that might get you thinking
+[17:03.480 --> 17:08.120]  about whether this is something that you can do in the future. Obviously the first one was
+[17:08.120 --> 17:13.040]  they had to learn Kotlin. The team at that point merged into one large team and for the
+[17:13.040 --> 17:17.040]  Android side, well, they were off having a party for weeks because they already knew
+[17:17.080 --> 17:22.880]  all this. But iOS and JavaScript devs, they had some learning to do. They had a lot of
+[17:22.880 --> 17:27.480]  catch up and that was a big investment for the company to make sure that they did. They
+[17:27.480 --> 17:32.840]  had the resources they needed. They could build this. The other thing of course was
+[17:32.840 --> 17:39.480]  we had to go all in on a build system. We obviously went with Gradle. It made iOS developers
+[17:39.480 --> 17:45.640]  very sad. I think there was a few people still crying out for make files. It was kind of a
+[17:45.720 --> 17:50.480]  little bit of contention for a while, but everyone got on board in the end and it's
+[17:50.480 --> 17:57.480]  definitely a big change to the whole process. The other thing was the actual moving and
+[17:57.480 --> 18:01.560]  tooling, the shifting and tooling. Like I mentioned, we had C++ developers. We had people
+[18:01.560 --> 18:07.280]  that were used to being able to just spin up Vim or text editor of their choice, write
+[18:07.280 --> 18:14.280]  some code and build it. They didn't quite grasp just how big Android Studio is and
+[18:15.240 --> 18:20.720]  some of the issues when projects get large, as we've heard about earlier today as well.
+[18:20.720 --> 18:25.280]  So there was a lot of relearning. I definitely wouldn't recommend trying to use any of those
+[18:25.280 --> 18:30.200]  developers' laptops because all their key bindings are completely changed and it's
+[18:30.200 --> 18:34.200]  very strange. I've had a look at it before, but because they're so used to using things
+[18:34.200 --> 18:39.200]  like Vim, they've completely remapped their Android Studio, which is fine.
+[18:40.120 --> 18:45.840]  So yeah, where are we today? Well, we have released the SDK. It is actually available.
+[18:45.840 --> 18:49.800]  We've split that out into two modules. We have the voice component and we have the chat
+[18:49.800 --> 18:55.440]  component as separate things. The chat component is releasing the end of this quarter, but
+[18:55.440 --> 19:00.120]  we have voice out there for people to actually use.
+[19:00.120 --> 19:07.120]  And so now that we are right now here in the last couple of months, I've kind of, again,
+[19:07.920 --> 19:14.760]  I asked the question to the developers again, what changed? What happened? What have you
+[19:14.760 --> 19:20.720]  learned about this process and what would be useful for people to hear about? I think
+[19:20.720 --> 19:26.480]  one thing that they kind of didn't really consider necessary at the time was that you
+[19:26.480 --> 19:31.320]  have to keep up to date with Kotlin updates. Some of the developers are very much used
+[19:31.360 --> 19:39.360]  to using things that are a bit more stagnated, slow developing languages, C++, that you
+[19:39.360 --> 19:43.120]  don't have to worry about the new and exciting things because kind of everything's already
+[19:43.120 --> 19:49.200]  there and it's done. So there is definitely resource that's going into making sure that
+[19:49.200 --> 19:53.240]  the team keeps up to date with Kotlin. It can use the new features as they're released.
+[19:53.240 --> 19:59.080]  It can do all those sorts of fun stuff, but it's something you have to consider. Importantly,
+[19:59.360 --> 20:05.720]  the original pain point of consistency completely removed. You can now just write once and it
+[20:05.720 --> 20:12.720]  work everywhere for our SDK. All the platform code is actually now doing is exposing the
+[20:13.160 --> 20:18.400]  functionality of the Kotlin multi-platform code. What's that kind of as meant is that
+[20:18.400 --> 20:25.400]  we have more time to work on that API contract between SDK and developer, which at least
+[20:25.560 --> 20:31.040]  I certainly think it means that the new SDK is much nicer to use, both as an Android developer
+[20:31.040 --> 20:37.320]  as an iOS developer or as a JavaScript developer. We have the time to kind of fine tune and
+[20:37.320 --> 20:44.080]  improve that experience, whereas previously it was kind of just, here it is.
+[20:44.080 --> 20:48.920]  The other great thing is that now everyone knows Kotlin, which I mean, just as a thing,
+[20:48.920 --> 20:54.200]  I think is great from the previous talk. Everyone should know Kotlin. But it does mean that
+[20:54.240 --> 20:58.440]  everyone on the team can build a feature. Everyone can own a feature from its design
+[20:58.440 --> 21:04.440]  all the way through. They have that responsibility. We're not dependent on any specific person.
+[21:04.440 --> 21:09.080]  We're not dependent on multiple people deploying the same feature. There's more ownership within
+[21:09.080 --> 21:14.840]  the team as well to actually kind of take that through the whole process, which we wouldn't
+[21:14.840 --> 21:20.280]  have had before. Another one which I could give a whole separate talk on is that we have
+[21:20.320 --> 21:26.400]  moved to a Mono repo for the SDK. In terms of keeping the whole team synchronized and
+[21:26.400 --> 21:33.400]  everyone having visibility and access to the whole SDK code base, it's much better. I know
+[21:33.520 --> 21:37.240]  that we could definitely have an argument about whether Mono repos are good and the times
+[21:37.240 --> 21:43.280]  that they are good, but in this situation it's worked incredibly well for us.
+[21:43.280 --> 21:50.280]  The final point, we have tests now. As you all know, tests are the key to saving developers
+[21:52.040 --> 21:58.360]  time, effort, energy. As developers are our world, that's how we've saved the world with
+[21:58.360 --> 22:02.920]  Kotlin Multi Platform. Honestly, also it's just really nice to be able to rely on tests
+[22:02.920 --> 22:09.920]  and they actually work. That is what we've done with Kotlin Multi Platform. If you would
+[22:10.400 --> 22:16.800]  like to check out the SDK, please do. The QR code will take you to a GitHub community,
+[22:16.800 --> 22:20.880]  which will give you the tutorials and show you how to get started with the SDK with
+[22:20.880 --> 22:25.200]  some sample apps. There's also a coupon code. If you do want to sign up for a developer
+[22:25.200 --> 22:32.200]  account, you get 10 euros credit and you can send SMS messages and call yourself and all
+[22:32.200 --> 22:37.000]  that sort of fun stuff. Please do check that out if you'd like to. Other than that, thank
+[22:37.000 --> 22:42.040]  you very much. As always, my slides are available on GitHub if you'd like them. Thank you.

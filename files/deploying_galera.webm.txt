@@ -1,0 +1,298 @@
+[00:00.000 --> 00:10.440]  So, I'm going to talk to you a little bit about deploying your Galera clusters in the
+[00:10.440 --> 00:11.840]  real world.
+[00:11.840 --> 00:16.480]  I'm actually very pleasantly pleased to note that a lot of you are using Galera cluster
+[00:16.480 --> 00:20.880]  already, so that's great.
+[00:20.880 --> 00:32.440]  I work at Codership, and before this I was also with MariaDB, MySQL, Fedora, etc.
+[00:32.440 --> 00:38.160]  Codership makes Galera clusters, so obviously there's support, training, consulting, and
+[00:38.160 --> 00:39.160]  so forth.
+[00:39.160 --> 00:44.400]  The company's been around since 2007, three founders, all engineers, fully-services business
+[00:44.400 --> 00:53.640]  model, and it's used in lots of places, from your gaming, aka gambling, also gaming, telecoms,
+[00:53.640 --> 01:01.320]  banking, insurance, SaaS, Paz, IAS, it's literally everywhere.
+[01:01.320 --> 01:07.240]  Since many of you already use Galera cluster, I don't actually have to maybe introduce it
+[01:07.240 --> 01:11.240]  to all of you, but it is highly scalable.
+[01:11.240 --> 01:16.840]  You can add nodes on the fly, you can delete nodes on the fly, this is as simple as actually
+[01:16.840 --> 01:25.360]  just pointing the IP address of your new node to an existing node, and it should be able
+[01:25.360 --> 01:30.640]  to sync via something known as SSD, state snapshot transfer.
+[01:30.640 --> 01:35.120]  And from an application point of view, it still looks like one very large database.
+[01:35.840 --> 01:41.640]  Naturally, we like you to have a minimum of three nodes, even though some have two, and
+[01:41.640 --> 01:47.040]  some have three separated across two data centers, even though they'll claim they have
+[01:47.040 --> 01:49.960]  very, very fast network.
+[01:49.960 --> 01:56.160]  So if you have three databases, as we suggest, you'll have three copies of the same data
+[01:56.160 --> 02:01.800]  as well, and so it looks like one very big database from the application point of view.
+[02:01.800 --> 02:06.240]  You can't have any number of parallel applyer threads as well.
+[02:06.240 --> 02:14.320]  So we have actually renamed things like, we don't call it the WSRAP slave threads any
+[02:14.320 --> 02:16.440]  longer, we call it applyer threads.
+[02:16.440 --> 02:22.640]  So we are following exactly what MySQL and MariaDB is doing in terms of being politically
+[02:22.640 --> 02:31.720]  correct, I guess, though we are in Europe, so maybe this is less of a concern.
+[02:31.720 --> 02:36.600]  So this is a point to note, because if you are actually in your config files using older
+[02:36.600 --> 02:41.680]  configurations, when you're moving to something new, you should rename it, otherwise you're
+[02:41.680 --> 02:46.760]  going to find that Galera will fail to start with a very poor error message in your error
+[02:46.760 --> 02:53.320]  log, and maybe that's the other pro tip is to never disable the error log, ever, because
+[02:53.320 --> 02:56.440]  Galera writes all messages to the error log.
+[02:56.440 --> 03:01.680]  In fact, if you're using MySQL 57 or 80, which I presume most of you should be using
+[03:02.400 --> 03:07.960]  in terms of a newer version of MySQL, the temporary password is inside your error log.
+[03:07.960 --> 03:12.200]  So if you disabled it, how do you plan to start?
+[03:12.200 --> 03:14.960]  So the error log is actually very crucial.
+[03:14.960 --> 03:22.080]  So MariaDB, on the other hand, you can start with passwordless logins by default, but MySQL
+[03:22.080 --> 03:23.080]  requires it.
+[03:23.080 --> 03:30.560]  So I suggest if you're using Galera, never disable the error log like ever.
+[03:30.560 --> 03:35.720]  We also, of course, have parallel replications, so it makes state transfers quick for new nodes.
+[03:35.720 --> 03:39.680]  So you can actually consider just increasing the applied threads.
+[03:39.680 --> 03:44.280]  Don't use a value of WSRAP applied threads that is higher than the average given number
+[03:44.280 --> 03:48.520]  of what is known as the cert depth distance, the certification depth distance.
+[03:48.520 --> 03:51.880]  You can actually see this in the status variables.
+[03:51.880 --> 03:56.760]  We probably, as an improvement, should be able to spend more time actually going through
+[03:56.760 --> 04:00.520]  all the WSRAP stuff that you should be paying attention to.
+[04:00.520 --> 04:05.560]  But to some extent, we've also given that off to GUI tools to manage.
+[04:05.560 --> 04:09.920]  Of course, we have an optimized network protocol, so packets are only exchanged over the when
+[04:09.920 --> 04:12.200]  a transaction can be time.
+[04:12.200 --> 04:16.140]  We have topology-aware applications, so you can actually segment things.
+[04:16.140 --> 04:21.240]  So each transaction is sent to a separate data center actually only once.
+[04:21.240 --> 04:26.240]  We also detect and automatically evict unreliable nodes.
+[04:26.240 --> 04:29.640]  This has improved tremendously in Galera 4, actually.
+[04:29.640 --> 04:34.320]  So if you have a flappy network or node failure, you don't actually need any manual intervention.
+[04:34.320 --> 04:37.280]  We will eject.
+[04:37.280 --> 04:43.280]  In the very unlikely event that you've configured Galera to ignore split brains, we aim to actually
+[04:43.280 --> 04:46.560]  recover from these problems.
+[04:46.560 --> 04:55.760]  Again, we provide these options for you, but we don't recommend you to use them.
+[04:56.760 --> 04:59.600]  Why would you want to cause yourself grief?
+[04:59.600 --> 05:02.360]  MySQL and MariaDB don't allow you to sync data.
+[05:02.360 --> 05:07.880]  So if you have a split brain situation with two different sets of data, how do you plan
+[05:07.880 --> 05:10.400]  to sync this data later?
+[05:10.400 --> 05:15.400]  Well, you can, of course, turn on the binary logs, which we actually do recommend, at least
+[05:15.400 --> 05:18.360]  for a short period of time, and then maybe do some replaying.
+[05:18.800 --> 05:24.120]  If you have MariaDB, you can use the flashback capability.
+[05:24.120 --> 05:29.200]  If you have MySQL, you can actually just replay the bin logs.
+[05:29.200 --> 05:33.240]  So if you happen to actually lose data, and, of course, traffic encryption is something
+[05:33.240 --> 05:42.000]  we also support, it's not turned on by default in all distributions except Percona XDB Cluster
+[05:42.000 --> 05:43.000]  8.
+[05:43.240 --> 05:48.400]  If you get Percona XDB Cluster 8, traffic encryption is enabled by default.
+[05:48.400 --> 05:51.600]  And if you're using the cloud, this is kind of key, right?
+[05:51.600 --> 05:59.680]  Because it turns out that everything happens in, replication happens in plain text, basically.
+[05:59.680 --> 06:07.000]  This is true even for asynchronous replication or even semi-synchronous replication.
+[06:07.000 --> 06:12.080]  So did I just promise you a panacea for the whole world?
+[06:12.080 --> 06:13.080]  Of course not.
+[06:13.080 --> 06:15.080]  It does come with trade-offs, right?
+[06:15.080 --> 06:19.880]  You are not going to be as fast as asynchronous because you're not just committing to the
+[06:19.880 --> 06:23.600]  primary, you're committing to the primary and to other nodes.
+[06:23.600 --> 06:26.360]  It's obviously not going to be as fast as semi-synchronous because it's not committing
+[06:26.360 --> 06:28.800]  to one primary and one secondary.
+[06:28.800 --> 06:33.160]  So we can't really beat the laws of physics even though you're in the same data center,
+[06:33.160 --> 06:38.280]  which is, again, why it's such a bad idea, and we see this a lot in production where
+[06:38.280 --> 06:44.300]  people say, we have a three-node Galera cluster in two data centers.
+[06:44.300 --> 06:49.680]  If you want high availability, you really should invest in the money that comes from
+[06:49.680 --> 06:53.680]  running high availability.
+[06:53.680 --> 07:00.600]  So we've now found out that basically none of you use Code of Ships Galera cluster.
+[07:00.600 --> 07:04.060]  And as Monty says, a lot of the features are actually pretty much inside of MariaDB
+[07:04.060 --> 07:10.340]  Galera cluster, but there is this one interesting feature that is not made it to any other distribution
+[07:10.340 --> 07:12.140]  that's clone SSD.
+[07:12.140 --> 07:19.140]  SSDs that happen via the clone plugin as opposed to using the likes of Maria backup, extra
+[07:19.140 --> 07:29.500]  backup, and unfortunately, the clone plugin doesn't run on MariaDB.
+[07:29.500 --> 07:33.900]  So on MariaDB, you use Maria backup, which is also fast.
+[07:33.900 --> 07:38.300]  On Percona XDB cluster, you use extra backup, which is also fast, but we found that clone
+[07:38.300 --> 07:41.580]  is actually also pretty amazing.
+[07:41.580 --> 07:43.500]  So we do open up a new port for it.
+[07:43.500 --> 07:48.740]  And if you use Galera Manager, by default, if you deploy MySQL 8, we actually use clone
+[07:48.740 --> 07:51.260]  SSD to provision your new nodes.
+[07:51.260 --> 07:56.500]  So you should be able to see some good speed up there.
+[07:56.500 --> 08:03.020]  It works extremely closely with MariaDB PLC, I have to say not MariaDB Corporation any
+[08:03.020 --> 08:07.700]  longer because the company has a new name, to make a MariaDB Galera cluster.
+[08:07.700 --> 08:16.180]  In fact, it's been around inside a developer tree since 10.1, which is around October 2014.
+[08:16.180 --> 08:21.900]  So then it got released as a GA in October 2015 in 10.18.
+[08:21.900 --> 08:26.820]  And you get all the features of MariaDB that work with Galera, basically.
+[08:26.820 --> 08:28.740]  This is your Oracle support.
+[08:28.740 --> 08:37.300]  I know there's no generic MariaDB feature talk in this entire FOSDAM, but go check out
+[08:37.300 --> 08:39.900]  the knowledge base.
+[08:39.900 --> 08:43.900]  I have another talk on the ecosystem later, which will give you a quick overview.
+[08:43.900 --> 08:49.260]  But you also get the things like system version tables, sequences, all those optimizer features
+[08:49.260 --> 08:54.340]  that Monty talked about that are coming in MariaDB 11, you just get benefit of it as
+[08:54.340 --> 08:55.340]  well.
+[08:55.340 --> 08:59.220]  And it was actually the first to include Galera 4 in 10.4.
+[08:59.220 --> 09:05.580]  So if you're using 10.4, 10.5, 10.6, you're already getting Galera 4.
+[09:05.580 --> 09:10.460]  And then, of course, there's a Pocona actually DB cluster, which another half of you actually
+[09:10.460 --> 09:11.460]  use.
+[09:11.460 --> 09:12.980]  Base is Pocona server.
+[09:12.980 --> 09:16.580]  It comes with proxy SQL, including an administrative tool.
+[09:16.900 --> 09:23.940]  It has a strict mode, which disallows MyISM tables to be replicated via Galera.
+[09:23.940 --> 09:31.700]  Now this is an interesting thing because while Pocona actually DB cluster disallows it, MariaDB,
+[09:31.700 --> 09:33.860]  later versions of MariaDB actually allows this.
+[09:33.860 --> 09:42.060]  You can, since 10.6, have ARIA and MyISM replication inside of Galera cluster.
+[09:42.060 --> 09:47.340]  We consider this kind of experimental, but it works.
+[09:47.340 --> 09:49.980]  It's feature modes that are available.
+[09:49.980 --> 09:52.980]  Of course, it disables tables without primary keys.
+[09:52.980 --> 09:57.420]  Again with something like MariaDB, you can also force primary key creation.
+[09:57.420 --> 10:03.260]  And Galera also has an option where you can sort of insert one, ensures using the row
+[10:03.260 --> 10:08.300]  bin log format, logging to a file, obviously not tables.
+[10:08.300 --> 10:12.740]  So there's some interesting things, setting the inner DB auto increment log mode to two,
+[10:12.740 --> 10:17.300]  and of course, out of the box encryption.
+[10:17.300 --> 10:21.820]  So there are some feature highlights, like intelligent donor selection.
+[10:21.820 --> 10:30.660]  So now with Galera 3 and 4, we 3.x where we have introduced new features.
+[10:30.660 --> 10:33.140]  You can actually now prefer a donor to do an ISD.
+[10:33.140 --> 10:38.140]  When it comes to cluster crash recovery, we've actually by default turned on PC.recovery
+[10:38.140 --> 10:43.060]  equals on, so all nodes will maintain the cluster information persistently, not requiring
+[10:43.060 --> 10:45.140]  necessarily to bootstrap.
+[10:45.140 --> 10:51.340]  We have full GTID compatibility in Galera 4 with either MariaDB or MySQL, so actually
+[10:51.340 --> 10:55.500]  using the native GTIDs as opposed to the Galera GTIDs.
+[10:55.500 --> 11:02.780]  So previously this was a bit of a point of contention, so this is actually a good thing.
+[11:02.780 --> 11:03.780]  Foreign key support.
+[11:03.900 --> 11:09.020]  When I say improved foreign key support, you'd actually, if you looked in your arrow logs
+[11:09.020 --> 11:12.500]  and used foreign keys, you may have found that there were lots and lots of errors that
+[11:12.500 --> 11:14.740]  were not actually errors.
+[11:14.740 --> 11:19.540]  So cleaning up the error reporting was actually how we improved foreign key support, because
+[11:19.540 --> 11:23.220]  lots of people were complaining like, hey, we're seeing this in the arrow logs, but it
+[11:23.220 --> 11:24.980]  was running just fine.
+[11:24.980 --> 11:30.220]  So it was just maybe a bit too verbose, and then we added a couple of new tables inside
+[11:30.220 --> 11:33.940]  of the MySQL table as well.
+[11:33.940 --> 11:37.900]  It's the WSJAP cluster, cluster members, and streaming log.
+[11:37.900 --> 11:41.300]  Very important to remember that streaming replication, which I'll talk about probably
+[11:41.300 --> 11:46.460]  in the next slide, actually does make use of chunking your data and putting it inside
+[11:46.460 --> 11:51.460]  the MySQL table, so this actually improves the ability for you to use long-running transactions
+[11:51.460 --> 11:54.660]  or large transactions, so to speak.
+[11:54.660 --> 11:59.580]  And that's why it's in the MySQL table because permissions, right, otherwise other people
+[11:59.580 --> 12:03.020]  are going to see what's being streamed.
+[12:03.020 --> 12:04.340]  Next slide.
+[12:04.340 --> 12:10.700]  So previously, you'd have to play with WSJAP Max WS rows and WSJAP Max WS size, limiting
+[12:10.700 --> 12:16.540]  the transaction rows between 128 kilobytes to a gigabyte, maximum of two gigabytes, but
+[12:16.540 --> 12:21.020]  now you can actually cut those large transactions by setting fragment sizes.
+[12:21.020 --> 12:26.700]  This can be done literally at runtime, so you can set them around 10,000 rows to 20,000
+[12:26.700 --> 12:31.940]  rows, and your application can also obviously set streaming replication on and off on a
+[12:31.940 --> 12:33.300]  need-by-need basis.
+[12:33.300 --> 12:35.540]  Again, this doesn't come for free.
+[12:35.540 --> 12:40.940]  There is naturally replication overhead, which is being improved on in every release that
+[12:40.940 --> 12:41.940]  we come.
+[12:41.940 --> 12:46.380]  So if you're always looking for the latest, greatest streaming replication, naturally
+[12:46.380 --> 12:49.780]  you'd want to take a look at what's inside of MariaDB.
+[12:49.780 --> 12:53.860]  And then, of course, there is better error handling for poor networks, so cluster error
+[12:53.860 --> 13:00.940]  voting is a feature that has a protocol for nodes to decide how the cluster will react
+[13:00.940 --> 13:02.900]  to problems inside of replication.
+[13:02.900 --> 13:08.500]  So when one or several nodes have an issue to apply an incoming transaction, like a suspected
+[13:08.500 --> 13:11.260]  inconsistency, this feature basically helps.
+[13:11.260 --> 13:16.580]  So in a five-node cluster, if two nodes basically fail to apply a transaction, they get removed,
+[13:16.580 --> 13:21.020]  and of course, now your DBA could go into fix to see what went wrong and then rejoin
+[13:21.020 --> 13:23.700]  the cluster.
+[13:23.700 --> 13:29.380]  So I know we had forced them, so this is an apology slide because, unfortunately, there
+[13:29.380 --> 13:31.620]  are enterprise features, but I will not talk about them.
+[13:31.620 --> 13:33.940]  This is for you to go check them out yourself.
+[13:33.940 --> 13:39.980]  Both MariaDB and Codeship have these options.
+[13:39.980 --> 13:44.660]  The biggest hurdle to upgrades that I hear from consulting is we don't want to migrate
+[13:44.660 --> 13:46.020]  to MySQL 8.
+[13:46.020 --> 13:52.260]  I don't know why people say this a lot, but if you are using MySQL, last I checked, it's
+[13:52.300 --> 13:55.980]  going to EOL fairly soon, 5.7, so it's time to upgrade.
+[13:55.980 --> 13:58.100]  You've got eight more months to get working.
+[13:58.100 --> 14:03.900]  And if you want Galera 4, remember, MariaDB's had it since 10.4, but again, a lot of you
+[14:03.900 --> 14:07.340]  are not even on the 10.4 or 10.5 train yet.
+[14:07.340 --> 14:14.900]  So upgrading from 10.2 or 10.3 is probably something that is ideal if you can find the
+[14:14.900 --> 14:15.900]  time to do it.
+[14:15.900 --> 14:24.340]  Okay.
+[14:24.340 --> 14:26.860]  Common setups.
+[14:26.860 --> 14:29.540]  Three Galera cluster nodes in one data center.
+[14:29.540 --> 14:33.580]  This is the highly recommended common setup.
+[14:33.580 --> 14:35.980]  Nine Galera cluster nodes in three data centers.
+[14:35.980 --> 14:38.780]  Also, of course, another recommended setup.
+[14:38.780 --> 14:43.340]  And if you are doing this, make sure you are ensuring your database operations are kept
+[14:43.340 --> 14:48.780]  local by setting each data center that GMCAST segment equals 0, 1, 2.
+[14:48.780 --> 14:52.500]  And of course, the flow control is fully configurable.
+[14:52.500 --> 14:55.580]  And we want to have minimal latency penalty.
+[14:55.580 --> 15:02.940]  Remember that latency penalty only occurs during commit time, so then actually no communication
+[15:02.940 --> 15:07.260]  between these remote nodes and Galera doesn't use distributed locking, so each row-level
+[15:07.260 --> 15:11.220]  lock does not have to be communicated across data centers.
+[15:11.220 --> 15:15.900]  So in very, very high latency situations where complete avoidance of secondary lag
+[15:15.900 --> 15:21.100]  is required, we can also support asynchronous replication between two otherwise independent
+[15:21.100 --> 15:24.460]  Galera clusters, each running in its own data center.
+[15:24.460 --> 15:30.540]  Now I put an asterisk there with recommended because I know Marco Tusa is not here today,
+[15:30.540 --> 15:37.660]  but he was on Friday and he has written a lot about why you should never run your Galera
+[15:37.660 --> 15:41.060]  clusters in a wide area network.
+[15:41.060 --> 15:45.100]  Or I guess even your group replication in IndieBee clusters in a wide area network to
+[15:45.100 --> 15:46.540]  some extent.
+[15:46.540 --> 15:52.340]  And he's spent quite a lot of blogs and including a video.
+[15:52.340 --> 15:59.580]  So basically whenever you need a solution based on a tightly coupled database cluster,
+[15:59.580 --> 16:03.420]  you can't obviously locate your nodes at a distance that is longer than the largest
+[16:03.420 --> 16:08.500]  round-trip time of the shortest desired period of commit.
+[16:09.500 --> 16:11.380]  Wow, five more minutes.
+[16:11.380 --> 16:14.460]  We're going to go fast now.
+[16:14.460 --> 16:19.380]  You should always remember that we like the minimum of three nodes basically in terms
+[16:19.380 --> 16:23.860]  of a quorum because a quorum is greater than 50 percent, so if one node goes away you still
+[16:23.860 --> 16:26.820]  have two thirds, 66.7.
+[16:26.820 --> 16:30.500]  And you always want to ensure the primary component is there because otherwise if it
+[16:30.500 --> 16:33.700]  splits due to network failure you have split brain.
+[16:33.700 --> 16:35.420]  So this is very bad.
+[16:35.420 --> 16:42.180]  You can fine-tune this with evs.suspectTimeout as a parameter.
+[16:42.180 --> 16:45.220]  Very realistic common setups that we end up seeing.
+[16:45.220 --> 16:48.300]  Two node Galera cluster, really not recommended.
+[16:48.300 --> 16:51.460]  Even though we documented, we tell you how to shoot yourself in the foot, it doesn't
+[16:51.460 --> 16:53.700]  mean you should.
+[16:53.700 --> 16:57.500]  Three node Galera cluster across two data centers also common.
+[16:57.500 --> 17:00.900]  Three node across three data centers also common.
+[17:00.900 --> 17:03.260]  Five nodes, seven nodes.
+[17:03.260 --> 17:06.780]  So you always have to remember the trade-offs of scalability, reliability, resilience and
+[17:06.780 --> 17:07.780]  performance.
+[17:07.780 --> 17:14.220]  This is a sample of my.cnf that one would want to maybe pay a bit of attention to where
+[17:14.220 --> 17:18.780]  we actually include a WSR provider options because by default we don't put a segment
+[17:18.780 --> 17:22.180]  for example, but you also want more than just a segment.
+[17:22.180 --> 17:28.060]  You want to, if you're doing wide area network stuff, consider increasing the replication
+[17:28.060 --> 17:29.180]  windows.
+[17:29.180 --> 17:33.100]  You want to increase the timeouts above max round trip time.
+[17:33.100 --> 17:36.580]  Look at the flow control which you can actually monitor inside.
+[17:36.580 --> 17:43.540]  And then pay attention to the FC limit, the master slave yes, causal read, timeouts and
+[17:43.540 --> 17:48.700]  the evs settings where you can actually set the send window to 512, the user send window
+[17:48.700 --> 17:50.460]  to 512.
+[17:50.460 --> 17:53.060]  You can look at the keep alive periods.
+[17:53.060 --> 17:57.780]  We have all this actually in blogs and documentation to some extent.
+[17:57.780 --> 18:03.740]  So I'd highly recommend you pay attention to galeracluster.com slash blog.
+[18:03.740 --> 18:07.700]  Always set your GCash size.
+[18:07.700 --> 18:11.740]  Potentially also set your retry autocommit, something like five.
+[18:11.740 --> 18:16.700]  You may want to certify non-primary key stuff, but really you should use primary keys.
+[18:16.700 --> 18:18.620]  You tell the developers to use primary keys.
+[18:18.620 --> 18:25.940]  In fact, if you're using MariaDB, you can say in a DBforce primary key equals one.
+[18:25.940 --> 18:29.780]  Make it such that they can't create tables any longer.
+[18:29.780 --> 18:33.580]  Make the developers suffer a little bit.
+[18:33.580 --> 18:38.620]  Replicate my ISM, replicate ARIA, these are all things that are very MariaDB specific.
+[18:38.620 --> 18:43.620]  I'd like to actually talk about the ring buffer file as well as the on demand page store which
+[18:43.620 --> 18:48.100]  is the GCash.page underscore size.
+[18:48.100 --> 18:53.900]  But I don't think we have so much time, so consider this blog post that we will write
+[18:53.900 --> 18:57.380]  maybe next week.
+[18:57.380 --> 19:00.660]  Another one that I should probably mention really quickly is the arbitrator.
+[19:00.660 --> 19:05.180]  So the arbitrator is a member of your cluster that can participate in voting, but not in
+[19:05.180 --> 19:06.260]  the actual application.
+[19:06.260 --> 19:10.860]  So if you want to save money, you want to have two data center setups, three nodes each.
+[19:10.860 --> 19:14.860]  You can actually just set up the arbitrator daemon in digital ocean or line node.
+[19:14.860 --> 19:18.340]  It doesn't have to be a powerful machine.
+[19:18.340 --> 19:23.540]  It can just basically read traffic and act as an arbitrator.
+[19:24.140 --> 19:27.580]  Don't use things like ignore split brain and so forth.
+[19:27.580 --> 19:33.820]  So Garbdy can act as the odd node and he can also of course help you do backups.
+[19:33.820 --> 19:35.340]  Plenty of proxies available.
+[19:35.340 --> 19:37.380]  There's Galera load balancer.
+[19:37.380 --> 19:38.380]  There's HA proxy.
+[19:38.380 --> 19:39.380]  We have documentation for that.
+[19:39.380 --> 19:43.500]  There's proxy SQL or talk coming up later today evening.
+[19:43.500 --> 19:46.460]  And of course MariaDB max scale.
+[19:46.460 --> 19:50.700]  To provision new nodes, 8.0 gives you clone SSD.
+[19:50.700 --> 19:52.500]  Maria gives you Maria backup.
+[19:52.500 --> 19:57.940]  Percona extra backup is still the choice inside of Percona, actually be cluster.
+[19:57.940 --> 20:03.060]  Very common setup and runtime issues, S Linux firewall.
+[20:03.060 --> 20:05.460]  You can't get your, you can't get a IST.
+[20:05.460 --> 20:08.100]  Well it turns out you've probably got a port closed.
+[20:08.100 --> 20:12.300]  Make sure port 4444 TCP is open.
+[20:12.300 --> 20:17.020]  If you want to avoid long running queries, MySQL and MariaDB as, you know, max execution
+[20:17.020 --> 20:19.940]  time, MariaDB as enhance kill.
+[20:19.940 --> 20:25.220]  You've got DNS giving you problems, switch to IPs.
+[20:25.220 --> 20:29.180]  Couple of functions for developers that may be useful.
+[20:29.180 --> 20:32.500]  Again, you can tell the developers to check this out.
+[20:32.500 --> 20:36.580]  It's well documented.
+[20:36.580 --> 20:37.740]  It's widely adopted.
+[20:37.740 --> 20:42.380]  So lots of people are going, you know, you could use it in Xflower, PowerDNS, lots of
+[20:42.380 --> 20:44.900]  Kubernetes operators.
+[20:44.900 --> 20:49.940]  All right, so the most exciting thing for me in MariaDB 11 from a Galera standpoint
+[20:49.940 --> 20:52.220]  is WSWAP provider options is now a plugin.
+[20:52.220 --> 20:55.460]  So you can actually use this from a more automated thing.
+[20:55.460 --> 21:01.340]  I presume from a MariaDB standpoint, this helps automatically reconfigure SkySQL.
+[21:01.340 --> 21:07.140]  So this is better for you because otherwise you have to put in my.cnf, some of it's dynamic,
+[21:07.140 --> 21:11.860]  not all of it's dynamic, resetting a server, horrible.
+[21:11.860 --> 21:16.900]  Got more granular, you know, few things to improve on, makes schema changes, upgrades
+[21:16.900 --> 21:17.900]  easier.
+[21:17.900 --> 21:19.900]  Lots of further reading.
+[21:19.900 --> 21:23.580]  I know we've literally run out of time, 20 minutes is not a lot of time.
+[21:23.580 --> 21:31.620]  So you can tweet me, you can send me an email, we're hiring, and yeah, we have lots of services.
+[21:31.620 --> 21:33.100]  Thank you for listening.
+[21:41.860 --> 21:42.860]  Thank you.
+[21:42.860 --> 21:42.860]  Bye.

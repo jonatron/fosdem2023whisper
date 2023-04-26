@@ -1,0 +1,363 @@
+[00:00.000 --> 00:13.760]  Hi everyone, welcome to my talk about using GNU Geeks containers with FHS support, file
+[00:13.760 --> 00:15.080]  system hierarchy support.
+[00:15.080 --> 00:21.080]  It's a pleasure to be presenting here at FOSDOM, I wish I could be there in person.
+[00:21.080 --> 00:26.880]  This talk, if you're watching it kind of live, is also at a really early time for me in my
+[00:26.880 --> 00:32.160]  time zone, so I'll do my best to be mentally present for questions by looking forward to
+[00:32.160 --> 00:34.360]  discussing afterwards.
+[00:34.360 --> 00:39.880]  I am not a container expert, I've definitely suffered a bit through some containers in
+[00:39.880 --> 00:44.200]  just trying to make some things work and trying to explore other stuff.
+[00:44.200 --> 00:48.400]  Containers have been pretty much everywhere it seems like, so I've come in contact that
+[00:48.400 --> 00:53.800]  not something I've developed personally, but kind of as a practical trying to get through
+[00:53.800 --> 00:56.040]  and use it.
+[00:56.040 --> 01:01.600]  In terms of what FHS is, that stands for the File System Hierarchy Standard, and this
+[01:01.600 --> 01:08.320]  is what we typically see in most distros, Linux distros, things in slash lib, slash
+[01:08.320 --> 01:14.600]  bin, lots of random things in slash etc., and so on, so that's the typical thing, but
+[01:14.600 --> 01:20.680]  this is a rather big assumption, and that's something I didn't even know the term or know
+[01:20.680 --> 01:25.760]  what it was referring to until I really started working on this and coming to Geeks especially
+[01:25.760 --> 01:27.160]  and seeing what they do there.
+[01:27.160 --> 01:31.880]  Also, let me start by giving you a brief overview of GNU Geeks, I'm sure most of you are pretty
+[01:31.880 --> 01:35.000]  familiar with it, but those you aren't, I'll just give you a quick overview of some of
+[01:35.000 --> 01:37.520]  the features and kind of how it works.
+[01:37.520 --> 01:43.400]  So it's a distribution of GNU operating system, it follows the FSDG, the Free System Distribution
+[01:43.400 --> 01:48.760]  Guidelines, meaning that they only deal with free software essentially, no binary blobs
+[01:48.760 --> 01:52.400]  and firmware and things like that in the kernel for instance.
+[01:52.400 --> 02:02.320]  The whole distribution from the package definitions down to the service manager, Shepard, is all
+[02:02.320 --> 02:04.280]  built on Guile Scheme.
+[02:04.280 --> 02:08.440]  So as I mentioned before, I love all things Lisp, and this was really a big feature for
+[02:08.440 --> 02:16.800]  me as being able to hack on the whole distribution from top down in a language that is a Lisp.
+[02:16.800 --> 02:21.880]  And this has brought lots of cool features, things are transactional, either happens or
+[02:21.880 --> 02:27.240]  it doesn't, you don't get stuck in weird states, you can roll back to previous sets of packages.
+[02:27.240 --> 02:31.400]  The whole system is declarative, so you can just have one file and you declare exactly
+[02:31.400 --> 02:36.280]  how you set up your operating system from where file systems are mounted to your users
+[02:36.280 --> 02:42.480]  to the packages that are included, how you configure all sorts of things, including other
+[02:42.480 --> 02:46.520]  cool things like transformations, so being able to take a package definition and easily
+[02:46.520 --> 02:52.680]  change it to a different branch, a different Git commit to using patches that you have
+[02:52.680 --> 02:58.920]  locally to do things, and it's all then a way that you can reproduce the same output
+[02:58.920 --> 02:59.920]  again.
+[02:59.920 --> 03:03.520]  And that's a big feature of what Geeks tries to do.
+[03:03.520 --> 03:11.360]  And to do a lot of these things, it's necessary that Geeks does not follow FHS.
+[03:11.360 --> 03:16.040]  So in other words, in order to have different package versions for different users on the
+[03:16.040 --> 03:18.560]  system, they can't all be in slash bin, right?
+[03:18.560 --> 03:23.000]  To have different dependency versions or to substitute trying out a newer dependency for
+[03:23.000 --> 03:26.400]  something you're building versus what other things are, you need to be able to kind of
+[03:26.400 --> 03:31.760]  separate out where things are without just throwing them all in one place.
+[03:31.760 --> 03:36.200]  This also lets you do the system configuration and kind of roll back and change things just
+[03:36.200 --> 03:39.720]  by changing sim links basically.
+[03:40.040 --> 03:45.440]  I'll just leave a few links up here for those who want to read more.
+[03:45.440 --> 03:50.440]  So speaking of, then something that's a nice feature of Geeks, which is what this talk is
+[03:50.440 --> 03:53.760]  about, kind of an additional option, is GeekShell.
+[03:53.760 --> 03:57.480]  And this is essentially a very quick one-off environment.
+[03:57.480 --> 04:03.040]  You can just install something in this temporary environment to the shell and use it, do some
+[04:03.040 --> 04:06.800]  testing, do whatever you want without installing it in your main profile.
+[04:06.800 --> 04:09.880]  So rather than normally, most issues, you want to use something, you have to install
+[04:09.880 --> 04:12.600]  it, use it, and then you forget about it, right?
+[04:12.600 --> 04:16.080]  I've definitely installed lots of little tools just to play around or try something, figure
+[04:16.080 --> 04:21.120]  out which one I want, and then forget until you realize you've installed lots of stuff
+[04:21.120 --> 04:23.000]  taking up space.
+[04:23.000 --> 04:26.600]  So this lets you do kind of a one-off thing.
+[04:26.600 --> 04:29.480]  Some nice features too is that this is cache.
+[04:29.480 --> 04:33.800]  So the first time, it may have to download subsuits or build things if you're building
+[04:33.800 --> 04:38.280]  locally for whatever you need for the package you want to run, so that can take a little
+[04:38.280 --> 04:39.360]  bit of time.
+[04:39.360 --> 04:41.840]  But afterwards, then, it's nearly instantaneous, right?
+[04:41.840 --> 04:46.520]  If this is something that Geekshell's already computed, the set of packages you want, it'll
+[04:46.520 --> 04:51.920]  run pretty much as quick as just running the stuff directly, the launching, at least.
+[04:51.920 --> 04:55.280]  After that, it's, you know, however fast the program runs.
+[04:55.280 --> 04:57.040]  And I found this really an invaluable tool.
+[04:57.040 --> 04:59.640]  I love having little tools I use once in a while.
+[04:59.640 --> 05:01.960]  I don't need them around all the time.
+[05:01.960 --> 05:06.480]  So some simple examples here.
+[05:06.480 --> 05:11.400]  One is for using, let's say, Python or another language where you just have some scripts
+[05:11.400 --> 05:12.400]  you want to run occasionally.
+[05:12.400 --> 05:14.040]  You don't need to develop them all the time.
+[05:14.040 --> 05:17.920]  You don't need Python and tons of Python packages all around.
+[05:17.920 --> 05:24.160]  So in this case, you can do Geekshell with Python as an input, and Python, here's a particular
+[05:24.160 --> 05:28.360]  package for that, Canvas API used for some grading stuff.
+[05:28.360 --> 05:32.920]  And then after the double dash, the command you want to run in that shell.
+[05:32.920 --> 05:37.400]  You can also just do Geekshell without the stuff after the two dashes to enter an environment
+[05:37.400 --> 05:42.080]  there for as long as you need, and then exit back out to your normal shell.
+[05:42.080 --> 05:43.600]  So nice, simple tool.
+[05:43.600 --> 05:44.960]  It's really powerful.
+[05:44.960 --> 05:49.600]  It's great for building up one-off environments or being able to reproduce a set of packages
+[05:49.600 --> 05:55.400]  to hack on something, for instance, without having to maintain all of that at once.
+[05:55.400 --> 05:59.840]  So the next step on this command is the container option.
+[05:59.840 --> 06:05.120]  So the long forms dash, dash container, dash C, and it runs it, as you might guess, from
+[06:05.120 --> 06:06.880]  the good naming in a container.
+[06:06.880 --> 06:13.280]  And this container uses pretty much the same technology as everything else, which is namespaces,
+[06:13.280 --> 06:17.520]  and it works basically the same way where you are in an isolated environment, so you
+[06:17.520 --> 06:20.280]  have to specify everything you want to be in there.
+[06:20.280 --> 06:24.840]  It's not quite a virtual machine, because we're not emulating, for instance, different
+[06:24.840 --> 06:30.240]  host CPU or something like that, but it's kind of in between there and you specify everything.
+[06:30.240 --> 06:35.280]  You want, it's by default, in a container, so it's isolated from the host.
+[06:35.280 --> 06:39.760]  Let's you do things in a reproducible manner and a way where you can keep things contained
+[06:39.760 --> 06:44.400]  and not have to worry about being polluted by environment variables, other packages,
+[06:44.400 --> 06:48.080]  anything else you have going on.
+[06:48.080 --> 06:51.400]  So the new option that I'm going to spend the rest of the time on this talk about is
+[06:51.400 --> 06:53.200]  FHS containers.
+[06:53.200 --> 06:59.040]  So this is a new option, building off of that container option, called emulate FHS or dash
+[06:59.040 --> 07:01.240]  F for the short version.
+[07:01.240 --> 07:05.880]  And in short, this makes things in the container look like an FHS distribution.
+[07:05.880 --> 07:10.320]  So we'll get things like slash lib, slash bin, and it also includes on a more technical
+[07:10.320 --> 07:15.680]  note a glib C, which we'll read from a global loader cache.
+[07:15.680 --> 07:20.240]  That'll help with compatibility, which is one reason why it was added here.
+[07:20.240 --> 07:26.000]  And in short, the uses here is it gives you a nice minimal environment that's more typical
+[07:26.000 --> 07:31.200]  in a sense, unless just I love geeks and think it can take over the world, it hasn't yet.
+[07:31.200 --> 07:35.480]  So it's good to be able to make contact with what most other people will be using in some
+[07:35.480 --> 07:36.480]  way.
+[07:36.480 --> 07:41.480]  Often language specific tooling expects to be able to download packages from places or
+[07:41.480 --> 07:44.640]  to set up an environment in a certain way, which may not play well with geeks.
+[07:44.640 --> 07:51.240]  So if you're kind of in between using packages in geeks or having to use other ecosystems,
+[07:51.240 --> 07:55.640]  that can be a handy way to set up a nice, isolate environment for that.
+[07:55.640 --> 07:59.640]  Likewise, for some binaries, I'll discuss testing too, if you want to be able to test
+[07:59.640 --> 08:04.440]  something in a different environment, not going to a full virtual machine or anything
+[08:04.440 --> 08:09.760]  like that, but sort of like a CH root type testing setup.
+[08:09.760 --> 08:12.880]  So before again, to some more specific details.
+[08:12.880 --> 08:19.840]  If we look at our previous one, we add here the FHS option.
+[08:19.840 --> 08:24.480]  Here we can see that slash lib has a whole bunch of stuff.
+[08:24.480 --> 08:31.080]  Bin also has a bunch of things as we might expect in a typical place versus here I see
+[08:31.080 --> 08:39.480]  nothing and in a regular geek system, I just have a sim link for shell for a compatibility
+[08:39.480 --> 08:40.480]  reasons, right?
+[08:40.480 --> 08:41.480]  That's it.
+[08:41.560 --> 08:45.320]  It's to kind of come about through those profiles, the sim links I mentioned before to be able
+[08:45.320 --> 08:47.200]  to find things.
+[08:47.200 --> 08:53.000]  So the FHS environment, in short, just kind of sets up some further sim links and puts
+[08:53.000 --> 08:58.720]  things you'd expect to be in certain places where things can find them.
+[08:58.720 --> 08:59.920]  So let's look at a few examples.
+[08:59.920 --> 09:03.320]  I think that's the best way to demonstrate the uses and kind of how this is a nice, neat
+[09:03.320 --> 09:06.120]  tool to do some things.
+[09:06.120 --> 09:07.960]  So one, the Tor browser.
+[09:07.960 --> 09:12.320]  This is one where you're usually concerned about privacy if you're using it, fingerprinting
+[09:12.320 --> 09:17.280]  and, in other words, tracking down who someone is based on, things like font sizes, things
+[09:17.280 --> 09:20.280]  that are installed, canvas sizes, etc.
+[09:20.280 --> 09:24.920]  So for privacy, Tor, for instance, and other places recommend running kind of a standard
+[09:24.920 --> 09:31.000]  browser, right, without all these little things that users do to make it their own.
+[09:31.000 --> 09:35.840]  So in this case, running the official Tor browser binary is a good idea.
+[09:35.840 --> 09:36.840]  And why not?
+[09:36.840 --> 09:38.240]  We're trying to be safe and private.
+[09:38.240 --> 09:43.840]  Let's have some extra isolation and keep that environment pretty self-contained.
+[09:43.840 --> 09:46.640]  So here is the command here.
+[09:46.640 --> 09:48.520]  In this case, I've downloaded the Tor browser.
+[09:48.520 --> 09:53.320]  I've already extracted it to a folder called Tor-browser.
+[09:53.320 --> 09:57.400]  And then this command just to highlight some of the different pieces there.
+[09:57.400 --> 10:02.600]  So running GeekShell in a container, the network option gives network access.
+[10:02.600 --> 10:06.840]  By default, we do not do that, and the FHS option.
+[10:06.840 --> 10:12.000]  Now in order to do things like display something on the host outside the container, we want
+[10:12.000 --> 10:14.400]  to provide some environment for it.
+[10:14.400 --> 10:21.200]  So preserving and sharing things like the display and X authority for an X server will let us
+[10:21.200 --> 10:22.960]  do that.
+[10:22.960 --> 10:28.800]  And then here, Tor-browser is pretty self-contained, but it still expects to have things from the
+[10:28.800 --> 10:30.360]  typical distro it's being run on.
+[10:30.360 --> 10:36.320]  So here I've added ALSA, bash, core utilities, various things there as you might expect to
+[10:36.320 --> 10:38.800]  get things to run.
+[10:38.800 --> 10:42.880]  And then we can just launch it basically, which is this last piece.
+[10:42.880 --> 10:50.680]  So let's try that out.
+[10:50.680 --> 10:52.040]  In this case, it starts up right away.
+[10:52.040 --> 10:56.320]  I've already run it, so it didn't have to download and set up all those packages.
+[10:56.320 --> 10:57.320]  And there we are.
+[10:57.320 --> 10:58.320]  We're in our Tor-browser.
+[10:58.320 --> 11:02.320]  It's very bright, but looks good.
+[11:02.320 --> 11:07.080]  So another example I mentioned earlier is kind of tooling ecosystems from different languages.
+[11:07.080 --> 11:08.960]  Rust is one which is very popular.
+[11:08.960 --> 11:12.560]  It's in the Linux kernel, or just about to be.
+[11:12.560 --> 11:17.000]  And it moves quickly, and a lot of projects will notice we'll use the nightly set of tool
+[11:17.000 --> 11:21.320]  chain binaries and libraries and all that stuff.
+[11:21.320 --> 11:24.960]  So if you're keeping up that, developing things, you may want to have access to that.
+[11:24.960 --> 11:28.600]  And geeks were not as quick on updating Rust.
+[11:28.600 --> 11:33.080]  There's a lot of things that need to be built, and it's kind of a moving target.
+[11:33.080 --> 11:37.440]  So in this case, maybe you want to do that in a separate environment, be able to use
+[11:37.440 --> 11:42.480]  the kind of quote-unquote usual tools and directions that someone gives for setting
+[11:42.480 --> 11:43.480]  up Rust.
+[11:43.480 --> 11:47.800]  So in this case, there's the Rust-up tool, which is just a little script that will download
+[11:47.800 --> 11:51.520]  and set up a Rust tool chain and environment for you.
+[11:51.520 --> 11:55.720]  As you might expect, if you tried to do this, I suppose I can.
+[11:55.720 --> 11:56.720]  Why not?
+[11:56.720 --> 12:02.000]  This is the instructions given on the Rust-up website, just says to kind of curl and pipe
+[12:02.000 --> 12:04.960]  that into shell.
+[12:04.960 --> 12:10.640]  So if we were to try that, it'll download it, and then you'll get a cryptic no such file
+[12:10.640 --> 12:16.680]  or directory error, which is weird because if you look, the thing it's asking for does
+[12:16.680 --> 12:17.680]  exist.
+[12:17.680 --> 12:23.320]  In this case, it's indicative of it's trying to run something or use a library that's not
+[12:23.320 --> 12:26.480]  or expected to loader in this case.
+[12:26.480 --> 12:28.480]  So there's ways around this.
+[12:28.480 --> 12:33.560]  You can patch the paths to point to the right place and so on, but that's getting a bit
+[12:33.560 --> 12:34.560]  tricky.
+[12:34.560 --> 12:36.480]  Instead, we'll use our new tool.
+[12:36.480 --> 12:42.640]  So here I'll run a shell again, giving network access, going to download stuff, and then
+[12:42.640 --> 12:44.960]  a bunch of inputs needed.
+[12:44.960 --> 12:47.840]  In this case, this is a lot more than you need just for the Rust-up script.
+[12:47.840 --> 12:54.040]  For the Rust-up script, you pretty much just need, I think, probably GCC lib to load stuff,
+[12:54.040 --> 12:58.600]  the tool chain for building stuff, curl, grab.
+[12:58.600 --> 13:04.120]  The rest of these more graphical ones are for building, as an example, a Rust project,
+[13:04.120 --> 13:07.220]  which we can show as well.
+[13:07.220 --> 13:10.360]  So here, I'll run this.
+[13:10.360 --> 13:15.560]  In the last option it mentioned here, it says I'm sharing the temp home directory I created
+[13:15.560 --> 13:17.160]  as home in the container.
+[13:17.160 --> 13:21.200]  So by default, the container will just see the current working directory.
+[13:21.200 --> 13:26.200]  So in this case, I eliminated the current working directory so it doesn't appear nested.
+[13:26.200 --> 13:27.960]  But that's the default behavior.
+[13:27.960 --> 13:31.680]  You'll just see the directory you're in, not anything else outside of it.
+[13:31.680 --> 13:36.240]  So for instance, if you want to reuse your environments, especially an FHS one where
+[13:36.240 --> 13:40.320]  you might be running things for a while and want to go back to it, then you'd want to
+[13:40.360 --> 13:42.600]  set up a home directory for it.
+[13:42.600 --> 13:44.100]  You could share your own.
+[13:44.100 --> 13:48.120]  I think it's good practice here in containers, set up a separate one, and let that build
+[13:48.120 --> 13:49.880]  up the state for that.
+[13:49.880 --> 13:53.320]  And then if you want to erase it or go to a different one, you can just change that option
+[13:53.320 --> 13:57.680]  and not have to clean out things and figure out what got touched.
+[13:57.680 --> 14:02.680]  Okay, so then let's run this.
+[14:02.680 --> 14:04.680]  You can see it has some instructions.
+[14:04.680 --> 14:09.520]  It already says, and we can just let it download things and run.
+[14:09.520 --> 14:10.520]  That's it.
+[14:10.520 --> 14:15.960]  That gives you some instructions here to source something, and we can see if there's a rust.
+[14:15.960 --> 14:22.600]  And indeed, there is 1.67 from five days ago, pretty recent.
+[14:22.600 --> 14:26.240]  Outside the container, I don't have rust.
+[14:26.240 --> 14:30.200]  But then from there, I can follow the usual directions for a project.
+[14:30.200 --> 14:37.680]  So the inputs I gave here was from an example of EWW, this widget library.
+[14:37.680 --> 14:41.680]  It's pretty popular for making kind of cool desktop widgets.
+[14:41.680 --> 14:46.040]  And in that case, it uses the latest rust, and the instructions for building the project
+[14:46.040 --> 14:50.280]  are pretty much to clone the repository and then run cargo build.
+[14:50.280 --> 14:54.800]  And you can do that in the shell once you have rust up that gave you the latest version
+[14:54.800 --> 14:59.400]  and sets up your environment the way you want it without polluting and messing up your main
+[14:59.400 --> 15:04.040]  environment and shell, which is quite nice, especially things like this, which are downloading
+[15:04.040 --> 15:06.160]  a lot of stuff, setting things up.
+[15:06.160 --> 15:10.360]  If you especially want to test things, build from clean environment, this is just a really
+[15:10.360 --> 15:12.720]  nice tool for doing that.
+[15:12.720 --> 15:14.800]  All right.
+[15:14.800 --> 15:19.520]  As another example, addressing something in Geeks in particular, but I think pretty handy
+[15:19.520 --> 15:23.480]  more generally, we don't have electron-based applications.
+[15:23.480 --> 15:30.520]  Really the JavaScript packaging nightmare dystopias, I've heard it called, is just hard or impossible
+[15:30.520 --> 15:35.800]  right now to package things from source or to bootstrap it from source all the way through.
+[15:35.800 --> 15:40.880]  Just the dependency chains, circular dependencies, and the ecosystem there is not really built
+[15:40.880 --> 15:45.240]  with what Geeks wants to do and the standards that we have for how we want to package things.
+[15:45.240 --> 15:50.200]  So you have some free software, electron-based stuff, for instance, which there's no reason
+[15:50.200 --> 15:54.960]  why you shouldn't be able to run it, but we can't build it from source.
+[15:54.960 --> 15:59.800]  But we could use app images, for instance, which are supposed to be these nice self-contained
+[15:59.800 --> 16:05.600]  have everything in them packages, as we'll see that it's not quite as simple as that.
+[16:05.600 --> 16:10.120]  But let's jump right to an example before looking at some detail there.
+[16:10.120 --> 16:15.880]  So in this case, I have a little bit more, a trick that I want to show here is using
+[16:15.880 --> 16:17.400]  the development option.
+[16:17.400 --> 16:22.000]  So what this does is it grabs all the development inputs needed to build, in this case, on Google
+[16:22.000 --> 16:23.840]  to Chromium from source.
+[16:23.840 --> 16:27.560]  So in that case, it'll be all the libraries, the compilers, all the stuff you need if you
+[16:27.560 --> 16:30.480]  were to be working on that project.
+[16:30.480 --> 16:33.040]  In this case, I want to grab all those inputs.
+[16:33.040 --> 16:38.760]  This I just found is a nice kind of not a finessing tool, not a minimalistic tool, but
+[16:38.760 --> 16:41.920]  as a way of grabbing lots of inputs when you don't want to mess around with things or you
+[16:41.920 --> 16:46.800]  expect that you'll need all the kind of stuff that a typical browser does in this case.
+[16:46.800 --> 16:49.800]  So for electron things, I think that's helpful.
+[16:49.800 --> 16:55.520]  GCC lib is usually needed for a few libraries that are always expected to be around for
+[16:55.520 --> 16:57.040]  binaries, for instance.
+[16:57.040 --> 17:01.960]  And now we start getting to some more details for kind of desktop applications that often
+[17:01.960 --> 17:06.400]  expect to have access to debuffs and be able to send messages and receive messages that
+[17:06.400 --> 17:07.400]  way.
+[17:07.400 --> 17:12.840]  So preserving that environment and exposing where it runs.
+[17:12.840 --> 17:18.360]  Likewise in this case, since it's using Chromium basically as a rendering engine, it tries
+[17:18.360 --> 17:19.840]  to use hardware acceleration.
+[17:19.840 --> 17:26.560]  So exposing a bunch of devices and other hardware things is needed to make things work as smooth
+[17:26.560 --> 17:29.040]  as possible.
+[17:29.040 --> 17:34.120]  While most of this is, I would say, kind of reproducible in a sense, some of these options
+[17:34.120 --> 17:37.920]  are getting probably more particular to my system in terms of what hardware is needed
+[17:37.920 --> 17:41.360]  and what it tries to run with.
+[17:41.360 --> 17:45.860]  So some of this may need tweaking on different systems.
+[17:45.860 --> 17:52.600]  But once we have all that, then I've downloaded from some weeks ago a version of VSCodium,
+[17:52.600 --> 17:59.560]  which is the freely licensed free build of Microsoft's VSCode editor.
+[17:59.560 --> 18:04.840]  And once you've made it executable, you can just, supposed to be able to just run it directly
+[18:04.840 --> 18:07.600]  because it's supposed to have everything in there.
+[18:07.600 --> 18:08.600]  But that doesn't work.
+[18:08.600 --> 18:15.600]  So maybe we should try that first as an example just to see what that looks like.
+[18:15.600 --> 18:21.600]  So I get the same no such file or directory if I try to just run it.
+[18:21.600 --> 18:27.520]  As expected, a binary assumes you have some things and doesn't expect you to have nothing.
+[18:27.520 --> 18:29.000]  So they're not really a self-contained.
+[18:29.000 --> 18:34.400]  I've seen other app images when I've had to include other random inputs you'd expected
+[18:34.400 --> 18:36.200]  have packaged in there.
+[18:36.200 --> 18:40.760]  But other times, they make assumptions on what's on the host system, which is why here
+[18:40.760 --> 18:45.120]  I've included some other stuff that, again, is overkill probably for this package, but
+[18:45.120 --> 18:50.840]  just as an example that you can use.
+[18:50.840 --> 18:55.360]  So again, the profile is already existing, so it doesn't have to do anything here.
+[18:55.360 --> 18:59.560]  And we get VSCodium.
+[18:59.560 --> 19:05.080]  So a couple things to note here, one, as I mentioned, I've exposed more stuff from the
+[19:05.080 --> 19:06.480]  host in order to get this to run.
+[19:06.480 --> 19:10.960]  So even though this is a container, it's supposed to be self-contained, the app image, you still
+[19:10.960 --> 19:17.560]  need things from the host to run a big graphical tool, desktop tool in this case.
+[19:17.560 --> 19:22.200]  So it's something, you know, it's a convenience to be able to run things like this on the
+[19:22.200 --> 19:25.280]  host without having to build it from source and all of that.
+[19:25.280 --> 19:30.960]  On the other hand, it's not really completely contained in private if we have to start poking
+[19:30.960 --> 19:35.000]  lots of holes in order to get things to work.
+[19:35.000 --> 19:40.560]  On a kind of technical note, the app image here was using this option called app image
+[19:40.560 --> 19:45.400]  extract and run, which basically the app image is, as far as I understand, sort of an archive
+[19:45.400 --> 19:47.200]  slash disk image.
+[19:47.200 --> 19:52.680]  And so normally when you try to run it directly, it mounts itself using fuse and then, you
+[19:52.680 --> 19:56.520]  know, that's mounted somewhere in your file system and then it runs from within there.
+[19:56.520 --> 20:01.400]  This doesn't work because if you try to mount something within the container, you don't
+[20:01.400 --> 20:06.520]  have access, usually you need root access or fuse access in this case to mount something,
+[20:06.520 --> 20:10.120]  you don't have that from within the container.
+[20:10.120 --> 20:16.240]  There is a way to call out the container using tools from Flatpak.
+[20:16.240 --> 20:22.760]  In that case, you can, as a test I did, you have a little wrapper that'll call fuse fuser
+[20:22.760 --> 20:27.440]  mount on the host to mount the image.
+[20:27.440 --> 20:32.920]  And that actually will work, except that within the container you don't see the mounted image.
+[20:32.920 --> 20:35.840]  I would love if someone could explain the details.
+[20:35.840 --> 20:39.200]  Basically I'm thinking of something to do with when namespaces are created and since
+[20:39.200 --> 20:43.840]  the container already has access to certain things, even if it has access to where that
+[20:43.840 --> 20:47.760]  image is mounted through fuse, it can't access what's in there.
+[20:47.760 --> 20:49.080]  It sees nothing.
+[20:49.080 --> 20:52.800]  If you create another container, if you look from the host after you've run this mount,
+[20:52.800 --> 20:54.240]  you will see it.
+[20:54.240 --> 20:59.480]  So that's a little bit kind of a technical detail there on kind of containers, which
+[20:59.480 --> 21:02.920]  probably someone can explain a little better, but for good reasons, generally you don't
+[21:02.920 --> 21:06.920]  want things in the container to call out to the host and especially things that need
+[21:06.920 --> 21:09.720]  special access like mounting disk images.
+[21:09.720 --> 21:16.520]  All right, so a few tips I want to kind of close out with.
+[21:16.520 --> 21:18.680]  In general, the packages you need, it's not clear.
+[21:18.680 --> 21:20.200]  Usually there's a lot of trial and error.
+[21:20.200 --> 21:24.080]  You run something, it complains it can't find a library.
+[21:24.080 --> 21:28.560]  That's not always the most helpful because often you'll get, as you saw, like file not
+[21:28.560 --> 21:33.840]  found or you'll get some other error and it's not clear where it's failing to load something.
+[21:33.840 --> 21:38.240]  So in that case, Strace can be a bit overkill, but you could, of course, use that or other
+[21:38.240 --> 21:42.760]  tools to kind of see what libraries are trying to be loaded and where it's breaking down.
+[21:42.760 --> 21:47.280]  Readme Surprise Surprise can often tell you what is expected to build a project for it
+[21:47.280 --> 21:50.200]  to run, but they're not usually complete.
+[21:50.200 --> 21:56.760]  There's usually some assumptions of tools everyone supposedly has on a machine in a distro.
+[21:56.760 --> 21:59.800]  So there's a bit of trial and error going on there.
+[22:00.320 --> 22:06.440]  XDG Utils from Flatpak lets you kind of call out to the host using portals, as it called,
+[22:06.440 --> 22:11.360]  which is a way of then, for instance, passing a URL to be open on the host browser.
+[22:11.360 --> 22:14.480]  Kind of lastly, what's next?
+[22:14.480 --> 22:18.600]  I think some utilities to make this easier to script.
+[22:18.600 --> 22:23.400]  You can definitely take those long, quick, geek shell commands and put them in a, you
+[22:23.400 --> 22:26.560]  know, your favorite script and run them that way.
+[22:26.560 --> 22:30.920]  You can use a kind of longer shebang to also call geek shell and so on.
+[22:30.920 --> 22:34.600]  But I think it would be helpful to have some ways of kind of packaging up some of these
+[22:34.600 --> 22:39.880]  common options or ways to run things like that more seamlessly from the host.
+[22:39.880 --> 22:45.480]  So I think that could be some things we could work on and can make things kind of smooth.
+[22:45.480 --> 22:50.520]  I'm also interested to hear what uses other people have.
+[22:50.520 --> 22:54.680]  A few people already on the geeks mailing list and IRC sometimes chime in with things
+[22:54.760 --> 22:58.600]  they're trying to do and that's been helpful to see what works and what doesn't.
+[22:58.600 --> 23:03.920]  Yeah, so to end, I think this is another great tool in the geek shell toolbox.
+[23:03.920 --> 23:08.520]  I know I'm a little partial as having written the patches but with help.
+[23:08.520 --> 23:12.640]  But I think it's just something that lets us do a lot of stuff in geek shell that for
+[23:12.640 --> 23:14.760]  practical reasons we want to be able to do.
+[23:14.760 --> 23:17.960]  I would love to be able to build everything from source to have it reproducible, to have
+[23:17.960 --> 23:19.800]  a geeks package for it.
+[23:19.800 --> 23:20.800]  Not always possible.
+[23:20.920 --> 23:23.800]  It's not something I really reach for very often.
+[23:23.800 --> 23:28.200]  I'm very few occasions I've needed it but it's great to have it there, be able to test
+[23:28.200 --> 23:34.400]  something that I might expect to work on another machine, for instance.
+[23:34.400 --> 23:36.520]  But it's always, I think, a good learning experience.
+[23:36.520 --> 23:41.120]  This has taught me a lot about kind of geeks about what's reproducible, what's minimalistic
+[23:41.120 --> 23:43.600]  to come back to the theme of this dev room.
+[23:43.600 --> 23:48.000]  Being able to really specify everything that's in your container and what's needed and understand
+[23:48.000 --> 23:52.240]  really what's happening there gives you a good understanding, I think, of how software
+[23:52.240 --> 23:54.240]  is built and the shortcomings.
+[23:54.240 --> 23:58.640]  Even things like app images and flat packs, which are supposed to be all in one, are not
+[23:58.640 --> 23:59.640]  really.
+[23:59.640 --> 24:04.680]  And this gives us another way of kind of running stuff like that or being able to maybe develop
+[24:04.680 --> 24:09.680]  ways of packaging things like that in addition to other tools geeks has.
+[24:09.680 --> 24:15.080]  But I definitely appreciate any input and feedback and questions people have.
+[24:15.080 --> 24:19.600]  And just to end really quickly with a thank you to Ludovix, especially who helped really
+[24:19.600 --> 24:23.680]  tweak and polish these patches and some fixes.
+[24:23.680 --> 24:27.520]  Previous work done on a third-party channel, which is non-free so I won't mention any detail
+[24:27.520 --> 24:31.000]  but that was kind of the origin of some of this stuff and things that I worked on there
+[24:31.000 --> 24:32.000]  as well.
+[24:32.000 --> 24:33.000]  Thank you everyone for paying attention.
+[24:33.000 --> 24:34.400]  It's been a pleasure to be here.
+[24:34.400 --> 24:36.960]  I hope to see everyone in person at the next one.
+[24:36.960 --> 24:37.320]  Thanks.

@@ -1,0 +1,214 @@
+[00:00.000 --> 00:14.060]  Hi, I'm Sebastian, co-founder and CTO at Enclave, and our mission is to make confidential
+[00:14.060 --> 00:18.040]  cloud computing as simple as possible.
+[00:18.040 --> 00:24.200]  This is also the subject of this talk, it's about an open source project that we call
+[00:24.200 --> 00:35.040]  the base and where we help the community to simplify the development of Enclave applications.
+[00:35.040 --> 00:46.000]  So in this talk I will bring you on a journey, also with our journey where we first of all
+[00:46.000 --> 00:55.400]  had to explore how to bring Enclaveation into existing product applications.
+[00:55.400 --> 01:03.280]  So here comes the disclaimer, this talk is about lessons learned and in particular about
+[01:03.280 --> 01:11.040]  a lot of pains that we discover, and we hope that from our lessons we can help the community
+[01:11.040 --> 01:19.560]  to just find a much smoother way to develop confidential compute applications.
+[01:19.560 --> 01:29.480]  So speaking of that, I think the main motivation why we started the whole project is, we believe
+[01:29.480 --> 01:36.560]  the cloud is super cool and the future is cloud, so effectively everybody will develop
+[01:36.560 --> 01:40.720]  in future applications in the cloud.
+[01:40.720 --> 01:48.400]  But as a security guy, I also know that by default the cloud sees all the data, the application
+[01:48.400 --> 01:54.800]  codes, which is in particular critical for a lot of businesses, because the business
+[01:54.800 --> 02:05.640]  logic is leaked and so on, and that somehow motivated the whole field of confidential
+[02:05.640 --> 02:06.840]  cloud computing.
+[02:06.840 --> 02:15.520]  So people started to think already a long time ago, like decades ago, with approaches
+[02:15.520 --> 02:25.560]  like fully homomorphic encryption or multi-party computation, how to compute in an encrypted
+[02:25.560 --> 02:33.880]  way, and confidential cloud computing is like a revolution of those ideas with applications
+[02:33.880 --> 02:45.600]  to the cloud, and in particular to solving the problems that a cloud leaks by default.
+[02:45.600 --> 02:52.760]  So here comes another disclaimer, so whatever I'm now going to talk about relates to Intel
+[02:52.760 --> 03:00.120]  SGX based incubation technology, there are also other approaches, most notably by AMD
+[03:00.120 --> 03:12.080]  5, but for ease of use and presentation, this talk is related rather to Intel SGX approaches.
+[03:12.080 --> 03:16.240]  So what is confidential cloud computing?
+[03:16.240 --> 03:24.760]  It's quite easily explained, it's the idea of turning your workloads into enclave workloads.
+[03:24.760 --> 03:29.960]  So the nice thing is, for example, if you have the AMRunning with your Docker apps or
+[03:29.960 --> 03:41.720]  Kubernetes cluster, you can with this new concept turn those applications, clusters, containers
+[03:41.720 --> 03:50.240]  into applications that run in a black box, and by black box we really mean, through encryption
+[03:50.240 --> 04:00.080]  mechanisms, the ability that even at runtime, your application, your data, your workloads
+[04:00.080 --> 04:07.120]  is black box shielded, vaulted from the infrastructure.
+[04:07.120 --> 04:12.640]  And this is somehow cool, because as mentioned, it solves a lot of problems that we have right
+[04:12.640 --> 04:19.000]  now with cloud applications in particular, keep in mind that the cloud is designed in
+[04:19.000 --> 04:25.600]  such a way that it shares resources, and the only way how the resources are shared are
+[04:25.600 --> 04:32.440]  through virtualization, and virtualization is with a hypervisor, rather implementing
+[04:32.440 --> 04:37.400]  a software-based isolation mechanism.
+[04:37.400 --> 04:47.080]  With enclave technology, we finally can use strong cryptographic mechanisms, which are
+[04:47.080 --> 04:53.200]  based on well-studied cryptographic assumptions.
+[04:53.200 --> 05:00.000]  So let me just start with a short introduction, how the basic concepts work in order to give
+[05:00.000 --> 05:06.840]  you a better feeling how those black boxes are designed, and it's also an appetizer
+[05:06.840 --> 05:14.920]  what needs to be done whenever you want to develop those black boxes and put your workloads
+[05:14.920 --> 05:18.360]  into enclaves.
+[05:18.360 --> 05:23.680]  And I think that the main concept, which I personally find very revolutionary, is that
+[05:23.680 --> 05:33.040]  runtime memory encryption, or you can now talk about data and use encryption, or always
+[05:33.040 --> 05:42.880]  encrypted at any point in time, and this is possible thanks to an extension of existing
+[05:42.880 --> 05:51.440]  CPUs, in particular the extension in Intel-based CPU, this is called SGX, and you can think
+[05:51.440 --> 06:00.880]  about that like a small security process or somehow extension of the ideas of TPMs back
+[06:00.880 --> 06:10.640]  in the days that gives the CPU additional cryptographic superpower to, among others,
+[06:10.640 --> 06:13.560]  encrypt user space memory.
+[06:13.560 --> 06:19.920]  This is called an enclave in terms of Intel SGX.
+[06:19.920 --> 06:27.120]  And here the assumption is that the CPU is a trust anchor, so we really assume that the
+[06:27.120 --> 06:37.520]  CPU, who helps, for example, the encryption decryption keys, acts like a trusted anchor,
+[06:37.520 --> 06:42.320]  and keys are not extractable from the hardware.
+[06:42.320 --> 06:46.000]  This is the base assumption.
+[06:46.000 --> 06:52.320]  And with that help, you can just think about that whenever the memory management unit,
+[06:52.320 --> 07:01.320]  for example, accesses some physical addresses, on the way there is an encryption engine,
+[07:01.320 --> 07:12.680]  typically the AES, that first of all allows to encrypt and decrypt those memory bits.
+[07:12.680 --> 07:21.560]  And another thing which is somehow related to the choice of the AES algorithm is also
+[07:21.560 --> 07:31.280]  the fact that whatever now you write to memory is not only encrypted, but it's also often
+[07:31.280 --> 07:32.280]  indicated.
+[07:32.280 --> 07:41.800]  Meaning, for example, if someone alters the memory, changes the ciphertext, then of course
+[07:41.800 --> 07:44.600]  this is detectable.
+[07:44.600 --> 07:52.360]  So integrity protection comes literally for free.
+[07:52.360 --> 07:59.160]  And if you put that together and you assume that now with the CPU we have a trust anchor,
+[07:59.160 --> 08:06.600]  something like a trusted third party inside our compute environment, then another cool
+[08:06.600 --> 08:10.120]  feature is remote attestation.
+[08:10.120 --> 08:16.880]  Remote attestation is about now proving to a user, which, for example, has no access
+[08:16.880 --> 08:25.560]  to the hardware, to the data center, to the cloud, that his workload runs in an enclave
+[08:25.560 --> 08:29.360]  and no one has modified that.
+[08:29.360 --> 08:34.920]  And the way it is done is through a protocol called remote attestation, it's a bit like
+[08:34.920 --> 08:41.360]  a challenge response protocol with the fact that the CPU acts like an auditor, like a
+[08:41.360 --> 08:47.240]  trusted third party, that measures the enclave.
+[08:47.240 --> 08:55.360]  And on this basis, issues and signs of reports such that the user can easily verify that
+[08:55.960 --> 09:03.840]  he deals now with an enclave that, for example, he has generated, he has signed, and he has
+[09:03.840 --> 09:16.960]  now a cryptographic proof that no one has manipulated the workload.
+[09:16.960 --> 09:26.680]  And a last feature, which is quite innovative, and I really find cool, is key provisioning.
+[09:26.680 --> 09:32.720]  So an enclave is like any other application, first of all, called, that is somehow stored
+[09:32.720 --> 09:37.880]  in the file system, which is loaded by the operating system.
+[09:37.880 --> 09:45.880]  And of course, if we assume that anything is untrusted except the CPU, then we, for example,
+[09:45.880 --> 09:55.880]  should think about that a malicious party has access to the binary and can, of course,
+[09:55.880 --> 09:56.880]  manipulate it.
+[09:56.880 --> 10:06.880]  So a very, very bad idea is to put any secrets, any passwords or whatever in that binary,
+[10:06.880 --> 10:11.280]  simply because it may be reverse engineered.
+[10:11.280 --> 10:18.280]  And key provisioning is another protocol, building a remote attestation, that allows
+[10:18.280 --> 10:27.280]  to provision all the secret key material, all the environment variables, maybe password
+[10:27.280 --> 10:35.280]  secret keys for SSLTLS certificate, whatever, you consider crucial.
+[10:35.280 --> 10:42.280]  You can also think about, you know, adding additional files into the enclave, for example,
+[10:42.280 --> 10:53.280]  any documents and crypto file systems, whatever you think is, as mentioned, worth to be protected.
+[10:53.280 --> 10:59.280]  And secret key provisioning is a protocol that, first of all, allows the user to remotely
+[10:59.280 --> 11:08.280]  attest that he is now talking to an enclave and whereas the application he knows, he can trust.
+[11:08.280 --> 11:18.280]  And before effectively starting the application, he can provision through a secure SSLTLS protected
+[11:18.280 --> 11:27.280]  channel the secrets in order to parametrize, configure or maintain the application.
+[11:27.280 --> 11:33.280]  So this is like a life provisioning of secret information.
+[11:33.280 --> 11:36.280]  And of course, it totally makes sense.
+[11:36.280 --> 11:44.280]  And if, for example, your application is somewhere hosted by an untrusted environment, you just
+[11:44.280 --> 11:51.280]  want to make sure that this environment has no access to your secrets.
+[11:51.280 --> 11:58.280]  So this is roughly the theory behind enclave technology.
+[11:58.280 --> 12:12.280]  And now let's go on a mission or a journey, how one can get an application enclave.
+[12:13.280 --> 12:22.280]  And this is also a bit part of our journey, because we started with a lot of approaches.
+[12:22.280 --> 12:29.280]  And you can consider this walkthrough a bit also like, you know, and best practice advice.
+[12:29.280 --> 12:37.280]  How I at least believe is the easiest way to build enclave applications.
+[12:37.280 --> 12:40.280]  So what kind of ingredients do you need?
+[12:40.280 --> 12:42.280]  Of course, hardware.
+[12:42.280 --> 12:48.280]  And as mentioned before, in this talk, it's all about Intel SGX.
+[12:48.280 --> 13:00.280]  So you definitely need a CPU, an Intel CPU starting from Skylake onwards that has been introduced around 2015.
+[13:00.280 --> 13:10.280]  And this micro architecture for the very first time contains the SGX security extensions.
+[13:10.280 --> 13:17.280]  So you might think, ah, maybe I have a laptop, you know, there is an Intel CPU inside.
+[13:17.280 --> 13:26.280]  Maybe it's not that old, so chances are high that you are lucky and your CPU supports that.
+[13:26.280 --> 13:33.280]  But I don't think that this is a good idea because maybe you have read about that.
+[13:33.280 --> 13:46.280]  The desktop line where SGX has been supported is now deprecated and stopped simply because the SGX capabilities are strictly limited.
+[13:46.280 --> 13:55.280]  The enclave sizes that you can generate are, for example, too small for larger mainstream applications.
+[13:55.280 --> 14:03.280]  And Intel has shifted strategy now towards server-based architecture.
+[14:03.280 --> 14:14.280]  So a good idea is, of course, to find a server blade which supports SGX and here, I think, IceLake.
+[14:14.280 --> 14:22.280]  And most notably in the recent introduction this year at Sapphire Rapids, it's like a better chance.
+[14:22.280 --> 14:34.280]  So these are high-performance servers made for cloud applications with, I think, 48 cores or even more.
+[14:34.280 --> 14:37.280]  I think Sapphire has even more cores.
+[14:37.280 --> 14:47.280]  And the nice thing is that you can generate enclaves, I think, up to one terabyte.
+[14:47.280 --> 14:52.280]  The downside is that, of course, those machines are not so cheap.
+[14:52.280 --> 15:01.280]  So they cost you roughly somewhere between $30,000 to $50,000, depending on what configuration you're interested in.
+[15:01.280 --> 15:13.280]  So this is already a small showstop right thing for someone who's just interested in developing a small project at home,
+[15:13.280 --> 15:23.280]  contributing to open-source projects, helping, for example, to bring enclaveation into their stack.
+[15:23.280 --> 15:41.280]  So later on, I'm going to tell a bit how, I think, I believe one can bypass these huge investment costs for open-source development.
+[15:41.280 --> 15:46.280]  So let's come to the second ingredient, a second chapter.
+[15:46.280 --> 15:54.280]  We definitely need drivers, drivers that tell the operating system how to talk to the SGX unit.
+[15:54.280 --> 16:00.280]  So, of course, you can compile the drivers from scratch.
+[16:00.280 --> 16:08.280]  There's the GitHub repo where the drivers are available, provided by Intel.
+[16:08.280 --> 16:16.280]  But this is also something I would recommend you from our experiences, because there are a lot of configurations,
+[16:16.280 --> 16:27.280]  and you really need to know for what environment you want to compile the drivers and so on.
+[16:27.280 --> 16:39.280]  So there's a better idea. Simply use a Linux operating system that has kernel 5.11 on-walls,
+[16:39.280 --> 16:47.280]  because the drivers have been upstreamed to the kernel, so they are ready to use.
+[16:47.280 --> 16:52.280]  So you literally have to do nothing. This is my advice.
+[16:52.280 --> 17:07.280]  And a good example is, for example, Ubuntu 22, which provides those drivers out of the box.
+[17:07.280 --> 17:17.280]  So now we know, we have the requirements about hardware, we know that we need to install the drivers.
+[17:17.280 --> 17:25.280]  So as an open source developer, a question is, so damn, how can I get this setup running?
+[17:25.280 --> 17:30.280]  It sounds like a huge entry barrier.
+[17:30.280 --> 17:41.280]  And I think there is a nice shortcut to just get those two requirements implemented.
+[17:41.280 --> 17:49.280]  So one way I would, for example, to rent a bare metal machine and OVH, for example,
+[17:49.280 --> 17:56.280]  offers the advanced one series, which is SGX enabled.
+[17:56.280 --> 18:00.280]  So the functionality is available through the BIOS.
+[18:00.280 --> 18:05.280]  So all you need is just to install an operating system with the matching drivers.
+[18:05.280 --> 18:12.280]  And my advice would be to just install Ubuntu 22.
+[18:12.280 --> 18:24.280]  Another approach is to have a look at the Azure Cloud, because Azure also offers confidential compute ready VMs.
+[18:24.280 --> 18:30.280]  So you can literally just book a VM, which is hourly charged.
+[18:30.280 --> 18:36.280]  And so the operating system, the drivers are all in place.
+[18:36.280 --> 18:41.280]  So you can literally start with development.
+[18:41.280 --> 18:44.280]  And here a small disclaimer.
+[18:44.280 --> 18:48.280]  So I have no strings attached in either to OVH or Azure.
+[18:48.280 --> 18:56.280]  You know, I'm just putting that into the air simply because I know that finding the right hardware
+[18:56.280 --> 19:04.280]  that's the right prerequisites in order to implement NCAT application is not easy.
+[19:04.280 --> 19:15.280]  And this is something that, you know, we figure out something, an easy approach, at least what we believe.
+[19:15.280 --> 19:28.280]  But there are, I guess, some other cloud providers, smaller and larger, that might offer you similar configurations.
+[19:28.280 --> 19:32.280]  Yeah.
+[19:32.280 --> 19:36.280]  Cool. So now let's move on to the next ingredient.
+[19:36.280 --> 19:42.280]  So if now the hardware prerequisites are met,
+[19:42.280 --> 19:46.280]  we are now interested in implementing the software.
+[19:46.280 --> 19:55.280]  So we want now to enclave our code.
+[19:55.280 --> 20:08.280]  I think a standard approach, and this is also historically motivated, is to use an SDK and there is an SDK provided by Intel,
+[20:08.280 --> 20:19.280]  but a bunch of other open source projects, like Tclave, somehow maintained by the Apache Foundation or conclave,
+[20:19.280 --> 20:27.280]  offer SDKs in different programming languages.
+[20:27.280 --> 20:34.280]  This is definitely cool if you, for example, start developing your application from scratch,
+[20:34.280 --> 20:44.280]  your application is small, think about, for example, a small crypto wallet, which just needs a signing functionality you would like to put in an enclave.
+[20:44.280 --> 20:47.280]  I think this is a cool approach.
+[20:47.280 --> 20:55.280]  But when you're in the situation that you have, for example, existing applications,
+[20:56.280 --> 21:04.280]  the open source community has developed and maintains for decades, like a MariaDB or an Android X server.
+[21:04.280 --> 21:15.280]  I think this is not a good idea because this would require that you go into the code and you somehow rewrite it where necessary,
+[21:15.280 --> 21:20.280]  taking the SGX functionality into account.
+[21:20.280 --> 21:29.280]  And here, my recommendation would be then to rather focus on existing Libos approaches.
+[21:29.280 --> 21:41.280]  There are also a bunch of open source projects, for example, like the Grime projects, Aclo, or Mysticos, who develop Libos.
+[21:41.280 --> 21:58.280]  Libos is something like an user space library that emulates of rating system functionality, most notably syscalls.
+[21:58.280 --> 22:09.280]  And the nice thing is that you actually do not need to rewrite the application and recompile it.
+[22:09.280 --> 22:16.280]  You can just load the binary into the enclave thanks to the Libos.
+[22:16.280 --> 22:27.280]  The binary thinks that it runs like a normal application on top of the operating system.
+[22:27.280 --> 22:32.280]  But effectively, it is within an enclave.
+[22:32.280 --> 22:38.280]  This is the superpower of Libos approaches.
+[22:39.280 --> 22:45.280]  But those Libos approaches also have their limitations.
+[22:45.280 --> 22:53.280]  There are open source projects, some of them are production-ready, some are less, some are actively maintained,
+[22:53.280 --> 22:59.280]  some are less, the standard situation with open source projects.
+[23:00.280 --> 23:09.280]  Of course, where functionality in this way is limited, and they require some expertise and training.
+[23:09.280 --> 23:16.280]  It's like any application or a development stack, you really need to understand what you do.
+[23:16.280 --> 23:20.280]  So what is the shortcut here?
+[23:20.280 --> 23:25.280]  And that was also a bit the motivation of our work.
+[23:25.280 --> 23:40.280]  We developed and open sourced the base where we hope to give ready-to-use enclave application on a silver plate.
+[23:40.280 --> 23:43.280]  So what is the base?
+[23:43.280 --> 23:50.280]  18 applications ranging from standard databases to backend technologies.
+[23:50.280 --> 24:00.280]  And also some applications, for example WordPress, Umami, which is analytics tools, Mosquito, like an IoT broker.
+[24:00.280 --> 24:09.280]  But the whole idea was that we asked ourselves, hey, what do I need typically on a daily basis as a developer?
+[24:09.280 --> 24:13.280]  Definitely some of those applications.
+[24:13.280 --> 24:21.280]  And why don't we just give those applications an enclave form?
+[24:21.280 --> 24:26.280]  So in this project, for example, you find the Docker or Docker compose files.
+[24:26.280 --> 24:37.280]  You can easily derive manifest files out of that for Kubernetes cluster or whatever cloud-native tools you use on your daily basis.
+[24:37.280 --> 24:45.280]  And simply use the recipes in order to enclave your cloud application.
+[24:45.280 --> 25:06.280]  And you don't really need to dive very much into the deepness of the underlying lip-osses, which we, for example, have already done just in order to save time and help you to just focus on the development of your applications
+[25:06.280 --> 25:19.280]  and not only in becoming a security engineer, understanding what do I need to do, how does it work to enclave it.
+[25:19.280 --> 25:30.280]  We really just want to speed up the process and this way contribute to the fact that enclaveation technology becomes the next standard.
+[25:30.280 --> 25:41.280]  So the project comes with documentation, a lot of examples, how you, for example, can customize your enclaves and applications.
+[25:41.280 --> 25:54.280]  Some of those repos also have demo branches where, for example, created some kind of attacks showcasing the power of enclave application versus non-enclave.
+[25:54.280 --> 26:14.280]  Some repos also have some demo videos, for example, if you first of all want to check out how SGX can help your application and speed up a process because some of those applications need to be built and the build processes.
+[26:15.280 --> 26:21.280]  At the time consuming, you know, there are images ready on Docker Hub.
+[26:21.280 --> 26:43.280]  And for those who just want to check out how it works, we also released the base on Azure marketplace where you can just click the right VM, the application you want to try out and literally start with the development.
+[26:45.280 --> 27:00.280]  And for those people who still believe that this is still a hacky and time consuming approach, we recently started to contribute to the Portainer project.
+[27:00.280 --> 27:13.280]  Portainer is something like configuration, development, orchestration platform for Docker and Kubernetes based applications.
+[27:13.280 --> 27:24.280]  And our contribution contains the extension of Portainer towards the support of enclave containers.
+[27:24.280 --> 27:38.280]  So what we envision is that people have just in this UI simple templates where they can choose, hey, I want a MariaDB or I want a MongoDB.
+[27:38.280 --> 27:53.280]  They just configure it, they deploy it as usual with Portainer and the extension just makes sure that the key management, the key provisioning is set up in place.
+[27:53.280 --> 28:05.280]  So the whole idea with Portainer CC is to even further simplify the development of enclave applications.
+[28:08.280 --> 28:21.280]  Yeah, that's almost the end of my talk. So as mentioned, the base as well as Portainer CC, our open source project, and we're interested in growing the community.
+[28:21.280 --> 28:33.280]  We're looking for people that want to contribute, for example, with their own enclave applications or help to add additional functionality to Portainer CC.
+[28:33.280 --> 28:41.280]  So if you're interested, you know, through the GitHub, you find a little invitational link to our Discord server.
+[28:41.280 --> 28:57.280]  So please join us, even if you have questions or are interested in, you know, learning more about SJX or even, you know, AMD's counterpart technology.
+[28:57.280 --> 29:14.280]  And if on the other hand, you don't have the time to contribute to an open source project, but you're interested in, for example, using an application to protect your workload as an engineer because you're convinced that this still doesn't make sense.
+[29:14.280 --> 29:22.280]  I recommend you to just go to enclave.cloud, which is the one stop shop for confidential cloud computing.
+[29:22.280 --> 29:36.280]  So here, you really can, with a few clicks, configure the corresponding environment you're interested in, for example, VM or Kubernetes cluster or serverless function and managed database.
+[29:36.280 --> 29:55.280]  Choose your cloud provider, at least at the moment the type of cloud provider that supports confidential compute technology, and then literally use that environment in order to build your cloud application.
+[29:55.280 --> 30:05.280]  That's it. Thanks for your time and hope to see you. Bye-bye.
+[30:06.280 --> 30:08.280]  Thank you.

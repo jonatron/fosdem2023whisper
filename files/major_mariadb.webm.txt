@@ -1,0 +1,195 @@
+[00:00.000 --> 00:11.320]  What's new in 11.0 and that's basically a new optimizer release, a new and new but
+[00:11.320 --> 00:16.000]  at least the cost model is totally new.
+[00:16.000 --> 00:24.400]  So I think that from the optimizer point this is one of the biggest milestones, the only
+[00:24.400 --> 00:33.760]  time we did something comparable was in MariaDB 5.3 and the big change is that before one
+[00:33.760 --> 00:43.520]  cost unit if you do, last query cost was one IO, the one IO was not really that exact,
+[00:43.520 --> 00:52.400]  it could basically be one IO or one key read or one row read or one access to some file
+[00:52.400 --> 01:02.160]  and that also meant and the things were not that balanced so some costs were just taking
+[01:02.160 --> 01:08.240]  oh this sounds good, let's use that and even my SQL has that even now.
+[01:08.240 --> 01:12.880]  So I decided to actually do something that you can measure and then that also makes
+[01:12.880 --> 01:19.280]  it very easy to fix the optimizer that if you see that the cost is not something's milliseconds
+[01:19.280 --> 01:25.440]  and something is off and then your justings accordingly.
+[01:25.440 --> 01:33.520]  So and we decided to call this 11.0 because if you change things in the optimizer as drastically
+[01:33.520 --> 01:39.640]  as we have done some plan may change, hopefully it should always be the better because now
+[01:39.640 --> 01:47.120]  we actually have a proper cost and it's really easy to change things because almost all costs
+[01:47.120 --> 01:51.600]  are available for the user to change.
+[01:51.600 --> 01:58.240]  So I just think that this will be a good foundation for all future MariaDB releases.
+[01:58.240 --> 02:07.560]  So with the optimizer the idea is to get better table combination and better plans.
+[02:07.560 --> 02:13.280]  The old optimizer was actually pretty good in deciding things for simple things because
+[02:13.280 --> 02:19.720]  if it found a good index it would use it and so on but when you had to decide that should
+[02:19.720 --> 02:26.520]  I use this index or this index and this index I could use with the index and the lookup
+[02:26.520 --> 02:34.960]  and the other one not, their things started to fall apart and also cost between different
+[02:34.960 --> 02:38.640]  engines were not taking into account.
+[02:38.640 --> 02:46.800]  The only one who had some information was the heap table although the ones were more
+[02:46.800 --> 02:47.800]  or less the same.
+[02:47.800 --> 03:00.000]  So I wanted to fix that and also allow people to function the optimizer.
+[03:00.000 --> 03:07.080]  So what the new optimizer should be able to do, it should be able to use the different
+[03:07.080 --> 03:12.880]  methods to access rows which is table scan, index scan, index merge and hash and be able
+[03:12.880 --> 03:19.840]  to choose those correctly what is optimal for things.
+[03:19.840 --> 03:32.120]  And I don't, only those who have complex queries should see a big difference.
+[03:32.120 --> 03:37.000]  And I don't know how many user use optimizer trace that was added to MariaDB 10.4 but
+[03:37.000 --> 03:42.640]  I couldn't have done this work without that because that shows me exactly how the planner
+[03:42.640 --> 03:51.240]  is doing and we have, I've been able to use it to find out where the optimizer calculates
+[03:51.240 --> 03:57.560]  things wrong and as part of 11.0 I've been, lots of things added to it so it's very easy
+[03:57.560 --> 04:04.840]  to know look at the plan and see if the optimizer does something wrong.
+[04:04.840 --> 04:12.280]  There's lots and lots of bug fixes related to optimizer like selectivity, you couldn't
+[04:12.280 --> 04:20.280]  use selectivity level four at all before, sometimes the selectivity would become bigger
+[04:20.280 --> 04:29.120]  than one which means that the optimizer would assume that you will get more rows when you
+[04:29.120 --> 04:32.640]  have condition instead of less rows.
+[04:32.640 --> 04:38.480]  So all that should be fixed.
+[04:38.480 --> 04:46.280]  And we also added lots of new optimizations like if you have several indexes that you
+[04:46.280 --> 04:50.160]  can use and one index is faster than another.
+[04:50.160 --> 04:56.360]  But we noticed that the slow index actually will result in smaller set of rows.
+[04:56.360 --> 05:03.760]  We actually used that as the estimated rows, something we didn't do before but that helps
+[05:03.760 --> 05:09.720]  with a lot of different plans.
+[05:09.720 --> 05:15.120]  When we have created the right tables before they were not using unique keys I don't really
+[05:15.120 --> 05:22.040]  know why that decision was made but know most the right table using unique keys which are
+[05:22.040 --> 05:32.480]  faster because the optimizer can estimate better how many rows we actually will do.
+[05:32.480 --> 05:38.320]  Cost calculations we have, there's lots of different places where we calculate costs.
+[05:38.320 --> 05:45.120]  I basically gone through as far as I know every single one and they show that the costs
+[05:45.120 --> 05:52.800]  are comparable and will be close to microseconds for those.
+[05:52.800 --> 05:59.320]  For example we didn't really have a good estimate before, what's the cost of file sort?
+[05:59.320 --> 06:00.320]  No we haven't.
+[06:00.320 --> 06:10.600]  We have filters, selectivity, metallization, using index for group buy and one big difference
+[06:10.600 --> 06:16.640]  is that all these access costs are now based on SSDs, not hard disk as before.
+[06:16.640 --> 06:22.800]  I think that most people use SSDs with the database but that's something actually you
+[06:22.800 --> 06:28.440]  can change just by changing one variable.
+[06:28.440 --> 06:34.560]  We also had a problem with cost that if we assume you have a big table and then you have
+[06:34.560 --> 06:36.200]  a small lookup table.
+[06:36.200 --> 06:43.760]  Basically before we assume that every read in the lookup table will have a disk access
+[06:43.760 --> 06:48.620]  but in practice if the table is small after you have read a couple rows everything is
+[06:48.620 --> 06:49.620]  in memory.
+[06:49.620 --> 06:53.120]  No we assume that.
+[06:53.120 --> 07:01.920]  So here you can see some of the cost and one can retrieve those for every engine and I
+[07:01.920 --> 07:05.280]  just to show the difference between InnoDB and Aria.
+[07:05.280 --> 07:12.800]  So InnoDB is using clustered index, Aria using a direct access to rows, cached.
+[07:12.800 --> 07:19.400]  So with InnoDB basically the key lookup and the row lookup cost is roughly the same which
+[07:19.400 --> 07:26.520]  means that if you search for a key and you search for a row both are using indexes so
+[07:26.520 --> 07:29.120]  it's roughly the same.
+[07:29.120 --> 07:35.200]  For example with Aria the row lookup cost is notable smaller.
+[07:35.200 --> 07:46.120]  So this is one example why it's important to do this at a very very low level.
+[07:46.120 --> 07:52.120]  All costs, all engine costs and most SQL costs are now available.
+[07:52.120 --> 07:59.840]  So for example optimize disk read cost this is the time to read a 4k block from the device
+[07:59.840 --> 08:01.760]  and that's a typical SSD.
+[08:01.760 --> 08:09.680]  If you have a hard disk you just have to change that one cost.
+[08:09.680 --> 08:15.200]  And the disk read ratio is how often we actually have to go to them.
+[08:15.320 --> 08:21.200]  Is there a way on your system just to run something so you can populate these values automatically?
+[08:21.200 --> 08:28.960]  You don't, the only one that you need to populate is basic, the optimator disk read cost.
+[08:28.960 --> 08:35.400]  They are basically there so that assuming something goes really wrong then you can populate
+[08:35.400 --> 08:36.400]  this.
+[08:36.400 --> 08:37.400]  I don't see that.
+[08:37.400 --> 08:41.040]  They are part of the engine behavior not part of the amount of behavior.
+[08:41.040 --> 08:45.960]  So basically the three things that you normally would like to change is disk read cost if
+[08:45.960 --> 08:55.120]  you have a fast SSD then the disk read ratio I plan to sometimes do that automatically
+[08:55.120 --> 08:57.120]  based on engine statistics.
+[08:57.120 --> 09:01.240]  I didn't want to do that at the beginning because if we do that automatically that means
+[09:01.240 --> 09:05.360]  that you do a query and then you do the same query and then the plan changes.
+[09:05.360 --> 09:06.360]  That confuses people.
+[09:06.880 --> 09:14.680]  It may be better but so and the wear cost is the cost added to each row.
+[09:14.680 --> 09:21.080]  So if you want to ensure that you get the minimal amount of row accesses you just increase
+[09:21.080 --> 09:22.080]  that one.
+[09:22.080 --> 09:33.840]  So how I checked all these things was that there's a part program part of the server
+[09:33.840 --> 09:42.520]  check cost you can run it with any engine and it then produce that's a lot of different
+[09:42.520 --> 09:51.000]  checks tables can index can key look up and so on and then it you get here you get the
+[09:51.000 --> 09:59.040]  costs and here you have the timing milliseconds for doing that and if the if things are correct
+[09:59.040 --> 10:06.840]  you get as far close to one and this I have a fixed for all engines.
+[10:06.840 --> 10:13.760]  So that means that I have a way to verify that the cost is up or okay it's almost impossible
+[10:13.760 --> 10:20.160]  to get them totally because even when you run things on a machine things actually changes
+[10:20.160 --> 10:38.400]  from run to run but it's a millisecond yeah there were lots of things in the optimizer
+[10:38.400 --> 10:45.800]  that was cost based sorry but still also a lot of things rule based no basically everything
+[10:45.800 --> 10:58.160]  is everything I found is no cost base which means that it's easier for the optimizer to
+[10:58.160 --> 11:07.320]  do choices therefore there is patches in the DB that's all still in MySQL where they recommend
+[11:07.320 --> 11:20.080]  that MySQL prefers table scan so let's reduce all index scans to half just to force the
+[11:20.080 --> 11:26.520]  optimizer to use indexes instead of table scans which is of course a disaster for the
+[11:26.520 --> 11:32.480]  optimizer because then it gets wrong data and can do good decisions so all of those
+[11:32.480 --> 11:48.080]  are removed so no inner DB gives the best optimizer it can and that helps things a lot
+[11:48.080 --> 12:01.440]  and I spent a lot of time doing improving things from performance point of view especially
+[12:02.440 --> 12:13.400]  is probably 50% faster than before more caching simplified code and had I haven't worked in
+[12:13.400 --> 12:20.720]  the optimizer since the first version of MySQL in 95 maybe between 95 and 2000 I worked on
+[12:20.720 --> 12:27.200]  it and then a lot of other people worked on it and they did a lot of amazing jobs in different
+[12:27.200 --> 12:33.480]  parts of the server but nobody took the time to ensure that how things related to this one and
+[12:33.480 --> 12:45.040]  this one and this one especially with costs so all of that's no done I also fixed small things
+[12:45.040 --> 12:57.480]  then we also I also changed that we tried to use a longer indexes if they are there
+[12:57.480 --> 13:06.360]  the one thing that is a problem is that especially for the test suite is that no when we actually
+[13:06.360 --> 13:14.440]  have proper costs table scans is preferred for most queries in the test system because the tables
+[13:14.520 --> 13:20.200]  can both in the DB and other engines is really really really fast one disk seek and you get
+[13:20.200 --> 13:29.600]  hundred rows compared to index lookups so there's optimizers can set up cost that is
+[13:29.600 --> 13:40.520]  is I think it's 10 milliseconds as default just to encourage the optimizer to use indexes for
+[13:40.520 --> 13:45.960]  small tables mostly because if you don't that you can confuse both the test system and users
+[13:45.960 --> 13:53.200]  and if they're small tables nobody like here if it takes one 10 to a milliseconds or 100 slow
+[14:00.640 --> 14:08.000]  basically this affect tables that are less than than 20 rows and that's unfortunately most of the
+[14:08.000 --> 14:16.080]  tests in my Maria DB have 10 rows or small yes what I see in concurrency is that it doesn't work
+[14:16.080 --> 14:20.880]  very well because he's doing a lot of full scan at the end of the plan even if the index is there
+[14:20.880 --> 14:28.480]  and could choose the accurate yeah but then no things are cost based and except with a small
+[14:28.480 --> 14:36.760]  very small penalty for table scan but that's more for getting more and more chocolate so
+[14:36.760 --> 14:43.280]  that you don't need indexes anymore because the hash algorithms are much faster hash is really really
+[14:43.280 --> 14:51.120]  slow for you if you are going to fit a small of a small amount of rows I was in 10,000 20,000
+[14:51.120 --> 14:59.040]  12,000 of those that you have all in cash and also depending it depends on total on queries and
+[14:59.440 --> 15:09.240]  and concurrency hashing takes a lot of memory no but that means that you get this concurrency
+[15:09.240 --> 15:16.120]  because the CPU is just moving things from memory when it doesn't so hashing is good in some cases
+[15:16.120 --> 15:26.280]  but it especially if you want to access a lot of rows directly or indirectly if you only need to
+[15:26.280 --> 15:33.920]  access a few rows then hashing is really a disaster yeah and most if you look at banks and
+[15:33.920 --> 15:39.160]  sections everything else hashing wouldn't work or any of those because usually just want to have
+[15:39.160 --> 15:48.000]  everything from a small set of customers so here the from the user point of view those are the
+[15:48.000 --> 15:58.560]  only variables that I think that you but may need those who create engines may need more and one
+[15:58.560 --> 16:06.920]  thing to be aware of that from the use user variables they are in in microseconds not in
+[16:06.920 --> 16:12.680]  milliseconds because I first had them in in milliseconds but the numbers get so small that
+[16:12.680 --> 16:21.040]  it was very hard to look at those so there's a so when they internally they use the milliseconds
+[16:21.040 --> 16:41.960]  but from user point the costs are in microseconds you have these variables here
+[16:41.960 --> 16:51.640]  all these are just for memory and then you have a cost for fetching the fetching the disks fetching
+[16:51.640 --> 17:04.440]  the blocks yeah so this is all memory yeah so optimize optimize a discrete cost that's the one
+[17:04.440 --> 17:16.080]  that is an IO so there's like running more easy on like bare metal machine with very fast SSD like
+[17:16.080 --> 17:24.720]  the IO is half it's one 10 of a millisecond but in the cloud IOs go through yeah network as you
+[17:24.720 --> 17:37.000]  compare but I guess you need to tune this variable probably I haven't done that so I've been basically
+[17:37.000 --> 17:42.120]  focused just to get this to work so everything is focused on getting the memory part of work but
+[17:42.120 --> 17:48.960]  the disk is there and it's only two variables so it's very hard to get those totally wrong yeah
+[17:54.720 --> 18:01.760]  if you run on a managed database in the cloud they might tune it with people like you might
+[18:01.760 --> 18:09.680]  miss this would be interesting to see like the difference in how wrong things get if MeruDB
+[18:09.680 --> 18:16.240]  thinks you're on fast SSDs but you're actually on network SSDs and this variable every engine has
+[18:16.600 --> 18:22.000]  has its own variable so you can choose it changes for different engines if you want if you for
+[18:22.000 --> 18:32.360]  example run on different devices so chasing cost variables is easy you just session or
+[18:32.360 --> 18:43.880]  change global all engines are global but the wear cost and or that things are local so this is
+[18:44.560 --> 18:53.160]  see I have a couple of minutes left so so question why does this matter to you if you ever had to
+[18:53.160 --> 19:02.880]  go and say force index or have to try to tweak queries in any way or had to use analyze the
+[19:02.880 --> 19:12.120]  analysis table is still useful because you get the statistics but I would say that one main thing is
+[19:12.120 --> 19:22.800]  that much less tweaking queries these should just work and especially we use in a DBM memory
+[19:22.800 --> 19:31.120]  engine for example or other engines things are not a little better and no even the server knows
+[19:31.120 --> 19:38.600]  that no we have temporal tables in in in area or heap so it can take that that cost into account
+[19:38.600 --> 19:47.960]  so state of things basically everything is done we have had QA testing this no form is one month
+[19:47.960 --> 19:56.760]  founder some bugs most of the bugs is in the also in older releases so I in this I basically fixing
+[19:56.760 --> 20:03.880]  everything related to optimizer in this one there's one issue left that I will push on
+[20:04.840 --> 20:14.520]  at this week and then basically the level should be done we have a BB 11 0 that includes everything
+[20:14.520 --> 20:22.960]  I think this is one of the most tested releases ever done internally just because I've been working
+[20:22.960 --> 20:31.640]  so much with our QA team so I expect this be almost stable from from start or access table from
+[20:31.640 --> 20:42.200]  start and for anybody who wants to help if you have a slave where you can put 11 0 on put it on
+[20:42.200 --> 20:48.320]  send feedback make your entries anything related to optimizer will be fixed it immediately
+[20:48.320 --> 21:09.440]  should it should be the same except something like row by the filters is faster so all code
+[21:09.440 --> 21:16.320]  I don't think that anything will be slower in the optimizer but the plan should be better so
+[21:16.560 --> 21:20.800]  the end result should be faster there are a couple of things that are not a little better
+[21:27.760 --> 21:34.800]  row by the filter means that if you have two indexes you can use and then we then we create
+[21:36.000 --> 21:43.280]  we take we will use the the faster one but if if it makes sense we take the other one
+[21:44.240 --> 21:50.160]  fetch all primary keys and then when we read other ones we see that only those who has
+[21:52.240 --> 21:57.600]  an existing primary key we need to consider so basically where there's a wind we don't have
+[21:57.600 --> 22:03.040]  to fetch the row for things that we can filter out and the algorithm's name
+[22:03.840 --> 22:12.560]  you know basically it's a lookup of all primary keys that are acceptable and we
+[22:12.560 --> 22:20.560]  use the used we do a check against those which is actually pretty fast so state of things basically
+[22:21.920 --> 22:24.160]  basically ready this will be released
+[22:24.880 --> 22:35.920]  I think it's next in February yes so this month so future plans I will start working on
+[22:35.920 --> 22:43.520]  parallel query there's still some optimized cleanups to be done I also want to enable all
+[22:43.520 --> 22:51.040]  optimizers which is by default for example MariaD has supported has joins forever with the
+[22:51.040 --> 23:00.480]  actually very hard to get to enable those bushy plans is something that we
+[23:02.800 --> 23:07.680]  I would like to do because we have this you big users who would need that bushy plans basically
+[23:07.680 --> 23:16.240]  have two big tables and then lots of tables that you have a relationship and then you have a join
+[23:16.240 --> 23:22.000]  between those directly the big tables directly or indirectly and our optimizer currently can't do
+[23:22.000 --> 23:27.040]  that very very efficiently so that's something I would like to do but the parallel query is the
+[23:27.920 --> 23:32.720]  next big task that I will start was start on and I have some plans or ideas how to do that
+[23:35.920 --> 23:42.560]  and I've been working with Sergi Petrugna who's know the leader the optimizer for doing this
+[23:43.360 --> 23:47.920]  and then he got go got some help from the sensor Andrew so that's about 20 minutes
+[23:50.800 --> 23:53.280]  okay thanks I don't think we have time for questions our next speaker
+[23:54.000 --> 23:56.960]  set up but if you have questions from my team you can chat to him in the hallway
+[23:57.520 --> 24:04.480]  we've got a stand downstairs where you can meet some other MariaD team as well it's the one without
+[24:04.480 --> 24:08.400]  any uh any banner or anything like that because the person was supposed to bring all this work
+[24:09.360 --> 24:18.640]  but let's say this way I'm really happy with this work and I think that for those who have
+[24:20.400 --> 24:26.880]  complex plan which is especially when we're looking at things coming from oracle customers
+[24:26.880 --> 24:33.520]  where we have lots of store procedures and really big queries queries that are in thousand of lines
+[24:33.520 --> 24:42.320]  and this is just one query but this optimizer we really have so thank you

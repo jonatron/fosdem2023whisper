@@ -1,0 +1,329 @@
+[00:00.000 --> 00:13.240]  Okay, our next speaker is going to talk about something we all used in Go, which is strings.
+[00:13.240 --> 00:16.680]  If you didn't ever use it in Go, what are you doing here?
+[00:16.680 --> 00:23.600]  So let's give a round of applause for Matej.
+[00:23.600 --> 00:24.600]  Thank you, everyone.
+[00:24.600 --> 00:25.600]  Thank you.
+[00:25.600 --> 00:29.800]  Excited to be here, excited to see so many faces, excited to speak first time at the
+[00:29.800 --> 00:35.720]  FOSDEM, also a bit intimidating, but hopefully I can show you a thing or two about string
+[00:35.720 --> 00:38.920]  optimization in Go.
+[00:38.920 --> 00:41.000]  About me, my name is Matej Gera.
+[00:41.000 --> 00:45.000]  I work as a software engineer at a company called Coreologics, where we're building an
+[00:45.000 --> 00:46.800]  observability platform.
+[00:46.800 --> 00:52.000]  Apart from that, I'm active in different open source communities, mostly within the Cloud
+[00:52.000 --> 00:58.160]  Native Computing Foundation, specifically in the observability area.
+[00:58.160 --> 01:03.280]  I work a lot with metrics, I'm a maintainer of the TANAS project, which I will also talk
+[01:03.280 --> 01:06.480]  a bit about during my presentation.
+[01:06.480 --> 01:12.000]  And apart from that, I contribute to a couple different projects, most interestingly, Open
+[01:12.000 --> 01:13.800]  Telemetry.
+[01:13.800 --> 01:15.640]  And yeah, these are my handles.
+[01:15.640 --> 01:21.360]  I'm not that active on social media, best is to reach me on the GitHub issues directly
+[01:21.360 --> 01:25.080]  or PRs, and let's get into it.
+[01:25.080 --> 01:32.000]  So if anything else, I'd like you to take at least three things today from this presentation.
+[01:32.000 --> 01:37.160]  So first of all, I'd like you to understand how strings work behind the scenes in Go.
+[01:37.160 --> 01:42.000]  This might be old news for many people who are more experienced with Go, or might be
+[01:42.000 --> 01:44.360]  a new knowledge for newbies.
+[01:44.360 --> 01:50.320]  But I want to set kind of a common ground from which we can talk about the optimization.
+[01:50.320 --> 01:55.800]  Secondly, I want to tell you about the use cases in context of which I have been thinking
+[01:55.800 --> 02:00.160]  about string optimization and where I think the presented strategies can be useful.
+[02:00.160 --> 02:05.640]  And lastly, I want to tell you about the actual optimization strategies and show some examples
+[02:05.640 --> 02:09.800]  of how they can be applied or where they have been applied.
+[02:09.800 --> 02:15.840]  I won't be talking today much about stack versus heap, although a lot of this has to
+[02:15.840 --> 02:18.200]  do with memory.
+[02:18.200 --> 02:21.800]  For the presentation, I kind of assume we'll be talking more about the heap and kind of
+[02:21.800 --> 02:30.680]  a long-term storage of strings in memory, also only going into encoding or related types
+[02:30.680 --> 02:35.920]  like runes and charts, although it's all kind of related, but it's outside of the scope
+[02:35.920 --> 02:38.000]  for today.
+[02:38.000 --> 02:41.920]  So let me first tell you what kind of brought me to this topic, what was the inspiration
+[02:41.920 --> 02:42.920]  behind this talk.
+[02:42.920 --> 02:47.840]  As I already said, I worked primarily in the observability landscape with metrics and
+[02:47.880 --> 02:53.520]  over the past almost two years, I was working a lot on the Thanos project, which I mentioned
+[02:53.520 --> 02:58.080]  and which you can, for simplicity here, imagine as a distributed database for storing time
+[02:58.080 --> 02:59.600]  series.
+[02:59.600 --> 03:06.280]  And with these goals, it's intended to store millions of time series, even up to or more
+[03:06.280 --> 03:11.400]  than billion series, we have heard also about deployments like that.
+[03:11.400 --> 03:16.600]  And as I was working with Thanos and learning about these various aspects and components,
+[03:16.600 --> 03:20.440]  one particular issue that has been standing out to me was the amount of memory needed
+[03:20.440 --> 03:24.560]  for certain Thanos components to operate.
+[03:24.560 --> 03:31.640]  And this is partly due to the fact that the time series data is stored in memory in a
+[03:31.640 --> 03:33.880]  time series database.
+[03:33.880 --> 03:39.440]  And this is where I decided to focus my attention, where I started to explore what are some possible
+[03:39.440 --> 03:44.240]  avenues where we could optimize the performance here.
+[03:44.240 --> 03:47.840]  The big role here was played by doing this in a data-driven way.
+[03:47.840 --> 03:54.840]  So I started looking at different data points from Thanos, like metrics, profiles, benchmarks.
+[03:54.840 --> 03:59.800]  And this small side note, because I considered data-driven performance optimization to be
+[03:59.800 --> 04:04.520]  the most important when you're improving efficiency of your program.
+[04:04.520 --> 04:09.040]  So I don't want to diverge here, but I highly recommend for you to check out a talk by Partik
+[04:09.040 --> 04:12.120]  Plotka, who I think is in the room here.
+[04:12.120 --> 04:17.200]  So he's talking a couple of thoughts after me, who is kind of dedicating a lot of his
+[04:17.200 --> 04:21.680]  time into this data-driven approach to efficiency in the ecosystem.
+[04:21.680 --> 04:25.800]  I don't have it on the slide, but also the presentation that's after me, that has to
+[04:25.800 --> 04:28.640]  do with squeezing go functions, it seems interesting.
+[04:28.640 --> 04:34.520]  So a lot of optimization talks today, which I love to see.
+[04:34.520 --> 04:41.720]  And he might also ask why string-specific, what makes them so interesting or so optimization-worthy.
+[04:41.720 --> 04:47.680]  And although I've been looking at Thanos for some time, something clicked after I've
+[04:47.680 --> 04:50.440]  seen this particular image at the different presentation.
+[04:50.440 --> 04:55.480]  So this was presentation from Brian Borum, I know it should be also somewhere around
+[04:55.480 --> 05:02.280]  FOSDEM, who is working on a kind of a neighboring project called Prometheus, which is a time
+[05:02.280 --> 05:05.120]  series database on which Thanos is built.
+[05:05.120 --> 05:10.440]  So if Thanos is kind of a distributed version of Prometheus, we reuse a lot of the code
+[05:10.440 --> 05:16.440]  from Prometheus and also the actual time series database code.
+[05:16.440 --> 05:21.840]  So he shows, based on the profile and on the icicle graph that you see here, that the labels
+[05:21.840 --> 05:25.840]  take most of the memory in Prometheus, and that was around one-third.
+[05:25.840 --> 05:30.120]  And when I thought about it, the result was rather surprising to me, because the labels
+[05:30.120 --> 05:36.640]  of the time series, we could think of them as some kind of metadata or some kind of contextual
+[05:36.640 --> 05:41.360]  data about the actual data points, about the samples, as we call them, and these were
+[05:41.360 --> 05:46.680]  taking up more spaces than those actual data points, those actual samples themselves.
+[05:46.680 --> 05:51.320]  So there's been a lot of thought and work put into optimization and compression of the
+[05:51.320 --> 05:56.360]  samples of the actual time series data, but Brian's finding indicated that there can be
+[05:56.360 --> 05:59.120]  more, can be squeezed out of labels.
+[05:59.120 --> 06:01.180]  And what are actually labels?
+[06:01.180 --> 06:06.860]  Labels are key value pairs attached to a given time series to kind of characterize it.
+[06:06.860 --> 06:10.860]  So in principle, they are nothing more than pairs of strings.
+[06:10.860 --> 06:13.940]  So this is what brought me in the end to the strings.
+[06:13.940 --> 06:17.700]  And it inspired me to talk about this topic to a large audience.
+[06:17.700 --> 06:23.260]  I thought it might be useful to look at this from kind of a more general perspective, even
+[06:23.260 --> 06:28.900]  though we're dealing with this problem in a limited space of observability, I think
+[06:28.940 --> 06:33.860]  it can be also, some learnings from this can be gained and used also in different, in
+[06:33.860 --> 06:37.420]  other types of programs.
+[06:37.420 --> 06:42.060]  So first let's lay foundations to our talk by taking a look at what string actually is
+[06:42.060 --> 06:43.060]  in Go.
+[06:43.060 --> 06:46.340]  So most of you probably are familiar with different properties of strings.
+[06:46.340 --> 06:47.700]  They are immutable.
+[06:47.700 --> 06:52.420]  They can be converted easily into slides of bytes, can be concatenated, sliced, et cetera,
+[06:52.420 --> 06:53.420]  et cetera.
+[06:53.420 --> 06:57.260]  However, talking about the qualities of strings does not answer the question what strings
+[06:57.260 --> 06:58.260]  really are.
+[06:58.500 --> 07:02.740]  And if you look at the source code of Go, you'll see that the strings are actually represented
+[07:02.740 --> 07:05.260]  by the string struct struct.
+[07:05.260 --> 07:08.900]  So strings are structs, shocking, right?
+[07:08.900 --> 07:13.180]  You can also get the runtime representation of this from the Reflect package, which contains
+[07:13.180 --> 07:15.380]  the string header type.
+[07:15.380 --> 07:19.980]  So based on these two types, we see that the string consists of a pointer to the actual
+[07:19.980 --> 07:25.180]  string data in the memory, an integer which gives information about the size of the string.
+[07:25.180 --> 07:28.780]  When Go creates a string, it allocates storage corresponding to the provided string size and
+[07:28.780 --> 07:32.820]  then sets the string content as a slice of bytes.
+[07:32.820 --> 07:36.180]  As you've seen, the string data is stored as a contingent slice of bytes memory.
+[07:36.180 --> 07:41.100]  The size of the strings stays the same during its lifetime, since, as I mentioned previously,
+[07:41.100 --> 07:42.100]  the string is immutable.
+[07:42.100 --> 07:45.860]  And this also means that the size and the capacity of the backing slice of bytes stays
+[07:45.860 --> 07:46.860]  the same.
+[07:46.860 --> 07:51.340]  When you put this all together, the total size of the string will consist of the overhead
+[07:51.340 --> 07:55.940]  of the string header, which is equal to 16 bytes, and I show in a bit why, and the byte
+[07:55.940 --> 07:57.660]  length of the string.
+[07:57.660 --> 08:03.260]  We can break this down on this small example of the string I created with FOSDEM, space,
+[08:03.260 --> 08:04.820]  waving hand emoji.
+[08:04.820 --> 08:05.980]  So this is just a snippet.
+[08:05.980 --> 08:12.860]  I don't think it would compile this code, but for brevity, I decided to show these three
+[08:12.860 --> 08:14.700]  small lines.
+[08:14.700 --> 08:19.460]  And by calling the size method on the string type from the Reflect package, you would see
+[08:19.460 --> 08:22.180]  it return number 16.
+[08:22.180 --> 08:23.180]  Don't be fooled.
+[08:23.180 --> 08:28.140]  The size method returns only the information of the size of the type, not size of the whole
+[08:28.140 --> 08:29.140]  string.
+[08:29.140 --> 08:33.340]  Therefore, it correctly tells us it's 16 bytes, 18 bytes due to pointer pointing to the string
+[08:33.340 --> 08:37.540]  in memory, and 8 bytes for keeping the string length information.
+[08:37.540 --> 08:41.900]  To get the size of the actual string data, we have to use the good old length method.
+[08:41.900 --> 08:44.220]  This tells us it's 11 bytes.
+[08:44.220 --> 08:45.380]  This is the string literal.
+[08:45.380 --> 08:47.300]  Here is UTF-8 encoded.
+[08:47.300 --> 08:52.420]  We count one byte per each letter and space, and we need actually four bytes to encode
+[08:52.420 --> 08:54.340]  the waving hand emoji.
+[08:54.340 --> 08:58.140]  And this brings our total to 27 bytes.
+[08:58.140 --> 09:02.580]  Interestingly for such a short string, the overhead of storing it is bigger than the string
+[09:02.580 --> 09:05.700]  data itself.
+[09:05.700 --> 09:09.540]  It's also important to realize what happens if we declare a new string variable that is
+[09:09.540 --> 09:11.060]  copying an existing string.
+[09:11.300 --> 09:16.020]  In this case, co-creates what we can consider a shallow copy, meaning the data the string
+[09:16.020 --> 09:18.780]  refers to is shared between the variables.
+[09:18.780 --> 09:21.380]  Let's break it down again on the example of our FOSDEM string.
+[09:21.380 --> 09:27.060]  So we declare a new string literal, FOSDEM waving hand emoji, and then create a new
+[09:27.060 --> 09:32.540]  STR or new string variable, and set it to value equal to string or STR.
+[09:32.540 --> 09:34.140]  What happens behind the scenes?
+[09:34.140 --> 09:37.780]  If you would look at the values, pointer of each of the strings, you would see different
+[09:37.780 --> 09:38.780]  addresses.
+[09:38.780 --> 09:43.740]  We're making it obvious that these are two different strings strictly speaking, but looking
+[09:43.740 --> 09:48.340]  at their headers, we would see identical information, same pointer to string data,
+[09:48.340 --> 09:49.340]  and same length.
+[09:49.340 --> 09:50.340]  But because...
+[09:50.340 --> 09:55.180]  Excuse me, sir, can we turn the light on the front off first?
+[09:55.180 --> 09:56.180]  I cannot.
+[09:56.180 --> 09:57.180]  Sorry.
+[09:57.180 --> 09:58.180]  Okay.
+[09:58.180 --> 09:59.180]  Sorry.
+[09:59.180 --> 10:05.140]  Yeah, it's a bit light, right, sorry.
+[10:05.140 --> 10:10.820]  But anyway, so these are two different strings strictly speaking, and looking at the header
+[10:10.820 --> 10:16.780]  information, we would see that they point to same string data and have same length.
+[10:16.780 --> 10:20.700]  Because they are two different strings, we need to be mindful of the fact that the new
+[10:20.700 --> 10:23.060]  STR comes with a brand new string header.
+[10:23.060 --> 10:28.500]  So the bottom line is, when we do this copying, there is, again, even the data is shared,
+[10:28.500 --> 10:32.660]  the overhead of 16 bytes is still there.
+[10:32.660 --> 10:36.500]  So I briefly talked about my inspiration for this talk, but I also wanted to expand a bit
+[10:36.500 --> 10:42.100]  on the context of the problems, where I think the string optimization strategies can be
+[10:42.100 --> 10:43.100]  useful.
+[10:43.100 --> 10:48.740]  I think in general, many programs with characteristics of in-memory stores may face performance issue.
+[10:48.740 --> 10:52.340]  I will talk about in this slide such programs.
+[10:52.340 --> 10:57.180]  I already mentioned numerous times, the time series database, DNS resolvers, or any other
+[10:57.180 --> 11:02.100]  kind of key value store, where we come with an assumption that these are some long running
+[11:02.100 --> 11:09.820]  programs, and over the runtime of the program, we will keep the number of strings we will
+[11:09.820 --> 11:12.180]  keep accumulating.
+[11:12.180 --> 11:15.180]  So we can be talking potentially billions of strings.
+[11:15.180 --> 11:19.180]  There's also potential for repetitions of strings, since many of these stored values
+[11:19.180 --> 11:21.060]  may repeat themselves.
+[11:21.060 --> 11:25.700]  So for example, if we associate each of our entries with a label denoting which cluster
+[11:25.700 --> 11:30.540]  they belong to, we are guaranteed to have repeated values, since we have a finite and
+[11:30.540 --> 11:32.660]  often small amount of clusters.
+[11:32.660 --> 11:38.820]  So the string cluster will be stored as many times as many entries there are in our database.
+[11:38.820 --> 11:42.740]  There are also certain caveats when it comes to handling of incoming data.
+[11:42.740 --> 11:50.460]  Data will often come in a form of request through HTTP or GRPC or any other protocol,
+[11:50.460 --> 11:56.500]  and usually we handle this data in our program by un-martialing them into a struct, and then
+[11:56.500 --> 12:03.740]  we might want to store some information, some string from this struct in the memory for
+[12:03.740 --> 12:04.740]  future use.
+[12:04.740 --> 12:09.580]  However, the side effect of this is that the whole struct will be prevented from being
+[12:09.580 --> 12:14.340]  garbage collected, because as long as the string or as a matter of fact any other field
+[12:14.340 --> 12:21.060]  from a struct is being referenced by our database in memory, the garbage collection
+[12:21.060 --> 12:25.580]  won't kick in and eventually will lead to bloats in the memory consumption.
+[12:25.580 --> 12:32.260]  I think the second kind of different type of programs where string optimization can
+[12:32.260 --> 12:39.380]  be useful are kind of one of data processing situations as opposed to the long-running
+[12:39.380 --> 12:40.380]  programs.
+[12:40.380 --> 12:47.020]  So we can take an example of handling some large JSON file, perhaps it can be some data
+[12:47.020 --> 12:51.900]  set from a study or a health data, which I think were some good examples I've seen
+[12:51.900 --> 12:57.100]  out in the wild, and such processing will require a larger amount of memory to decode
+[12:57.100 --> 12:58.860]  the data during processing.
+[12:58.860 --> 13:03.020]  So even though we might be processing same strings that repeat themselves over and over
+[13:03.020 --> 13:07.300]  again such as the keys in the JSON document, we're having to allocate such strings in
+[13:07.300 --> 13:09.300]  new each time.
+[13:09.300 --> 13:15.940]  So now that we have a better understanding of the problem zones, let's look at the actual
+[13:15.940 --> 13:18.860]  optimization strategies.
+[13:18.860 --> 13:25.620]  So the first strategy is related to the issue I mentioned a couple of slides before where
+[13:25.620 --> 13:33.620]  we are wasting memory by keeping whole structs in memory when we only need part of the struct
+[13:33.620 --> 13:35.660]  that is represented by the string.
+[13:35.660 --> 13:40.100]  So what we want to do here is to have a mechanism that will allow us to quote unquote detach
+[13:40.100 --> 13:44.500]  the string from the struct so that the rest of the struct can be garbage collected.
+[13:45.060 --> 13:48.940]  Previously this was also possible to achieve with some unsafe manipulation of strings,
+[13:48.940 --> 13:55.060]  but since Go 118 there's a new method called clone in the string standard library that
+[13:55.060 --> 13:57.460]  makes it quite straightforward.
+[13:57.460 --> 14:01.300]  Though clone creates a new fresh copy of the string, this decouples the string from the
+[14:01.300 --> 14:06.300]  struct, meaning the struct can be garbage collected in the long term and will retain
+[14:06.300 --> 14:08.620]  only the new copy of the string.
+[14:08.620 --> 14:13.060]  So remember previously I showed that when we copy strings we create shallow copies, here
+[14:13.100 --> 14:17.700]  we want to achieve the opposite, we want to truly copy the string and create a fresh copy
+[14:17.700 --> 14:22.020]  of the underlying string data so the original string can be garbage collected together
+[14:22.020 --> 14:28.180]  with the struct it's part of, so this we can refer to as deep copying.
+[14:28.180 --> 14:32.580]  The next most interesting and I'd say one of the most widely used strategies in software
+[14:32.580 --> 14:35.060]  in general is string interning.
+[14:35.060 --> 14:38.820]  String interning is a technique which makes it possible to store only a single copy of
+[14:38.820 --> 14:43.180]  each distinct string and subsequently we keep referencing the same underlying string
+[14:43.180 --> 14:44.620]  in the memory.
+[14:44.620 --> 14:49.420]  This concept is somewhat more common in other languages such as Java or Python but can be
+[14:49.420 --> 14:54.060]  implemented effortlessly in Go as well and there are even some ready-made solutions out
+[14:54.060 --> 14:56.580]  in the open that you can use.
+[14:56.580 --> 15:03.380]  So at Simplus you could achieve this by having a simple map string string and you can keep
+[15:03.380 --> 15:08.740]  the references to the string in this map which we can call our interning map or cache
+[15:08.740 --> 15:13.220]  or anything like that.
+[15:13.220 --> 15:18.540]  First complication comes with the concurrency, right, because we need a mechanism to prevent
+[15:18.540 --> 15:23.380]  concurrent write and read to our interning map so obvious choice would be to use mutex
+[15:23.380 --> 15:27.260]  which have our incurred performance penalty but so be it.
+[15:27.260 --> 15:31.780]  Our concurrency save map version from the sync standard library.
+[15:31.780 --> 15:36.260]  The second complication or the noteworthy fact is that with each new reference string
+[15:36.260 --> 15:41.380]  we are incurring the 16 bytes overhead as I explained a couple of slides back.
+[15:41.380 --> 15:47.900]  So even though we're saving on the actual string data, it's not, we're still incurring
+[15:47.900 --> 15:55.620]  the overhead so with millions of strings, 16 bytes for every string, it's a non-trivial
+[15:55.620 --> 15:57.620]  amount.
+[15:57.620 --> 16:02.220]  Third complication comes from the unknown lifetime of the string in our interning map.
+[16:02.220 --> 16:07.020]  At some point in the lifetime of the program there might be no more references to a particular
+[16:07.020 --> 16:09.620]  string so it can be safely dropped.
+[16:09.620 --> 16:12.780]  But how to know when these conditions are met?
+[16:12.780 --> 16:18.100]  Ideally we don't want to be keeping unused strings as in an extreme case this can be
+[16:18.100 --> 16:25.500]  a denial of service vector leading to exhaustion of memory if we allow the map to grow unbounded.
+[16:25.500 --> 16:29.540]  One option could be to periodically clear the map or give the entries a certain time
+[16:29.540 --> 16:34.540]  to live so after a given period the map or the given entries are dropped from the map
+[16:34.540 --> 16:39.540]  and if a string reappears after such deletion we simply create the entry in the interning
+[16:39.540 --> 16:45.700]  map so kind of like a cache and naturally this can lead to some unnecessary churning
+[16:45.700 --> 16:49.700]  and unnecessary allocations because we don't know exactly which strings are no longer needed
+[16:49.700 --> 16:54.140]  or referenced but we might be still dropping them.
+[16:54.140 --> 16:59.940]  One and more elaborate way to do this is to keep counting the number of references of
+[16:59.940 --> 17:05.540]  the used strings and this naturally requires a more eloquent and complex implementation
+[17:05.540 --> 17:10.660]  but you can see here I linked a work done in the Prometheus project writing is a good
+[17:10.660 --> 17:17.700]  example of how this can be implemented with counting the references.
+[17:17.700 --> 17:22.500]  We can take this even to the next level as I recently learned there is an implementation
+[17:22.500 --> 17:27.900]  of an interning library that is capable of automatically dropping unused references.
+[17:27.900 --> 17:34.020]  The go4.org intern library is capable of doing this thanks to somewhat controversial concept
+[17:34.020 --> 17:37.860]  of the finalizers in the go runtime.
+[17:37.860 --> 17:42.380]  Finalizers set very plainly make it possible to attach a function that will be called on
+[17:42.380 --> 17:47.460]  a variable that is deemed to be garbage collection ready by the garbage collector.
+[17:47.460 --> 17:52.380]  At that point this library checks the sentinel boolean on the reference value and if it finds
+[17:52.380 --> 17:57.460]  this is the last reference to that value it drops it from a map.
+[17:57.460 --> 18:01.700]  The library also cleverly boxes the string header down to a single pointer which brings
+[18:01.700 --> 18:06.060]  the overhead down to 8 bytes instead of 16.
+[18:06.060 --> 18:10.740]  So as fascinating as this implementation is to me it makes uses of some potentially unsafe
+[18:10.740 --> 18:15.740]  code behavior hence the dark arts reference in the slide title.
+[18:15.740 --> 18:19.540]  However the library is deemed stable and major enough and has been created by some well-known
+[18:19.540 --> 18:21.380]  names in the go community.
+[18:21.380 --> 18:26.980]  So if you're interested I encourage you to study and look at the code it's just one file
+[18:26.980 --> 18:33.860]  but it's quite interesting and you're sure to learn a thing or two about some less known
+[18:33.860 --> 18:37.220]  parts of go.
+[18:37.220 --> 18:43.500]  And as an example I recently tried this library in the last blood point in the TANOS project
+[18:43.500 --> 18:48.860]  again I linked you the PR with the usage with the implementation which I think is rather
+[18:48.860 --> 18:50.820]  straightforward.
+[18:50.820 --> 18:59.700]  And we ran some synthetic benchmarks on this version in turning on this was the result.
+[18:59.700 --> 19:05.060]  On the left side you can see probably not very clearly unfortunately but there is a graph
+[19:05.060 --> 19:13.460]  showing metrics for both reported by the go runtime, how many bytes we have in the heap
+[19:13.460 --> 19:22.500]  and metrics reported by the container itself and you can see the differences between the
+[19:22.500 --> 19:28.700]  green and yellow line and the blue and red line so it came up to roughly two to three
+[19:28.700 --> 19:35.940]  gigabytes improvement per instance so this is averaged per I think across six or nine
+[19:35.940 --> 19:41.100]  instances so per instance this was around two to three gigabytes so we can count overall
+[19:41.100 --> 19:46.780]  improvement around ten to twelve gigabytes but more interestingly on the right side of
+[19:46.780 --> 19:52.700]  the slide there is another graph to kind of confirm that the interning is doing something
+[19:52.700 --> 19:59.980]  that it's working then we can see we're following again a metric reported by the go runtime
+[19:59.980 --> 20:07.060]  and we're looking at the number of objects held in the memory so we can see that it dropped
+[20:07.060 --> 20:12.100]  almost by health when we look at the average.
+[20:12.100 --> 20:15.620]  Finally there's a string interning with a slightly different flavor I would say which
+[20:15.620 --> 20:20.820]  I refer to a string interning with symbol tables and in this alternative instead of
+[20:20.820 --> 20:26.260]  keeping a reference string we replace it with another referring symbol such as for example
+[20:26.260 --> 20:30.900]  an integer so the integer one will correspond to string apple or string integer two will
+[20:30.900 --> 20:35.540]  correspond to string banana and so on and this can be beneficial with scenarios with
+[20:35.540 --> 20:40.980]  a lot of duplicated strings again this brings me to my home field and to the time series
+[20:40.980 --> 20:46.660]  databases where there is generally a high probability of the labels so also the strings
+[20:46.660 --> 20:53.140]  being repeated and especially when such strings are being sent over the wire so instead of
+[20:53.140 --> 20:58.700]  sending all the duplicated strings we can send a symbol table in their place and we
+[20:58.700 --> 21:04.220]  can replace the strings with the references in this table so where this idea come from
+[21:04.260 --> 21:10.220]  or where I got inspired for this was also in Thanos but this was by one of my fellow
+[21:10.220 --> 21:15.900]  maintainers so you can look at that PR who implemented this for data series being sent
+[21:15.900 --> 21:22.340]  over the network between Thanos components so instead of sending all the long and unduplicated
+[21:22.340 --> 21:27.940]  label keys and values so instead of sending all of these strings we build a symbol table
+[21:27.940 --> 21:35.380]  that we send together with the duplicated label data that includes that contains only
+[21:35.380 --> 21:40.100]  references instead of the strings so that all we have to do on the other side once
+[21:40.100 --> 21:44.740]  we receive the data is to replace the references by the actual strings based on the symbol
+[21:44.740 --> 21:50.460]  table which saves us on one hand the cost of the network since the requests are smaller
+[21:50.460 --> 21:56.460]  and also the allocations once we're dealing with the data on the receiving side.
+[21:57.260 --> 22:02.940]  Lastly you could try putting all of the strings into one big structure into one big string
+[22:02.940 --> 22:07.340]  and this can be useful to decrease the total overhead of the strings as this eliminates
+[22:07.340 --> 22:17.540]  the already mentioned overhead of the string header so yeah since this is always 16 bytes
+[22:17.540 --> 22:22.700]  plus the byte length of the string which consists which creates the size of the string by putting
+[22:22.700 --> 22:30.060]  all the strings into the one we can effectively decrease the overhead of those string headers.
+[22:30.060 --> 22:34.140]  So of course this is not without added complexity because now we have to deal with how to look
+[22:34.140 --> 22:41.540]  up those sub strings or those smaller strings within the bigger structure and so you need
+[22:41.540 --> 22:46.820]  a mechanism because you cannot simply look them up in a map or symbol table and obviously
+[22:46.820 --> 22:52.260]  another already mentioned complication such as concurrent access you also have to deal
+[22:52.260 --> 22:57.340]  with this and I think particularly interesting attempt at this is going on in the Prometheus
+[22:57.340 --> 23:04.100]  project which again this is done by Brian Boren who I mentioned in the previous slides
+[23:04.100 --> 23:11.460]  so if you're interested feel free to check out this PR.
+[23:11.460 --> 23:17.780]  So I will conclude with a few words of caution so I have shown you some optimization techniques
+[23:17.780 --> 23:22.220]  that I found particularly interesting when I was doing my research but let's not be naive
+[23:22.220 --> 23:26.420]  these are not magic ones that will make your program suddenly work faster and with fewer
+[23:26.420 --> 23:31.780]  resources this is still a balancing exercise so many of the presented techniques can save
+[23:31.780 --> 23:36.460]  memory but will actually increase the time it takes to retrieve a string so when I mean
+[23:36.460 --> 23:40.980]  optimization this is mostly in a situation where we want to decrease expensive memory
+[23:40.980 --> 23:47.020]  footprint of our application while sacrificing a bit more CPU a tradeoff that I believe is
+[23:47.020 --> 23:49.700]  reasonable in such setting.
+[23:49.700 --> 23:54.660]  Also not making any concrete claims about performance improvements of various techniques
+[23:54.660 --> 24:00.420]  as you have seen and I think this nicely ties into the introduction of my talk where I talked
+[24:00.420 --> 24:05.820]  about the need of data data driven optimization so I believe there's still more data points
+[24:05.820 --> 24:10.980]  needed to show how well these techniques work in practice how well they can work in your
+[24:10.980 --> 24:16.620]  specific use case how they compare with each other when it comes to performance and whether
+[24:16.620 --> 24:22.540]  there are some other real world implications or maybe properties of go or compiler or the
+[24:22.540 --> 24:30.220]  runtime that might not render them useful in practice or the performance gain might
+[24:30.220 --> 24:38.700]  be negligible so just to say that your mileage might vary but I think these ideas are worth
+[24:38.700 --> 24:55.940]  exploring and can be interesting and that is all from my side thank you for your attention.
+[24:55.940 --> 25:00.700]  Also included a couple more resources for those who are interested you can find the slides
+[25:00.700 --> 25:02.580]  in the PENTA bar.

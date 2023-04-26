@@ -1,0 +1,312 @@
+[00:00.000 --> 00:10.280]  The name of my talk is Postgres Observability.
+[00:10.280 --> 00:17.600]  My intention is to show you what's great about Postgres and how it integrates well with
+[00:17.600 --> 00:21.520]  observability, but also where some of the problems are.
+[00:21.520 --> 00:27.560]  Obviously, in 25 minutes, it's not going to be an exhaustive presentation of all of the
+[00:27.560 --> 00:31.940]  metrics in Postgres, but maybe I can give a bit of an introduction.
+[00:31.940 --> 00:34.000]  So first of all, my name is Gregory Stark.
+[00:34.000 --> 00:41.120]  I work for Ivan, which is a, so I work in the open source programs office, contributing
+[00:41.120 --> 00:42.440]  to Postgres.
+[00:42.440 --> 00:49.040]  Ivan is a data infrastructure hosting company.
+[00:49.040 --> 00:56.840]  We host Postgres, but we also host a range of other data services, including some observabilities
+[00:56.840 --> 01:07.840]  that it's all open source software, and we contribute back to the projects that we sell.
+[01:07.840 --> 01:17.640]  So I'm sure in this room, most people have seen the cliched three pillars of observability.
+[01:17.640 --> 01:23.680]  In a modern software, what people expect are their logs to be structured so they can send
+[01:23.680 --> 01:32.400]  it to some sort of index, something like OpenSearch, some sort of indexed aggregate log system.
+[01:32.400 --> 01:37.200]  They expect time series database to hold all their metrics with labels and well-defined
+[01:37.200 --> 01:38.200]  semantics.
+[01:38.200 --> 01:41.600]  They expect distributed tracing.
+[01:41.600 --> 01:47.080]  Postgres is not so much of a modern, it's still actively developed and has modern relational
+[01:47.080 --> 01:53.640]  database features, but for things like this, Postgres is going on almost 30 years now.
+[01:54.600 --> 02:04.280]  Our logs, our metrics, our tracing tools predate most of these modern distributed system concepts.
+[02:04.280 --> 02:09.880]  So what these look like in Postgres is we have very good logs, they're meant for a human
+[02:09.880 --> 02:12.280]  to be reading in a text file.
+[02:12.280 --> 02:17.920]  So we actually support JSON logs, but the actual error message, the actual log message
+[02:17.920 --> 02:22.600]  will just be a string inside that JSON struct.
+[02:22.600 --> 02:30.080]  All the JSON structured information, labels and so on are the metadata about the log
+[02:30.080 --> 02:36.520]  line, things like process ID, session ID, the actual like table name being mentioned
+[02:36.520 --> 02:43.960]  in the error, the actual, well actually current user is one of those columns, but if the error
+[02:44.000 --> 02:49.320]  message mentions a user name or a table name or an index, it's just going to be part of
+[02:49.320 --> 02:52.240]  the string.
+[02:52.240 --> 02:56.040]  There's tons of metrics in Postgres, and I'll go into more detail, I'm mainly going
+[02:56.040 --> 03:03.400]  to be talking about metrics here, but they're in SQL, they're not in like Prometheus exposition
+[03:03.400 --> 03:06.680]  format or open metrics or anything like that.
+[03:06.680 --> 03:12.880]  And then there's explain plans are basically a tracing tool, but it's meant for a human
+[03:12.920 --> 03:18.040]  to be investigating on a single system, it doesn't integrate into any sort of distributed
+[03:18.040 --> 03:20.600]  tracing tools.
+[03:20.600 --> 03:27.040]  So I want to spend a little bit of time showing you what like the metrics in Postgres look
+[03:27.040 --> 03:33.240]  like because it gives you, I can't show you all of them, there are hundreds and hundreds,
+[03:33.240 --> 03:39.680]  probably thousands, but I want to give you a feel for like the kinds of in depth metrics
+[03:39.680 --> 03:44.520]  that Postgres does provide.
+[03:44.520 --> 03:51.800]  It does give you, there's a whole component inside Postgres whose job is to track metrics
+[03:51.800 --> 03:59.240]  about your objects, your tables, indexes, functions, things like that.
+[03:59.240 --> 04:06.960]  So those are mostly quantitative metrics, cumulative counters that are counting how
+[04:06.960 --> 04:11.920]  many times events have occurred or how many seconds have elapsed while doing operations
+[04:11.920 --> 04:15.280]  on your table.
+[04:15.280 --> 04:25.280]  There are also other kinds of metrics that don't map so well to quantitative Prometheus-style
+[04:25.280 --> 04:31.360]  metrics, and I'll show you, if I have time, I'll try and show a bit of why those are difficult
+[04:31.360 --> 04:41.640]  to map to time series databases like Prometheus.
+[04:41.640 --> 04:48.560]  The thing to understand is Postgres exposes these things through SQL.
+[04:48.560 --> 04:54.920]  The way you access these metrics is by logging into the database and running SQL queries.
+[04:54.920 --> 05:06.720]  So for example, this is pg.database, I realize you probably can't read it very well, but
+[05:06.720 --> 05:12.680]  if you can, hopefully if you can see the general shape of it, I'll describe it, there's one
+[05:12.680 --> 05:16.680]  line for each database inside the Postgres cluster.
+[05:16.680 --> 05:21.160]  So there's a database called Postgres, there's a database called template one and database
+[05:21.160 --> 05:25.200]  called template zero and another database with my username Stark.
+[05:25.200 --> 05:31.600]  And each row of this table, it's actually a view, there's no storage attached to it,
+[05:31.600 --> 05:37.360]  it's a dynamically generated table, a virtual table, say.
+[05:37.360 --> 05:41.440]  Each row represents the metrics for that table.
+[05:41.440 --> 05:47.320]  So it shows you the number of backends that are connected to that database, I think I
+[05:47.400 --> 05:51.320]  said table before, I meant database, it shows you the number of backends connected to that
+[05:51.320 --> 05:59.600]  database, that's a gauge in Prometheus parlance, you can go up and down, the number of transactions
+[05:59.600 --> 06:11.280]  that have committed on that database, I think that's since the database start up actually,
+[06:11.280 --> 06:14.120]  the number of transactions that have rolled back, the number of blocks that have been
+[06:14.200 --> 06:19.960]  read on that database, the number of blocks that were hit in the shared memory cache,
+[06:19.960 --> 06:24.680]  these are all, and actually this is truncated, there are many, well, there's a good number
+[06:24.680 --> 06:29.880]  of more columns as well, but the key point is there's a row for each database and there's
+[06:29.880 --> 06:32.480]  a bunch of metrics about that database.
+[06:32.480 --> 06:39.040]  And then you can go into more detail, there's similar tables for, there's similar views
+[06:39.040 --> 06:43.480]  to show you metrics about your tables, the number of sequential scans that have occurred
+[06:43.480 --> 06:50.680]  on a table named PG bench branches in this case, and PG bench accounts, PG bench colors,
+[06:50.680 --> 06:55.200]  so the number of sequential scans on that, each row is a table and this is showing the
+[06:55.200 --> 07:01.120]  number of these various operations like sequential scans, tuples read, index scanned, for each
+[07:01.120 --> 07:05.040]  of those tables.
+[07:05.040 --> 07:10.720]  So in like Prometheus or other time series database world, you would probably want to
+[07:10.760 --> 07:15.920]  make the relation name, the table name here, a label on your metric, you probably also
+[07:15.920 --> 07:20.720]  want the schema name as a label, you might want the ID number, which is that first column
+[07:20.720 --> 07:25.480]  as a label, you actually have a decision to make there, do you want the time series to
+[07:25.480 --> 07:30.080]  be tied to the ID number or the name, so if you rename a table, is that a new time series
+[07:30.080 --> 07:32.400]  or not?
+[07:32.560 --> 07:41.560]  So the tool in Postgres world, like that mapping, those decisions are made somewhere, where
+[07:41.560 --> 07:49.680]  the mapping has to be made is in an agent that connects to the database, runs SQL and
+[07:49.680 --> 07:58.360]  exposes the data in Prometheus exposition format or open metrics, so the agent, the
+[07:58.400 --> 08:05.240]  standard agent for Prometheus is called Postgres exporter and it has built in queries for
+[08:05.240 --> 08:10.720]  these things, it has built in ideas about what the right labels are for the metrics
+[08:10.720 --> 08:18.600]  and how to map these data types, these are actually all 8 byte integers which need to
+[08:18.600 --> 08:27.440]  be mapped to floating point numbers for Prometheus, so like there's all kinds of hidden assumptions
+[08:27.720 --> 08:34.960]  that Postgres exporter has to be making to map this data to the monitoring data, the
+[08:34.960 --> 08:42.320]  data for Prometheus or M3 or whatever time series database you're using.
+[08:42.320 --> 08:47.760]  I don't have time to go into like how you would use these particular metrics to understand
+[08:47.760 --> 08:58.400]  your, like how to tune your database, but one point is, the way Postgres, like these
+[08:58.400 --> 09:04.240]  metrics were originally designed, you were imagined to have a DBA logging into your database
+[09:04.240 --> 09:09.560]  querying specific rows with a word clause, maybe doing calculations where you divide
+[09:09.560 --> 09:15.040]  one by another to find out the number of tuples each sequential scan is returning and things
+[09:15.040 --> 09:21.360]  like that and obviously in a modern observability world what you're actually going to do, what
+[09:21.360 --> 09:26.800]  Postgres exporter actually does is just do select star with no where clause, takes all
+[09:26.800 --> 09:32.560]  this data, dumps it into a time series database and then you do those same calculations but
+[09:32.560 --> 09:40.320]  you do them in from QL or whatever the equivalent is in your observability tool and that gives
+[09:40.320 --> 09:46.640]  you the same kind of flexibility but now you can look at how those metrics relate to
+[09:46.640 --> 09:51.840]  metrics that came from other sources so you get a more global view, you can aggregate
+[09:51.840 --> 10:00.640]  across multiples databases, you can aggregate across your Postgres databases and other systems.
+[10:00.640 --> 10:08.680]  So a lot of the flexibility here that these are designed to give you is no longer relevant
+[10:08.680 --> 10:14.200]  when you're just doing a simple select star and dumping it all into Prometheus.
+[10:14.200 --> 10:24.680]  Sorry, there's more complicated metrics which don't really map well to tools like Prometheus
+[10:24.680 --> 10:29.480]  or M3, Datadog, whatever.
+[10:29.480 --> 10:35.480]  So this is PG stat activity, there's one row for each session, there's actually two,
+[10:35.480 --> 10:43.600]  there's the same, just to explain what you're looking at the first results that there are
+[10:43.600 --> 10:56.680]  the first half dozen or dozen columns and then the second set there is, I've elided
+[10:56.680 --> 11:01.960]  after PID, I've elided those columns and showed you the next bunch of columns just
+[11:01.960 --> 11:06.240]  because I wanted to actually make a point about one of those columns that would be way
+[11:06.240 --> 11:08.320]  past the edge of the screen.
+[11:08.320 --> 11:14.720]  So in PG stat activity you have one row per session on the database and obviously that
+[11:14.720 --> 11:21.760]  already is difficult to put into Prometheus because you would be having time series come
+[11:21.760 --> 11:26.840]  and go every time an application connects and disconnects.
+[11:26.840 --> 11:34.520]  Probably what people actually, I think what Postgres exporter puts in the data is aggregates,
+[11:34.520 --> 11:41.560]  it just puts an account of how many rows are present and then maybe account of how many,
+[11:41.560 --> 11:45.480]  the minimum maximum of some of these columns.
+[11:45.480 --> 11:50.360]  But there is data in here like the weight event type and weight event, those are text
+[11:50.360 --> 11:57.080]  strings, inside Postgres those are actually ID numbers but they get presented to the user
+[11:57.080 --> 12:07.440]  in a nice readable format which then if you want to make metrics of you probably then
+[12:07.440 --> 12:11.960]  turn them back into numbers or you put them in labels, they're difficult to really make
+[12:11.960 --> 12:17.880]  use of in a time series database.
+[12:17.880 --> 12:36.760]  Some of them are quite important to have some idea, so there's information there that will
+[12:36.760 --> 12:42.640]  show you in PG stat activity that will show you if a session is in a transaction, an idle
+[12:42.640 --> 12:47.760]  and you really do want to know if there's a session that's idle in transaction for a
+[12:47.760 --> 12:49.880]  long period of time.
+[12:49.880 --> 12:57.600]  So what most people do there is have an aggregate, they have one gauge for the maximum, the longest
+[12:57.600 --> 13:08.680]  time that any session has been idle in transaction.
+[13:08.680 --> 13:15.520]  So just to be clear what we're talking about here is Postgres exporter which is connecting
+[13:15.520 --> 13:24.000]  to Postgres QL and querying PG stat user tables, PG stat user indexes, PG stat activity,
+[13:24.000 --> 13:32.360]  all the various views that start with PG stat, it can also, Postgres exporter is very flexible,
+[13:32.360 --> 13:40.920]  you can configure customized queries to query other views that like some of the PG stat
+[13:40.920 --> 13:46.320]  views you might want more detail than the default queries.
+[13:46.320 --> 13:57.440]  So it doesn't actually include all those table statistics by default if you have an application
+[13:57.440 --> 14:03.080]  where your schema is fairly static and you have a reasonable number of tables to do that
+[14:03.080 --> 14:09.000]  with, you can quite reasonably get all of those columns, put them in Prometheus and be able
+[14:09.000 --> 14:16.920]  to do all kinds of nice graphs and visualizations, but that's not standard.
+[14:16.920 --> 14:20.960]  And if you're, on the other hand, you're an ISP with hundreds of customers and your customers
+[14:20.960 --> 14:29.600]  create and drop tables without your control, then you can't really be trying to gather
+[14:29.600 --> 14:38.680]  statistics like that because you're taking on an unbounded cardinality and time series
+[14:38.680 --> 14:42.400]  coming and going without being able to control it.
+[14:42.400 --> 14:53.880]  So the level of detail that you grab is very dependent on how you're using Postgres, whether
+[14:53.880 --> 14:59.960]  you're a site with one key database that you want to optimize or many, many databases
+[14:59.960 --> 15:06.560]  that you just want to monitor at a high level or an application that you're controlling
+[15:06.560 --> 15:11.680]  versus applications that you're hosting for other people.
+[15:11.680 --> 15:17.400]  It also means that many sites add queries in Postgres exported query, other data sources
+[15:17.400 --> 15:21.680]  like what I've put in this diagram here is PGSTAT statements, which is an extension in
+[15:21.680 --> 15:27.200]  Postgres, which gathers statistics for your queries.
+[15:27.200 --> 15:34.600]  So the key in there is a query ID, which is like a hash of the query with the constants
+[15:34.640 --> 15:41.400]  removed, and you can get long-lived statistics about which queries are taking a lot of time
+[15:41.400 --> 15:50.160]  or doing a lot of ale, but that's, again, like a custom query that you would be adding.
+[15:50.160 --> 15:59.480]  So I talked a bit about the map, like the difficulty mapping some of these metrics for me to use.
+[15:59.480 --> 16:06.000]  There's other problems with, am I doing it for time?
+[16:06.000 --> 16:08.000]  Am I doing it for time?
+[16:08.000 --> 16:17.840]  There's, I don't, okay, there are, so I do want to talk a bit about the kinds of problems
+[16:17.840 --> 16:20.880]  that we have.
+[16:20.880 --> 16:25.600]  Some of the metrics don't map very well to Prometheus metrics.
+[16:25.600 --> 16:31.000]  The fact that the metrics can be customized, and in fact kind of have to be customized
+[16:31.000 --> 16:36.400]  because Postgres is used in different ways at different sites, means that there's no,
+[16:36.400 --> 16:41.320]  there is a standard dashboard in Grafana for Postgres, but it's a very high-level dashboard.
+[16:41.320 --> 16:45.440]  I think I do have a screenshot there, yeah.
+[16:45.440 --> 16:53.840]  There is a dashboard for Postgres, but it, this is not showing individual tables and
+[16:53.840 --> 17:01.120]  individual functions and so on, because on many sites that data wouldn't even be present.
+[17:01.120 --> 17:06.400]  You have to add custom queries for it.
+[17:06.400 --> 17:08.200]  It also means you have to deploy the agent.
+[17:08.200 --> 17:14.240]  You have to run this side, this Go program alongside your database everywhere you deploy
+[17:14.240 --> 17:20.760]  your database, or you could, depending on how you deploy it, you can deploy a single one
+[17:20.880 --> 17:27.480]  for all your databases, or one for all the databases running on one host, so that mapping
+[17:27.480 --> 17:37.320]  of which agent to, which agents metrics correspond to which actual database is entirely dependent
+[17:37.320 --> 17:42.120]  on how you manage your deploys.
+[17:42.120 --> 17:52.040]  The other problem that I've, the, I can't go into all of the problems, but the, the
+[17:52.040 --> 18:00.480]  op, the Rezors contention, I gave names to each of these classes, but, so the Rezors
+[18:00.480 --> 18:07.880]  contention problems are that Postgres, because it's exposing this information through SQL,
+[18:07.880 --> 18:13.480]  means that you have to have a working SQL session in order to get the metrics.
+[18:13.480 --> 18:18.760]  So when your system is not functioning correctly, you're very likely to also lose all your data,
+[18:18.760 --> 18:23.120]  which you need to debug the problem.
+[18:23.120 --> 18:28.520]  So if you're running low-end connections, or you're running into transaction wraparound,
+[18:28.520 --> 18:35.280]  or the system is just out of memory, or getting disk errors, quite often you also lose all
+[18:35.280 --> 18:40.360]  your metrics that would allow you to figure out which application component is using all
+[18:40.360 --> 18:45.640]  the connections, or which table is it that needs to be vacuumed to recover from the transaction
+[18:45.640 --> 18:49.280]  wraparound issue.
+[18:49.280 --> 18:57.400]  I actually tried to, I've run into a problem where a table was locked by the application,
+[18:57.400 --> 19:03.240]  and the custom queries needed that same lock.
+[19:03.240 --> 19:09.760]  So the queries all disappeared, the metrics all disappeared, because the Postgres exporter
+[19:09.760 --> 19:12.000]  was getting blocked on that lock.
+[19:12.000 --> 19:19.920]  When I tried to recreate it for a demo, I actually found, oh, this is not a lock, this
+[19:19.920 --> 19:26.000]  is, I actually caused the regression test on Postgres to fail, because one of the regression
+[19:26.000 --> 19:29.600]  tests tries to drop a database.
+[19:29.600 --> 19:34.400]  And the Postgres exporter keeps a connection to each database, because the metrics, like
+[19:34.400 --> 19:41.080]  I said, you need a session, you need a connection to the database, so you need, in Postgres,
+[19:41.080 --> 19:44.280]  each session is tied to a specific database.
+[19:44.280 --> 19:52.800]  So if you have a dozen databases, it uses a dozen connections, and it keeps those connections,
+[19:52.800 --> 19:58.760]  it's optional, it's to work around the problem that it might not be able to connect if you
+[19:58.760 --> 20:05.000]  have a problem, but as a result, it has persistent connections to those databases, and the regression
+[20:05.000 --> 20:08.040]  test failed when they tried to drop that database.
+[20:08.040 --> 20:09.760]  And that could actually happen in production.
+[20:09.760 --> 20:14.880]  If you try to do a deploy and roll out a new version of some data that drops a database
+[20:14.880 --> 20:21.320]  and recreates it from scratch, if you have Postgres exporter running and it has a connection,
+[20:21.320 --> 20:25.360]  you could run into the same kind of issue.
+[20:25.360 --> 20:37.520]  So I'm hoping, I'm already working on something to replace Postgres exporter with a background
+[20:37.520 --> 20:42.360]  worker inside Postgres, so you would be connecting directly to Postgres, you wouldn't have to
+[20:42.360 --> 20:49.600]  deploy a separate program alongside it, and my goal is that that program would have standardized
+[20:49.600 --> 20:53.840]  metrics.
+[20:53.840 --> 20:59.960]  That program would have standardized metrics that every dashboard or visualization or alerting,
+[20:59.960 --> 21:06.400]  so we could have mix-ins that have alert rules and visualizations, and it would be able to
+[21:06.400 --> 21:14.400]  rely on standardized metrics that will always be present, and they would be exported directly
+[21:14.400 --> 21:21.840]  from shared memory without going through the whole SQL infrastructure.
+[21:21.840 --> 21:29.240]  So it would avoid depending on locks and transactions and all of the things that could interfere
+[21:29.240 --> 21:33.960]  with or be interfered with by the application.
+[21:33.960 --> 21:40.240]  It's still early days, I have a little proof of concept, but it's not going to be in the
+[21:40.240 --> 21:46.040]  next version of Postgres, it's definitely experimental.
+[21:46.040 --> 21:52.600]  The main difficulties are going to be sort of definitional problems of, for example,
+[21:52.600 --> 21:57.480]  the table names, like I mentioned before, should a time series change when a table gets
+[21:57.480 --> 21:58.880]  renamed?
+[21:58.880 --> 22:04.080]  But in fact, I have a bigger problem because the table names are in the catalog, the schema
+[22:04.080 --> 22:09.640]  catalog, they're not in shared memory, and they're not, we don't really want them in
+[22:09.640 --> 22:21.600]  shared memory, that brings in the whole risk of character encoding changes and collations.
+[22:21.600 --> 22:32.640]  So there's, it probably will only replace the core database metrics, and then you would
+[22:32.640 --> 22:37.600]  still probably deploy a tool like Postgres Explorer only for your custom queries, only
+[22:37.600 --> 22:49.160]  for more application level metrics, not monitoring core Postgres metrics.
+[22:49.160 --> 22:54.520]  So my hope is that when you deploy Postgres, you can add it to your targets in Prometheus
+[22:54.520 --> 23:11.200]  and not have to do any further operational work to get dashboards and alerts.
+[23:11.200 --> 23:13.200]  Two more minutes.
+[23:13.200 --> 23:20.160]  It feels like time is elastic here.
+[23:20.160 --> 23:32.480]  So I skipped over, I mean, so this is the proof of concept.
+[23:32.480 --> 23:37.120]  The telemetry server in the first PS listing there is a single process.
+[23:37.120 --> 23:43.560]  It's a Postgres background worker that can be, you can connect to it and get metrics
+[23:43.560 --> 23:47.440]  with just ID numbers for the tables.
+[23:47.440 --> 23:52.200]  And the second example is Postgres Exporter, and you can see there's a session, there's
+[23:52.200 --> 23:57.360]  a database session, and with Postgres Exporter, there's a database session for each database,
+[23:57.360 --> 24:00.760]  and they're all idle.
+[24:00.760 --> 24:07.480]  So even just reducing the number of sessions and reducing the number of processes involved
+[24:07.480 --> 24:16.440]  is already quite a visible improvement.
+[24:16.440 --> 24:23.120]  I think I have more information if people have questions or want to see something specific,
+[24:23.120 --> 24:30.600]  but I tried to condense a much longer presentation to 25 minutes, so I've skipped over plenty
+[24:30.600 --> 24:31.600]  of other information.
+[24:31.600 --> 24:37.160]  If there's questions, that would be probably better than me just jumping around finding
+[24:37.160 --> 24:49.600]  a slide.
+[24:49.600 --> 24:59.960]  Okay, so any questions, thanks a lot for the great talk, it was pretty interesting.
+[24:59.960 --> 25:04.800]  So any questions, anyone?
+[25:04.800 --> 25:15.440]  Hello, my name is Brian, you spoke about metrics, is there any traces or any talk of traces
+[25:15.440 --> 25:17.960]  in the future?
+[25:17.960 --> 25:25.760]  I have ideas, I have plans, but they're all in my head, there's no code.
+[25:25.760 --> 25:31.400]  Postgres does have explain plans, and explain plans are basically traces, but there's no
+[25:31.400 --> 25:37.440]  way to, what we have today is you run something on the terminal and you see the plan for your
+[25:37.440 --> 25:44.440]  query, and there's an extension that will dump the explain plans in the logs.
+[25:44.440 --> 25:50.880]  So it wouldn't be much, it's a bit pie in the sky, but I don't see any reason we shouldn't
+[25:50.880 --> 26:00.160]  be exporting that same information to a tracing server, and that basically just involves adding
+[26:00.160 --> 26:10.440]  support for receiving the trace IDs, the spans, and creating spans for either plan nodes or
+[26:10.440 --> 26:18.280]  certain kinds of plan nodes, there's a lot of, it's not well thought out plans.
+[26:18.280 --> 26:26.720]  In my pie in the sky dream there is I want to be able to answer the question, which front
+[26:26.720 --> 26:34.840]  end web API endpoint is causing sequential scans on this table over here, skipping the
+[26:34.840 --> 26:41.680]  whole stack trace in the middle without having to dig all the way up.
+[26:41.680 --> 26:49.480]  So we have a architecture in which we have Postgres databases which are short lived running
+[26:49.480 --> 26:56.280]  in Docker containers, so the entire cluster basically will live and die for matters of
+[26:56.280 --> 26:59.800]  possibly minutes or less.
+[26:59.800 --> 27:03.000]  And we would like to know what the hell is going on with them, have you got any bright
+[27:03.000 --> 27:10.080]  ideas?
+[27:10.080 --> 27:18.240]  I admit I don't think I've seen anybody trying to do that with Prometheus.
+[27:18.240 --> 27:25.240]  I mean it's not a best practice in Prometheus to have time series that keep changing, but
+[27:25.240 --> 27:34.560]  you're kind of inevitably going to get a new bunch of time series with each database.
+[27:34.560 --> 27:40.000]  I guess I need a better idea where you're looking.
+[27:40.000 --> 27:44.880]  I don't think I have anything off the top of my head that you wouldn't have already
+[27:44.880 --> 27:46.600]  thought about.
+[27:46.600 --> 27:54.800]  Hi, where can we get your proof concept from and fill it with it and test it?
+[27:54.800 --> 27:56.840]  I'm sorry, I didn't hear the question.
+[27:56.840 --> 28:02.080]  Where can you get your proof of concept from to test it and fill it with it?
+[28:02.080 --> 28:07.960]  I posted a patch to the mailing list.
+[28:07.960 --> 28:16.720]  Postgres follows a fairly old school patch review process where patches are mailed to
+[28:16.720 --> 28:19.000]  the hacker's mailing list.
+[28:19.000 --> 28:41.640]  So it's easy to lose sight of patches if they get posted and it was months ago.
+[28:41.640 --> 28:45.640]  I can send it to you if you want.
+[28:45.640 --> 28:49.360]  You can probably find it on the mailing list if you search.
+[28:49.360 --> 28:50.960]  It's pretty early days though.
+[28:50.960 --> 29:04.680]  It's not really ready to use even for experimental production uses.
+[29:04.680 --> 29:12.160]  With that integrated matrix, how do you expose the matrix to have an HTTP endpoint that
+[29:12.160 --> 29:18.600]  exposed directly from Postgres?
+[29:18.600 --> 29:23.960]  The current situation is it's a background worker and that background worker has a configuration
+[29:23.960 --> 29:35.080]  option to specify a second port to listen on and it runs a very small embedded web server
+[29:35.080 --> 29:40.920]  so it responds to normal HTTPS requests.
+[29:41.520 --> 29:49.320]  I would want the normal Postgres port to respond so that your label, your target is just the
+[29:49.320 --> 29:52.680]  database port.
+[29:52.680 --> 29:59.640]  I expect, well, I actually have already heard a lot of pushback on that idea.
+[29:59.640 --> 30:10.240]  A lot of Postgres installs are sort of old school where you probably have it firewalled
+[30:10.360 --> 30:15.720]  and you don't want to have two different, you don't want to have a new service running
+[30:15.720 --> 30:21.720]  on a port, the same port as the actual database, you want to have a port that you can firewall
+[30:21.720 --> 30:24.800]  separately for your admin stack.
+[30:24.800 --> 30:33.040]  It makes Prometheus very difficult to manage when you have a different port to get metrics
+[30:33.040 --> 30:34.480]  about.
+[30:34.480 --> 30:39.200]  So you have database running on port A and then you have metrics on port B and you have
+[30:39.280 --> 30:46.800]  to have your dashboards and the targets and so on all configured to understand that the
+[30:46.800 --> 30:52.320]  target with port B is actually the database on port A and you can add rewrite rules but
+[30:52.320 --> 30:56.920]  then you have to manage those rewrite rules.
+[30:56.920 --> 31:06.520]  But I don't really expect people to accept the idea of responding on the database port.
+[31:06.520 --> 31:14.280]  There's also a general security principle involved of, it's almost always a terrible
+[31:14.280 --> 31:19.520]  idea for security reasons to respond to two different protocols on the same port because
+[31:19.520 --> 31:27.120]  a lot of security vulnerabilities have come about from arranging, like finding bugs where
+[31:27.120 --> 31:31.360]  one side of a connection thinks you're talking protocol A and the other side thinks you're
+[31:31.360 --> 31:33.720]  talking protocol B.
+[31:33.720 --> 31:39.360]  So it's probably, there's big trade-offs to doing that.
+[31:39.360 --> 31:46.280]  First of all, thanks a lot for the amazing talk, very insightful.
+[31:46.280 --> 31:49.360]  Thanks for offering to modernize POSGRACE monitoring.
+[31:49.360 --> 31:55.160]  You had a very good point there about standardizing on the metrics.
+[31:55.160 --> 31:59.800]  I've been involved in the semantic conventions around open telemetry and other projects but
+[31:59.800 --> 32:06.080]  in general, I'm curious to hear if you personally or Ivan or anyone else, what kind of effort
+[32:06.080 --> 32:13.040]  is being done to standardize on database monitoring metrics, not specifically POSGRACE but databases
+[32:13.040 --> 32:17.800]  in general, if you can share?
+[32:17.800 --> 32:19.200]  I would be interested in that.
+[32:19.200 --> 32:26.040]  I haven't heard anything on that front.
+[32:26.040 --> 32:27.040]  That would be exciting.
+[32:27.040 --> 32:29.640]  That would be a lot of work.
+[32:29.640 --> 32:43.120]  I think there's a lot of, a lot of the interesting metrics are very, that would be difficult.
+[32:43.120 --> 32:50.120]  I don't know, I haven't seen anything like that.
+[32:50.120 --> 32:59.280]  Okay, so thanks a lot everyone.

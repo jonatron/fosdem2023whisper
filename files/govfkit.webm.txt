@@ -1,0 +1,582 @@
+[00:00.000 --> 00:05.000]  And one second, okay, our last speaker
+[00:08.960 --> 00:11.080]  from a full sized stock of the day is Christophe
+[00:11.080 --> 00:15.840]  and I got weird that I got a macOS stock at FOSDEM,
+[00:15.840 --> 00:16.940]  couldn't even fire me,
+[00:16.940 --> 00:19.760]  but it seems to be open source and it goes, so,
+[00:19.760 --> 00:21.440]  say just yours.
+[00:21.440 --> 00:24.760]  All right, hello everyone, thank you for staying so late.
+[00:24.760 --> 00:26.600]  So yeah, we'll be talking about VFKit,
+[00:26.600 --> 00:29.800]  which is macOS hypervisor, which I didn't go,
+[00:29.800 --> 00:31.320]  which I've been doing for my work,
+[00:31.320 --> 00:34.280]  so yeah, we first present a few things,
+[00:34.280 --> 00:35.520]  then I will present in more detail
+[00:35.520 --> 00:37.280]  hyper utilization framework,
+[00:37.280 --> 00:40.400]  which VFKit is based on, why VFKit,
+[00:40.400 --> 00:41.560]  and then I will go in more details
+[00:41.560 --> 00:43.880]  about how you can use objective C code,
+[00:43.880 --> 00:45.040]  you can call it from go.
+[00:47.120 --> 00:49.600]  So a bit of background, so my name is Christophe Fergero,
+[00:49.600 --> 00:51.120]  I'm working at Red Hat,
+[00:51.120 --> 00:53.680]  I'm working in the CSE team,
+[00:53.680 --> 00:55.360]  which is a so-called open C flow call,
+[00:55.360 --> 00:56.840]  which was called,
+[00:56.840 --> 01:00.280]  quadratic containers, so what is it?
+[01:00.280 --> 01:03.200]  It's basically a way of running an open shift cluster,
+[01:03.200 --> 01:07.040]  so just say Kubernetes cluster on a laptop,
+[01:07.040 --> 01:09.040]  so you can do that on a Linux laptop,
+[01:09.040 --> 01:11.600]  you can do this on a Windows laptop,
+[01:11.600 --> 01:13.960]  or it can also be done on a macOS machine.
+[01:14.920 --> 01:17.600]  So how we do it, we create a virtual machine,
+[01:17.600 --> 01:19.920]  and then we start the cluster in it,
+[01:19.920 --> 01:24.040]  yeah, basically it starts and you have a Kubernetes cluster.
+[01:24.040 --> 01:25.000]  Why do we do that?
+[01:25.000 --> 01:27.440]  It's aimed at developers,
+[01:27.440 --> 01:30.000]  so if you want to develop a Kubernetes application,
+[01:31.000 --> 01:33.080]  you can have that all on your Mac,
+[01:33.080 --> 01:37.320]  you don't need access to whatever on AWS or something,
+[01:37.320 --> 01:39.120]  you create your Kubernetes application,
+[01:39.120 --> 01:41.600]  you start the VM on your Mac,
+[01:41.600 --> 01:44.080]  and you can do all your tests over there.
+[01:45.320 --> 01:47.720]  So for a virtual machine, we need a hypervisor,
+[01:47.720 --> 01:49.720]  so on Linux we use QMU, it's easy,
+[01:49.720 --> 01:52.960]  on Windows there is Hyper-V, it's so easy,
+[01:52.960 --> 01:56.880]  on macOS, it's been more complicated for us,
+[01:56.880 --> 01:59.440]  so we used to be using Hyper-Kit,
+[01:59.440 --> 02:01.200]  but Hyper-Kit, they don't have support
+[02:01.200 --> 02:05.040]  for Apple's second hardware, so a few years ago,
+[02:05.040 --> 02:07.920]  okay, okay, they're switching to these new ARM CPUs,
+[02:07.920 --> 02:11.400]  they're great, but we cannot really keep using Hyper-Kit.
+[02:11.400 --> 02:15.000]  So the next option was QMU, QMU is just great,
+[02:15.000 --> 02:18.640]  it's in blue on Mac, you can install it, you can use it.
+[02:18.640 --> 02:20.840]  For my specific project, at Red Hat,
+[02:20.880 --> 02:23.680]  we would have to re-build QMU ourselves,
+[02:23.680 --> 02:26.200]  and then to ship it, and we have nobody at Red Hat
+[02:26.200 --> 02:30.240]  maintaining macOS QMU bits, so we were really worried
+[02:30.240 --> 02:32.560]  that it would be on my team to maintain that,
+[02:32.560 --> 02:34.560]  we are like three people, a little bit more,
+[02:34.560 --> 02:36.360]  five people maybe working in the team,
+[02:37.400 --> 02:40.120]  and QMU, it's like millions of lines of C-Code,
+[02:40.120 --> 02:42.960]  I'm not exaggerating, we really did not want
+[02:42.960 --> 02:46.480]  to be the ones maintaining it, in other projects,
+[02:46.480 --> 02:49.680]  I would just use QMU, I would be happy to do it,
+[02:49.680 --> 02:54.400]  for my project, it was like, yeah, not a great idea,
+[02:54.400 --> 02:57.880]  so we needed something else, we were looking
+[02:57.880 --> 02:59.920]  for something common line, we were looking for something
+[02:59.920 --> 03:03.400]  which is free software, at the time,
+[03:03.400 --> 03:06.520]  we did not find anything, even today, I'm not so sure
+[03:06.520 --> 03:08.600]  there's like a lot of things we could use,
+[03:09.840 --> 03:14.840]  but yeah, there was this new visualization from work
+[03:15.400 --> 03:17.160]  from Apple, which was just released,
+[03:17.520 --> 03:20.680]  it looked very nice for our purpose,
+[03:20.680 --> 03:24.200]  so I'm going to present a bit more in detail what it is,
+[03:24.200 --> 03:28.160]  so it was introduced in macOS 11, so two years ago,
+[03:28.160 --> 03:31.680]  I think, and it's like some really high-level APIs
+[03:31.680 --> 03:34.240]  to create virtual machines on macOS,
+[03:34.240 --> 03:35.760]  you can create macOS virtual machines,
+[03:35.760 --> 03:37.600]  which I've never tried actually,
+[03:37.600 --> 03:39.920]  and you can also create Linux virtual machines
+[03:39.920 --> 03:43.680]  using this framework, it's a framework which means
+[03:43.680 --> 03:46.640]  it's a Swift Objective API, that's some kind
+[03:46.640 --> 03:48.720]  of library, they create a framework for me,
+[03:48.720 --> 03:50.960]  it's just like a shared library in C,
+[03:51.880 --> 03:53.960]  but they don't provide user applications,
+[03:53.960 --> 03:55.720]  there is nothing to manage your VMs,
+[03:55.720 --> 03:57.520]  there's nothing to create them,
+[03:57.520 --> 04:00.800]  there's nothing graphical, it's really something
+[04:00.800 --> 04:02.920]  you can use as a programmer, but not something
+[04:02.920 --> 04:06.080]  you can directly use as a user,
+[04:08.000 --> 04:11.240]  so yeah, when I say it's a high-level framework,
+[04:11.240 --> 04:13.600]  I mean, it provides everything you need
+[04:13.600 --> 04:15.880]  for a virtual machine, but yeah, not much more,
+[04:15.880 --> 04:18.920]  so in QMU, you would have support for real devices,
+[04:18.920 --> 04:22.080]  like QMU emulates, I don't know, for internet,
+[04:22.080 --> 04:24.040]  they emulate real tech hardware, they emulate
+[04:24.040 --> 04:26.880]  Intel hardware, and they also have some
+[04:26.880 --> 04:30.440]  virtualization-specific devices, in this framework
+[04:30.440 --> 04:34.720]  from Apple, you only have Vataio devices,
+[04:34.720 --> 04:37.600]  which are just virtual devices used in virtual machines,
+[04:37.600 --> 04:41.080]  but there is no real hardware implementations of that,
+[04:41.080 --> 04:43.480]  and so they have some VataioNet for networking,
+[04:43.480 --> 04:47.400]  they have Vataio BLK for disk images,
+[04:47.400 --> 04:49.920]  Vataio RNG for serial number,
+[04:49.920 --> 04:51.880]  Vataio Serial for serial ports,
+[04:51.880 --> 04:54.720]  there are plenty of devices like this,
+[04:54.720 --> 04:59.240]  and there are some very useful devices for my use case
+[04:59.240 --> 05:03.320]  and for other use cases, like containers on my OS,
+[05:03.320 --> 05:06.040]  for example, so they have Vataio FS,
+[05:06.040 --> 05:08.160]  which is a way of sharing files
+[05:08.160 --> 05:09.920]  between the host and the guest,
+[05:10.920 --> 05:12.560]  and yeah, it's quite efficient,
+[05:12.560 --> 05:15.560]  like I forgot which container solution
+[05:15.560 --> 05:18.880]  switched to this on my OS,
+[05:18.880 --> 05:21.600]  and they say, yeah, it's really great for performance,
+[05:21.600 --> 05:23.520]  so it's really useful to have that,
+[05:23.520 --> 05:26.520]  they offer Vataio vSoc, if you need some communication
+[05:26.520 --> 05:28.720]  between the guest and the host,
+[05:28.720 --> 05:31.920]  it's a POSIX sockets API for easy communication
+[05:31.920 --> 05:36.320]  between the two systems, and there's a server-zeta support,
+[05:37.320 --> 05:42.320]  which allows you, so you start a Linux ARM64 virtual machine
+[05:42.760 --> 05:45.360]  and they provide you a way of running
+[05:45.360 --> 05:48.360]  Intel Linux binaries inside this virtual machine,
+[05:48.360 --> 05:51.480]  so they just reuse what they implemented for the Mac,
+[05:51.480 --> 05:54.560]  they make that available for Linux binaries as well,
+[05:54.560 --> 05:57.320]  so it can just be great and useful.
+[05:59.880 --> 06:02.400]  Yeah, so I don't know, is it really about enough,
+[06:02.400 --> 06:03.560]  actually, I hope so.
+[06:04.480 --> 06:09.480]  Yeah, I just wanted to show how easy it is to use,
+[06:09.520 --> 06:11.920]  so you create a configuration for the virtual machine,
+[06:11.920 --> 06:13.520]  you give the number of CPUs you want,
+[06:13.520 --> 06:16.200]  you give the memory size that you want,
+[06:16.200 --> 06:19.680]  you need a bootloader, more on that in the next slide,
+[06:19.680 --> 06:22.440]  basically this is the very basic configuration,
+[06:22.440 --> 06:24.680]  all that you need for a virtual machine,
+[06:24.680 --> 06:26.520]  you could ask a disk image to it,
+[06:26.520 --> 06:28.680]  but it's not in that example,
+[06:28.680 --> 06:30.960]  this is some twist code, it's not some go code,
+[06:31.640 --> 06:35.680]  so for a bootloader, it's also very easy to create,
+[06:35.680 --> 06:37.080]  you need that in the configuration,
+[06:37.080 --> 06:42.080]  but basically, they just need the path to the kernel,
+[06:43.800 --> 06:45.800]  which is at the very top,
+[06:45.800 --> 06:49.280]  you can specify around disk,
+[06:49.280 --> 06:51.080]  if you need that, but it's optional,
+[06:51.080 --> 06:52.800]  you give the kernel command line arguments
+[06:52.800 --> 06:55.080]  and that's it, you have your bootloader configuration
+[06:55.080 --> 06:58.000]  for your Linux virtual machine,
+[06:58.000 --> 06:59.200]  and then you can start the VM,
+[06:59.200 --> 07:02.440]  which is that, so it's just a few lines of code,
+[07:02.440 --> 07:05.760]  you have a way of creating a Linux virtual machine on the Mac,
+[07:05.760 --> 07:07.520]  so virtual machine, you create it,
+[07:07.520 --> 07:11.640]  you give it the configuration, and then you start it,
+[07:11.640 --> 07:15.560]  and that's it, so this framework would be just great
+[07:15.560 --> 07:19.120]  for what we needed, which was something
+[07:19.120 --> 07:21.760]  to start virtual machines on the Mac,
+[07:21.760 --> 07:23.200]  the framework is maintained by Apple,
+[07:23.200 --> 07:26.000]  so we don't have hundreds or millions of lines of code
+[07:26.000 --> 07:28.880]  to maintain, because Apple is kind of taking care of that,
+[07:29.920 --> 07:32.760]  but yeah, it has like some issues,
+[07:33.960 --> 07:35.880]  it's written in Swift or Objective-C,
+[07:36.800 --> 07:38.520]  basically the framework is non-free,
+[07:39.360 --> 07:40.800]  and yeah, I'm in the Godave room,
+[07:40.800 --> 07:45.160]  so yeah, it's not a great fit for this room.
+[07:45.160 --> 07:47.920]  In my team, we do everything in Go,
+[07:47.920 --> 07:51.680]  so yeah, ideally for us,
+[07:51.680 --> 07:53.920]  what we would use to start and manage
+[07:53.920 --> 07:56.120]  the virtual machine would be in Go as well,
+[07:56.120 --> 07:57.800]  so we're like, okay, we have this great framework,
+[07:57.800 --> 08:01.400]  but there are no Go bindings, we would like some Go,
+[08:01.400 --> 08:02.240]  so what do we do?
+[08:04.040 --> 08:05.960]  This is where VFKit comes into play,
+[08:06.960 --> 08:10.360]  so before VFKit, there was this very, very nice project,
+[08:10.360 --> 08:15.360]  Got Hex VZ, which is written by someone named Key Kamikawa,
+[08:15.920 --> 08:18.600]  and it's some Go bindings for the Apple Virtualization
+[08:18.600 --> 08:23.360]  framework, so yeah, basically lots of Go code,
+[08:23.360 --> 08:26.160]  lots of Go code from the Go code
+[08:26.160 --> 08:28.800]  to be calling the Objective-C code,
+[08:28.800 --> 08:31.800]  it's written in Objective-C, not in Swift,
+[08:31.800 --> 08:34.160]  it has a free license, MIT licensing,
+[08:35.120 --> 08:37.280]  and yeah, one very important thing as well
+[08:37.280 --> 08:42.280]  is that the maintainer is very active and is very, very,
+[08:43.960 --> 08:45.680]  he was very fast in adding the new API
+[08:45.680 --> 08:47.880]  which we added in MacOS 12 and 13,
+[08:47.880 --> 08:50.400]  and some of them are very important for us,
+[08:50.440 --> 08:53.920]  MacOS 12, this is where they added file sharing,
+[08:53.920 --> 08:55.800]  which we really needed.
+[08:55.800 --> 08:59.120]  MacOS 13, they added lots of API,
+[08:59.120 --> 09:02.160]  but mostly for graphical virtual machines,
+[09:02.160 --> 09:03.720]  I don't really have a need for that,
+[09:03.720 --> 09:05.480]  so it was not that important,
+[09:05.480 --> 09:10.480]  but they have a way of booting UEFI virtual machines,
+[09:10.600 --> 09:12.120]  which makes everything simpler,
+[09:12.120 --> 09:14.720]  like I showed, if you want to start a virtual machine,
+[09:14.720 --> 09:16.000]  you need a Linux kernel,
+[09:16.000 --> 09:18.360]  a NetRD kernel command line,
+[09:19.440 --> 09:22.000]  with this new feature in MacOS 13,
+[09:22.000 --> 09:23.800]  you can directly boot this image,
+[09:23.800 --> 09:26.680]  and you don't need to provide these additional details,
+[09:26.680 --> 09:28.320]  so it's just so nice to have that.
+[09:29.320 --> 09:34.120]  And so, one could think that, okay, we have this,
+[09:34.120 --> 09:36.720]  it's great, we just use it, and we are done.
+[09:37.600 --> 09:40.440]  There is one more thing to know about the virtualization
+[09:40.440 --> 09:43.800]  framework, is that it's an API, it's a framework,
+[09:43.800 --> 09:48.680]  so this is binding the API to be able to use it in Go,
+[09:48.680 --> 09:51.800]  but it's really not managing virtual machines or anything,
+[09:51.800 --> 09:55.360]  so if you write your test code,
+[09:55.360 --> 09:57.600]  you create a virtual machine, you start it,
+[09:57.600 --> 10:00.760]  as soon as your program exists, the virtual machine is gone,
+[10:00.760 --> 10:02.680]  because basically, Apple provides a way
+[10:02.680 --> 10:05.000]  of starting the VM and stuff,
+[10:05.000 --> 10:08.960]  but it's up to you to keep the process alive
+[10:08.960 --> 10:11.640]  for as long as you want the virtual machine to be alive.
+[10:11.640 --> 10:14.840]  So, Codex VZ, it's also some kind of library,
+[10:14.840 --> 10:17.720]  it's a Go package, but there is not this process
+[10:17.720 --> 10:19.640]  which would be alive for as long as the virtual machine
+[10:19.640 --> 10:22.760]  is alive, and I spoke too much.
+[10:24.760 --> 10:27.720]  And so, we needed something, a process,
+[10:27.720 --> 10:30.480]  to create the virtual machine and to be sure
+[10:30.480 --> 10:33.120]  that it will stay alive as long as we need the virtual machine,
+[10:33.120 --> 10:34.840]  so basically, until we want to kill it,
+[10:34.840 --> 10:37.800]  or until the virtual machine starts by itself.
+[10:37.800 --> 10:42.200]  And so, we decided to write this program called VFKit.
+[10:42.200 --> 10:44.480]  It has a command line interface
+[10:44.480 --> 10:47.080]  on top of the Codex VZ bindings,
+[10:50.040 --> 10:52.400]  so this means you can just use that
+[10:52.400 --> 10:54.800]  to create your virtual machine, to start it,
+[10:54.800 --> 10:56.080]  and as long as the process is alive,
+[10:56.080 --> 10:59.000]  the virtual machine will be running, so it's written in Go,
+[10:59.000 --> 11:02.640]  and it's using also free license,
+[11:02.640 --> 11:07.440]  so just command line, you specify the bootloader,
+[11:07.920 --> 11:10.640]  this one, yes, CPU memory as we saw before,
+[11:10.640 --> 11:12.360]  and then the list of devices that you want,
+[11:12.360 --> 11:15.160]  and that's it, so very simple way of starting the VM,
+[11:17.480 --> 11:19.720]  and yeah, the command line can get long,
+[11:19.720 --> 11:23.160]  so this is why we also added a way
+[11:23.160 --> 11:25.360]  of creating the command line from Go,
+[11:26.240 --> 11:28.480]  so you can use like a nice Go API,
+[11:28.480 --> 11:30.280]  you create a bootloader with the parameters,
+[11:30.280 --> 11:32.400]  you create a virtual machine with the parameters
+[11:32.400 --> 11:35.600]  for the memory and the CPU, then you add your devices,
+[11:35.600 --> 11:38.080]  and then you ask it to give you the command line,
+[11:38.080 --> 11:41.200]  and then you can just use that to start your virtual machine,
+[11:42.920 --> 11:45.620]  so yeah, put the name of the package at the bottom,
+[11:48.000 --> 11:50.520]  and so I wanted to give a quick overview
+[11:50.520 --> 11:55.520]  of how you can use Objective-C from Go,
+[11:55.920 --> 11:58.200]  because at first I was like, yeah, okay, it's magic,
+[11:58.200 --> 12:01.540]  but actually, yeah, it's a bit magic, but not so much,
+[12:02.760 --> 12:04.480]  Objective-C, one thing to know,
+[12:04.480 --> 12:05.960]  the syntax can be weird,
+[12:05.960 --> 12:08.120]  but it's really a super set of C,
+[12:08.120 --> 12:11.320]  so you can just use a C Go,
+[12:11.320 --> 12:14.120]  and so this import C syntax
+[12:15.000 --> 12:17.520]  to just call the Objective-C functions methods
+[12:17.520 --> 12:18.960]  and to do what you want,
+[12:20.040 --> 12:21.720]  and so if you look at the code
+[12:21.720 --> 12:23.880]  for the code hex vz bindings,
+[12:23.880 --> 12:25.400]  which are like the bindings
+[12:25.400 --> 12:28.880]  for the Objective-C methods of the virtualization framework,
+[12:30.080 --> 12:34.080]  you will see like the Objective-C types
+[12:34.080 --> 12:38.840]  are usually changed to C types, converted to C types,
+[12:38.840 --> 12:41.440]  and then we interact with the Go code using C types,
+[12:41.440 --> 12:46.120]  this means C strings, and void pointers,
+[12:46.120 --> 12:48.880]  C pointers that we can reuse.
+[12:51.160 --> 12:55.440]  So what can we do with this support for Objective-C
+[12:56.400 --> 12:57.240]  in C Go?
+[12:58.600 --> 13:00.880]  One also nice thing is that we can build
+[13:00.880 --> 13:04.320]  a M64 and AMD64 code on the same machine,
+[13:04.320 --> 13:05.800]  and so we can generate then
+[13:05.800 --> 13:08.120]  a MacOS universal binaries on the same machine.
+[13:08.120 --> 13:11.280]  There's a Go module to generate this universal binaries,
+[13:11.280 --> 13:12.120]  so it's very nice,
+[13:13.120 --> 13:16.440]  and a few annoying things, minor but annoying,
+[13:16.440 --> 13:19.400]  I always forget the semicolon at the end of the lines,
+[13:19.400 --> 13:22.240]  and then the compilation failed in the Objective-C code,
+[13:22.240 --> 13:24.560]  and compilation can get quite slow,
+[13:24.560 --> 13:26.560]  even for small programs,
+[13:26.560 --> 13:27.800]  don't know why, but I guess
+[13:27.800 --> 13:30.400]  for the compilation of the Objective-C code,
+[13:30.440 --> 13:33.080]  sometimes it can easily take like 30 seconds
+[13:33.080 --> 13:35.200]  to just compile something,
+[13:36.160 --> 13:38.840]  which yeah, sometimes I can't come on, hurry up.
+[13:40.880 --> 13:43.160]  Yeah, and the samples are not going to be much readable,
+[13:43.160 --> 13:44.840]  I'm sorry for that,
+[13:44.840 --> 13:46.920]  but yeah, if I want to call a Hello World function
+[13:46.920 --> 13:48.120]  from Objective-C,
+[13:49.080 --> 13:52.040]  I would just use like this C prefix,
+[13:52.040 --> 13:55.680]  which is the same if you were using like C code from Go,
+[13:55.680 --> 13:58.240]  we'd also like add this C prefix
+[13:58.240 --> 14:00.640]  from the name of the function in C.
+[14:00.640 --> 14:04.080]  So in Objective-C, I define the method here in the comments,
+[14:04.080 --> 14:07.400]  and you have to put this import C right after the comments,
+[14:07.400 --> 14:09.080]  otherwise the Go compiler will miss it,
+[14:09.080 --> 14:11.880]  will not realize it's Objective-C code or C code,
+[14:11.880 --> 14:12.880]  and this will fail.
+[14:13.880 --> 14:18.880]  Then in the comments, I put my Objective-C code,
+[14:20.200 --> 14:22.960]  so it just void Hello World and no parameters,
+[14:23.800 --> 14:25.680]  which match what I call here,
+[14:25.680 --> 14:28.560]  and one important thing is that at the beginning,
+[14:28.560 --> 14:30.880]  you have like to put some special flags
+[14:30.880 --> 14:32.640]  with the compiler is going to be using
+[14:34.040 --> 14:35.600]  to know it's Objective-C,
+[14:35.600 --> 14:36.800]  so there's a flag at the end,
+[14:36.800 --> 14:39.880]  which says it's Objective-C code,
+[14:39.880 --> 14:41.520]  and there are some libraries you need to add
+[14:41.520 --> 14:43.680]  for the Objective-C code as well.
+[14:44.640 --> 14:46.960]  But apart from that, you do this,
+[14:46.960 --> 14:49.240]  and you will be able to just call the Objective-C code
+[14:49.240 --> 14:50.920]  from your function.
+[14:51.920 --> 14:56.920]  So next here, it's more examples of passing data
+[14:59.520 --> 15:03.400]  from Go to Objective-C or the other way around
+[15:03.400 --> 15:05.520]  from Objective-C to Go.
+[15:05.520 --> 15:09.400]  So in this case, we want to get a string from Objective-C.
+[15:10.840 --> 15:14.320]  We will not be using a native Objective-C string,
+[15:14.320 --> 15:16.400]  which would be an S string.
+[15:17.440 --> 15:20.320]  We are just going to a C string,
+[15:20.320 --> 15:22.280]  which is just a char pointer,
+[15:22.280 --> 15:24.120]  and then using that from Go.
+[15:24.120 --> 15:29.120]  So the Objective-C code, it has an S string,
+[15:30.080 --> 15:35.080]  but we just convert it to UTF-8 string,
+[15:35.160 --> 15:38.520]  which is what Go expects at the encoding of the string.
+[15:39.760 --> 15:41.600]  We make a copy, because otherwise,
+[15:41.600 --> 15:43.960]  it's going to cause memory issues.
+[15:44.960 --> 15:49.960]  And then from GoLang, we just get the C string.
+[15:50.720 --> 15:52.400]  And then in Sigo, we have some helpers
+[15:52.400 --> 15:55.720]  to convert from a C string to a Go string, which we use.
+[15:55.720 --> 15:57.920]  And then we can just print it.
+[15:57.920 --> 15:59.680]  I could do anything I want with the string.
+[15:59.680 --> 16:04.120]  It's a regular Go string, so I could add more stuff to it.
+[16:04.120 --> 16:05.360]  I could do some comparison.
+[16:05.360 --> 16:07.760]  I could check if it has some given prefix.
+[16:07.760 --> 16:10.080]  I could do anything I want.
+[16:10.080 --> 16:11.640]  So here, I just print it.
+[16:12.640 --> 16:16.400]  And then, since I made a copy of the C string
+[16:17.400 --> 16:20.120]  in the Objective-C code,
+[16:20.120 --> 16:22.000]  I need to fill the memory I use.
+[16:22.000 --> 16:25.240]  So this is the path, which is trickier
+[16:25.240 --> 16:27.040]  when you are used to Go.
+[16:27.040 --> 16:29.440]  You have some memory management to do,
+[16:29.440 --> 16:32.160]  either in C or in Objective-C.
+[16:32.160 --> 16:33.800]  So you have to be careful about it
+[16:34.920 --> 16:37.680]  when you add the boundary between the two languages.
+[16:38.680 --> 16:41.960]  So the next example is the opposite one.
+[16:41.960 --> 16:46.960]  So I want to pass a string from Go to Objective-C.
+[16:48.600 --> 16:51.480]  So once again, in Sigo, there's a helper
+[16:51.480 --> 16:54.880]  to convert a Go string this time to a C string.
+[16:55.880 --> 16:57.800]  So I tell it, okay, I want a C string
+[16:57.800 --> 16:59.560]  for the HelloWatt string.
+[17:01.160 --> 17:03.600]  And then I still have this C prefix
+[17:03.600 --> 17:06.920]  to call my method in Objective-C.
+[17:07.880 --> 17:09.400]  So I pass it the string.
+[17:10.320 --> 17:13.440]  And then, once again, there is some memory management to do,
+[17:13.440 --> 17:17.400]  so I need to free the string, which I got from C string.
+[17:17.400 --> 17:22.040]  It's all documented in the Sigo documentation.
+[17:22.040 --> 17:26.240]  And the Objective-C code is getting a regular C string
+[17:26.240 --> 17:28.040]  and it can print it directly
+[17:28.040 --> 17:30.680]  because Objective-C is quite close to C
+[17:30.680 --> 17:33.360]  and it can reuse some stuff from C.
+[17:34.360 --> 17:36.760]  And so, yeah, this way I pass the string
+[17:37.640 --> 17:40.480]  from Go to Objective-C.
+[17:41.360 --> 17:44.520]  And the last one, the last example,
+[17:44.520 --> 17:48.080]  it's when you might have some cases
+[17:48.080 --> 17:51.040]  when you want to call a Go function
+[17:51.040 --> 17:53.200]  from an Objective-C function.
+[17:53.200 --> 17:55.280]  For example, if your API has some callbacks,
+[17:55.280 --> 17:58.800]  like there is one API which is like
+[17:58.800 --> 18:00.040]  when you start the virtual machine,
+[18:00.040 --> 18:02.680]  you can get some function to be called if there's an error
+[18:02.680 --> 18:04.240]  or if it stops.
+[18:04.240 --> 18:06.400]  And so, in this case, you would like a Go function
+[18:06.400 --> 18:08.440]  to be called from the Objective-C code
+[18:08.440 --> 18:11.560]  to tell you, okay, there was an error in the virtual machine
+[18:11.560 --> 18:13.560]  and then you want to do something in Go.
+[18:14.880 --> 18:17.160]  So once again, it's similar to what you would do
+[18:17.160 --> 18:18.760]  for a C function.
+[18:18.760 --> 18:21.680]  So in Go, you have to say this method
+[18:21.680 --> 18:23.560]  is going to be exported,
+[18:23.560 --> 18:26.320]  which means it's going to be called from C code, for example.
+[18:26.320 --> 18:28.320]  So you had export print before it.
+[18:28.320 --> 18:31.360]  So this one is a regular Go method.
+[18:32.920 --> 18:35.240]  Yeah, so it's getting a string from the C code,
+[18:35.240 --> 18:37.720]  so it converts it to Go string and prints it.
+[18:38.920 --> 18:42.400]  And then the Objective-C code also needs to be made aware
+[18:42.400 --> 18:43.880]  of the Go method.
+[18:45.360 --> 18:49.400]  And then, yeah, it can just call the print method
+[18:49.400 --> 18:52.540]  from Go with a C string.
+[18:53.680 --> 18:55.240]  So I put that in a comment.
+[18:56.160 --> 18:58.160]  I'm not sure it compiles the analysis,
+[18:58.160 --> 19:00.960]  but it was more convenient to show in the presentation.
+[19:01.960 --> 19:04.160]  But, yeah, one thing to be aware of
+[19:05.400 --> 19:07.240]  that you can put that in separate files as well,
+[19:07.240 --> 19:11.320]  you could have an Objective-C file, Objective-C header,
+[19:11.320 --> 19:14.400]  and then you could tell the Go code to make use of that.
+[19:15.440 --> 19:18.360]  And, yeah, sometimes, I mean, if you add more code,
+[19:18.360 --> 19:20.840]  it's easier to have separate files for everything.
+[19:22.600 --> 19:24.760]  And so this one would be an example,
+[19:24.760 --> 19:27.080]  most sophisticated example, but a concrete example
+[19:27.080 --> 19:30.720]  of calling the virtualization from OKPI
+[19:30.720 --> 19:31.560]  or from Go.
+[19:33.080 --> 19:34.680]  So it's more complicated
+[19:34.680 --> 19:37.480]  because there are some parameters to pass on everything.
+[19:39.400 --> 19:41.240]  The important thing I wanted to show
+[19:41.240 --> 19:44.200]  is just this valid return value.
+[19:44.200 --> 19:49.200]  So this creates an Objective-C object
+[19:50.280 --> 19:52.560]  by calling the virtualization from up.
+[19:52.560 --> 19:55.000]  This is here, so, yeah, the syntax was weird
+[19:55.000 --> 19:58.080]  with these brackets, but, yeah,
+[19:58.080 --> 20:00.320]  basically it's how Objective-C works.
+[20:00.320 --> 20:05.120]  And so I'm creating a VZ disk image storage device
+[20:05.120 --> 20:08.760]  attachment, which is a virtualization from OK Objects,
+[20:08.760 --> 20:11.080]  and I want to return it to Go,
+[20:11.080 --> 20:13.000]  to keep it around, to use it later.
+[20:14.720 --> 20:17.880]  And so I create it, I pass it some parameters
+[20:17.880 --> 20:20.480]  which are converted from C strings
+[20:21.520 --> 20:23.400]  to what I needed for that function.
+[20:23.400 --> 20:27.240]  So it's similar to what I did before.
+[20:27.240 --> 20:30.480]  And then I return it as a void pointer,
+[20:30.480 --> 20:33.880]  which is like anonymous pointer in C,
+[20:33.880 --> 20:37.360]  which then I can reuse in Go, which I show here.
+[20:37.360 --> 20:38.960]  So this is the Go code corresponding
+[20:38.960 --> 20:40.400]  to the example before.
+[20:40.400 --> 20:45.120]  So here I have this C prefix to call my method,
+[20:45.120 --> 20:46.640]  the method I defined just before.
+[20:46.640 --> 20:48.880]  So I pass it the same parameters.
+[20:49.880 --> 20:53.720]  And so I get this pointer, this C pointer,
+[20:53.720 --> 20:57.160]  and in Go you have this unsafe pointer data type
+[20:57.160 --> 21:01.520]  which I can use to store my Objective-C object.
+[21:01.520 --> 21:04.760]  And then I can reuse it in like later API calls.
+[21:05.960 --> 21:09.200]  So, yeah, this one is very big.
+[21:09.200 --> 21:11.880]  Yeah, there is not a lot to be seen.
+[21:11.880 --> 21:16.880]  So here, so the unsafe pointer I got from the API before
+[21:17.080 --> 21:22.080]  I pass it to another Objective-C method.
+[21:22.120 --> 21:25.080]  And then the Objective-C method is able to reuse that pointer
+[21:25.080 --> 21:28.680]  and to pass it to some more Objective-C API.
+[21:28.680 --> 21:32.760]  This is basically what allows me to use
+[21:32.760 --> 21:34.800]  the virtualization from work API from Go.
+[21:34.800 --> 21:38.800]  So every time I make a call from Go to the virtualization
+[21:38.800 --> 21:42.840]  API to get a pointer for, I don't know,
+[21:42.840 --> 21:44.200]  a configuration object.
+[21:44.200 --> 21:47.180]  In Go, I store the pointer for this configuration object.
+[21:47.180 --> 21:51.720]  I can do some more Go code if I want to do more work.
+[21:51.720 --> 21:54.500]  And then when from the configuration objects,
+[21:54.500 --> 21:56.060]  I want to tell the virtualization framework
+[21:56.060 --> 21:58.540]  create a virtual machine from this configuration.
+[21:58.540 --> 22:03.540]  I just pass back the unsafe pointer I stored in my Go code.
+[22:03.780 --> 22:05.820]  I pass it back to the Objective-C code
+[22:05.820 --> 22:08.100]  which then can pass it to the virtualization framework
+[22:08.100 --> 22:10.100]  and then can create the virtual machine.
+[22:10.100 --> 22:13.140]  And so this is how all the interaction
+[22:13.140 --> 22:14.460]  with the Objective-C code is working.
+[22:14.460 --> 22:18.340]  It's through these Go strings, C strings helpers
+[22:18.340 --> 22:21.420]  and through this unsafe pointer and some casting back
+[22:21.420 --> 22:24.860]  and forth to communicate with the Objective-C layer.
+[22:27.220 --> 22:29.980]  So yeah, in the end, you have this Go code.
+[22:29.980 --> 22:32.900]  Under the hood, it's calling some Objective-C code
+[22:32.900 --> 22:36.820]  but it's like really close to traditional Go code.
+[22:36.820 --> 22:40.980]  So you create a device storage attachment.
+[22:40.980 --> 22:43.300]  You store it so I don't handle the errors.
+[22:43.300 --> 22:46.940]  You create a config by reusing the attachment you created.
+[22:47.940 --> 22:52.580]  And so here, there is some memory handling to do.
+[22:52.580 --> 22:55.340]  So when you no longer need the Objective-C objects,
+[22:55.340 --> 22:56.740]  you have to release them.
+[22:56.740 --> 23:01.740]  But even for that, you can like have some calls in Go
+[23:02.100 --> 23:05.020]  to tell it, okay, when you dispose of the Go object,
+[23:05.020 --> 23:07.780]  I want you to code this method to also release
+[23:07.780 --> 23:10.540]  the associated Objective-C object.
+[23:10.540 --> 23:12.460]  So even that, you can remove it
+[23:12.460 --> 23:15.660]  to really have like some typical Go code
+[23:15.660 --> 23:17.460]  and not have to really realize
+[23:17.460 --> 23:19.940]  that you are interacting with the Objective-C.
+[23:21.660 --> 23:25.700]  So yeah, put the memory management rules here
+[23:25.700 --> 23:28.340]  which are compiled from this URL
+[23:28.340 --> 23:30.620]  but yeah, not going to go in details about it
+[23:30.620 --> 23:33.340]  because yeah, time is like slightly short
+[23:33.340 --> 23:35.380]  but basically they have some conventions
+[23:35.380 --> 23:38.260]  about like when memory is allocated in Objective-C
+[23:38.260 --> 23:42.100]  and when you need to keep track of the memory
+[23:42.100 --> 23:44.700]  and get rid of it when you no longer need it.
+[23:44.700 --> 23:46.780]  But yeah, otherwise, like a lot of APIs
+[23:46.780 --> 23:49.220]  are just returning new pointers, objects
+[23:49.220 --> 23:52.100]  that you don't really need to dispose afterwards
+[23:52.100 --> 23:55.020]  because I don't know, Objective-C is doing that for you.
+[23:56.820 --> 23:58.060]  Some other features.
+[23:58.060 --> 24:00.780]  So yeah, cgo.handle can also be useful.
+[24:00.780 --> 24:02.660]  It was introduced two releases ago
+[24:02.660 --> 24:04.140]  or three releases ago in Go.
+[24:05.420 --> 24:08.660]  Yeah, it's really useful for delegates.
+[24:08.660 --> 24:11.820]  What I was talking about when I mentioned callbacks before.
+[24:12.820 --> 24:15.700]  So it is when from your Go code
+[24:15.700 --> 24:19.100]  you want to pass a function to the Objective-C code
+[24:19.100 --> 24:22.180]  which needs to be called at some later point in the future.
+[24:23.220 --> 24:26.940]  So before it was like quite complicated to do.
+[24:26.940 --> 24:29.780]  You needed like to record everything somewhere
+[24:29.780 --> 24:32.220]  and to look it up and something.
+[24:32.220 --> 24:36.620]  Now with cgo.handle, you can from the Objective-C code
+[24:36.620 --> 24:38.780]  call a Go function and from the Go function
+[24:38.820 --> 24:41.780]  find back the Go callback that you want to call.
+[24:43.460 --> 24:45.820]  Objective-C has this notion of blocks.
+[24:47.980 --> 24:50.620]  If you keep the blocks internal to the Objective-C code
+[24:50.620 --> 24:52.420]  you can use them, there's no problem.
+[24:53.460 --> 24:54.700]  You can have pointers to block.
+[24:54.700 --> 24:57.700]  I did not try to see if you could pass the blocks back
+[24:57.700 --> 25:01.180]  to Go and then back to the Objective-C code.
+[25:01.180 --> 25:04.420]  But yeah, it's really a very specific Objective-C feature
+[25:04.420 --> 25:07.980]  and it has exceptions and this one I never tried to see.
+[25:07.980 --> 25:11.140]  I mean, I'm quite sure you can catch the exceptions
+[25:11.140 --> 25:13.860]  and convert that to Go errors.
+[25:13.860 --> 25:15.540]  But yeah, I never tried that.
+[25:15.540 --> 25:19.220]  So these are things that are still to explore
+[25:19.220 --> 25:21.900]  regarding like by doing Objective-C in Go.
+[25:23.900 --> 25:27.940]  Yeah, and this one, it's quite nice for my use case
+[25:27.940 --> 25:32.940]  because in Objective-C you can dynamically check
+[25:33.060 --> 25:35.300]  if some API is available.
+[25:35.340 --> 25:38.780]  So at runtime you check, okay, if I'm on macOS 12
+[25:38.780 --> 25:41.420]  then I know I can use this API and I'm going to use it
+[25:41.420 --> 25:45.780]  but if I'm not on macOS 12 then do something different.
+[25:46.780 --> 25:49.180]  And so the compiler is taking care of that for you
+[25:49.180 --> 25:52.700]  and this means I can build a binary for even macOS 11
+[25:52.700 --> 25:55.820]  on macOS 13 and run that binary
+[25:55.820 --> 25:59.540]  which is like in C can be complicated to do for example
+[25:59.540 --> 26:02.580]  because if you are using API which is not available
+[26:02.580 --> 26:04.420]  where you try to run the binary
+[26:04.420 --> 26:07.220]  basically the binary is not going to start.
+[26:07.220 --> 26:08.880]  So this was really nice because for example
+[26:08.880 --> 26:10.980]  file sharing is not available in macOS 12
+[26:10.980 --> 26:14.260]  but in macOS 11, it's only available in macOS 12
+[26:14.260 --> 26:15.940]  but I wanted to use it.
+[26:15.940 --> 26:19.380]  So with that I can have like some nice error handling
+[26:19.380 --> 26:20.980]  and fall back.
+[26:20.980 --> 26:24.180]  If I try to use file sharing on macOS 11
+[26:24.180 --> 26:26.860]  at runtime I get an error telling me it's not available
+[26:26.860 --> 26:28.820]  so I can just ignore the error or print it
+[26:28.820 --> 26:30.320]  or do whatever I want with it.
+[26:31.320 --> 26:35.680]  And so this is about it for VFKit.
+[26:36.880 --> 26:40.640]  So all the examples on the code I tried to show
+[26:40.640 --> 26:44.520]  but we trust to that it's in this GitHub repository.
+[26:44.520 --> 26:48.080]  So I put here some contact information at the bottom
+[26:49.440 --> 26:51.560]  and if there are some questions there are a few minutes
+[26:51.560 --> 26:52.400]  for that.
+[26:54.040 --> 26:55.360]  Thank you.
+[26:55.720 --> 26:56.560]  Thank you.
+[27:00.560 --> 27:02.360]  Question from this weird guy again.
+[27:03.480 --> 27:06.840]  Hello, a lot of your code was censored.
+[27:06.840 --> 27:09.200]  Will the slides be available?
+[27:09.200 --> 27:10.920]  Sorry, a lot of my code was.
+[27:10.920 --> 27:12.680]  A lot of your code was censored.
+[27:12.680 --> 27:14.880]  It's like some of them.
+[27:14.880 --> 27:18.000]  Yeah, I should have tested them on the projector before.
+[27:18.000 --> 27:20.400]  But will the slides be available?
+[27:20.400 --> 27:25.240]  Yeah, yeah, I will put them on the page of the Tokyo.
+[27:26.360 --> 27:28.720]  So just go to the schedule page, click on there
+[27:28.720 --> 27:30.840]  and every speaker has uploaded slides there.
+[27:30.840 --> 27:33.320]  So all slides for today should be able to be found
+[27:33.320 --> 27:35.640]  on fosdm.org slash go.
+[27:37.640 --> 27:40.240]  Any more questions over there?
+[27:40.240 --> 27:42.120]  I'm gonna quickly run around the room.
+[27:44.640 --> 27:46.240]  This is my fitness for this week.
+[27:47.800 --> 27:49.560]  Can I pass by please?
+[27:49.560 --> 27:50.400]  Sorry.
+[27:50.560 --> 27:51.400]  Thank you.
+[27:54.080 --> 27:56.320]  Hello, thank you for the talk.
+[27:56.320 --> 27:59.000]  So you said VFKit makes it possible
+[27:59.000 --> 28:01.600]  for the virtual machine to not get suspended.
+[28:01.600 --> 28:03.840]  So how are you achieving that?
+[28:03.840 --> 28:06.520]  I know it's not about suspending the VM.
+[28:06.520 --> 28:08.640]  It's really about,
+[28:10.760 --> 28:13.080]  so the VFKit process has to stay alive.
+[28:13.080 --> 28:16.600]  I mean, it stays alive as long as the VM needs to be running.
+[28:16.600 --> 28:18.840]  But yeah, if you suspend your Mac,
+[28:18.840 --> 28:22.880]  the VM is also going to be suspended at the same time.
+[28:22.880 --> 28:25.600]  Right, so I mean, how are you keeping the VM alive
+[28:25.600 --> 28:27.160]  if there is no activity inside?
+[28:27.160 --> 28:30.920]  It just does a loop at the end of the VFKit code.
+[28:30.920 --> 28:35.840]  I have some loop which basically waits until the VM stops.
+[28:35.840 --> 28:37.200]  So the virtualization framework,
+[28:37.200 --> 28:39.080]  it tells you okay, the VM has stopped.
+[28:39.080 --> 28:41.240]  And I'm also like catching the signals
+[28:41.240 --> 28:44.280]  that you could send to the VM to just tell the process,
+[28:44.280 --> 28:47.520]  okay, just shut down now, it's over.
+[28:47.560 --> 28:49.360]  It's just not a wide loop,
+[28:49.360 --> 28:52.800]  but a select to equate for a condition to happen
+[28:52.800 --> 28:54.360]  and tell it to exit.
+[28:54.360 --> 28:55.240]  Okay, thank you.
+[28:56.840 --> 28:58.000]  Thank you, and our time is up.
+[28:58.000 --> 28:59.960]  So one last round of applause.
+[28:59.960 --> 29:00.800]  Thank you.

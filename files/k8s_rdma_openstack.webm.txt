@@ -1,0 +1,391 @@
+[00:00.000 --> 00:10.540]  Next speaker is John Garbert from StackHPC who's going to talk about self-service Kubernetes
+[00:10.540 --> 00:13.260]  with RDMA on OpenStack.
+[00:13.260 --> 00:14.260]  Thank you.
+[00:14.260 --> 00:15.260]  Hello, everyone.
+[00:15.260 --> 00:18.140]  Yeah, I pressed the button.
+[00:18.140 --> 00:19.140]  Excellent.
+[00:19.140 --> 00:20.140]  I'm Green.
+[00:20.140 --> 00:21.140]  Hello, everyone.
+[00:21.140 --> 00:22.140]  I'm John Garbert.
+[00:22.140 --> 00:29.860]  I'm here to talk to you about OpenStack, RDMA, Kubernetes, and are they oil and water mixing
+[00:29.860 --> 00:32.740]  or are they bread, oil, and vinegar?
+[00:32.740 --> 00:37.420]  Hopefully I'll come into you at something nice.
+[00:37.420 --> 00:41.180]  So start with some thank yous from my sponsors.
+[00:41.180 --> 00:43.180]  So I work at StackHPC.
+[00:43.180 --> 00:47.780]  We're about 20-something people now.
+[00:47.780 --> 00:52.900]  We've got people across the UK and across Europe.
+[00:52.900 --> 00:56.220]  So I'm based out of Cambridge, but the head office is a lot of people around Bristol, people
+[00:56.220 --> 00:59.980]  in Poland, and people in France as well.
+[00:59.980 --> 01:07.120]  And we work on helping people create OpenStack clouds, train them up on how to look after
+[01:07.120 --> 01:12.820]  them, and support them through that journey and everything that's happening there.
+[01:12.820 --> 01:18.220]  For this particular topic today, I want to say a big thank you to all of these organizations.
+[01:18.220 --> 01:20.580]  These are all in the UK.
+[01:20.580 --> 01:21.580]  Lastly, Jasmine.
+[01:21.580 --> 01:28.580]  So I'm going to talk today about how do we package up these solutions and stamp them
+[01:28.580 --> 01:33.060]  out for people as reusable pieces, and this is a project that's come out of the Jasmine
+[01:33.060 --> 01:34.060]  Institution.
+[01:34.060 --> 01:39.860]  And that got taken on by Iris, which is an STFC community cloud project.
+[01:39.860 --> 01:45.620]  So they're trying to get ways in which more STFC funded activities in the UK can share
+[01:45.620 --> 01:47.060]  the same sets of infrastructure.
+[01:47.060 --> 01:51.580]  How do we get one pool of infrastructure and share that between all of these different
+[01:51.580 --> 01:53.580]  research use cases?
+[01:53.580 --> 01:59.500]  And in particular, there's lots of organizations we've been working on getting feedback from.
+[01:59.500 --> 02:04.620]  So we've been working a lot with the SKA community in the UK, particularly the SLC community
+[02:04.620 --> 02:05.620]  at the moment.
+[02:05.620 --> 02:10.980]  And they've been giving us great feedback on some early versions of all of this and
+[02:10.980 --> 02:11.980]  how to improve things.
+[02:11.980 --> 02:15.940]  And that's actually been funded partly by also the Dirac project, which is the HPC
+[02:15.940 --> 02:23.380]  center, a group of HPC systems.
+[02:23.380 --> 02:29.060]  Also note the small I, not the capital I, Dirac, just to confuse everything.
+[02:29.060 --> 02:32.820]  If you look for the small I, Dirac, that's the group of the HPC centers as opposed to
+[02:32.820 --> 02:36.700]  the job submission system.
+[02:36.700 --> 02:40.740]  And we've been working very closely with the research computing services at the University
+[02:40.740 --> 02:43.380]  of Cambridge and tying this together.
+[02:43.380 --> 02:48.100]  One of the iris sites and one of the Dirac sites, and we're starting to reuse the things
+[02:48.100 --> 02:50.100]  coming out of Jasmine.
+[02:50.100 --> 02:55.100]  Anyway, big thank you to all those folks.
+[02:55.100 --> 03:01.700]  So I want to start with, why on earth would you use OpenStack and Kubernetes and not just
+[03:01.700 --> 03:06.460]  have one big batch schedule?
+[03:06.460 --> 03:10.460]  And really it's about getting the most value out of the infrastructure investment you've
+[03:10.460 --> 03:11.460]  made.
+[03:11.460 --> 03:15.860]  And today also it's worth saying that the, getting, what I really mean by that partly
+[03:15.860 --> 03:20.900]  is the, that investment in your infrastructure is also investment in carbon cost.
+[03:20.900 --> 03:25.180]  How do you get the best out of that investment in carbon to manufacture these machines and
+[03:25.180 --> 03:27.460]  run these machines?
+[03:27.460 --> 03:28.660]  And what do I mean by value?
+[03:28.660 --> 03:30.820]  Well, that's different things to different people.
+[03:30.820 --> 03:35.900]  I mean, had we reduced time to science, how do we get more science out of that particular
+[03:35.900 --> 03:40.580]  investment that a community has made?
+[03:40.580 --> 03:46.460]  So firstly it's a bit about sharing diverse infrastructure.
+[03:46.460 --> 03:48.780]  Hopefully people aren't hungry, apologies.
+[03:48.780 --> 03:56.260]  I've spent far too much time on unsplash, so thank you to unsplash.
+[03:56.260 --> 04:01.540]  So there's increasing diversity, as in different flavours on the pizza here, in lots of the
+[04:01.540 --> 04:03.180]  user requirements.
+[04:03.180 --> 04:07.860]  So in terms of the iris community, they're currently working actually a lot more with
+[04:07.860 --> 04:13.060]  large international collaborations, and often those users come with a system that they want
+[04:13.060 --> 04:16.460]  to run on your infrastructure, regardless of everything else that's happening.
+[04:16.460 --> 04:20.340]  And so one of the problems that's been happening is you sort of silo your infrastructure into
+[04:20.340 --> 04:25.620]  well, this was bought for purpose A, this was bought for purpose B, but actually those
+[04:25.620 --> 04:27.900]  infrastructures are getting more diverse.
+[04:27.900 --> 04:32.900]  There's only so many GPUs anyone person can afford in a particular institution, and everyone
+[04:32.900 --> 04:34.020]  wants to use them.
+[04:34.020 --> 04:35.060]  How do we share that out?
+[04:35.100 --> 04:39.780]  How do we share out the accelerators and all the special bits of kit between these different
+[04:39.780 --> 04:45.540]  use cases that day to day might be different people wanting to use those bits of infrastructure?
+[04:45.540 --> 04:49.060]  That's kind of how do we slice it up?
+[04:49.060 --> 04:55.020]  And also one physical server, particularly when you're doing test and development, is
+[04:55.020 --> 05:00.220]  getting bigger and bigger in terms of consuming it, so giving people one whole server can
+[05:00.220 --> 05:01.940]  be a problem.
+[05:01.940 --> 05:07.140]  The other thing, and I'm speaking as a developer here before I bash developers, we love breaking
+[05:07.140 --> 05:08.140]  things.
+[05:08.140 --> 05:12.180]  So if you give people access to the kernel and they're going crazy and they crash the
+[05:12.180 --> 05:18.260]  kernel, if it's just your little kernel, then it's only you you've just crashed.
+[05:18.260 --> 05:20.620]  That's a bit of an extreme example to be fair.
+[05:20.620 --> 05:23.900]  I don't really mean crashing the kernel, I more mean crashing the thing that you put
+[05:23.900 --> 05:27.900]  in the kernel more likely to be particular.
+[05:27.900 --> 05:30.460]  Anyway, how do we separate this up?
+[05:30.460 --> 05:35.060]  And actually probably a better analogy rather than pizza is sort of a reconfigurable conference
+[05:35.060 --> 05:36.220]  room.
+[05:36.220 --> 05:39.820]  So if you plan ahead, you can make this kind of change.
+[05:39.820 --> 05:46.220]  So sometimes you want to use all of the room for a really big meeting, like this one.
+[05:46.220 --> 05:49.500]  Sometimes you want to divide it up, and when you divide it up, you kind of want a certain
+[05:49.500 --> 05:55.220]  amount of isolation, and not accidentally, you can get the noisy neighbor problem in
+[05:55.220 --> 05:57.220]  these setups.
+[05:57.220 --> 06:05.020]  So you have to be careful about actually how you're doing that dividing.
+[06:05.020 --> 06:10.260]  And so one of the things that's also changed most recently is how do we get these reusable
+[06:10.260 --> 06:11.820]  bits of infrastructure.
+[06:11.820 --> 06:16.420]  So I said we've got a well reusable platforms on top of the infrastructure.
+[06:16.420 --> 06:19.660]  So one of the things I said about the IRIS project is it's working a lot with international
+[06:19.660 --> 06:22.780]  communities coming with a thing to run.
+[06:22.780 --> 06:27.980]  Very often these days that thing to run is packages and Kubernetes.
+[06:27.980 --> 06:32.940]  Sometimes people are developing on Kubernetes on their laptops, and they need a bigger Kubernetes,
+[06:32.940 --> 06:35.700]  but this is certainly becoming a thing now.
+[06:35.700 --> 06:40.300]  People just say, you know, whereas this is how I'm wanting to deploy, how do I carve
+[06:40.300 --> 06:45.340]  out the Kubernetes infrastructure and have Kubernetes on top of it to do what I need
+[06:45.340 --> 06:46.340]  to do?
+[06:46.340 --> 06:52.620]  And actually it's been very helpful in terms of giving us a higher level of abstraction
+[06:52.620 --> 06:58.060]  that we're working with to kind of, you know, to package up web applications and interactive
+[06:58.060 --> 07:02.940]  applications and a whole manner of things.
+[07:02.940 --> 07:12.740]  Okay, so the next piece in the topic was why RDMA networking or why random access, remote
+[07:12.740 --> 07:13.740]  direct memory access.
+[07:13.740 --> 07:17.220]  I can remember that, so I put it in there.
+[07:17.220 --> 07:21.500]  I thought to try and prove my point, I'd show a pretty graph.
+[07:21.500 --> 07:23.020]  This is open foam.
+[07:23.020 --> 07:28.860]  At the bottom here, there's a link to the tool that we use to actually run these benchmarks,
+[07:28.860 --> 07:32.740]  and to make it nice and repeatable.
+[07:32.740 --> 07:37.820]  Essentially you can describe in a Kubernetes CRD the kind of benchmark you want to run,
+[07:37.820 --> 07:44.300]  and then it basically submits a job to Volcano, monitors the output and just tells you what
+[07:44.300 --> 07:45.300]  the output of that was.
+[07:45.300 --> 07:50.900]  It's just a way of just making it nice and quickly reproducible.
+[07:50.900 --> 07:56.860]  So if you look at this graph, it's showing basically wall clock time for the simulation.
+[07:56.860 --> 08:02.180]  And on these lines, we've got lots of different networking technologies that were being tested
+[08:02.180 --> 08:08.140]  out, and not unsurprisingly the ones that were performing the best have all got the
+[08:08.140 --> 08:13.820]  lowest wall clock time, so the best result in this particular benchmark.
+[08:13.820 --> 08:20.660]  As you can see, this was probably an interesting configuration in the sense that as you were
+[08:20.660 --> 08:24.540]  scaling out the compute, there was actually no benefit at all in terms of the simulation
+[08:24.540 --> 08:25.540]  time.
+[08:25.540 --> 08:34.060]  Actually, interestingly, because of this slightly wackadoodle configuration, or the job was
+[08:34.060 --> 08:39.460]  too small essentially, you can actually see in the TCP ones above, they gradually actually
+[08:39.460 --> 08:46.020]  get worse as they've got more cross communication, as you would expect with MPI underneath here.
+[08:46.020 --> 08:53.140]  So if we dive down into MPI, on the left-hand side we've got the latencies, and these bottom
+[08:53.140 --> 08:59.660]  two latencies for people at the back of the room, there's two at about five microseconds
+[08:59.660 --> 09:02.460]  and one that's about half of that.
+[09:02.460 --> 09:06.020]  These are interesting, these are the RDMA ones.
+[09:06.020 --> 09:13.260]  Actually, I'm saying RDMA here, these are actually all rocky using Ethernet, as you
+[09:13.260 --> 09:17.740]  probably guessed, because I just said what the latencies were, if you're interested in
+[09:17.740 --> 09:19.740]  that kind of thing.
+[09:19.740 --> 09:30.540]  So there's no such thing as a free coffee unless you're at Fosden, I guess, but let's
+[09:30.540 --> 09:35.100]  just compare very briefly those three technologies.
+[09:35.100 --> 09:38.900]  If we have a look at the bandwidth, there's something interesting happening here.
+[09:38.900 --> 09:42.380]  It would be slightly more interesting if we'd actually had the hardware for long enough
+[09:42.500 --> 09:46.820]  and run the rest of the points, but you can see that the one with the lowest latency actually
+[09:46.820 --> 09:52.740]  caps out about 100 gigabits a second, and the ones with a slightly higher latency, or
+[09:52.740 --> 10:00.180]  double if you're being mean, actually go all the way up to the 200 gigabits a second, and
+[10:00.180 --> 10:04.460]  actually there's a difference in the way in which that's been wired up, which I'll go
+[10:04.460 --> 10:09.060]  into in a bit more detail later, but essentially one of them can use the whole bond, and one
+[10:09.060 --> 10:11.420]  of them can only use one side of the bond.
+[10:11.460 --> 10:15.580]  So these were on service with bonded 100 gig ethernet.
+[10:15.580 --> 10:20.460]  If you pay a latency penalty, you can use both sides of the bond in an interesting way.
+[10:20.460 --> 10:26.460]  If you want the ultimate lowest latency, you kind of have to dedicate and just use one
+[10:26.460 --> 10:29.460]  side of the bond.
+[10:29.460 --> 10:35.180]  Anyway, so why do you make a big difference to these kind of workloads?
+[10:35.180 --> 10:40.380]  I'm referencing a talk here that was at KubeCon, five ways with a CNI.
+[10:40.380 --> 10:47.100]  If you look at the FOSDEM session information for this talk, one of the links on there is
+[10:47.100 --> 10:50.980]  to a blog that we wrote about this kind of thing, and there's a video from KubeCon you
+[10:50.980 --> 10:57.740]  can watch to have more detail, and this particular set of bang for bang, how's all these different
+[10:57.740 --> 11:03.140]  ways of wiring the networks.
+[11:03.140 --> 11:06.780]  So that all sounded a bit complicated, right?
+[11:06.780 --> 11:12.260]  How do we actually stamp this out in a kind of useful way for users and get this all tied
+[11:12.260 --> 11:15.260]  together?
+[11:15.260 --> 11:20.140]  So how do we manage that operational complexity?
+[11:20.140 --> 11:27.380]  So the first side of this is in terms of deploying at the OpenStack layer and configuring all
+[11:27.380 --> 11:33.820]  of that, we've got tools from the OpenStack community, from the Collar community in particular,
+[11:33.860 --> 11:39.020]  Kube and Collar Ansible, and we use those with Ansible playbooks to sort of repeatedly,
+[11:39.020 --> 11:42.420]  once you've got a working configuration, make sure you do that every time.
+[11:42.420 --> 11:48.500]  It involves ensuring you can re-image the machines easily and make sure that you apply
+[11:48.500 --> 11:53.820]  the Ansible on there and get the same thing each time, so sort of package that up, and
+[11:53.820 --> 11:59.260]  that is all open for people to reuse.
+[11:59.260 --> 12:02.860]  And then the next stage is the users need to actually consume this infrastructure.
+[12:02.900 --> 12:09.860]  So if we give people OpenStack directly, they can get very confused, because the people
+[12:09.860 --> 12:16.420]  that are trying to just create a platform are typically not experts in using cloud infrastructure.
+[12:16.420 --> 12:18.500]  So how do we make that easier?
+[12:18.500 --> 12:22.060]  So I want to talk about azimuth.
+[12:22.060 --> 12:26.900]  This is the project that I mentioned at the beginning coming from the Jasmine team, and
+[12:26.900 --> 12:32.420]  the idea here is for the people creating platforms, so for the platform creators, people who want
+[12:32.460 --> 12:37.220]  to create a Jupyter Hub or a Dask Hub or a Slurm cluster that's isolated and dedicated
+[12:37.220 --> 12:38.220]  for their own needs.
+[12:38.220 --> 12:44.060]  This might be for a development use case or otherwise, or create a Kubernetes cluster.
+[12:44.060 --> 12:50.500]  How do we just package up those good practices and make that really easy to deploy, so calling
+[12:50.500 --> 12:53.580]  this platform as a service?
+[12:53.580 --> 12:58.420]  If you've seen me talk about this before, one of the changes here is that you get all
+[12:58.420 --> 13:05.260]  of the platforms in one view now, so you can log in using your OpenStack credentials.
+[13:05.260 --> 13:09.420]  So there's the cloud operator, and then there's the platform operator logs into azimuth, creates
+[13:09.420 --> 13:14.900]  the platform, then on top of the platform, you can choose which users can log into that,
+[13:14.900 --> 13:23.260]  just to make all of that much easier to do.
+[13:23.260 --> 13:28.020]  So I'll quickly go through the types of things that are going on here and the different types
+[13:28.020 --> 13:30.780]  of platforms.
+[13:30.780 --> 13:34.740]  So firstly, there's Ansible-based platforms.
+[13:34.740 --> 13:40.500]  So things like, give me a bigger laptop, which is a particular case, and so give me a Linux
+[13:40.500 --> 13:46.380]  workstation that I can just guacamole into, or then give me a Slurm cluster.
+[13:46.380 --> 13:49.180]  What we do for that is they're not Kubernetes-based.
+[13:49.180 --> 13:56.380]  We use Terraform to stamp out virtual machines, and then there's Ansible, basically, Ansible's
+[13:56.380 --> 14:03.260]  running Terraform to stamp out machines and do any final configuration that might be required.
+[14:03.260 --> 14:06.460]  So when you click the button, all of that happens in the background, and it sets up
+[14:06.460 --> 14:10.500]  the infrastructure and you can get straight in.
+[14:10.500 --> 14:15.740]  The other type is, give me a Kubernetes cluster, I go into this in a bit more detail in a sec,
+[14:15.740 --> 14:21.300]  but you choose your Kubernetes cluster, set that up, and it stamps that out.
+[14:21.300 --> 14:27.620]  And the third type, which is relatively new now, is, well, I just want a Jupyter Hub or
+[14:27.620 --> 14:34.420]  a Dask Hub, and so for those kind of situations, we're deploying those on the Kubernetes cluster,
+[14:34.420 --> 14:36.740]  so you can go through that.
+[14:36.740 --> 14:38.620]  So let's go into a bit more detail.
+[14:38.620 --> 14:43.860]  This is more just a bit of an eye chart, particularly because it's not rendering at all.
+[14:43.860 --> 14:47.140]  The idea is you just ask some basic questions about creating a Kubernetes cluster, what
+[14:47.140 --> 14:51.260]  size nodes you want, what name it is.
+[14:51.260 --> 14:57.020]  If you're creating your Kubernetes application, and you've pressed go into the Kubernetes application,
+[14:57.020 --> 15:02.540]  you give it a name and the basic constraints for the notebooks, and it's sort of pre-configured
+[15:02.540 --> 15:06.700]  and you tell it which Kubernetes cluster to put it on, or create one if you haven't got
+[15:06.700 --> 15:11.020]  one yet.
+[15:11.020 --> 15:16.020]  And then finally, when you've stamped out all of these bits of infrastructure, you can
+[15:16.020 --> 15:22.540]  see there's a nice single sign-on to go and dig in.
+[15:22.540 --> 15:28.060]  So if you've got Dask Hub, you can click on the link to sort of open your notebook,
+[15:28.060 --> 15:31.380]  and it gets you straight in.
+[15:31.380 --> 15:35.460]  One of the issues we've got at the moment is that there's a cost of IPv4 addresses or
+[15:35.460 --> 15:38.740]  the shortage of IPv4 addresses is a big deal.
+[15:38.740 --> 15:43.460]  So we're actually using a Zenith proxy here, a tunneling proxy called Zenith.
+[15:44.020 --> 15:50.140]  So essentially when we create the infrastructure, there's an SSH session poking out, doing a
+[15:50.140 --> 15:57.060]  port forward essentially, out into the proxy, and the proxy secures that it does all the
+[15:57.060 --> 16:01.660]  authentication and authorization, and then punches that through.
+[16:01.660 --> 16:08.420]  So essentially it means that these are inside, you've got a VM inside your private network,
+[16:08.420 --> 16:13.420]  and then it goes out through the NAT, not consuming floating IPs for each of these bits
+[16:13.420 --> 16:16.140]  of infrastructure that you're stamping out.
+[16:16.140 --> 16:22.820]  And there's lots of, I'm not going to go into too much detail on all these things.
+[16:22.820 --> 16:27.220]  If you create a Kubernetes cluster, it's easy to get the kubectl out.
+[16:27.220 --> 16:34.500]  It's got monitoring included, and SLIM, similarly, it comes with monitoring open-on-demand dashboards.
+[16:34.500 --> 16:39.220]  So in this case, you can get in and out through open-on-demand, although this one does require
+[16:39.220 --> 16:43.060]  a public IP so that you can do SSH.
+[16:43.060 --> 16:48.740]  I said about bigger desktop, so if you just want a VM, you can get into without worrying
+[16:48.740 --> 16:51.700]  about SSH, without having to configure all that.
+[16:51.700 --> 16:56.740]  You can go in through Guacamole, get a web terminal and otherwise.
+[16:56.740 --> 17:03.420]  Again, you can stamp out all of these without consuming a floating IP.
+[17:03.420 --> 17:07.580]  Another mode, which is a bit like Binderhub, but just inside a single VM, is just you specify
+[17:07.580 --> 17:09.540]  your repo to Docker.
+[17:09.540 --> 17:10.540]  Same kind of idea.
+[17:10.540 --> 17:14.540]  It spins up the Jupyter Notebook, punches it out with Zenith, so it's all nice and simple
+[17:14.540 --> 17:16.340]  to just get that up and running.
+[17:16.340 --> 17:23.700]  Okay, so let's do a little bit of a shortish technical dive into actually how do you get
+[17:23.700 --> 17:29.060]  RDMA in Loki, what the heck is Loki, you may have said.
+[17:29.740 --> 17:34.860]  If you've been in some of the open-infotalks, Thierry described this quite well.
+[17:34.860 --> 17:41.980]  This is the idea of Linux OpenStack and Kubernetes, giving you dynamic infrastructure.
+[17:41.980 --> 17:43.660]  How do we get RDMA into this stack?
+[17:43.660 --> 17:46.140]  There's three main steps.
+[17:46.140 --> 17:51.220]  First of all, you do need RDMA in the OpenStack servers that you're creating.
+[17:51.220 --> 17:55.980]  Second step is, if you want Kubernetes, you need the Kubernetes clusters on those OpenStack
+[17:55.980 --> 17:56.980]  servers.
+[17:57.300 --> 18:03.220]  The third step is you need RDMA inside the Kubernetes pods, executing within the Kubernetes
+[18:03.220 --> 18:04.220]  clusters.
+[18:04.220 --> 18:06.780]  So let's just drill down into each of those.
+[18:06.780 --> 18:09.620]  So how do we do RDMA inside the OpenStack servers?
+[18:09.620 --> 18:12.620]  Well, there's two main routes here.
+[18:12.620 --> 18:22.020]  The first route is if it's a bare metal server, you've got the nick there, RDMA is generally
+[18:22.020 --> 18:24.780]  available in the way it's normally available.
+[18:25.580 --> 18:27.780]  This is not a lot special to do there.
+[18:27.780 --> 18:28.940]  I should stop there for a moment.
+[18:28.940 --> 18:32.900]  What I've said is you're using the standard OpenStack APIs and all the Terraform tooling
+[18:32.900 --> 18:34.740]  and you're stamping out bare metal machines.
+[18:34.740 --> 18:36.060]  That's totally possible.
+[18:36.060 --> 18:43.060]  When you select the flavor dropdown, it might be give me a box with an 8A100 on it.
+[18:43.060 --> 18:44.380]  I want the whole thing.
+[18:44.380 --> 18:46.380]  That's perfectly possible.
+[18:46.380 --> 18:50.900]  So I referenced Cambridge as helping us out with this.
+[18:51.020 --> 18:56.620]  Cambridge's HPC clusters are actually deployed on OpenStack using the bare metal orchestration.
+[18:56.620 --> 19:03.060]  So it doesn't get in the way of anything in terms of RDMA or InfiniBand or whatever.
+[19:03.060 --> 19:05.980]  You get the bare metal machine.
+[19:05.980 --> 19:09.300]  On the VM side, it's a little bit more complicated.
+[19:09.300 --> 19:13.980]  Essentially, the easiest way to get RDMA working in there is that we pass in an actual nick
+[19:13.980 --> 19:17.300]  using PCI Passu, the SROV.
+[19:17.300 --> 19:23.340]  So the VM itself has to have drivers appropriate for the nick that you've passed through.
+[19:23.340 --> 19:27.740]  Now there's a whole bunch of different strategies for doing that, but I wanted to quickly go
+[19:27.740 --> 19:35.180]  through this one, which is using specifically in some MeloLux cards, and there are other
+[19:35.180 --> 19:36.700]  ways of doing this.
+[19:36.700 --> 19:41.100]  Essentially you do OVS offload onto your virtual function.
+[19:41.100 --> 19:49.660]  So if you do SROV into the VM, that virtual function can actually get attached into OVS.
+[19:49.660 --> 19:53.260]  Now that sounds insane because that's a really slow path and you just put a nice fast thing
+[19:53.260 --> 19:54.900]  into a slow path.
+[19:54.900 --> 20:02.140]  What happens is OVS gets told that actually you look for hardware offloaded flows.
+[20:02.140 --> 20:06.420]  So when you actually start getting connections going into your different machines, it notices
+[20:06.420 --> 20:15.540]  the MAC and IP address pairs and those flows in OVS get put into the hardware and then
+[20:15.540 --> 20:17.620]  it goes onto a fast path.
+[20:17.620 --> 20:24.940]  The other part of this is that you connect the OVS directly to your bond on the host
+[20:24.940 --> 20:29.020]  and the VFs are actually getting connected to the bond.
+[20:29.020 --> 20:32.260]  So in that earlier graph where I was showing 200 gigabits a second and basically getting
+[20:32.260 --> 20:38.100]  line rate, that's using this setup where essentially your VM with its virtual function
+[20:38.100 --> 20:42.580]  is going through the bond rather than through one of the individual interfaces.
+[20:42.580 --> 20:48.380]  And this is actually quite a nice setup in terms of wiring.
+[20:48.380 --> 20:53.180]  So if you've got a server that's got dual 100 gig ethernet going in or dual 25 gig
+[20:53.180 --> 20:57.900]  ethernet, you don't have to dedicate one of those ports to SROV.
+[20:57.900 --> 21:01.620]  You have the host bond on there and you can connect the virtual functions into the host
+[21:01.620 --> 21:05.020]  bond.
+[21:05.020 --> 21:10.820]  Okay, so the next bit, create Kubernetes.
+[21:10.820 --> 21:14.220]  I'm not going to go into that too much detail.
+[21:14.220 --> 21:17.620]  Essentially we're using Cluster API.
+[21:17.620 --> 21:24.300]  I really like its logo because it uses basically you create a management cluster.
+[21:24.300 --> 21:30.500]  In CRDs you describe what you want your HA cluster to be or your other cluster to be
+[21:30.500 --> 21:33.580]  and it stamps that out for using an operator.
+[21:33.580 --> 21:39.300]  This has proved to be really quite a stable way and reliable way of creating Kubernetes.
+[21:39.300 --> 21:46.780]  One part of this is that we're actually hoping to try and, well, while I'm in the room, I'm
+[21:46.780 --> 21:52.300]  trying to fix the unit test on it, but we're developing a Magnum driver for OpenStack Magnum
+[21:52.300 --> 21:56.500]  to actually consume Cluster API and just stamp them out.
+[21:56.500 --> 22:03.980]  To make this repeatable, it's all been packaged up in Helm charts, which are here.
+[22:03.980 --> 22:10.660]  So now we've got OpenStack machines that have got RDMA in, we can do that.
+[22:10.660 --> 22:15.100]  We've set up a Kubernetes cluster that's using those OpenStack machines that have the virtual
+[22:15.100 --> 22:18.100]  function in that's doing RDMA at line rate.
+[22:18.100 --> 22:24.980]  Now how on earth do we get the Kubernetes pods to actually make use of RDMA?
+[22:24.980 --> 22:30.860]  Now if this was a bare metal machine, there's actually quite a lot of standard patterns.
+[22:30.860 --> 22:34.060]  It seemed to be quite well documented in terms of actually using virtual functions into the
+[22:34.060 --> 22:35.060]  pod.
+[22:35.060 --> 22:40.300]  If we're inside a VM, we've already done the PF to VF translation, so you can't go again.
+[22:40.300 --> 22:46.460]  You can't have a VVF yet, although VDPA and other things might change this.
+[22:46.460 --> 22:52.020]  So what we're actually doing is we're using Maltis and something called the Mac VLAN CNI.
+[22:52.020 --> 22:56.780]  So essentially when you create your Kubernetes pod, you give it two interfaces, your regular
+[22:56.780 --> 23:04.340]  CNI interface, so that has all the usual smarts, and you give it an additional Mac IP address
+[23:04.340 --> 23:08.020]  pair on your virtual function for the VM.
+[23:08.020 --> 23:12.860]  Now at the moment, you have to turn off port security to ensure that those extra Macs that
+[23:12.860 --> 23:18.740]  are auto-generated inside Kubernetes are punching out correctly and not restricted by the virtual
+[23:18.740 --> 23:19.740]  function.
+[23:19.740 --> 23:23.780]  There's a plan to try and orchestrate that, so you can use allowed address pairs to explicitly
+[23:23.780 --> 23:25.780]  decide which ones.
+[23:25.780 --> 23:31.100]  But that's basically, so you use Maltis to say, give me two network connections, and
+[23:31.100 --> 23:37.660]  you use Mac VLAN to get that connection to your RDMA.
+[23:37.660 --> 23:42.260]  And there's also some permission stuff, which is actually quite a simple decorator on the
+[23:42.260 --> 23:43.260]  pod.
+[23:43.260 --> 23:51.220]  But essentially, extra pod YAML to opt in to actually how to get this all wired together.
+[23:51.220 --> 23:58.540]  Okay, so it'd be really great if people have these problems, and this is interesting, to
+[23:58.540 --> 23:59.540]  get involved.
+[23:59.540 --> 24:06.220]  There's a whole load of links, but yeah, thank you very much.
+[24:06.220 --> 24:21.980]  And before you've got time for half a question.
+[24:21.980 --> 24:31.980]  Yeah, you mentioned, I thought you mentioned that we are doing the bond on the network
+[24:31.980 --> 24:32.980]  interface.
+[24:32.980 --> 24:35.540]  You're getting the full bandwidth of the bond.
+[24:35.540 --> 24:40.340]  So whenever I do LICP bonding, any particular connection, I only get half the interface.
+[24:40.340 --> 24:42.580]  So I'm just wondering how you're doing that.
+[24:42.580 --> 24:44.060]  It depends on your bonding mode.
+[24:44.060 --> 24:47.300]  But yeah, so with LICP bonding, I only say make it half.
+[24:47.300 --> 24:51.580]  Well, no, so there's a hashing mode on your bond.
+[24:51.580 --> 24:57.220]  So what you need to make sure is that you do something like L3 plus L4 hashing, so that
+[24:57.220 --> 25:02.460]  from a single client, it depends, it's basically, each of your traffic flows gets hashed onto
+[25:02.460 --> 25:06.140]  a different bit of the bond.
+[25:06.140 --> 25:10.540]  So you need drivers that are respecting that hashing function.
+[25:10.540 --> 25:16.540]  But yeah, if you get enough different flows, then it will actually hash across the bond,
+[25:16.540 --> 25:17.540]  okay.
+[25:17.540 --> 25:19.420]  It's all about the hashing modes.
+[25:19.420 --> 25:23.620]  Not all switches support all hashing modes, which is the gotcha in that.
+[25:23.620 --> 25:27.620]  Yeah, the other question I have is, I don't understand the connection between MAC VLAN
+[25:27.620 --> 25:28.620]  and RDNA.
+[25:28.620 --> 25:29.620]  Sorry, what's that?
+[25:29.620 --> 25:32.300]  The connection between MAC VLAN and RDNA.
+[25:32.300 --> 25:34.300]  The connection between the MAC VLAN and RDNA.
+[25:34.300 --> 25:39.380]  Yeah, why do you need MAC VLAN to do the RDNA into your VMs?
+[25:39.380 --> 25:41.900]  So you could just do host networking.
+[25:41.900 --> 25:45.980]  So if you did host networking on the pod, you would just have access to all of those host
+[25:45.980 --> 25:46.980]  interfaces.
+[25:46.980 --> 25:51.180]  But if you want to have multiple different RDNA flows with different MAC and IP address
+[25:51.180 --> 25:56.580]  pairs, then the MAC VLAN allows you to have those multiple pods, each with their own identity
+[25:56.580 --> 26:00.540]  on your VLAN that's doing RDNA.
+[26:00.540 --> 26:05.100]  Anyway, emails for the next questions, I think.
+[26:05.100 --> 26:09.660]  So I should let the next person set up.
+[26:09.660 --> 26:11.060]  Any other questions for Joan?
+[26:11.060 --> 26:12.060]  Can it?
+[26:12.060 --> 26:13.060]  Oh.
+[26:13.060 --> 26:14.060]  Yeah, last one.
+[26:14.060 --> 26:20.060]  Actually, I had two, but okay, I'll re-work it.
+[26:20.060 --> 26:21.060]  Okay.
+[26:21.060 --> 26:24.060]  So I saw that you were also creating slurm clusters.
+[26:24.060 --> 26:25.060]  Yes.
+[26:25.060 --> 26:31.780]  So how does Kubernetes and slurm play together for the network topology and placement of
+[26:31.780 --> 26:32.780]  your networks?
+[26:32.780 --> 26:35.780]  Well, I have lots of ideas for that after your talk.
+[26:35.780 --> 26:37.220]  At the moment, not really.
+[26:37.220 --> 26:40.460]  So they just, the pods get placed wherever and then...
+[26:40.460 --> 26:42.780]  Yeah, at the moment, they're totally isolated environments.
+[26:42.780 --> 26:46.780]  So you stamp out a slurm cluster and it's your own to do what you need.
+[26:46.780 --> 26:53.780]  And then super briefly, the pink line that was legacy RDNA, SR, IO virtualization.
+[26:54.780 --> 26:55.780]  Yes.
+[26:55.780 --> 26:59.500]  Is that bare metal or is that also virtualized?
+[26:59.500 --> 27:01.000]  That was...
+[27:01.000 --> 27:04.000]  Is it running on...
+[27:04.000 --> 27:05.000]  Because that was...
+[27:05.000 --> 27:08.000]  We can catch up later.
+[27:08.000 --> 27:09.000]  Okay.
+[27:09.000 --> 27:15.020]  So that specific scenario, I definitely recommend watching Stigt Alpha's talk, they're five
+[27:15.020 --> 27:16.780]  ways on CNI.
+[27:16.780 --> 27:22.220]  I think that particular setup was actually bare metal with a virtual function.
+[27:22.220 --> 27:26.380]  So it was actually Kubernetes on bare metal with the virtual function passed into the
+[27:26.380 --> 27:27.380]  container.
+[27:27.380 --> 27:28.380]  Right.
+[27:28.380 --> 27:35.380]  I believe we got similar results without doing that legacy path into the VM as well.
+[27:36.180 --> 27:41.580]  The extra cost, I believe, is on the VF lag piece because there's an extra bit in routing
+[27:41.580 --> 27:48.180]  inside the silicon, I believe, but I'm not certain on that, so I'd have to check.
+[27:48.180 --> 27:49.180]  Thank you.
+[27:49.180 --> 27:50.180]  Pleasure.
+[27:50.980 --> 27:51.980]  Thank you very much, John.
+[27:51.980 --> 27:52.980]  Thank you.

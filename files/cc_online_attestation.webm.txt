@@ -1,0 +1,327 @@
+[00:00.000 --> 00:10.220]  Hello, my name is Tobin and today I want to talk to you about an interesting security
+[00:10.220 --> 00:14.940]  consideration that has come up in the confidential containers community and that might apply
+[00:14.940 --> 00:19.000]  to other confidential computing projects as well.
+[00:19.000 --> 00:22.700]  I know that remote talks can be a little bit flat, but if it's any enticement, I think
+[00:22.700 --> 00:27.460]  this is maybe the biggest security issue that our community has faced so far and possibly
+[00:27.460 --> 00:29.740]  also the most interesting.
+[00:29.740 --> 00:34.100]  Before we start, I want to thank my colleague Dov Muirk as well as community members Nan
+[00:34.100 --> 00:39.740]  Krishnamurti and Mingwei Sho for helping to discover and uncover and think about this
+[00:39.740 --> 00:42.140]  interesting problem.
+[00:42.140 --> 00:45.240]  Before we get to the main issue, I want to revisit one design principle of confidential
+[00:45.240 --> 00:49.060]  containers that is significant here and that's the idea of decoupled measurement.
+[00:49.060 --> 00:54.860]  With a lot of confidential computing projects, the hardware evidence is used to measure
+[00:54.860 --> 00:59.200]  or includes the measurement of the workloads and in some ways it's very intuitive to want
+[00:59.200 --> 01:03.180]  to measure the workload the most significant thing with the hardware, but the drawback
+[01:03.180 --> 01:09.060]  to this is that the hardware measurement is often platform specific and a little clunky.
+[01:09.060 --> 01:14.460]  In confidential containers, we prefer to use standard techniques such as container signatures
+[01:14.460 --> 01:16.540]  or encrypted containers.
+[01:16.540 --> 01:19.780]  We do this with a two-stage process where we use the hardware measurement to measure
+[01:19.780 --> 01:24.020]  the stack essentially, the CAD agent and its associated tools and then once those are
+[01:24.060 --> 01:28.820]  trusted via this hardware measurement, we can use those tools to measure the workload
+[01:28.820 --> 01:29.820]  itself.
+[01:29.820 --> 01:33.820]  This is handy because again, it allows us to do standard stuff, but it also means that
+[01:33.820 --> 01:39.700]  we can use a generic guest image, which is a good fit for CAD containers in particular.
+[01:39.700 --> 01:43.900]  It will probably become clear why this generic guest image is significant here, but for now
+[01:43.900 --> 01:46.540]  I want to talk about these so-called evidence factory attacks.
+[01:46.540 --> 01:51.780]  I think that's more or less a made up term, but it makes sense here.
+[01:51.780 --> 01:55.740]  The crux of this attack is that we're going to use an attestation report that we aren't
+[01:55.740 --> 02:01.820]  really entitled to to get secrets that don't belong to us, to attack a target key broker.
+[02:01.820 --> 02:02.820]  How are we going to do this?
+[02:02.820 --> 02:06.620]  Well, attestation reports, once they're out in the wild, can't really be tampered with.
+[02:06.620 --> 02:09.300]  They can't really be stolen.
+[02:09.300 --> 02:14.380]  They can't be tampered with because they're generally signed by a private key that's only
+[02:14.380 --> 02:18.020]  known to the hardware and they can't really be stolen because you should probably put
+[02:18.020 --> 02:21.860]  the knots inside of your attestation report that's going to link this attestation report
+[02:21.860 --> 02:24.940]  to a very particular connection to the KBS.
+[02:24.940 --> 02:29.940]  If you can't steal one that's floating around in the world, how are you going to attack
+[02:29.940 --> 02:30.940]  the KBS?
+[02:30.940 --> 02:34.180]  How are you going to impersonate somebody who has a valid report?
+[02:34.180 --> 02:37.860]  One way might be to launch your own virtual machine.
+[02:37.860 --> 02:42.460]  Launch your own guest and request your own attestation report from that guest.
+[02:42.460 --> 02:46.460]  Of course, if you do this, the launch measurement will probably be wrong because the launch
+[02:46.460 --> 02:50.740]  measurement will show, hey, this is some random person's VM with a bunch of random
+[02:50.740 --> 02:51.740]  stuff in it.
+[02:51.740 --> 02:55.860]  It's not the VM that the KBS is expecting to provision the secrets to.
+[02:55.860 --> 02:59.940]  On the other hand, if you were somehow able to get the launch measurement to be correct,
+[02:59.940 --> 03:03.140]  well, then the VM wouldn't be malicious and you wouldn't be able to access it because
+[03:03.140 --> 03:06.220]  the launch measurement should guarantee that there's no way in.
+[03:06.220 --> 03:08.820]  There's no easy way into the guest.
+[03:08.820 --> 03:12.580]  To be clear, what we're really trying to do here, the crux of this attack is figuring
+[03:12.580 --> 03:17.460]  out if there's a way for a malicious virtual machine to manufacture a valid attestation
+[03:17.460 --> 03:18.460]  report.
+[03:18.460 --> 03:22.580]  When I say valid attestation report, what I mean is an attestation report that reports
+[03:22.580 --> 03:29.500]  the correct firmware, the correct NDRD, the correct kernel, and the correct command line.
+[03:29.500 --> 03:34.900]  If this exists, if there's a way to do this, then we have a bit of a problem.
+[03:34.900 --> 03:39.900]  How is somebody going to break into the guest in order to request a valid attestation report?
+[03:40.060 --> 03:44.820]  Clearly, it's not going to happen by tampering with the boot process because that would change
+[03:44.820 --> 03:45.820]  the launch measurement.
+[03:45.820 --> 03:49.780]  Well, that's not what this presentation is about, at least.
+[03:49.780 --> 03:54.860]  Instead, we're looking at a later phase of execution, basically, where the guest is already
+[03:54.860 --> 04:00.620]  running, where the guest has already booted and already has used a valid NDRDF-alternal.
+[04:00.620 --> 04:02.580]  It's already got the correct launch measurement.
+[04:02.580 --> 04:04.660]  Can we get into the guest once that has happened?
+[04:04.660 --> 04:08.260]  In the community, we've looked at the trust model of confidential containers a lot.
+[04:08.260 --> 04:15.380]  Something that stuck out from the beginning was the API between the guest and the host.
+[04:15.380 --> 04:17.500]  In this case, this is the API of the Cata agent.
+[04:17.500 --> 04:21.860]  One discussion from the beginning was how do we harden the API of the Cata agent so that
+[04:21.860 --> 04:26.900]  we can't have arbitrary code executed inside of the workload or inside of the guest?
+[04:26.900 --> 04:29.780]  But it turns out, when we were thinking about this, that we may have overlooked another
+[04:29.780 --> 04:37.340]  pretty significant attack service, a large API, and that is the API between the workload
+[04:37.340 --> 04:42.060]  and the guest, the API of the container, and the guest kernel.
+[04:42.060 --> 04:44.740]  Essentially, this is a very large API.
+[04:44.740 --> 04:48.240]  What if a workload could break out into the guest?
+[04:48.240 --> 04:51.020]  Would that cause big problems?
+[04:51.020 --> 04:52.940]  The answer, in short, is yes.
+[04:52.940 --> 04:58.460]  If a malicious container can break into guest user space, it can generate a valid adaptation
+[04:58.460 --> 05:02.140]  report and use that to request secrets from any KBS.
+[05:02.140 --> 05:05.420]  There's two things that are really bad about this in particular.
+[05:05.500 --> 05:09.100]  First of all, when I say any KBS, I really mean any KBS.
+[05:09.100 --> 05:12.020]  Not even a KBS belongs to a particular client.
+[05:12.020 --> 05:15.260]  Like I said, we have a generic guest image, meaning that the launch measurement we're
+[05:15.260 --> 05:18.580]  looking for is the same across the entire project.
+[05:18.580 --> 05:22.180]  Anyone who's using confidential containers is looking for the same launch measurement,
+[05:22.180 --> 05:23.180]  essentially.
+[05:23.180 --> 05:27.620]  So, if I can generate this adaptation report from a guest that is booted correctly from
+[05:27.620 --> 05:31.180]  that image, I can then request secrets from anyone.
+[05:31.180 --> 05:33.780]  That's obviously not good at all.
+[05:33.780 --> 05:37.940]  Another thing that's pretty bad about this is that containers are executing arbitrary
+[05:37.940 --> 05:39.340]  code by design.
+[05:39.340 --> 05:43.740]  So we might say that there's some way to limit that a malicious container would be able to
+[05:43.740 --> 05:44.740]  run.
+[05:44.740 --> 05:47.500]  But in fact, there isn't because part of confidential containers, one of the features, is that we
+[05:47.500 --> 05:48.700]  can run containers.
+[05:48.700 --> 05:51.500]  We can run any container you want, essentially.
+[05:51.500 --> 05:57.220]  Now, some of the good news is that this is not actively exploitable because it relies
+[05:57.220 --> 06:04.140]  on there being a way to break out of the container into guest user space.
+[06:04.140 --> 06:08.740]  But the flip side of this is that you might say that the security of confidential containers,
+[06:08.740 --> 06:13.620]  at least in this case, reduces down to the security of non-confidential containers just
+[06:13.620 --> 06:14.620]  to this API.
+[06:14.620 --> 06:17.660]  Once you break out of that, you have the ability to steal secrets.
+[06:17.660 --> 06:19.460]  That's really not good.
+[06:19.460 --> 06:24.020]  So, let me walk through this attack step by step just to make it absolutely clear how
+[06:24.020 --> 06:25.180]  it goes.
+[06:25.180 --> 06:29.180]  The first step is that the attacker needs to craft a container that can execute code
+[06:29.180 --> 06:32.660]  in user space.
+[06:32.660 --> 06:36.700]  This is not trivial, but it's far from impossible, and things like this have happened in the
+[06:36.700 --> 06:37.700]  past.
+[06:37.700 --> 06:41.540]  Then, the attacker is going to run this container with confidential containers.
+[06:41.540 --> 06:48.460]  They can do this locally using their own SEV machine or whatever, or they can do it
+[06:48.460 --> 06:49.460]  in the cloud.
+[06:49.460 --> 06:50.460]  It doesn't matter.
+[06:50.460 --> 06:54.500]  Anywhere where confidential containers is running, they can run this.
+[06:54.500 --> 06:58.420]  The container, once it starts up, is going to connect to a KBS and make some sort of
+[06:58.420 --> 06:59.420]  request.
+[06:59.420 --> 07:03.220]  As part of that, there's an authentication flow where it will get a nonce from the target
+[07:03.220 --> 07:04.220]  KBS.
+[07:04.220 --> 07:07.700]  It's going to keep track of that nonce, and then the container will break out and get
+[07:07.700 --> 07:09.460]  this valid AdStation report.
+[07:09.460 --> 07:12.500]  When it requests the AdStation report, it's going to put the nonce that it got in it,
+[07:12.500 --> 07:14.580]  and it's also going to put its own public key here.
+[07:14.580 --> 07:17.980]  It's basically just setting up its own secure connection.
+[07:17.980 --> 07:22.620]  Once that secure connection is there, it's just going to use it to request secrets.
+[07:23.140 --> 07:26.980]  Send off the AdStation report, the KBS will say, yep, the measurement checks out, okay,
+[07:26.980 --> 07:29.300]  here's the nonce that I sent it, that's correct.
+[07:29.300 --> 07:34.380]  Let me use this public key to create a secure channel to wrap secrets.
+[07:34.380 --> 07:38.780]  Really relatively straightforward attack in some ways.
+[07:38.780 --> 07:40.220]  Let's talk about solutions.
+[07:40.220 --> 07:43.500]  While this attack is in some ways very severe, there are actually a number of different things
+[07:43.500 --> 07:50.620]  we can do to prevent it, although it's not yet clear exactly which is the optimal solution.
+[07:50.620 --> 07:54.020]  Really the simplest solution is to revoke access to AdStation reports, and what this
+[07:54.020 --> 08:00.500]  means is that the guest would have some ability to revoke its own ability, its own capability
+[08:00.500 --> 08:03.020]  to get a future AdStation report.
+[08:03.020 --> 08:07.780]  This hinges on the idea that there's different phases of execution in confidential containers,
+[08:07.780 --> 08:09.460]  or in a lot of projects, really.
+[08:09.460 --> 08:13.540]  In the early phase of execution, we should still be executing really within the footprint
+[08:13.540 --> 08:19.340]  of what is measured, really within the footprint of the kernel, the NITRD, kernel parameters,
+[08:19.340 --> 08:20.340]  firmware, things like that.
+[08:20.460 --> 08:25.300]  As long as we're in this area that has been measured, we can be relatively confident about
+[08:25.300 --> 08:27.100]  what is going on.
+[08:27.100 --> 08:31.020]  One thing that is a big red flag here is that we are allowing arbitrary code to be executed
+[08:31.020 --> 08:33.540]  within the guest in the context of a container.
+[08:33.540 --> 08:38.220]  Maybe before we start doing this, we should figure out some way that we could get rid
+[08:38.220 --> 08:43.020]  of any future AdStation reports, make sure that none are generated.
+[08:43.020 --> 08:45.980]  With SCVS and P, there's actually a pretty easy way to do this, which is that we can
+[08:45.980 --> 08:50.420]  overwrite the keys that the guest needs to communicate with the PSP.
+[08:50.420 --> 08:53.300]  They're called VMPCKs, and you can delete them.
+[08:53.300 --> 08:57.100]  If you do that, you will not be talking to the PSP anymore.
+[08:57.100 --> 09:00.220]  This has some limitations.
+[09:00.220 --> 09:04.540]  I'm not sure of a good way to do this with TDX, but if you know, let me know.
+[09:04.540 --> 09:11.020]  I think this is a pretty simple way to address the problem, and a pretty good solution in
+[09:11.020 --> 09:12.300]  some ways.
+[09:12.300 --> 09:14.540]  That said, there are things it would conflict with.
+[09:14.540 --> 09:18.780]  There's been some discussion of something referred to as the passport model, where the
+[09:18.780 --> 09:24.060]  workload actually would get an AdStation report at runtime, and obviously that would be disabled
+[09:24.060 --> 09:28.100]  if we don't allow any AdStation reports to be generated at runtime.
+[09:28.100 --> 09:33.300]  There are maybe ways to resolve that, but that's a discussion that will need to happen.
+[09:33.300 --> 09:35.460]  Another solution is to use the host data field.
+[09:35.460 --> 09:39.700]  I'm going to come back to this because it's a fairly complicated proposal, so I'll talk
+[09:39.700 --> 09:43.460]  about that on the next slide, but let me go through the other two first.
+[09:43.460 --> 09:49.260]  One of them is to use IMA to basically constantly check the state of the guest.
+[09:49.260 --> 09:51.900]  This would maybe detect a breakout.
+[09:51.900 --> 09:56.460]  Doing this would probably require a virtual TPM inside the guest, and this may be available
+[09:56.460 --> 09:58.660]  at some point.
+[09:58.660 --> 10:01.540]  It's not yet clear if we're going to utilize that for confidential containers in some ways.
+[10:01.540 --> 10:04.020]  It might be overkill, but here it might actually be useful.
+[10:04.020 --> 10:06.020]  The final thing I wanted to mention is VMPLs.
+[10:06.020 --> 10:10.700]  This is virtual machine privilege levels, and it's a feature of SEVS and P. This probably
+[10:10.700 --> 10:14.620]  isn't feasible for use in confidential containers, exactly, but I bring it up because this is
+[10:14.620 --> 10:20.140]  actually the way that the VTPMs that are being developed for SEVS and P get sidestep
+[10:20.140 --> 10:21.140]  this problem.
+[10:21.140 --> 10:25.340]  A VMPL is a way to create different privilege levels inside of a guest, and one thing a
+[10:25.340 --> 10:31.300]  VMPL can limit access to is generation of a particular AdStation report.
+[10:31.300 --> 10:37.540]  If we had some sort of hardware feature like that that could isolate the ability to generate
+[10:37.540 --> 10:42.260]  these extremely sensitive AdStation reports, that could help, and the VTPMs, they have
+[10:42.260 --> 10:46.140]  exactly this in the form of the VMPL.
+[10:46.140 --> 10:48.780]  So let's talk about the host data-based solution.
+[10:48.780 --> 10:50.660]  First of all, what is the host data?
+[10:50.660 --> 10:54.580]  The host data is a field in the AdStation report that is set by the host prior to the
+[10:54.580 --> 11:00.460]  launch of the guest, and then included in every AdStation report requested from inside
+[11:00.460 --> 11:01.540]  the guest.
+[11:01.540 --> 11:07.100]  This is S&P terminology, but I believe MRINFO is a similar thing for TDX.
+[11:07.660 --> 11:12.220]  Even if the guest is malicious, there's no way for it to get a report without the host
+[11:12.220 --> 11:13.780]  data in it.
+[11:13.780 --> 11:17.580]  We could use the host data for a number of different things, but I'm going to focus
+[11:17.580 --> 11:20.780]  on using it to store the public key of the KBS.
+[11:20.780 --> 11:26.220]  This will essentially bind the hardware evidence to one KBS.
+[11:26.220 --> 11:29.700]  Interestingly, this does not actually guarantee that we are connecting to the correct KBS.
+[11:29.700 --> 11:34.700]  It doesn't guarantee the identity of the KBS, in part because the host sets the host data
+[11:34.700 --> 11:36.340]  and the host is untrusted.
+[11:36.780 --> 11:43.580]  Instead, what it guarantees us is that the guest will only be able to connect to one KBS.
+[11:43.580 --> 11:48.620]  When the AdStation agent connects to a KBS, it will check that the public key of the KBS
+[11:48.620 --> 11:50.620]  matches what is in the host data.
+[11:50.620 --> 11:52.460]  If it doesn't, the connection will fail.
+[11:52.460 --> 11:58.740]  Similarly, the KBS will also enforce that the correct public key is in the host data
+[11:58.740 --> 12:02.100]  that it has when it receives a request.
+[12:02.100 --> 12:08.300]  Fundamentally, the only evidence available within this guest will be evidence that has
+[12:08.300 --> 12:11.700]  this public key of a particular KBS in it.
+[12:11.700 --> 12:18.340]  Now, on its own, this does not really prevent the attack because we could direct all requests
+[12:18.340 --> 12:21.500]  coming from the guest to the target KBS.
+[12:21.500 --> 12:24.100]  But this is where signature validation comes in.
+[12:24.100 --> 12:28.580]  When we turn on signature validation, the AdStation agent will make a request to the
+[12:28.580 --> 12:32.820]  KBS for the signature policy before any containers can be run.
+[12:32.820 --> 12:35.900]  This is assuming we're using an online KBS.
+[12:35.900 --> 12:42.420]  Since we can only connect to one KBS, as soon as we make this request, as soon as we request
+[12:42.420 --> 12:47.660]  signatures and as soon as that request is successful, we've collapsed the attack space
+[12:47.660 --> 12:48.660]  dramatically.
+[12:48.660 --> 12:53.380]  Now, the only KBS that we can attack is the KBS that provides the signature verification
+[12:53.380 --> 12:55.260]  policy.
+[12:55.260 --> 13:00.020]  If we use a malicious KBS to provide a signature verification policy, for instance, one that
+[13:00.020 --> 13:04.180]  allows us to run the malicious container, then we still have to connect to the malicious
+[13:04.180 --> 13:06.420]  KBS for the entire lifetime of the guest.
+[13:06.420 --> 13:10.780]  So the only KBS that we can attack would be that malicious KBS.
+[13:10.780 --> 13:12.300]  That's not much of an attack.
+[13:12.300 --> 13:16.180]  On the other hand, we could try to get the target KBS, we could direct everything to
+[13:16.180 --> 13:20.300]  the target KBS instead, and try to get the target KBS to provide the signature verification
+[13:20.300 --> 13:23.860]  policy and then attack it later with secret requests.
+[13:23.860 --> 13:28.380]  But this isn't going to work because the target KBS shouldn't give us a signature verification
+[13:28.380 --> 13:31.900]  policy that would allow the malicious container to run.
+[13:31.900 --> 13:36.260]  So with these two properties, first requiring that all connections go to the same KBS using
+[13:36.260 --> 13:39.940]  the host data, putting the public host data in it, and then requiring that signatures
+[13:39.940 --> 13:44.100]  are there so that we know we've connected at least to one KBS and we know it's the KBS
+[13:44.100 --> 13:50.020]  that's actually running the container, we can really close off this attack fairly effectively.
+[13:50.020 --> 13:52.060]  So there's a few things we should still note here.
+[13:52.060 --> 13:56.500]  One of them is that we've made an assumption, which is that the target KBS is going to require
+[13:56.500 --> 13:57.820]  signatures.
+[13:57.820 --> 14:01.980]  And this might be setting a precedent for the project in some ways, saying that if you
+[14:01.980 --> 14:07.020]  want to sidestep some relatively serious security issues, you need to use image signatures.
+[14:07.020 --> 14:10.740]  Is this a reasonable thing to take on board or is it too restrictive?
+[14:10.740 --> 14:14.540]  Is it leaving aside certain use cases that are really valuable?
+[14:14.540 --> 14:17.180]  I think that's something we still need to think about.
+[14:17.180 --> 14:20.980]  Another thing is that I mentioned that this is not the only possible use of the host data.
+[14:20.980 --> 14:24.060]  So another thing we could do with the host data is that we could put workload-specific
+[14:24.060 --> 14:26.500]  information in the host data field.
+[14:26.500 --> 14:31.140]  For instance, we could put the measurement of the container image or something a little
+[14:31.140 --> 14:34.660]  bit more sophisticated that achieves the same thing.
+[14:34.660 --> 14:39.060]  In my mind, I think that this is redundant to the image signatures, which have so far
+[14:39.060 --> 14:43.140]  been really the main way that we've done measurement of the workload in this project.
+[14:43.140 --> 14:46.420]  And I think one of the important takeaways from this presentation is that there's ways
+[14:46.420 --> 14:52.140]  to resolve this attack without compromising on our ideas about decoupling measurement.
+[14:52.140 --> 14:55.420]  And in fact, we can have a generic guest image.
+[14:55.420 --> 15:01.860]  We can still use signatures and all this stuff as long as we take a few precautions.
+[15:01.860 --> 15:06.460]  But that said, I think it would solve the problem if we put workload-specific information
+[15:06.460 --> 15:08.260]  into the host data.
+[15:08.260 --> 15:09.660]  Okay.
+[15:09.660 --> 15:13.020]  I want to talk a little bit about SEVES.
+[15:13.020 --> 15:17.380]  So far, I've been talking about S&P, which isn't even implemented yet, so this is another
+[15:17.380 --> 15:20.340]  reason why in some ways it's not actively exploitable.
+[15:20.340 --> 15:25.620]  With TDX, I think the current TDX implementation probably is vulnerable to this, although I'm
+[15:25.620 --> 15:27.700]  not 100% sure about that.
+[15:27.700 --> 15:31.260]  What we've got currently on the SEVES side is SEVES.
+[15:31.260 --> 15:34.740]  And here, the story is sort of better and sort of worse.
+[15:34.740 --> 15:40.020]  I'm not going to go into all the details here, but the important thing is that the connection
+[15:40.020 --> 15:43.660]  to the KBS is actually made from the host, right?
+[15:43.660 --> 15:48.100]  Because with SEV and SEVES, we use preadastation, which is driven by the host.
+[15:48.100 --> 15:51.460]  So again, connection is made by the host, not inside the guest, which means it's very
+[15:51.460 --> 15:52.620]  hard to regulate.
+[15:52.620 --> 15:55.980]  This thing I was talking about earlier where we check that the KBS is going to match a
+[15:55.980 --> 15:58.980]  certain field or anything like that, it's not going to work because it's all happening
+[15:58.980 --> 16:02.500]  in the untrusted realm.
+[16:02.500 --> 16:08.540]  Unfortunately, we also don't really have the ability to revoke a connection inside the
+[16:08.540 --> 16:09.540]  guest.
+[16:10.420 --> 16:14.220]  The first solution that I mentioned, where we say no more attestation reports, we can't
+[16:14.220 --> 16:20.460]  really do that with SEV in the same way using the online KBS that we currently have.
+[16:20.460 --> 16:23.780]  So essentially, the two main solutions that have been proposed of the host data, that
+[16:23.780 --> 16:30.860]  won't really work for SEV and the revoking the attestation reports, that isn't really
+[16:30.860 --> 16:33.660]  going to work for SEV either.
+[16:33.660 --> 16:37.900]  The good news is that the VM can only connect to one KBS at a time, just the way that the
+[16:37.900 --> 16:43.780]  online KBS is implemented, you inject a connection to a very particular KBS.
+[16:43.780 --> 16:47.300]  Now you could target someone else's KBS here potentially, so the attack still exists, but
+[16:47.300 --> 16:55.300]  it can only be carried out targeting one KBS per guest, if that's any consolation.
+[16:55.300 --> 17:01.500]  So in some ways, the attack is a little bit less severe, but it's probably harder to mitigate,
+[17:01.500 --> 17:02.500]  to be honest.
+[17:02.580 --> 17:11.740]  So I am still thinking about the best way to address this with SEV and SEVES.
+[17:11.740 --> 17:13.700]  So what can we take away from this?
+[17:13.700 --> 17:16.180]  First I want to mention some general things.
+[17:16.180 --> 17:21.700]  For one thing, we realize here that the capability of generating a valid attestation report or
+[17:21.700 --> 17:25.180]  valid hardware evidence is precious and needs to be protected.
+[17:25.180 --> 17:29.380]  When I say valid here, I don't mean generating an attestation report that has a signature
+[17:29.380 --> 17:30.380]  that checks out.
+[17:30.380 --> 17:36.660]  I mean generating an attestation report that will convince someone's KBS to give you secrets.
+[17:36.660 --> 17:40.620]  Being able to do that, like I said, extremely precious.
+[17:40.620 --> 17:44.140]  So let's think, how are we protecting this?
+[17:44.140 --> 17:47.940]  For us, a big part of this is that we realize that our protection against this wasn't a
+[17:47.940 --> 17:48.940]  hardware protection.
+[17:48.940 --> 17:54.620]  Really, instead it was the software protection of the API between the workload container
+[17:54.620 --> 17:58.540]  and the guest.
+[17:58.540 --> 18:04.420]  It's also important to think what happens if these protections should fail, right?
+[18:04.420 --> 18:08.460]  Especially in our case where, again, it's not hardware protection, it's software protection.
+[18:08.460 --> 18:13.020]  What happens if somebody does breach that and gain the ability to generate so-called
+[18:13.020 --> 18:14.860]  valid evidence?
+[18:14.860 --> 18:18.460]  Is it the case that they can attack anyone, right?
+[18:18.460 --> 18:20.860]  There's some dangers of having a very generic measurement.
+[18:20.860 --> 18:24.820]  We need to be careful in having a generic guest measurement and make sure that that doesn't
+[18:24.820 --> 18:30.220]  mean that it's easy to impersonate some other person using confidential containers and convince
+[18:30.220 --> 18:33.860]  some other person's KBS to give you their secrets.
+[18:33.860 --> 18:39.540]  There's a more complex underlying question here about the identity of a guest.
+[18:39.540 --> 18:43.900]  Confidential guests for a long time haven't really had much of an identity.
+[18:43.900 --> 18:49.500]  There haven't been many ways to give an identity to a guest.
+[18:49.500 --> 18:53.580]  In some ways, our project leans into that by having a generic guest measurement.
+[18:53.580 --> 18:56.860]  But there's dangers in having no identity whatsoever.
+[18:56.860 --> 19:02.620]  Now, still, I maintain that the decoupling of the workload measurement and the guest
+[19:02.620 --> 19:04.940]  measurement is a good idea.
+[19:04.940 --> 19:09.460]  And that having a fixed identity or an identity that corresponds exactly to the workload may
+[19:09.460 --> 19:11.460]  or may not be necessary.
+[19:11.460 --> 19:16.060]  But we do have to take precautions to make sure, for instance, that evidence isn't interchangeable
+[19:16.060 --> 19:17.820]  between KBSs.
+[19:17.820 --> 19:18.820]  Interesting.
+[19:18.820 --> 19:22.460]  A sort of meta note about all this is that you need to be careful about relying too much
+[19:22.460 --> 19:23.580]  on one trust model.
+[19:23.580 --> 19:24.580]  I showed the diagram earlier.
+[19:24.580 --> 19:29.700]  It's a diagram that tons of people had spent a lot of time staring at and thinking about.
+[19:29.700 --> 19:33.180]  But we've mainly been thinking about the trust model in terms of protecting the workload
+[19:33.180 --> 19:34.540]  container.
+[19:34.540 --> 19:38.620]  It hadn't occurred to us that you also need to think about the protecting the ability
+[19:38.620 --> 19:42.940]  to generate evidence from everyone, protect it from everyone, including protecting it
+[19:42.940 --> 19:44.740]  from the workload.
+[19:44.740 --> 19:49.780]  Finally, a few things that are a little more specific to the project.
+[19:49.780 --> 19:54.180]  I do want to classify, again, that this is, in some ways, pretty serious, but also not
+[19:54.180 --> 19:56.100]  actively exploitable, pretty fixable.
+[19:56.100 --> 19:57.500]  So we will work to get this fixed.
+[19:57.500 --> 20:01.540]  We're working on the S&P implementation right now, and it will contain some of these mitigations.
+[20:01.540 --> 20:06.380]  It has not yet been decided exactly which, if you have any ideas for this, please let
+[20:06.380 --> 20:07.380]  me know.
+[20:07.380 --> 20:09.140]  This is still a relatively young project.
+[20:09.140 --> 20:15.220]  And we get confidence in the security of our project by going through things like this.
+[20:15.220 --> 20:19.580]  And at an early stage where it's relatively harmless, it's good to discover these things.
+[20:20.380 --> 20:25.540]  So if you have any ideas or any questions, please let me know.
+[20:25.540 --> 20:28.660]  And let's keep the discussion moving forward on this topic.

@@ -1,0 +1,106 @@
+[00:00.000 --> 00:20.640]  Okay, my name is Noel Brandon. I'm talking about the work that I've been doing making
+[00:20.640 --> 00:25.760]  LibreOffice faster. We all know that LibreOffice is a bit of an elephant. It's a cute elephant,
+[00:25.760 --> 00:29.000]  but it's still a bit of an elephant. We've got 10 million-odd lines of code, some of
+[00:29.000 --> 00:34.720]  which is 20 years old. Practices that were perfectly acceptable 20 years ago are a little
+[00:34.720 --> 00:39.920]  bit trickier these days. Optimizations that made perfect sense back in the day are not
+[00:39.920 --> 00:45.640]  great anymore, and things have just changed around. For example, CPU memory bandwidth
+[00:45.640 --> 00:51.800]  has dramatically changed. From around about the era of the 486DX2, we suddenly saw a dramatic
+[00:51.800 --> 00:57.160]  shift in the speeds of main RAM versus the speeds of your main CPU. Up until that point,
+[00:57.160 --> 01:02.560]  you were looking at CPUs that could touch location in memory at about the same speed
+[01:02.560 --> 01:10.120]  as they could touch local cached memory. So you wrote your algorithms around those sorts
+[01:10.120 --> 01:13.960]  of things. DX2 changed things, and it only got dramatically worse after that. To the
+[01:13.960 --> 01:19.960]  point now where touching something in L1 cache versus touching main memory can be anywhere
+[01:19.960 --> 01:26.360]  up to 50 times slower. Cache-finding algorithms are now the new game in town. We now have
+[01:26.360 --> 01:31.280]  multiple cores. Everybody has multiple cores. It used to be that only people with vast sums
+[01:31.280 --> 01:37.120]  of money had machines with multiple cores or the one CPU. Now, everybody has one. So
+[01:37.120 --> 01:40.480]  locking algorithms that made perfect sense because they only got touched by a handful
+[01:40.480 --> 01:48.600]  of people suddenly get exercised by everybody, and all sorts of interesting flaws come up.
+[01:48.600 --> 01:52.640]  An interesting note, the locking algorithms that were written back then, nobody actually
+[01:52.640 --> 01:58.880]  knew if they were truly solid or not because Intel's own engineers refused to commit to
+[01:58.880 --> 02:06.440]  a cache coherency protocol until somewhere around the Pentium era. Up until then, they
+[02:06.440 --> 02:11.560]  ruthlessly refused to say anything about it, and if queried, they would just say that it
+[02:11.560 --> 02:16.080]  wasn't something they had locked down yet. So you were kind of in the dark. So we end
+[02:16.080 --> 02:22.280]  up where we end up. So the good news. I've been at this for a little while, and the worst
+[02:22.280 --> 02:27.320]  and ugliest of the stuff is largely gone. I mean, there's still lots of performance
+[02:27.320 --> 02:32.600]  issues left in LibreOffice, but the stuff that used to hang LibreOffice up for minutes
+[02:32.600 --> 02:36.960]  at a time, I've managed to nail most of that down. There's still lots of places where
+[02:36.960 --> 02:42.680]  it's slow, but it's not like heinously slow like it used to be. The bad news is that the
+[02:42.680 --> 02:47.200]  remaining stuff is really, really ugly. It's typically the stuff that I just couldn't get
+[02:47.200 --> 02:50.960]  my head around the first time, and some of it I've looked at again, and I still can't
+[02:50.960 --> 02:57.120]  get my head around it. Some of it I've been beating on for a while, and I'm not making
+[02:57.120 --> 03:00.920]  a lot of progress. But anyhow, the point of this exercise is that you keep beating on
+[03:00.920 --> 03:08.080]  things, and eventually either you break or it breaks. Hopefully, you get the right thing.
+[03:08.080 --> 03:11.120]  So what worked out nicely? I'm going to talk today about what worked out well and what
+[03:11.120 --> 03:16.680]  worked out worse, because I think it's important that we share both the successes and the failures
+[03:16.680 --> 03:21.200]  because I think you learn equally for both. So what worked out nicely is reducing allocations
+[03:21.200 --> 03:27.400]  primarily with things like using standard optional. So, for example, if we were allocating
+[03:27.400 --> 03:34.280]  a temporary data structure inside a subroutine, I would switch that to use, to declare that
+[03:34.280 --> 03:39.600]  thing using standard optional, which does have the downside that it takes up space on the
+[03:39.600 --> 03:44.960]  stack even if you're not using it. But on the upside, using the stack is about 100 times
+[03:44.960 --> 03:49.880]  faster than allocating for a main memory. The reasons for that are because any time
+[03:49.880 --> 03:54.160]  you touch main, any time you have to allocate out of the heap, you have to take a lock.
+[03:54.160 --> 03:57.400]  That leads to locking contention, et cetera, et cetera. You have to talk to main memory
+[03:57.400 --> 04:01.440]  because you're doing all sorts of stuff there, whereas the stack is pretty much guaranteed
+[04:01.440 --> 04:06.640]  to be an L1 cache, and so allocating out of there and allocating out of there is just
+[04:06.640 --> 04:10.880]  ridiculously fast. So you can allocate quite large amounts of memory before you start falling
+[04:10.880 --> 04:15.200]  out of L1 cache. We're talking up to a couple of kilobytes here. So throwing the sort of
+[04:15.200 --> 04:19.560]  stuff at it worked well. The other thing I did was I've been converting
+[04:19.560 --> 04:26.400]  usages of our internal OSL, colon, colon, mutex class to the standard mutex class. Now,
+[04:26.400 --> 04:30.200]  despite the naming here, we're talking about two different kinds of mutexes. Our internal
+[04:30.200 --> 04:38.360]  mutex is what's normally called standard recursive mutex, whereas standard mutex is
+[04:38.360 --> 04:44.760]  a non-recursive mutex, and it is considerably faster. In an uncontended case, standard mutex
+[04:44.760 --> 04:50.320]  is about 20 to 50 times faster than standard recursive mutex. In the contended case, they
+[04:50.320 --> 04:55.760]  tend to fall back to roughly being about the same cost. So given that we run most of the
+[04:55.760 --> 05:01.280]  time with very, very little concurrency, except for an occasional use case here and there,
+[05:01.280 --> 05:07.560]  standard mutex is a major win. The downside with standard mutex is that if you use it
+[05:07.560 --> 05:13.160]  and you try and lock that mutex the second time, you get a dead lock. So you have to
+[05:13.160 --> 05:19.360]  write your code quite carefully. Most of our usages converted very easily. Did make a couple
+[05:19.360 --> 05:23.720]  of mistakes. So there were a couple of regressions added to fix, and in a couple of cases, the
+[05:23.720 --> 05:27.640]  regressions were simply unfixable, and so we backed it back out again. But in general,
+[05:27.640 --> 05:32.680]  it's a win. And as a side effect, standard mutex is allocation-free. It's literally
+[05:32.680 --> 05:39.200]  just a single word in memory. And the common unattended case of taking a standard mutex
+[05:39.200 --> 05:45.040]  is what's called a CAS operation, compare and swap. So it's really fast, and it doesn't
+[05:45.040 --> 05:51.800]  use even less memory than OSL mutex. So a win all around. What didn't work out? So
+[05:51.800 --> 05:56.480]  we've got this SVL shared string pool. It's a really nice thing. We use it in spreadsheets
+[05:56.480 --> 06:02.120]  primarily because spreadsheets often have many tens of thousands of strings, which are all
+[06:02.120 --> 06:06.520]  identical across all the cells. So we still references to those strings in the shared
+[06:06.520 --> 06:14.760]  pool. Now, this shared pool gets hit very hard at load time because other people implemented
+[06:14.760 --> 06:19.560]  concurrent loading of spreadsheets. So we have this nice stuff where we fire up multiple
+[06:19.560 --> 06:24.400]  threads and load a bunch of different chunks of the spreadsheet at the same time. This is
+[06:24.400 --> 06:30.760]  great. Speeds things up. But it was bottlenecking very hard in SVL shared string pool. So I
+[06:30.800 --> 06:36.720]  thought, oh, it's great. This is a hash map. Best case scenario, we can stick a concurrent
+[06:36.720 --> 06:40.800]  lock-free hash map in there. I found this great cuckoo hash map written by some very
+[06:40.800 --> 06:44.600]  bright people, much smarter than myself. I stuck it in there. Oh, it was great. It worked
+[06:44.600 --> 06:49.480]  out brilliantly. It completely destroyed the bottleneck. Speeds sheet loading went up by
+[06:49.480 --> 06:53.880]  a factor of two or three. And I thought I had a great win. And then the first bug came
+[06:53.880 --> 06:58.560]  in where there was an edge case where it wasn't quite the locking because we were doing concurrent
+[06:58.600 --> 07:03.320]  locking now. It was getting some weird edge cases. We had two different maps. They were
+[07:03.320 --> 07:10.240]  both talking in the same thing. So I then had to fix those edge cases. I reworked it.
+[07:10.240 --> 07:15.560]  We fixed those bugs. We reworked it again. I fixed the bugs. I eventually got it working.
+[07:15.560 --> 07:23.600]  And then another bright guy came in. Lubosh came in and said, but wait. String pool is
+[07:23.760 --> 07:30.440]  indeed a hotspot, but the hotspot is not actually the hash map inside string pool. The hotspot
+[07:30.440 --> 07:35.640]  is the uppercase conversion. He improved the uppercase conversion. And by the time he was
+[07:35.640 --> 07:39.520]  done improving the uppercase conversion, my concurrent hash map was making no difference
+[07:39.520 --> 07:48.280]  whatsoever. So I had identified a hotspot, but I hadn't identified the hotspot. So we
+[07:48.280 --> 07:52.640]  backed it out because there's no point in keeping a highly complicated piece of equipment
+[07:52.680 --> 07:56.520]  like that around. So I was very sad to see it go. But I learned some stuff in the process.
+[07:56.520 --> 08:01.600]  So no harm, no foul. And we backed it out again. And we're back to being faster than we were
+[08:01.600 --> 08:10.040]  before. Red line processing in writer, which is our document editor section, is often very,
+[08:10.040 --> 08:13.760]  very slow, especially if there's a ton of red lines in a big document. And it's slow
+[08:13.760 --> 08:19.120]  both loading and slow at runtime because when we're doing red lines, we often are doing
+[08:19.160 --> 08:24.200]  massive amounts of adding and deleting to data structures as we internally render and stuff.
+[08:24.200 --> 08:29.200]  And so I thought I'd try and speed that up. However, this is writer. Writer is the most
+[08:29.200 --> 08:34.560]  cash unfriendly program known to mankind. It just wants to chase pointers all over RAM.
+[08:34.560 --> 08:41.160]  It's dataset once you are more than, once you have more than a sort of 10 page document,
+[08:41.160 --> 08:46.280]  you are completely falling out of L1 cash. So you have no chance of getting cashed algorithms.
+[08:46.800 --> 08:51.320]  The data structures are inherently very, very complicated. Human languages and documents
+[08:51.320 --> 08:56.720]  just are. Consequences are we do pointer chasing. So we're constantly loading a pointer and then
+[08:56.720 --> 09:00.840]  following it to some other location in memory, which is guaranteed to not to be an L1 cache.
+[09:00.840 --> 09:05.360]  And then we're following that again to something else, which is also not an L1 cache. And in the
+[09:05.360 --> 09:09.440]  process, we've now blown apart our cache. So if we need the first pointer again, that's also not
+[09:09.440 --> 09:14.400]  an L1 cache. So we just chase our tails around in a very slow processing. I did my best to fix
+[09:14.440 --> 09:22.800]  this. And that involves trying to speed up something called a node index and a content index. And I
+[09:22.800 --> 09:29.360]  failed. I am now three levels deep, fixing different things related to that, no end in sight. And I'm
+[09:29.360 --> 09:33.680]  currently bottlenecked on a piece of processing that I just don't understand. So that didn't
+[09:33.680 --> 09:39.640]  work out. But in the process, I now know a lot more about writer. And so I consider that a win. Thank
+[09:39.640 --> 09:39.840]  you.

@@ -1,0 +1,371 @@
+[00:00.000 --> 00:09.640]  Okay. Hello, everyone, and welcome to our talk today. Yeah, so today we're going to
+[00:09.640 --> 00:15.880]  talk about real-time analytics application with Apache Pino and Apache Pulsar and Pino.
+[00:15.880 --> 00:21.640]  So here today too is myself. I'm Mary Grigleski. I'm a streaming developer advocate at Data
+[00:21.640 --> 00:26.960]  Stacks. A company is actually primarily doing Apache Cassandra up to this point. And now
+[00:26.960 --> 00:31.480]  we're going to be doing more Apache Pulsar. And it's a streaming event, streaming platform
+[00:31.480 --> 00:36.080]  that's kind of optimized for the cloud-native platform. I'm based in Chicago. I'm also
+[00:36.080 --> 00:40.800]  Java champion and president of Chicago Java user script too, and blah, blah, blah, all
+[00:40.800 --> 00:45.560]  these things. I was a developer before too, just so you know, mostly in Java. So now we
+[00:45.560 --> 00:50.600]  have Mark. So we have Mark introduce. Hello. And I do realize, Javier, that we've stolen
+[00:50.600 --> 00:55.840]  your intro section. So we've got, we've gone straight and say, yeah, hi. I'm Mark. I work
+[00:56.040 --> 01:01.000]  at Starchy. We do Apache Pino. I'm a developer advocate there. And so, yeah, like we kind
+[01:01.000 --> 01:04.200]  of had on the first slide, we're going to be showing you how to, yeah, how to, I guess
+[01:04.200 --> 01:10.200]  maybe more, how to build a real-time like analytics dashboard with Pulsar, Pino, and
+[01:10.200 --> 01:14.520]  then Python dashboard library called Streamlit. So we're going to see half the talk will be
+[01:14.520 --> 01:18.560]  that. And we're going to see how well does the Wi-Fi survive our attempts to use live
+[01:18.560 --> 01:24.920]  data. So let's see. Let's hope the demo gods are in the room. So I guess first things to
+[01:24.960 --> 01:28.760]  start with is to define like what exactly does this mean? What is real-time analytics?
+[01:28.760 --> 01:32.080]  So we've seen lots of talks, right, showing streaming data. So obviously that's like a
+[01:32.080 --> 01:37.280]  big part of it. But the real-time analytics bit is kind of this bit in highlighted. So
+[01:37.280 --> 01:42.160]  the goal is we're trying to provide insights to make decisions quickly. And I guess the
+[01:42.160 --> 01:45.760]  most important bit is that farsight. So like, it's cool that we've got the data. We can
+[01:45.760 --> 01:49.560]  capture our IoT data. We can capture like orders coming from a website. We can capture
+[01:49.560 --> 01:54.440]  the logs, but we want to do something, do something with it. And so if we move on from
+[01:54.480 --> 01:58.480]  the definition, like all the talks we've seen so far, they focus on events. We've got events
+[01:58.480 --> 02:03.120]  representing stuff. So someone is purchasing something. Someone wants to do a search query.
+[02:03.120 --> 02:07.760]  Someone is taking a taxi ride like we've seen in Javier's talk. And those events are cool
+[02:07.760 --> 02:10.880]  on their own, right? But we really want to get some insights from them. Like what can
+[02:10.880 --> 02:14.240]  we do? And eventually that leads to, okay, we've got some insight and we do something
+[02:14.240 --> 02:18.000]  as a result of knowing that this is happening. So like say, we know someone is searching
+[02:18.000 --> 02:21.800]  for a pizza. Okay, let's get a pizza shop in front of them if we're doing Google Adverts.
+[02:21.800 --> 02:25.160]  If someone's then going in and buying the pizza, okay, let's show them in real time
+[02:25.160 --> 02:28.640]  what are the things that people have also been buying along with that pizza or that
+[02:28.640 --> 02:33.360]  hamburger that we can suggest like in the flow. So we want to try and react to those
+[02:33.360 --> 02:37.840]  events coming in. So we've seen like lots of tools. We've seen Beam. We've seen Flink.
+[02:37.840 --> 02:42.160]  We've seen like lots of tools for getting the streaming data, but we want to do something
+[02:42.160 --> 02:45.960]  with that data. Like that's the whole purpose, I guess, of all the applications that we're
+[02:45.960 --> 02:51.000]  building. And in the real time analytics space, like this is like, you imagine the value of
+[02:51.040 --> 02:56.080]  data over time in this world where we're trying to do something with that streaming data,
+[02:56.080 --> 03:01.080]  the value of that data goes down over time. So if we know like today, like, hey, you made
+[03:01.080 --> 03:04.880]  an order and something's gone wrong with it, I can like try and do something to make you
+[03:04.880 --> 03:08.640]  happy, like give you a voucher or call you up and try and fix it. If I find out like
+[03:08.640 --> 03:13.320]  when I batch process that tomorrow, it's like, oh, you already hate me. So it's too late.
+[03:13.320 --> 03:17.200]  And so we're kind of focused on the left side of this diagram. So in terms of real time
+[03:17.240 --> 03:21.560]  analytics, we want the data like close to when it's coming in, maybe not exactly like, not
+[03:21.560 --> 03:24.960]  not exactly like when it comes in, like in the time just after that, that's the kind
+[03:24.960 --> 03:28.520]  of region that we're living. And there can be lots of people who are interested in this
+[03:28.520 --> 03:33.040]  data. So it could be the analysts inside a company. So maybe it's people like, in our
+[03:33.040 --> 03:37.080]  imaginary pizza shop, like they're actually like running, running the, running the operations
+[03:37.080 --> 03:39.560]  with the pizza shop. It might be the management. They're like, hey, I want to know what's going
+[03:39.560 --> 03:42.680]  on now. What's the, what's the revenue that we're seeing like right now, like we're in
+[03:42.680 --> 03:46.160]  the last 10 minutes or whatever it is. And it could be the users. And so that's, that's
+[03:46.200 --> 03:49.840]  kind of the interesting thing that we, that there's sort of changed, I guess, from doing
+[03:49.840 --> 03:53.760]  traditional analytics to doing this real time stuff is that the data is almost coming back
+[03:53.760 --> 03:57.920]  that users are creating the data and then we're feeding it back to them in terms of products
+[03:57.920 --> 04:04.520]  that they can then use. And yeah, I guess that's more or less what I wanted to say. And so when
+[04:04.520 --> 04:07.520]  we're building these applications, there are kind of, I mean, they're not, they're not strictly
+[04:07.520 --> 04:11.200]  like this, but there's sort of four obvious quadrants of applications that people build.
+[04:11.200 --> 04:15.480]  So they go along, oh yes, I should show you, they go along two axes. So we've got human facing
+[04:15.480 --> 04:20.760]  and machine facing along the Y and then internal and external on the X. So if we go in the top
+[04:20.760 --> 04:24.680]  side, that would be like the observability area. And actually a lot of the time series
+[04:24.680 --> 04:28.120]  querying would be in there. And this would be sort of the area of like data dogs. So
+[04:28.120 --> 04:31.640]  hey, like I wanted to get the met, I've got like all this telemetry data coming in and
+[04:31.640 --> 04:35.520]  I want to know what's going on, like what's going on in my, in my AWS cluster. What's
+[04:35.520 --> 04:38.440]  happening like with all my Lambda functions? Like are there any that are suddenly really
+[04:38.440 --> 04:43.400]  slow? Like can I, can I like figure that out? And maybe there's a machine that's actually
+[04:43.400 --> 04:46.440]  interpreting that data rather than a human is looking at it and going, oh yeah, it's
+[04:46.440 --> 04:51.560]  that one Lambda function there that's really slow. Probably be feeding it into like, like
+[04:51.560 --> 04:55.040]  some other tool that's figuring it out. If we come down here, so this is where we're
+[04:55.040 --> 04:59.680]  going to be today. So imagine this is a dashboard and obviously I'm sure you've seen loads of
+[04:59.680 --> 05:04.280]  dashboards, you've probably seen Tableau, you've seen loads of BI tools and with a lot of them,
+[05:04.280 --> 05:07.480]  the data that you're using is maybe like yesterday's, yesterday's data. And so what we're going
+[05:07.520 --> 05:11.640]  to show you today is how could you build one that is like updating as, as new data is coming
+[05:11.640 --> 05:16.440]  in. If we come up to the, to the top left, this is now the machine is processing the
+[05:16.440 --> 05:20.800]  data, but it's for the users. So this would be like how Javier was talking. So we've got
+[05:20.800 --> 05:23.600]  like the fraud detection system. So the data's coming in, it's being processed by something
+[05:23.600 --> 05:27.040]  and then I'm seeing, I'm seeing the result, but maybe I'm not going and working out like
+[05:27.040 --> 05:30.560]  with my own query. Oh, look, I wrote this really, really clever query. Here's the, here's
+[05:30.560 --> 05:34.600]  the thing. Maybe there's some, some pre-processing happening by some sort of machine learning
+[05:34.640 --> 05:38.960]  algorithm. And then if we come down into the bottom corner, be some sort of external service
+[05:38.960 --> 05:42.360]  that could be, yeah, like in our piece, for example, like an order tracking service. Like,
+[05:42.360 --> 05:46.280]  you know how on your phone you order something from, I don't know what's this food delivery
+[05:46.280 --> 05:50.600]  service here just eats. Maybe you see like, Hey, look, I can see exactly where it is. How
+[05:50.600 --> 05:55.080]  far away is it? Why on earth has the driver gone the wrong way to my house? You can see
+[05:55.080 --> 05:58.360]  all that sort of, all that sort of information. Maybe too much. Maybe they should just show
+[05:58.360 --> 06:01.960]  you. It's always coming towards your house. It never went like the absolute opposite way
+[06:02.040 --> 06:07.440]  and got to your house an hour later. So just to show you some real time, real, real world
+[06:07.440 --> 06:12.280]  examples of where this is, where this is used. So, so LinkedIn is one. So the, who viewed
+[06:12.280 --> 06:16.280]  your profile, I guess most of you have probably seen this and you see like, I guess for people
+[06:16.280 --> 06:19.800]  spying, spying on you. And if you, if you have, you can kind of see like all the people that
+[06:19.800 --> 06:23.040]  look to you. And it's, it's very, it's very up to date, right? Like if I went and viewed
+[06:23.040 --> 06:25.720]  one of your profile pages, you would see it straight away. Like, Hey, look, Mark looks
+[06:25.720 --> 06:30.240]  at it. Use for that would be, Hey, maybe someone is in like, you often, I guess it's often
+[06:30.280 --> 06:32.760]  recruiters, right? You're like, Oh, I wonder why that person is following them. I'm going
+[06:32.760 --> 06:36.480]  to, I'm going to contact them. So it's almost like, is there a real time way of like interacting
+[06:36.480 --> 06:39.720]  with someone? I don't know if you wanted to collaborate with them on something or yeah,
+[06:39.720 --> 06:44.200]  I guess they got a job that's available. They use it in the news field as well. So I guess
+[06:44.200 --> 06:48.560]  here is similar to what you would see in, I guess in Facebook, I guess even in TikTok
+[06:48.560 --> 06:53.080]  and those sorts of tools. The goal is kind of make you interact with, with this product
+[06:53.080 --> 06:56.680]  more like they want you to stay on it. So they need to show you what is happening now
+[06:56.840 --> 07:00.520]  so that you're going to stay on it and not, and not, yeah, I guess to not go away and do
+[07:00.520 --> 07:04.040]  something else, which potentially is more useful, but they want you to just stay on
+[07:04.040 --> 07:07.840]  there. And then yeah, for LinkedIn, like this one's, I guess this one's like a little bit
+[07:07.840 --> 07:12.440]  of a, a smaller user base, but yeah, for the recruiters, I can see like, okay, what is
+[07:12.440 --> 07:17.040]  the trends of what is happening in terms of what jobs are available, what places those
+[07:17.040 --> 07:20.840]  are in the world and so on. And then Uber Eats, let's do one more example. So Uber Eats
+[07:20.840 --> 07:23.360]  is another one. So this one's kind of like what I was saying. So they've got a dash,
+[07:23.400 --> 07:27.320]  this is a very, very much a dashboard approach. And this is for a restaurant manager. So if
+[07:27.320 --> 07:30.680]  they were hosting the restaurant on there, and you can see like the things that are
+[07:30.680 --> 07:33.600]  interesting are they would get like missed orders. So hey, we've made a mess of this
+[07:33.600 --> 07:37.400]  order. Can we fix it like now rather than waiting till tomorrow? We've got this order
+[07:37.400 --> 07:40.920]  that's gone wrong. Can we, can we go and fix it? It's almost like you're able to achieve
+[07:40.920 --> 07:43.760]  like the customer service that you are in a restaurant where you can kind of see like
+[07:43.760 --> 07:47.240]  with your eyes, okay, these people look really angry with me. It's like, hey, look, the data
+[07:47.240 --> 07:51.120]  is being shown is almost giving you the equivalent of the, in the restaurant experience without
+[07:51.160 --> 07:55.520]  being in the restaurant. Okay, so what, how do we go about, so those are some examples of
+[07:55.680 --> 07:58.760]  people who have built those things and they're, they're a way more of them. Those are just
+[07:58.760 --> 08:02.000]  some, some ones that are picked up. How do we, how do we build that? So there are some
+[08:02.000 --> 08:06.640]  properties that we need to, we need to achieve. And some of these Javier was talking about
+[08:06.640 --> 08:10.520]  in his talks. First one is we want to be able to get the data in quickly where it is in
+[08:10.520 --> 08:14.160]  these applications that generally coming from a streaming data platform of, of some
+[08:14.160 --> 08:18.320]  sorts. In our talk, it's going to be Pulsar and we need to be able to get the data into
+[08:18.360 --> 08:22.720]  Pulsar and then into like wherever we want to get it to query it, in this case, into
+[08:22.720 --> 08:27.080]  Pina, we need to get it in there very, very quickly. Once it's in there, we want to be
+[08:27.080 --> 08:32.040]  able to query it very quickly as well. So one way of thinking about it is in these applications,
+[08:32.040 --> 08:37.360]  we want to do OLTP type queries, like query speeds on OLAP data. So we want to be querying
+[08:37.360 --> 08:41.240]  everything but getting like the results in, in like, imagine like a refresh on a web page
+[08:41.240 --> 08:44.640]  or like on a page on a web, on a mobile app. So I don't want to, don't want to be sitting
+[08:44.720 --> 08:49.080]  there waiting for five or 10 seconds for the results, right? And that, that, that particular
+[08:49.080 --> 08:53.920]  requirement is a lot more the case when it's an external user, right? Like if it's inside
+[08:53.920 --> 08:56.640]  a company, because it's fine, you can just go and get a coffee and wait for the results.
+[08:56.640 --> 08:58.840]  But if it's outside, you're not going to, you're not going to do that. They're going
+[08:58.840 --> 09:02.880]  to use, use another application instead. And then finally, we want to be able to scale it,
+[09:02.880 --> 09:06.960]  right? So either it could be like one, one dashboard doing loads of different queries
+[09:06.960 --> 09:11.720]  and kind of aggregate and bringing everything together into one view or it's a lot, maybe
+[09:11.760 --> 09:16.120]  lots of users like concurrently doing it. But end result is lots of queries are coming
+[09:16.120 --> 09:19.280]  in. We need to be able to handle those and it can't affect those other two things either.
+[09:19.280 --> 09:23.640]  So we need to be able to still be like doing lots of those concurrent queries while ingesting
+[09:23.640 --> 09:28.400]  big amounts of data very quickly. So how do we go about building one of those? So these
+[09:28.400 --> 09:31.560]  are, we kind of got around the outside some of the properties that you would have. And
+[09:31.560 --> 09:35.280]  then in the middle, we've got a couple of tools that can achieve this. So in this case,
+[09:35.280 --> 09:38.960]  Pulsar and Pino. And so you can kind of see we want to achieve real-time ingestion. The
+[09:38.960 --> 09:42.680]  data will often be like very wide, like lots of, lots of columns, lots of properties potentially
+[09:42.680 --> 09:45.240]  nested. And then we've got to do something with it to figure out how we're going to get
+[09:45.240 --> 09:49.080]  it into a structure that we can query it. And then yeah, you can kind of see some of
+[09:49.080 --> 09:53.000]  them. So we need to be able to, the data needs to be fresh. We want to do thousands of queries
+[09:53.000 --> 09:57.880]  a second. And then the latency needs to be like OLTP style. So I'm going to hand the
+[09:57.880 --> 09:58.880]  microphone back to Mary now.
+[09:58.880 --> 10:04.240]  Okay. Thank you. Okay. Thank you, Mark. So, okay. So now we're going to focus just couple
+[10:04.240 --> 10:09.320]  minutes on Apache Pulsar. So Pulsar, right? How many of you actually real quickly have
+[10:09.320 --> 10:14.000]  heard of Pulsar or working? Oh, working. Okay, cool. So some of you have, and then of course
+[10:14.000 --> 10:18.800]  there are also folks using Kafka too. But here I'm wanting to say, to tell you why we
+[10:18.800 --> 10:23.360]  want to use Pulsar, right? So right now in here too, for those of you who are new and
+[10:23.360 --> 10:28.560]  essentially to Pulsar, there are like a couple components to it, but primarily to their brokers
+[10:28.560 --> 10:33.800]  that are serverless Java runtime, right? And running, but it's very flexible too. So for
+[10:33.840 --> 10:38.480]  clients, you are supposed to be writing your producer and consumer, it takes on a pop-up
+[10:38.480 --> 10:43.240]  type of architectural pattern, right? So I won't have time to get into all the details,
+[10:43.240 --> 10:46.480]  but just give you a highlight, right? Producer, consumer is what you write. You can write it
+[10:46.480 --> 10:51.920]  in Java, in Go, in Python, in any kind of languages that are supported by the community
+[10:51.920 --> 10:57.400]  too. And then multiple brokers that are running and also is optimized too to run in the cloud
+[10:57.400 --> 11:04.520]  native environment. Also too, instead of it managing all of the huge amounts of log messages,
+[11:04.520 --> 11:09.080]  it actually leveraged on Bookkey, which is a patchy bookkeeper project. And it's also
+[11:09.080 --> 11:16.440]  like a high availability or fast read and fast write type of log, logging, distributed
+[11:16.440 --> 11:22.960]  logging system. Then it also makes use of Zookeeper to help it to manage the cluster, that aspect
+[11:23.000 --> 11:28.640]  of things. And now really quick to kind of give you an introduction. Pulsar was developed
+[11:28.640 --> 11:34.760]  first by Yahoo back in 2013 or so, and it's basically recognizing we need an event streaming
+[11:34.760 --> 11:40.760]  platform that can run very effectively in a cloud native environment. They contributed
+[11:40.760 --> 11:46.720]  to Apache Software Foundation in 2016 and then very quickly became a top level project
+[11:46.720 --> 11:53.440]  in 2018. And again, it's very cloud native in nature. It's already cluster based. Multitenancy
+[11:53.440 --> 11:57.760]  is supported too. Again, I talked already about the simple client APIs that you can
+[11:57.760 --> 12:02.560]  write in many different languages. And it separates, one of the strengths of Pulsar
+[12:02.560 --> 12:07.520]  is that it separates out the compute and the storage. So Pulsar manage all of the message
+[12:07.520 --> 12:12.840]  things and then have Bookkeeper manage all of the log messages and stuff. And then also
+[12:12.920 --> 12:18.240]  Pulsar has guaranteed message delivery. And also it has a Pulsar function framework that's
+[12:18.240 --> 12:23.960]  very lightweight too. So then you don't need to rely on any external libraries or vendors
+[12:23.960 --> 12:30.160]  essentially to kind of do message transformation as you are constructing your data pipeline
+[12:30.160 --> 12:35.760]  too. And also another feature about it is that it has tiered storage offload. So if
+[12:35.760 --> 12:42.040]  there's messages that becomes cold, then you can move it off to, or actually if it kind
+[12:42.040 --> 12:46.600]  of becomes cold, then it gets moved off to offline storage such as like S3 buckets and
+[12:46.600 --> 12:50.880]  things like that. Okay, so just real quick slide just to show too like about streaming
+[12:50.880 --> 12:55.600]  and not versus not streaming. So in modern day streaming, as you can see, we're ingesting
+[12:55.600 --> 13:01.960]  data and this is what we'll be ingesting for like, you know, analytics software processing
+[13:01.960 --> 13:06.840]  so like Pino, you ingest data and then without actually writing to disk like the traditional
+[13:06.840 --> 13:11.320]  way of doing things. So then it speeds up to the whole process. And it processes the
+[13:11.320 --> 13:15.760]  data in memory. And when you're done with processing, you can use Pulsar function to
+[13:15.760 --> 13:20.200]  transform your data, whatever you need, and then you output your data to a sync. So there
+[13:20.200 --> 13:24.720]  will be connectors that that helps you to do that. So the whole kind of pipeline is designed
+[13:24.720 --> 13:30.040]  to be very efficient. That's what it is. So and now we back to Pino a little more and
+[13:30.040 --> 13:35.120]  then with the demo too. All right, so what is what is Pino? So this diagram more or less
+[13:35.120 --> 13:41.240]  explains it. So as I say, we've got data coming in from from sources. So in our case, it's
+[13:41.240 --> 13:44.480]  going to be Pulsar, but you can kind of see there are lots of other ones. And what's kind
+[13:44.480 --> 13:48.040]  of interesting is you could you could have in theory, you could load into the same tables
+[13:48.040 --> 13:52.440]  streaming and batch data sources and query them query them both together. Once they come
+[13:52.440 --> 13:57.560]  in, it's a it's a column store. So it's a store. And then you can kind of do some aggregation.
+[13:57.560 --> 14:01.100]  There's all the different types of indexes on top of that. And you can do some prematerialization
+[14:01.100 --> 14:05.240]  as well. And then on the right hand side, we've got a couple of the use cases. So just
+[14:05.240 --> 14:10.480]  to quickly show you the architecture of how this how this works from the from the far side.
+[14:10.480 --> 14:14.720]  So the data is coming in from Pulsar here. We've got there are we're going to be using
+[14:14.720 --> 14:17.240]  three components. We've got a controller, we've got a server and then we'll have a broker,
+[14:17.240 --> 14:21.080]  which will come up here. So the controller is the manager of the cluster. So it's taking
+[14:21.080 --> 14:26.160]  care of a hey, where does this where does this data need to go and then and Pino uses
+[14:26.160 --> 14:32.280]  a tool called Helix, which is on top of on top of zookeeper. And so it will then it breaks
+[14:32.280 --> 14:38.080]  data out into segments. So the segments will in this particular case will map to the partitions
+[14:38.080 --> 14:42.800]  coming from Pulsar. So what like each partition will be coming to a segment. So if we had,
+[14:42.800 --> 14:46.160]  for example, four partitions, we get four, four different segments. And if you were doing
+[14:46.160 --> 14:48.960]  it in the cluster, in our case, we'll just did on my machine. But if you were doing it
+[14:48.960 --> 14:53.480]  in a cluster, it would then have decide where is it going to replicate each of the data coming
+[14:53.480 --> 14:57.680]  from each of the partitions. I might do one, one is on server one and seven four, and two
+[14:57.680 --> 15:01.680]  is on server two and seven three and so on at the servers in the data. So that's where
+[15:01.680 --> 15:05.480]  the data is going. Remember, the controller manages everything. And then we have the broker
+[15:05.520 --> 15:09.240]  is taking care of the querying. So the query comes in here. So for example, here we're
+[15:09.240 --> 15:14.240]  counting from a table how many how many rows for the country us. And then the broker sends
+[15:14.240 --> 15:18.200]  it out in a scatter gather type pattern out to the servers that it knows have the data
+[15:18.200 --> 15:22.400]  that will map that might be appropriate. And then it will they will kind of send their result
+[15:22.400 --> 15:28.040]  back and then the broker takes care of aggregating it and sending it back to the client. Okay,
+[15:28.040 --> 15:32.720]  now let's have a look at a demo. Let's see if I can get this to. So what we're going to
+[15:32.760 --> 15:38.440]  do is if in case you want to look at it, this is where the demo lives. Hopefully that QR
+[15:38.440 --> 15:46.200]  code still works. I'll just let you take a picture of it. And what it what it is, we can kind of
+[15:46.200 --> 15:51.640]  tell from the name. So it's a wiki demo. It's going to sit in as I say before, it's going to sit
+[15:51.640 --> 15:56.000]  in this bottom corner. So real time dashboard. And this is the architecture of it. So we've got a
+[15:56.000 --> 15:59.680]  streaming API. And the data is going to come in, we've got a Python application, it's going to
+[15:59.680 --> 16:03.760]  process it, put it into Palsar, from Palsar into Pino. And then we're going to have a stream
+[16:03.760 --> 16:09.440]  that dashboard on the end. We've got 15 minutes. So let's see how we go. So wiki media has a really
+[16:09.440 --> 16:17.440]  nice recent changes feed. So this is capturing all the changes that are being done to different
+[16:17.440 --> 16:22.560]  properties in wiki media. And they actually store it internally as Kafka, but then expose it using
+[16:22.560 --> 16:26.800]  server side events protocols. This is a HTTP protocol, it basically just streams out loads
+[16:26.800 --> 16:32.000]  and loads of it, it reflects from the infinite stream of these events. And this is what it looks
+[16:32.000 --> 16:36.400]  like. So we get three properties to get an event, an ID and a data. The main bit that's
+[16:36.400 --> 16:40.560]  interesting is data. So you can kind of see it's like a sort of nested JSON structure of stuff.
+[16:40.560 --> 16:46.560]  And you can kind of, you can sort of see like, so we've got like the URL that's been changed,
+[16:46.560 --> 16:51.440]  you've got a request ID, you got an ID. It says somewhere, yeah, like what was the title of the
+[16:51.440 --> 16:57.920]  page? When was the time stamp? At the revision? Yeah, it's got lots of lots of kind of interesting
+[16:57.920 --> 17:02.880]  stuff that we can, that we can pull out. Nope, not done yet. Okay, so now that would have been,
+[17:02.880 --> 17:09.760]  that would have been amazing. So we have got, if I come, can you see? Yes. All right, great. How can I
+[17:12.720 --> 17:17.840]  see if I can get this to stay on my, hopefully, is that good enough? Is that good enough? Yeah.
+[17:17.840 --> 17:24.800]  All right, perfect. So we have a, let's see if I can type, pigmentize. Ah.
+[17:28.160 --> 17:33.040]  Yeah, there we go. So we've got a script called wiki.pipe. So this is what it looks like. So
+[17:34.400 --> 17:38.080]  I guess the red is not entirely readable. But we've got, this is, this is the,
+[17:38.960 --> 17:42.800]  don't do that. This is the URL that we're going to be working with. So you can see these are,
+[17:43.760 --> 17:49.280]  if I paste that into my browser. Oh, I don't know. What's that done? It's going to the wrong one.
+[17:49.280 --> 17:55.600]  Come here. Hang on. I'll escape that. So if we paste that in here, this is what it, this is what
+[17:55.600 --> 17:59.360]  it looks like. So you get some loads and loads of messages. Chrome will eventually get very,
+[17:59.360 --> 18:02.080]  very angry with you if you leave this running forever. But you can kind of see the messages
+[18:02.080 --> 18:06.880]  are coming through. And so we're going to be processing that. So you sort of see, we've got,
+[18:06.880 --> 18:11.680]  we're just using the request library in Python to make a wrap around it. So that's this bit here.
+[18:11.920 --> 18:15.920]  Wrap around that, that particular endpoint. And then it's going to stream the events. And we've
+[18:15.920 --> 18:21.040]  got this SSE, the server side events client, Python client. Wrap that round and we get an
+[18:21.040 --> 18:27.440]  infinite stream of messages. So if we were to run this, so let's just go here. And we'll pipe it
+[18:27.440 --> 18:31.920]  into JQ just so it's a bit more readable. So you can kind of see like the messages are coming through.
+[18:33.200 --> 18:37.280]  If I stop it and scroll up, so you can see we've got, this is what it looks like. So you got
+[18:38.240 --> 18:44.000]  the schema, meta, ID type. You can kind of see like, oh, this is, this is, this is what,
+[18:44.000 --> 18:47.440]  oh, this is Russian, Russian, someone's changing Russian Wikipedia at the moment apparently.
+[18:48.080 --> 18:52.880]  There you go. Thanks. So we've got lots of different stuff. And so that's kind of the first
+[18:52.880 --> 18:57.040]  bit, right? We wanted to get the stream into like a fashion that we've got it, right? So we've done
+[18:57.040 --> 19:01.120]  that bit. Next bit is we want to get it into Pulsar. So let's have a look at our second script. So
+[19:01.680 --> 19:06.240]  this one is to get it into Pulsar. Oh, hang on. It's a bit longer. So let's just pipe it into
+[19:06.240 --> 19:11.600]  less first. So we're going to be using the Pulsar client. And the first bit is the same, right?
+[19:11.600 --> 19:18.480]  So we still build our streaming client here, like for the, for the wiki. But then we also build a
+[19:18.480 --> 19:23.680]  Pulsar client here. So we're creating a Pulsar client. We point it to localhost 665. This is
+[19:23.680 --> 19:27.120]  the port. We're actually running all this in Docker, but if it exposes the ports out to the,
+[19:27.120 --> 19:33.360]  to the host OS, we create a producer. So our topic is going to be called wiki events.
+[19:33.360 --> 19:37.360]  And then if you scroll down here, this is still the same. So we're still looping through that
+[19:37.360 --> 19:43.120]  stream of stuff. But this time we, we then call the Pulsar producer and we send it a message and
+[19:43.120 --> 19:49.280]  we're sending it in async, which means we're not going to wait for the response, right? And then
+[19:49.280 --> 19:55.040]  finally we flush, we flushed it every 100 messages. Anything else to add on the Pulsar
+[19:55.040 --> 20:01.120]  production? That's good. All right, cool. So now let's call that one. So if we call Python
+[20:02.080 --> 20:08.720]  wiki to Pulsar. So then I run and you can kind of see like it will sort of run away and everything
+[20:08.720 --> 20:12.960]  is, everything is happy. I can never remember quite exactly what the commands are, but we can
+[20:12.960 --> 20:18.320]  then use the Pulsar client to check that these messages are making their way in. So we can call
+[20:18.320 --> 20:21.280]  this Pulsar client and we say we're going to actually, do you want to explain it? You're
+[20:21.280 --> 20:27.440]  probably better than me. Yeah, consuming and the events and then also the subscription. You have
+[20:27.520 --> 20:32.480]  a name to it. Okay. So it's going to pick up wherever it was the last time I did it. So let's
+[20:32.480 --> 20:36.480]  see. So there we go. I mean, this is going way faster. I guess it's catching up the ones that
+[20:36.480 --> 20:40.320]  we've done, we've done before. So, and then eventually we'll come to the same sort of speeds.
+[20:40.320 --> 20:44.800]  So we can see these are, these are the messages coming through Pulsar. We've put it in JSON
+[20:45.520 --> 20:50.000]  format, but it can handle multiple forms, right? If you wanted to. So yeah, sort of all the, all
+[20:50.000 --> 20:53.360]  the typical ones you would expect. So I guess most people would be doing Avro with some sort of
+[20:54.000 --> 20:57.120]  schema attached to it. But I mean, for, yeah, for simplicity in the demo,
+[20:57.120 --> 21:01.680]  JSON is quite a, quite a nice tool. Okay. So we've got it that far. Next thing is we want to get it
+[21:01.680 --> 21:09.360]  into our, into a way that we can query it from, let's see, where's my, right? So, so as I say,
+[21:09.360 --> 21:15.440]  Pino, it's like model is table. So you create a table and you can query it. And the first thing is
+[21:15.440 --> 21:21.520]  we need to have a schema for that table. So this is what the Wikipedia one looked like. So we're
+[21:21.520 --> 21:24.880]  pulling out some of the fields. We've got ID, we've got Wiki, we've got user, we've got title,
+[21:24.880 --> 21:30.720]  comment, stream, type, bots, and then we've specified a timestamp down to bottom. You notice maybe
+[21:31.600 --> 21:35.440]  that this is, this is kind of using the, the language of data warehousing. So these are dimension
+[21:35.440 --> 21:38.880]  fields. We don't have any metrics fields in because there aren't really anything that we can count
+[21:38.880 --> 21:42.960]  in this dataset, but you could have, if you had something that you were counting, then you could
+[21:42.960 --> 21:48.400]  put that as a metric field. And then finally we've got a date time field as well. Now in general,
+[21:49.040 --> 21:54.000]  by default, whatever fields you put in here, it will map exactly. If there is a value in your
+[21:54.000 --> 21:58.560]  source with this name, it will map it directly. So in ideal world, everything is flat and we just
+[21:58.560 --> 22:04.960]  go map, map, map, map, map. In this case actually, it's not quite as simple as that, but so what
+[22:04.960 --> 22:08.240]  we need to do, so I'll just show you the table conflict that goes with it. But the first thing
+[22:08.240 --> 22:13.200]  to notice is we can do these transformation functions to get the data into our column. So
+[22:13.200 --> 22:17.840]  ID is under meta.id. So we're using this JSON path function to pull stuff out. You could,
+[22:17.840 --> 22:21.920]  if you wanted to, if you, if we had cleaned the data up before, we could have used Palsar's
+[22:21.920 --> 22:25.680]  serverless functions to do the same thing. And then we would have it in a cleaner state and
+[22:25.680 --> 22:30.720]  just go straight into Pina. So you can kind of choose which, which of those options. This is not
+[22:30.720 --> 22:36.000]  a replacement for a stream processor, right? This is just a very, very tiny adjustments to the data,
+[22:36.000 --> 22:40.320]  right? If it was like slightly, slightly wrong. And then the other thing was the timestamps in
+[22:40.960 --> 22:46.720]  the wiki give you are in milliseconds, epoch seconds, and I need epoch milliseconds for,
+[22:46.800 --> 22:52.160]  for Palsar. So I multiply by a thousand. Now let's, oh, sorry. Yeah, I forgot the top bit. So
+[22:52.160 --> 22:56.080]  top bit, name of the table needs to match the name of the schema. So it's Wikipedia.
+[22:56.800 --> 23:00.560]  We need to specify what's the timestamp. And then this is the config that's telling it, hey, I need
+[23:00.560 --> 23:05.360]  to, actually, I'm looking, I'm looking at the wrong one even. I should be, I shouldn't be saying
+[23:06.720 --> 23:14.560]  table Palsar. There we go. So, sorry. So you see here, we say, hey, I'm going to be pulling the
+[23:14.560 --> 23:21.040]  data from the Palsar stream. This is my Palsar connection string. I then need to say, hey,
+[23:21.040 --> 23:24.560]  I'm going to decode, I need, I'm going to tell it which factory to use. I need to tell it the
+[23:24.560 --> 23:29.280]  Palsar factory. And then this is, yeah, I mean, this is not really necessary for, for now. And
+[23:29.280 --> 23:33.360]  what we're going to do now is we're going to add our table. So what this is going to do is going
+[23:33.360 --> 23:36.160]  to create the table and then immediately it's going to start consuming. If you didn't have any
+[23:36.160 --> 23:40.880]  messages in there, it obviously wouldn't consume anything. But since we, we do, we should be able
+[23:40.880 --> 23:46.160]  to see our table here, Wikipedia. And you can see we've got, the messages are kind of coming in.
+[23:46.160 --> 23:50.960]  So you can see we've got, at the moment, 9,000 messages. We could write like a, so it's a sequel,
+[23:51.600 --> 23:56.480]  sequel on top of it. So we can, thanks. We could say, okay, let's have a look which user is doing
+[23:56.480 --> 24:05.520]  the most stuff. Let's hang on. Oh, forgot the group by group. By user. Oh, can't type. Order by,
+[24:05.520 --> 24:09.200]  can't start sending. So we could do, yeah, we could do something.
+[27:05.520 --> 27:13.120]  What people, where people are changing stuff. And then finally, yeah, let me just, let me just
+[27:13.120 --> 27:21.040]  quickly show you what, what, what exactly what we're doing. Okay. They're back again. Should I
+[27:21.040 --> 27:29.200]  put it back? Yeah. Yeah. Okay. All right, easy one, easy one. So, oh, sorry. So what we're doing,
+[27:29.280 --> 27:34.560]  so it's all in Python. So we're using the Pena Python driver. We're connecting to Pena here.
+[27:35.440 --> 27:38.240]  And then we're basically just running some queries. So the one that we're showing you,
+[27:38.240 --> 27:42.320]  like the table on the top, this red is not entirely readable. Is that aggregation plus
+[27:42.320 --> 27:47.040]  filtering. So kind of capturing what happened in the last minute versus, versus what happened
+[27:47.040 --> 27:51.200]  a minute before. And then we're going to kind of just run the query and stick it into pandas.
+[27:51.200 --> 27:54.800]  We do the same. We build some metrics. There's numbers on the top there called,
+[27:54.800 --> 27:58.560]  string that calls the metrics. So we can pass in like a value and then we can build
+[27:58.560 --> 28:01.840]  the dieters. And the dieters, this minute minus the previous minutes, you can kind of see the
+[28:01.840 --> 28:07.280]  change. And instead of, yeah, I mean, I guess, yeah, that's probably enough on the code. But
+[28:07.280 --> 28:11.520]  if you want to have a look at that, it's all in the, the repository. And in theory, like you've
+[28:11.520 --> 28:15.360]  seen me literally just running the commands in there. It should just, should just work. So
+[28:15.360 --> 28:19.760]  hopefully, hopefully you can, you can follow along. But I just came back to here to conclude.
+[28:21.440 --> 28:26.320]  So yeah, lots of, lots of people doing stuff with, with parents or some of the, the users
+[28:27.200 --> 28:33.120]  parcel as well. So lots of, lots of different, lots of people, people using it. Just a conclusion
+[28:33.120 --> 28:38.000]  and then, and then one more slide. So I hope that you can kind of see what you're combining
+[28:38.000 --> 28:43.360]  these different tools together. You can build some quite, some quite cool applications. In this
+[28:43.360 --> 28:46.480]  case, I'm just going to show you what the action would be because all the users have built. But
+[28:46.480 --> 28:51.440]  you could imagine, like if it was like, if you were looking at real wicked users, you maybe want
+[28:51.440 --> 28:54.880]  to try and encourage the ones you see like are coming in new. We've built something that's fresh
+[28:54.960 --> 29:00.560]  there, the fast gradient scale. And we've done it with a classroom. For me, I'm writing a book with
+[29:00.560 --> 29:04.000]  an ex colleague of mine, I'm showing you how to build these type of things. If you're interested
+[29:04.000 --> 29:10.320]  in that, then there's my contact on your left. And I let Mary conclude. Just, okay. Here, it's just
+[29:10.320 --> 29:15.280]  how you can connect me with me and also Apache Pulsar. If you're interested, we have a Slack group
+[29:15.280 --> 29:20.480]  and also a wiki page. Sorry, wiki page of Apache Pulsar neighborhood team that you can
+[29:21.040 --> 29:27.040]  build up on more stuff on. So, okay, I think then this is pretty much it. And if you need more
+[29:27.920 --> 29:32.400]  links to Pulsar, this is the page and I can share the slide that we can share the slide
+[29:32.400 --> 29:37.760]  with you so you can have more. And we also have developer data stacks. We'll have it on YouTube
+[29:37.760 --> 29:43.680]  in five minutes about Pulsar if you're interested in that. Also, we'll have also master data stacks
+[29:43.680 --> 29:48.080]  developers that you can find examples to because today we can't get into a lot of these things.
+[29:48.080 --> 29:51.760]  And myself too, I've actually have a Twitch stream every Wednesday afternoon,
+[29:52.480 --> 29:56.400]  central time like Chicago, so there will be evening time here. So if you're interested,
+[29:56.400 --> 30:03.120]  you can follow me on Twitch as well. And yeah, I think that's it. How did it become like this?
+[30:03.120 --> 30:10.240]  Thank you. Thank you.
+[30:10.240 --> 30:16.400]  Backup slides in case the camera gets disastrously.
+[30:16.400 --> 30:18.400]  Two questions.
+[30:18.400 --> 30:22.400]  Here's one.
+[30:22.400 --> 30:27.840]  Yeah, quick one. As you know, the way Kafka has, you can have cluster of Kafka instance
+[30:27.840 --> 30:31.280]  brokers and stuff like that. Do you have that same problem where like one goes down,
+[30:31.280 --> 30:34.320]  the other one says going down? It's like zookeeper kind of causes that problem.
+[30:34.320 --> 30:38.480]  Because when I say Kafka, it always seems to be a problem with speaking with each other.
+[30:38.480 --> 30:46.880]  So that's more about, I can move it offline with you and if folks are interested too,
+[30:46.880 --> 30:51.760]  but I actually also have another talk that's kind of deeper right into Pulsar.
+[30:51.760 --> 30:55.440]  As well as tomorrow too, I actually have a talk at the open JDK room, but that's
+[30:55.440 --> 31:00.960]  more focusing on JMS. So there will be open JDK room in building H. So if you want to do that.
+[31:00.960 --> 31:06.080]  But as far as Pulsar is concerned, it is very cloud native by itself. So a lot of things
+[31:06.080 --> 31:09.840]  who in fact I didn't get to talk about is very infrastructure aware.
+[31:09.840 --> 31:13.280]  So things like, you know, you don't want to worry about how do you deal with
+[31:13.280 --> 31:16.640]  offsets while in Kafka. You don't have such, you don't have such thing.
+[31:16.640 --> 31:20.640]  And then there are other things too. You just don't have enough time.
+[31:20.640 --> 31:24.480]  I think I was told this time's up. So we can move it offline and then follow me on
+[31:24.480 --> 31:27.920]  my discord. Actually, I didn't even get my discord, but follow me somewhere.
+[31:28.480 --> 31:32.880]  Twitter. And I'll be happy to answer any questions you have. Thank you.
+[31:32.880 --> 31:39.680]  Okay. Thank you. Thank you.

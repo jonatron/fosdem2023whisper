@@ -1,0 +1,560 @@
+[00:00.000 --> 00:07.680]  With that, I will pass it over to our next speaker.
+[00:07.680 --> 00:09.000]  I think we're right on time.
+[00:09.000 --> 00:12.800]  How to package EBPF software presented on Gentoo Linux.
+[00:12.800 --> 00:14.200]  I will pass it over to you.
+[00:14.200 --> 00:15.160]  Welcome.
+[00:15.160 --> 00:17.720]  Thank you.
+[00:17.720 --> 00:20.720]  So yeah, my name is Yako, and this is the topic.
+[00:20.720 --> 00:24.320]  So let's dive straight into it.
+[00:24.320 --> 00:25.920]  What are we going to discuss in this talk?
+[00:25.920 --> 00:30.680]  So I'm going to introduce you shortly to a topic of EBPF
+[00:30.680 --> 00:32.960]  technology, explain a little bit what it is,
+[00:32.960 --> 00:35.720]  what we can do with it, and a little bit about history
+[00:35.720 --> 00:40.640]  and what development tools you can use to develop your own
+[00:40.640 --> 00:42.440]  EPF programs.
+[00:42.440 --> 00:46.600]  After that, we're going to focus on packaging side of things.
+[00:46.600 --> 00:48.440]  We're going to talk about a little bit of packaging
+[00:48.440 --> 00:51.840]  on Gentoo Linux, and then some challenges, problems
+[00:51.840 --> 00:55.800]  we have faced just packaging software and BPF software
+[00:55.800 --> 00:58.960]  in general on Gentoo and how we can fix or overcome
+[00:58.960 --> 01:01.840]  these issues.
+[01:01.840 --> 01:05.960]  So a little bit about, I work for a company called Santura.
+[01:05.960 --> 01:09.680]  We are based in Zagreb, Croatia, and our expertise
+[01:09.680 --> 01:14.000]  on most of our work revolves around embedded Linux.
+[01:14.000 --> 01:16.160]  We are focused on network edge.
+[01:16.160 --> 01:19.120]  We work a lot with network switches, CPEs,
+[01:19.120 --> 01:20.920]  and things like this.
+[01:20.920 --> 01:24.120]  We are heavily using some operating systems that
+[01:24.120 --> 01:28.320]  are tailored for embedded systems such as Buildroot, OpenWRT,
+[01:28.320 --> 01:28.720]  Yocto.
+[01:28.720 --> 01:32.600]  But we've also been using Gentoo for some of our stuff
+[01:32.600 --> 01:36.760]  that has to do with embedded devices as well.
+[01:36.760 --> 01:39.280]  We're also passionate about open source projects.
+[01:39.280 --> 01:41.600]  We love to contribute to open source
+[01:41.600 --> 01:44.920]  and give something back to the community.
+[01:44.920 --> 01:49.880]  And myself, I had the privilege of being a Gentoo developer
+[01:49.880 --> 01:51.720]  since 2021.
+[01:51.720 --> 01:53.760]  So I'm going to talk some experiences.
+[01:53.760 --> 01:57.920]  Well, we'll be using in Santura some BPF programs
+[01:57.920 --> 02:01.200]  and some of our projects for our network devices.
+[02:01.200 --> 02:05.120]  But I'm also going to share some experiences or things
+[02:05.120 --> 02:08.720]  I've learned during my time that I
+[02:08.720 --> 02:10.760]  had a chance to be a Gentoo developer and just how
+[02:10.760 --> 02:12.800]  to package software in general.
+[02:12.800 --> 02:21.840]  OK, so eBPF, short term for Extended Berkeley Packet
+[02:21.840 --> 02:22.340]  Filter.
+[02:22.340 --> 02:24.440]  So what is it?
+[02:24.440 --> 02:25.960]  Essentially, it's a Linux subsystem
+[02:25.960 --> 02:28.160]  that can run programs in a virtualized environment.
+[02:28.160 --> 02:31.320]  So it actually allows you to extend
+[02:31.320 --> 02:34.960]  functionality of your kernel without the need
+[02:34.960 --> 02:38.160]  to change your kernel source code, recompile it,
+[02:38.160 --> 02:41.120]  redeploy it, and all this complicated procedure
+[02:41.400 --> 02:44.520]  repeated multiple times.
+[02:44.520 --> 02:47.560]  Essentially, it allows you to write your own program
+[02:47.560 --> 02:51.480]  and then your BPF program can attach to the kernel.
+[02:51.480 --> 02:53.440]  And then you can extract or analyze
+[02:53.440 --> 02:57.200]  different information based on various Linux syscalls.
+[02:57.200 --> 03:01.000]  So for example, if you want to see,
+[03:01.000 --> 03:02.840]  you can see, let's say, how many times
+[03:02.840 --> 03:05.840]  or you can print information anytime
+[03:05.840 --> 03:11.720]  that user opens a certain file on his computer.
+[03:11.720 --> 03:15.680]  Nowadays, when we hear the term BPF,
+[03:15.680 --> 03:19.440]  most of the time it's referring to Extended BPF or eBPF.
+[03:19.440 --> 03:23.440]  But nowadays, we have something called Classic.
+[03:23.440 --> 03:28.000]  It got named Classic BPF, which is a simple internal virtual
+[03:28.000 --> 03:32.680]  machine designed to handle network packet filtering.
+[03:32.680 --> 03:36.160]  It started back in the 1990s, and that's
+[03:36.160 --> 03:38.200]  how we got its name, so packet filtering,
+[03:38.200 --> 03:42.360]  because that's what it was used for.
+[03:42.360 --> 03:47.320]  But Extended BPF was implemented on top of this standard BPF,
+[03:47.320 --> 03:48.360]  let's say.
+[03:48.360 --> 03:51.120]  I believe the first kernel to have support for eBPF
+[03:51.120 --> 03:55.760]  was 3.18, if I'm not mistaken, which was around 2014
+[03:55.760 --> 03:56.960]  and 2015 released.
+[03:56.960 --> 04:00.000]  So it's been less than 10 years.
+[04:00.000 --> 04:03.520]  And in this short period, this technology really
+[04:03.520 --> 04:06.040]  grew into a huge ecosystem.
+[04:06.040 --> 04:09.200]  Nowadays, it's just a general event processing framework.
+[04:09.200 --> 04:13.840]  And there are numerous tools available, information,
+[04:13.840 --> 04:16.200]  videos, books written about how you can do what you can do
+[04:16.200 --> 04:17.520]  with BPF.
+[04:17.520 --> 04:19.800]  We're not going to discuss or go into too many details,
+[04:19.800 --> 04:22.320]  because it's quite long.
+[04:22.320 --> 04:27.000]  But nowadays, it's used for observability, networking,
+[04:27.000 --> 04:31.120]  security, application tracing, and things like this.
+[04:31.120 --> 04:35.000]  If you're interested to learn more about this concept,
+[04:35.000 --> 04:37.320]  or just in general about performance and observability,
+[04:37.320 --> 04:40.920]  I highly recommend you to check Brandon Gregg's content.
+[04:40.920 --> 04:44.480]  He wrote a book, and there are many videos
+[04:44.480 --> 04:48.480]  available of him online in which he
+[04:48.480 --> 04:51.480]  speaks about performance, observability, BPF program,
+[04:51.480 --> 04:52.480]  and things like this.
+[04:52.480 --> 04:55.040]  So definitely check his content out
+[04:55.040 --> 04:58.240]  if you want to learn more.
+[04:58.240 --> 05:01.000]  So now we can take a look at some of the tools
+[05:01.000 --> 05:04.480]  that were developed to allow us to write BPF programs more
+[05:04.480 --> 05:05.440]  easily.
+[05:05.440 --> 05:06.920]  So how BPF programs actually work.
+[05:06.920 --> 05:10.640]  So before they can be loaded in the kernel,
+[05:10.640 --> 05:13.720]  they need to be compiled into bytecode.
+[05:13.720 --> 05:15.600]  So you can actually write this bytecode directly,
+[05:15.600 --> 05:17.800]  but it's going to be very tedious,
+[05:17.800 --> 05:21.600]  tedious process, not really suitable for development.
+[05:21.600 --> 05:24.520]  So there have been a lot of different tools,
+[05:24.520 --> 05:28.560]  toolkits implemented in various high-level languages
+[05:28.560 --> 05:33.800]  that allows you to do these things more easily.
+[05:33.800 --> 05:35.440]  So I've just mentioned a few projects here,
+[05:35.440 --> 05:40.240]  but if you go to eBPF.io, there are many more applications
+[05:40.240 --> 05:44.200]  written depending on what you want to use or what language.
+[05:44.200 --> 05:48.120]  For example, maybe a popular one was BCC.
+[05:48.120 --> 05:51.360]  So it's a toolkit for writing BPF programs using
+[05:51.360 --> 05:53.880]  higher-level language, such as Python and Law.
+[05:53.920 --> 05:58.960]  And it uses a LLVM compiler backend.
+[05:58.960 --> 06:03.040]  There's also BPF Trace, which is a high-level tracing language.
+[06:03.040 --> 06:06.760]  Then we have a libBPF, which is user space library
+[06:06.760 --> 06:10.240]  for loading and interacting with BPF programs.
+[06:10.240 --> 06:13.440]  This is actually in kernel library
+[06:13.440 --> 06:16.080]  present in the kernel source.
+[06:16.080 --> 06:17.720]  It grew very popular around the recent years.
+[06:17.720 --> 06:20.360]  There was a concept of BPF development.
+[06:20.640 --> 06:24.880]  It's so-called BPF-C-O-R-E compiled once run everywhere.
+[06:24.880 --> 06:29.280]  So it's a concept that allows you to develop programs
+[06:29.280 --> 06:31.080]  even more easily compared to, let's say,
+[06:31.080 --> 06:35.040]  BCC, which uses LLVM and Clang as a compiler,
+[06:35.040 --> 06:39.400]  which introduce more heavy dependencies
+[06:39.400 --> 06:43.760]  or certain requirements that maybe you cannot meet
+[06:43.760 --> 06:48.120]  if you're deploying something on an embedded environment.
+[06:48.120 --> 06:51.080]  There's also, for example, EBPF Go library,
+[06:51.080 --> 06:53.200]  Ply, lightweight dynamic tracing tool,
+[06:53.200 --> 06:56.760]  and many other applications.
+[06:58.240 --> 06:59.880]  Most of these packages are,
+[06:59.880 --> 07:01.200]  well, yeah, they're available in Gen2.
+[07:01.200 --> 07:03.720]  We have BCC, BPF Trace.
+[07:03.720 --> 07:05.440]  I believe we don't have EBF Go library,
+[07:05.440 --> 07:09.160]  but all of the other ones are present as packages.
+[07:09.160 --> 07:10.280]  So if you're using Gen2,
+[07:10.280 --> 07:13.920]  you can just simply download the latest version available.
+[07:14.760 --> 07:15.600]  Okay.
+[07:17.800 --> 07:21.800]  So now we talked a little bit about BPF,
+[07:21.800 --> 07:23.960]  what it is, what kind of tools we have.
+[07:23.960 --> 07:26.160]  Now let's focus on packaging side of things.
+[07:27.920 --> 07:29.520]  So Gen2, I'm sure you've heard about it.
+[07:29.520 --> 07:31.960]  It's a source-based distribution.
+[07:33.320 --> 07:35.960]  This fact is the one that distinguishes Gen2
+[07:35.960 --> 07:37.560]  from other distributions.
+[07:37.560 --> 07:40.440]  So usually if you're using, let's say,
+[07:40.440 --> 07:42.840]  Debian, Fedora, Ubuntu,
+[07:42.840 --> 07:44.360]  you wanna download, install package,
+[07:44.360 --> 07:46.280]  your package manager is gonna download
+[07:46.280 --> 07:49.480]  from repository pre-compiled package extracted
+[07:49.480 --> 07:51.600]  and install into your file system.
+[07:51.600 --> 07:53.200]  Well, Gen2 does things differently.
+[07:53.200 --> 07:57.560]  So most of the packages are actually, you know,
+[07:57.560 --> 07:58.480]  compiled from source.
+[07:58.480 --> 08:01.280]  So the package manager has to do all things
+[08:01.280 --> 08:02.480]  such as fetching the source,
+[08:02.480 --> 08:04.480]  then it has to unpack the source,
+[08:04.480 --> 08:08.160]  configure, compile, install, configure after installation,
+[08:08.160 --> 08:09.680]  and things like this.
+[08:09.680 --> 08:12.640]  Main component of Gen2 is actually,
+[08:12.640 --> 08:15.000]  it's package manager called Portage.
+[08:15.000 --> 08:16.520]  Portage is actually this component
+[08:16.520 --> 08:20.760]  that allows you to have this highly flexible
+[08:20.760 --> 08:21.800]  and customizable system.
+[08:21.800 --> 08:24.600]  It allows you to have a great control over your system.
+[08:25.800 --> 08:28.600]  So Gen2 is actually designed to be like,
+[08:28.600 --> 08:29.960]  you have a, when you download Gen2,
+[08:29.960 --> 08:32.920]  usually you have a minimal set of,
+[08:32.920 --> 08:34.400]  you have minimal archive which contains
+[08:34.400 --> 08:38.120]  just a basic set of tools like compilers, libraries,
+[08:38.120 --> 08:41.600]  you know, stuff that you,
+[08:41.600 --> 08:44.240]  stuff that are required to build programs actually.
+[08:44.240 --> 08:46.280]  So you just download this minimal set of files
+[08:46.280 --> 08:48.280]  and then you build, you build your own,
+[08:48.280 --> 08:52.340]  let's say, system tailored for your own needs.
+[08:57.000 --> 09:00.980]  Now, if we talk about package in Gen2 itself,
+[09:02.560 --> 09:05.160]  I've written some terms to allow us
+[09:05.160 --> 09:07.400]  to understand how this is actually done.
+[09:07.400 --> 09:08.840]  So we have eBuild.
+[09:08.840 --> 09:12.920]  eBuild is simply, yeah, it's a package file,
+[09:12.920 --> 09:16.120]  it's simply a text file that contains build instructions.
+[09:16.120 --> 09:18.980]  So it's written in a bash like syntax.
+[09:20.040 --> 09:23.240]  So this eBuild actually gives all of the instructions
+[09:23.240 --> 09:27.080]  to Portage how he's gonna download the source,
+[09:27.080 --> 09:29.040]  how to unpack, how to configure based
+[09:29.040 --> 09:32.200]  on what build system the project is using,
+[09:32.200 --> 09:33.380]  how to install the package,
+[09:33.380 --> 09:36.720]  whether you need to do some additional things,
+[09:36.760 --> 09:39.480]  specifying dependencies that need like this as well.
+[09:40.600 --> 09:42.280]  Then we have something called eClass.
+[09:42.280 --> 09:46.280]  So eClass, we can think of eClass like a library.
+[09:46.280 --> 09:51.280]  So it's just a, it's a common code used by different eBuilds.
+[09:52.560 --> 09:55.360]  So it's just there to avoid code duplication.
+[09:55.360 --> 09:59.200]  So for instance, easiest way to explain this is
+[09:59.200 --> 10:01.000]  if you're using, you have different build systems
+[10:01.000 --> 10:03.080]  such as, you know, auto tools, build system,
+[10:03.080 --> 10:05.440]  CMake or mess on build system.
+[10:05.440 --> 10:08.560]  So each of these systems has its own eClass.
+[10:08.560 --> 10:11.400]  Basically it allows you to avoid having to write,
+[10:11.400 --> 10:15.640]  you know, the same procedure for configuring,
+[10:15.640 --> 10:17.240]  building, installing the package.
+[10:18.840 --> 10:20.720]  We also have something called the use flag,
+[10:20.720 --> 10:24.000]  but we can think of it as like a feature flag
+[10:24.000 --> 10:25.040]  or configuration flag.
+[10:25.040 --> 10:29.560]  So this actually allows you to,
+[10:29.560 --> 10:32.140]  when you're compiling your package, building it from source,
+[10:32.140 --> 10:34.720]  it allows you to selectively turn on
+[10:34.720 --> 10:36.920]  or off certain features if you want them enabled
+[10:36.920 --> 10:39.040]  or disabled, like if you're building,
+[10:39.040 --> 10:41.680]  let's say you're building Gen2 for a headless system
+[10:41.680 --> 10:42.980]  for a server or something.
+[10:44.320 --> 10:45.880]  You're probably not gonna need support
+[10:45.880 --> 10:47.840]  for graphics graphical interface.
+[10:47.840 --> 10:51.560]  So you can just, for instance, you can look up
+[10:51.560 --> 10:55.440]  what use flag controls this support for graphical interface
+[10:55.440 --> 10:57.960]  and you can simply turn it off in your configuration.
+[10:57.960 --> 11:01.440]  So then package manager is not gonna pull
+[11:01.440 --> 11:03.400]  in any of these dependencies, you know,
+[11:03.400 --> 11:06.760]  Wayland, X11 or whatever can be used
+[11:06.760 --> 11:08.960]  and all of your packages are gonna be built
+[11:08.960 --> 11:10.640]  with the graphics support disabled.
+[11:12.920 --> 11:14.640]  Yeah, so when packaging things,
+[11:14.640 --> 11:19.000]  these are probably things we work with most of the times.
+[11:21.680 --> 11:24.680]  Now we can look at a short example.
+[11:24.680 --> 11:28.480]  So I've put a link here on our GitHub repository.
+[11:28.480 --> 11:31.920]  Essentially it's a small application just developed
+[11:31.920 --> 11:36.320]  to demonstrate how to write eBPF program
+[11:36.320 --> 11:37.640]  and how to package it.
+[11:39.520 --> 11:41.400]  There are also links to two blog posts here.
+[11:41.400 --> 11:44.960]  First one talks about how the BPF aspect of things,
+[11:44.960 --> 11:47.560]  how it was actually developed.
+[11:47.560 --> 11:51.560]  And the second one talks about packaging it using,
+[11:52.560 --> 11:55.280]  well, the second part actually talks about mostly
+[11:55.280 --> 11:57.440]  from the aspect of cross compilation.
+[11:57.440 --> 12:00.520]  We're not gonna focus on cross compilation,
+[12:00.520 --> 12:02.680]  but it still gives a good overview
+[12:02.680 --> 12:07.240]  of how packages are built and designed for Gen2 Linux.
+[12:11.240 --> 12:13.880]  So this is our three of our projects.
+[12:13.880 --> 12:18.000]  So it's a pretty standard CMake project directory.
+[12:18.000 --> 12:20.920]  We have some CMake specific files
+[12:20.920 --> 12:23.200]  which are used for CMake to determine
+[12:23.200 --> 12:26.600]  what library is, what dependencies,
+[12:26.600 --> 12:27.560]  what things you depend on.
+[12:27.560 --> 12:28.720]  Then we have a CMake list
+[12:28.760 --> 12:32.280]  which contains instructions for building,
+[12:32.280 --> 12:33.480]  installing the package.
+[12:34.920 --> 12:37.400]  Obviously we got the source code.
+[12:37.400 --> 12:38.840]  We got some include headers.
+[12:40.040 --> 12:41.360]  These headers are actually, well,
+[12:41.360 --> 12:44.520]  they depend on their different based on
+[12:44.520 --> 12:48.000]  what architecture you are building your program with.
+[12:48.000 --> 12:51.480]  So they contain kernel definitions
+[12:51.480 --> 12:53.740]  specific to each architecture.
+[12:53.740 --> 12:56.560]  So I've mentioned BCC previously a few slides ago.
+[12:57.560 --> 12:59.920]  So if we wrote this application using BCC,
+[12:59.920 --> 13:01.480]  we wouldn't have these include files
+[13:02.520 --> 13:05.080]  because when you develop program using BCC,
+[13:07.040 --> 13:11.240]  you must include or you have to have all kernel headers
+[13:11.240 --> 13:12.360]  present on your system.
+[13:12.360 --> 13:14.400]  Because a lot of times you don't know
+[13:14.400 --> 13:15.600]  which headers you're gonna need.
+[13:15.600 --> 13:18.680]  So, because BCC actually does on the fly compilation.
+[13:18.680 --> 13:21.080]  So it's compiled at runtime.
+[13:21.080 --> 13:24.280]  So you need both kernel headers
+[13:24.320 --> 13:26.880]  and you need Clang and LLVM present at runtime
+[13:26.880 --> 13:29.000]  which can be a serious.
+[13:29.000 --> 13:30.320]  Well, you can just present a challenge
+[13:30.320 --> 13:31.840]  when you want to develop something
+[13:31.840 --> 13:34.000]  for like a small embedded system
+[13:34.000 --> 13:37.520]  or you just don't have the necessary,
+[13:37.520 --> 13:39.960]  necessary processing power to do all these things.
+[13:44.360 --> 13:46.920]  So now we can have a look at simple.
+[13:46.920 --> 13:49.080]  Well, this is how evil looks like.
+[13:49.080 --> 13:52.160]  So it's, at the beginning,
+[13:52.160 --> 13:56.840]  we have some header information, copyright, so on.
+[13:56.840 --> 13:59.280]  Then on the line four, we have something called EAPI.
+[13:59.280 --> 14:01.840]  It's just a variable that tells your package manager
+[14:01.840 --> 14:04.080]  how to parse the rest of your file.
+[14:04.080 --> 14:08.520]  So we have these on six line E-classes
+[14:08.520 --> 14:10.480]  and their implementations can actually vary
+[14:10.480 --> 14:12.520]  depending on which EAPI you are using.
+[14:12.520 --> 14:16.360]  So it's necessary for us to specify EAPI
+[14:16.360 --> 14:17.800]  just for the package manager knows,
+[14:17.800 --> 14:19.200]  okay, this is how I'm gonna,
+[14:19.200 --> 14:20.680]  this is what functions I'm gonna use,
+[14:20.680 --> 14:22.400]  how they look like for each EAPI.
+[14:24.480 --> 14:26.720]  So then we need to inherit some functions,
+[14:26.720 --> 14:28.640]  some E-classes that are going to allow us
+[14:28.640 --> 14:31.920]  to package our program more easily.
+[14:31.920 --> 14:35.440]  So for example, obviously we're gonna use a CMake E-class.
+[14:35.440 --> 14:37.440]  We're also gonna use Git E-class
+[14:37.440 --> 14:39.440]  because we're going to build our package
+[14:39.440 --> 14:42.400]  from Git repository.
+[14:42.400 --> 14:44.960]  We got some, we got Linux info E-class
+[14:44.960 --> 14:49.160]  that gives us access to some of the, you know,
+[14:50.800 --> 14:52.160]  some of the things related to kernel
+[14:52.160 --> 14:56.600]  like checking which configuration options are present
+[14:56.600 --> 14:58.560]  in your kernel configuration and so on.
+[15:00.080 --> 15:03.280]  After that we got some metadata description,
+[15:03.280 --> 15:04.400]  whole page things like this
+[15:04.400 --> 15:07.840]  and then we specify which project
+[15:07.840 --> 15:09.400]  or which repository package manager
+[15:09.400 --> 15:12.640]  has to look for your package.
+[15:12.640 --> 15:13.840]  And we got license.
+[15:14.760 --> 15:17.080]  Slot is not really important for us in this context.
+[15:17.080 --> 15:19.680]  Keywords is just a way to specify
+[15:19.680 --> 15:23.640]  for which architectures your package is going to build.
+[15:24.840 --> 15:26.760]  So there's actually a mistake in this package.
+[15:26.760 --> 15:30.240]  So usually we call packages that are built
+[15:30.240 --> 15:32.520]  from Git like live packages.
+[15:32.520 --> 15:33.720]  So when we have live package,
+[15:33.720 --> 15:36.480]  we never specify what, like the key words
+[15:36.480 --> 15:41.480]  because when we build packages from Git,
+[15:42.120 --> 15:45.600]  we're not sure like their source can change at any time.
+[15:45.600 --> 15:47.200]  So there's, it's not really consistent.
+[15:47.200 --> 15:49.120]  So that's why we cannot guarantee,
+[15:49.120 --> 15:51.160]  we cannot guarantee they're going to build at certain,
+[15:51.160 --> 15:52.080]  you know, at all times.
+[15:52.080 --> 15:54.040]  So that's why we don't,
+[15:54.040 --> 15:55.560]  if the package has no keywords,
+[15:55.560 --> 15:56.880]  it means it's like highly, you know,
+[15:56.880 --> 15:57.920]  it's unstable package.
+[15:57.920 --> 16:01.080]  So it's not really, you cannot expect,
+[16:01.080 --> 16:03.680]  you can expect it to not work sometimes.
+[16:03.680 --> 16:06.240]  About for the purpose of this demonstration,
+[16:06.240 --> 16:08.160]  I've put it in there.
+[16:09.440 --> 16:11.480]  Then we specify some use flag
+[16:11.480 --> 16:13.480]  which are what I've talked about,
+[16:13.480 --> 16:17.880]  some configuration switches we will use later on.
+[16:17.920 --> 16:20.080]  Sometimes when you're building a package, for example,
+[16:20.080 --> 16:21.680]  maybe you want,
+[16:21.680 --> 16:23.640]  maybe you don't want your binaries to be stripped.
+[16:23.640 --> 16:26.240]  So you can also tell your package manager, okay,
+[16:26.240 --> 16:28.040]  I don't want my binaries to be stripped.
+[16:28.040 --> 16:28.880]  Please don't do that.
+[16:28.880 --> 16:31.080]  So you just tell him, okay,
+[16:31.080 --> 16:33.000]  I want you to restrict stripping binaries.
+[16:33.000 --> 16:35.840]  So all of your binaries are going to be built
+[16:35.840 --> 16:38.280]  with debugging for included in them.
+[16:42.280 --> 16:44.600]  Now we specify some dependencies here.
+[16:44.600 --> 16:45.680]  We have two,
+[16:45.680 --> 16:47.520]  well, we have a bit more types of dependencies,
+[16:47.560 --> 16:51.000]  but these are like the three main ones that we use.
+[16:51.000 --> 16:53.560]  Runtime dependencies and then we have built time dependencies
+[16:53.560 --> 16:58.400]  which are, which are consist of,
+[16:58.400 --> 16:59.960]  they can be split into two categories,
+[16:59.960 --> 17:00.960]  depend and be depend.
+[17:00.960 --> 17:03.880]  So why they are split?
+[17:03.880 --> 17:06.320]  Well, it's usually because of cross compilation.
+[17:06.320 --> 17:10.080]  So for example, when you're cross compiling a package to,
+[17:10.080 --> 17:12.400]  let's say from AMD 64 to ARM,
+[17:14.560 --> 17:16.400]  you're going to need some packages like
+[17:17.880 --> 17:19.040]  like headers or libraries,
+[17:19.040 --> 17:20.480]  you're going to need them present on this,
+[17:20.480 --> 17:23.080]  on this target system that you are compiling for.
+[17:24.240 --> 17:25.920]  So these, these packages,
+[17:25.920 --> 17:27.080]  they belong in the depend group.
+[17:27.080 --> 17:29.600]  So packages that need to be present at build time,
+[17:29.600 --> 17:34.000]  but they need to be present on the target system as well.
+[17:34.000 --> 17:36.640]  But be depend, it specifies dependencies
+[17:36.640 --> 17:39.280]  that package manager has to run
+[17:39.280 --> 17:40.480]  while the package is being built.
+[17:40.480 --> 17:42.440]  So obviously if you're cross compiling for ARM,
+[17:42.440 --> 17:44.720]  you have to have them available on your laptop
+[17:44.720 --> 17:46.920]  from which you are compiling.
+[17:46.960 --> 17:49.120]  Normally when you're,
+[17:49.120 --> 17:51.120]  when you're building a package for, you know,
+[17:51.120 --> 17:54.760]  on your laptop for, on the same architecture,
+[17:54.760 --> 17:57.840]  this, this does not make that much difference.
+[17:57.840 --> 17:59.760]  But when you're cross compiling packages,
+[17:59.760 --> 18:00.600]  it does make a difference.
+[18:00.600 --> 18:03.640]  So that's why we have to clearly specify.
+[18:06.440 --> 18:08.560]  Then we can, usually BPF programs,
+[18:08.560 --> 18:10.520]  they require a certain, certain
+[18:11.480 --> 18:13.320]  external configuration options to be,
+[18:13.320 --> 18:15.400]  to be included in your kernel
+[18:15.400 --> 18:16.600]  for them to work correctly.
+[18:16.640 --> 18:19.520]  So we can also say, okay, I need these options.
+[18:19.520 --> 18:22.640]  Can you please check if these options are present
+[18:22.640 --> 18:23.960]  while the package is being built?
+[18:23.960 --> 18:25.800]  And if they're not present,
+[18:25.800 --> 18:27.960]  your package manager is gonna print you a warning
+[18:27.960 --> 18:29.360]  after it's being built.
+[18:29.360 --> 18:32.840]  You need these, you need these options to be included.
+[18:32.840 --> 18:35.460]  Otherwise your program maybe won't work correctly.
+[18:38.800 --> 18:41.520]  Then we come to, well, we have to configure the package.
+[18:41.520 --> 18:45.480]  So we specify some CMake arguments.
+[18:45.480 --> 18:47.480]  This is where our use flags come to play.
+[18:47.480 --> 18:52.440]  So basically this is a batch syntax,
+[18:52.440 --> 18:56.160]  so whether it just depends the second line.
+[18:56.160 --> 19:01.160]  If you have the use flag VM Linux turned on,
+[19:01.520 --> 19:03.880]  obviously the argument is going to be on.
+[19:03.880 --> 19:04.720]  Yes.
+[19:06.360 --> 19:08.800]  After that we have a installation part.
+[19:08.800 --> 19:13.360]  We use the CMake key class implementation.
+[19:13.360 --> 19:16.040]  That's why we write CMake SRC install
+[19:16.040 --> 19:18.840]  and then we do some other stuff depending on,
+[19:18.840 --> 19:20.960]  again, if there is another use flag.
+[19:25.800 --> 19:27.960]  Now let's discuss some challenges
+[19:29.040 --> 19:31.760]  that we face during packaging,
+[19:31.760 --> 19:33.520]  not only BPF, but in general software.
+[19:33.520 --> 19:38.520]  So Gen2 tries to support as many different,
+[19:39.120 --> 19:42.160]  you know, many different build configurations,
+[19:42.160 --> 19:43.760]  whether you want to use a different compiler,
+[19:43.760 --> 19:45.760]  different linker, different, you know,
+[19:45.760 --> 19:48.120]  libc for your system, so on.
+[19:48.120 --> 19:49.920]  So it takes, you know,
+[19:49.920 --> 19:52.040]  sometimes it takes quite a bit of work to get,
+[19:52.040 --> 19:54.520]  obviously some things are not going to be able to be built
+[19:54.520 --> 19:55.520]  with all configurations,
+[19:55.520 --> 19:57.680]  but we try to provide as much support as possible
+[19:57.680 --> 20:02.680]  for you as a user to be able to build your own system.
+[20:04.720 --> 20:06.160]  Then we have to ensure compatibility
+[20:06.160 --> 20:07.920]  with latest tool chain, which is important
+[20:07.920 --> 20:10.000]  because we're building, we're constantly building
+[20:10.120 --> 20:12.960]  different source and we try to have the latest,
+[20:12.960 --> 20:16.040]  latest and greatest compilers, the libraries available.
+[20:17.080 --> 20:19.960]  So I've just mentioned two examples here of,
+[20:19.960 --> 20:22.960]  usually whenever there's a big release of either compiler
+[20:22.960 --> 20:24.560]  or something like this, glibc,
+[20:25.520 --> 20:27.640]  we have many, you know, build failures across our tree,
+[20:27.640 --> 20:29.000]  so then what we have to do is, you know,
+[20:29.000 --> 20:31.120]  we have to analyze, collect, okay,
+[20:31.120 --> 20:32.520]  these are the packages that do not build.
+[20:32.520 --> 20:34.480]  Sometimes there are like hundreds of packages
+[20:34.480 --> 20:36.120]  that do not build.
+[20:36.120 --> 20:39.360]  Then we have to, you know, go try to patch
+[20:39.360 --> 20:42.280]  each package and then send the patches upstream
+[20:42.280 --> 20:45.240]  if there's upstream, if they're still active and so on,
+[20:46.600 --> 20:49.600]  which, you know, can be quite a challenging task,
+[20:49.600 --> 20:52.680]  but yeah, in general, we have our tool chain team,
+[20:52.680 --> 20:55.560]  which does a great job of staying on top of,
+[20:55.560 --> 20:57.720]  on top of latest development efforts.
+[20:57.720 --> 21:00.400]  So we also try to, it's always good to have
+[21:00.400 --> 21:03.640]  this cross distribution collaboration where we, you know,
+[21:03.640 --> 21:05.200]  that's why it's important to provide patches
+[21:05.200 --> 21:07.640]  to send patches because then someone from Debian
+[21:07.640 --> 21:10.000]  or from Fedora can use our patch or vice versa.
+[21:12.160 --> 21:14.560]  There can also be cross compilation issues
+[21:14.560 --> 21:17.960]  related with packages, heavy build and line time dependencies
+[21:17.960 --> 21:20.640]  for some of these BPF packages,
+[21:20.640 --> 21:23.000]  so they may not be suitable for embedded systems.
+[21:23.920 --> 21:26.440]  How we deal with this, so for some of the things
+[21:26.440 --> 21:28.440]  that I mentioned, it's just not possible to deal with,
+[21:28.440 --> 21:30.680]  like whether we like it or not,
+[21:30.680 --> 21:33.200]  if there's a new compiler, like new GCC release,
+[21:33.200 --> 21:36.160]  things are going to break and it's not possible to avoid it,
+[21:36.160 --> 21:38.000]  but that's why it's important for us to,
+[21:38.000 --> 21:39.800]  proactively as a distribution test,
+[21:39.800 --> 21:44.800]  proactively test packages, write and submit patches upstream,
+[21:45.040 --> 21:46.320]  I mentioned that, it's very important,
+[21:46.320 --> 21:48.720]  and I've, I remember numerous times where I, you know,
+[21:48.720 --> 21:51.120]  try to fix a build failure for some package
+[21:51.120 --> 21:53.760]  and I just go and look, maybe I can look in Debian
+[21:53.760 --> 21:55.680]  or Fedora, maybe they have a patch and,
+[21:55.680 --> 21:57.920]  wow, they have a patch and it's so nice and convenient
+[21:57.920 --> 22:00.400]  to have, you know, already patch written for you,
+[22:00.400 --> 22:02.600]  so that's why it's important and we also try to,
+[22:02.600 --> 22:04.200]  if I write a patch or if we write a patch
+[22:04.200 --> 22:08.240]  for some, something, try to submit,
+[22:08.240 --> 22:11.560]  try to submit and give it back to, to community.
+[22:13.640 --> 22:18.120]  Yeah, that's pretty much it from me on this topic.
+[22:18.120 --> 22:20.960]  We have a few minutes for, for some questions if you have.
+[22:20.960 --> 22:21.800]  Okay.
+[22:32.800 --> 22:35.360]  So once you have a package on system,
+[22:35.360 --> 22:38.760]  how does that get loaded into the, into the,
+[22:38.760 --> 22:40.640]  if you, it's, if the package is installed
+[22:40.640 --> 22:42.840]  on your GENTI system, is it loaded automatically?
+[22:42.840 --> 22:47.280]  What is there, can you have any BPF package installed
+[22:47.280 --> 22:48.720]  and it's not put into the kernel?
+[22:48.720 --> 22:50.040]  No, then usually we'll have a,
+[22:50.040 --> 22:51.760]  you'll have a binary or something or script
+[22:51.760 --> 22:53.960]  that you can use to, you know, load your program.
+[22:53.960 --> 22:57.640]  So do you package those loader scripts as a separate thing
+[22:57.640 --> 23:00.080]  or how does it, like, what's that part of it?
+[23:00.080 --> 23:01.600]  Yeah, we can just package them, you know,
+[23:01.600 --> 23:03.760]  we can just install them additionally.
+[23:03.760 --> 23:06.040]  Like usually they're going to be, if the,
+[23:06.040 --> 23:07.680]  if they're intended to be by upstream,
+[23:07.680 --> 23:09.440]  they're going to be included in, you know,
+[23:09.440 --> 23:10.920]  the build system is going to install them.
+[23:10.920 --> 23:12.440]  So usually there's not going to be any need
+[23:12.440 --> 23:14.880]  to install them separately, but if there's like
+[23:14.880 --> 23:16.840]  configuration script or something with our package
+[23:16.840 --> 23:19.200]  that we need, obviously it's possible to just,
+[23:19.200 --> 23:21.480]  you know, use a simple helper functions
+[23:21.480 --> 23:24.040]  and install different files that you need.
+[23:24.040 --> 23:27.280]  Is it, so it's, the file being in a certain place
+[23:27.280 --> 23:29.200]  in the current, in a tree makes it be loaded
+[23:29.200 --> 23:30.840]  in the kernel at the time?
+[23:30.840 --> 23:34.160]  Sorry, I don't know how GENTI does things on the boot.
+[23:34.160 --> 23:35.920]  Ah, well the concept of BPF, you can just, you know,
+[23:35.920 --> 23:38.880]  it doesn't have to be, you can just be binary programmer
+[23:38.880 --> 23:40.840]  available in some, you know, random location,
+[23:40.840 --> 23:45.280]  like somewhere, doesn't have to be in a certain directory.
+[23:45.280 --> 23:48.800]  Okay, but sorry, I'm, it's maybe super dumb question,
+[23:48.800 --> 23:52.920]  but you know, I've got to say, been true on my files,
+[23:52.920 --> 23:54.600]  I've got a binary sitting on my files
+[23:54.600 --> 23:55.880]  that's a traditional, you know,
+[23:55.880 --> 23:59.360]  of ELF binary sitting there, right?
+[23:59.360 --> 24:01.360]  Just because it's there, it doesn't run,
+[24:01.360 --> 24:03.200]  you've got to have system deservice or something.
+[24:03.200 --> 24:05.840]  Well yes, that depends on what you're packaging actually,
+[24:05.840 --> 24:08.640]  this was just, you can have either system deservice
+[24:08.640 --> 24:09.480]  or you can.
+[24:09.480 --> 24:11.240]  So you would package a system deservice?
+[24:11.240 --> 24:12.560]  Yeah, yeah, you would also package a system deservice.
+[24:12.920 --> 24:15.640]  To insert it to, would be, is that the standard way
+[24:15.640 --> 24:17.360]  to do it or is there a?
+[24:17.360 --> 24:19.520]  Well most, yeah, if it's something that's,
+[24:19.520 --> 24:23.160]  it tended to be, you know, ran over periodically
+[24:23.160 --> 24:26.000]  or continuously, yes, you were gonna,
+[24:26.000 --> 24:27.600]  you're going to have a system deservice,
+[24:27.600 --> 24:29.960]  which you can also install with your packaging.
+[24:29.960 --> 24:30.800]  Okay.
+[24:32.840 --> 24:35.320]  You have one minute left, any last questions?
+[24:39.200 --> 24:40.040]  Last one.
+[24:42.560 --> 24:45.920]  BPF programs are changing the functionality of Kernel.
+[24:45.920 --> 24:49.840]  How do you ensure that we distributed the security issues?
+[24:49.840 --> 24:50.680]  How do you solve it?
+[24:50.680 --> 24:52.640]  Did you just use, that's what's already in Jagent?
+[24:52.640 --> 24:54.280]  Yeah, well, yeah, good question.
+[24:54.280 --> 24:56.280]  But BPF actually has its own verifier.
+[24:56.280 --> 24:58.080]  So it has to, you know, before it's loaded,
+[24:58.080 --> 25:01.000]  it has to be, it has to be verified
+[25:01.000 --> 25:03.680]  so that, you know, we are running a secure program.
+[25:03.680 --> 25:07.000]  So this is, yeah, how we handle this.
+[25:07.000 --> 25:10.120]  BPF itself handles this thing by using its verifier
+[25:10.120 --> 25:12.360]  before the program is loaded into the Kernel.
+[25:13.520 --> 25:18.520]  Nevertheless, it can be, I mean, functional and working,
+[25:19.160 --> 25:21.520]  but still changing the system in some way,
+[25:21.520 --> 25:22.960]  which is not intended.
+[25:22.960 --> 25:26.320]  So you just rely on the Ganto distribution
+[25:27.600 --> 25:31.480]  that the user is actually downloading that
+[25:31.480 --> 25:33.240]  what you have uploaded.
+[25:33.240 --> 25:34.600]  I'm sorry, can you repeat?
+[25:34.600 --> 25:38.920]  So when the package with BPF program comes to the user,
+[25:41.120 --> 25:44.400]  how does he know that you actually program it
+[25:44.400 --> 25:48.080]  and that it's not temperate on its way?
+[25:48.080 --> 25:50.960]  How does it know that we are packaging the right thing?
+[25:50.960 --> 25:55.960]  Yeah, you're using just the Ganto normal distribution.
+[25:56.480 --> 25:58.720]  Yeah, yeah, well, Ganto does, you know,
+[25:58.720 --> 26:02.360]  we usually when you package a software that's,
+[26:02.360 --> 26:03.720]  you package it from a release table
+[26:03.720 --> 26:05.560]  so then you compare the hashes.
+[26:06.640 --> 26:09.280]  Ganto package manager actually compares the hashes
+[26:09.320 --> 26:11.000]  of what you are downloading
+[26:11.000 --> 26:13.920]  and what is available on source repository.
+[26:13.920 --> 26:14.760]  So that's how.
+[26:14.760 --> 26:16.920]  Nothing special, just Ganto.
+[26:16.920 --> 26:19.480]  How do you port this on other distributions?
+[26:20.720 --> 26:21.560]  How do you port this?
+[26:21.560 --> 26:23.120]  Well, that just depends on, I mean,
+[26:23.120 --> 26:24.200]  the concept is pretty much the same,
+[26:24.200 --> 26:26.720]  just depends on what tooling you're going to use
+[26:26.720 --> 26:29.600]  if you're going to package either for Debian, Fedora,
+[26:30.600 --> 26:32.960]  Arch Linux, yeah.
+[26:36.520 --> 26:37.360]  Thank you.
+[26:37.360 --> 26:38.200]  Thank you.
+[26:38.200 --> 26:39.040]  Thank you.

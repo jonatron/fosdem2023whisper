@@ -1,0 +1,352 @@
+[00:00.000 --> 00:18.520]  Okay. Hello, everyone. Can you hear me okay? Good. Okay. My name is Arthur Cohen. I'm
+[00:18.520 --> 00:24.200]  a compiler engineer at Ambicosm, top left, and today I'm going to talk to you a little
+[00:24.200 --> 00:34.200]  bit about Rust GCC. So, first of all, a little summary. We're going to get into what is GCC
+[00:34.200 --> 00:39.840]  because this is a Rust dev room. I assume at least some of you have never used GCC, which
+[00:39.840 --> 00:46.640]  is good for you. It's good for your health. Then, what is Rust GCC? So, why do we make
+[00:46.640 --> 00:52.320]  it? Why, I mean, working on it. Who was stupid enough to even think about re-implementing
+[00:52.320 --> 00:57.960]  a Rust compiler from scratch? Then, how do we do that? So, I'm going to get into some
+[00:57.960 --> 01:03.120]  of the steps of our compilers, our parser, our intermediate representation, and all
+[01:03.120 --> 01:08.800]  of the extra fun Rust stuff that we have to handle because it's a really complex language.
+[01:08.800 --> 01:15.240]  Then, I'd like to get into our workflow, the community. So, all of the contributors, how
+[01:15.240 --> 01:20.520]  we work together, our merging process, GitHub, all of that, and all that interesting stuff
+[01:20.600 --> 01:26.600]  that comes with it. And finally, some sort of future questions. What are we going to
+[01:26.600 --> 01:34.600]  do? What are our goals? When are we going to stop? So, what is GCC? GCC stands for the
+[01:34.600 --> 01:43.280]  GNU Compiler Collection. It's sort of a very, very big program that contains multiple compilers
+[01:43.280 --> 01:50.000]  for multiple languages and that all share the same back end. So, the same sort of assembly
+[01:50.000 --> 01:55.640]  and mission and optimizers and so on and so on. One fun thing about GCC is that it's
+[01:55.640 --> 02:05.640]  very old. It's 30 years old, maybe more. It's really in C++11, so that's great. As I say,
+[02:05.640 --> 02:11.960]  it's multiple languages in one. So, you got a C compiler, a C++ compiler, Fortran compiler,
+[02:11.960 --> 02:16.480]  so on and so on, and we're trying to add Rust to it. And if you know a little bit about how
+[02:16.560 --> 02:23.920]  Rust C works, Rust C is called a front-end. It sort of does its thing and then talks to
+[02:23.920 --> 02:30.320]  LLVM to generate code. And that's what's good about LLVM is you can use it as a library.
+[02:30.320 --> 02:37.440]  You cannot do that with GCC. So, you have libGCCJet, which is sort of an attempt at having
+[02:37.440 --> 02:43.400]  a library for GCC, which is quite recent, or you can do like Rust GCC does, which is
+[02:43.440 --> 02:52.040]  create the compiler in tree. If you've been following sort of the Rust in GCC story, you'll
+[02:52.040 --> 02:58.600]  know that Rust C code gen GCC, the project by Antoyo, actually uses libGCCJet, and that's a way
+[02:58.600 --> 03:04.600]  better idea than Rust GCC, but let's keep going. So, what is Rust GCC? It's a full
+[03:04.600 --> 03:10.440]  implementation of Rust on top of the GNU tool chain. So, as I said earlier, this means that
+[03:11.080 --> 03:17.800]  we're actually re-implementing the compiler from scratch. So, we started from sort of nothing
+[03:17.800 --> 03:24.280]  and kept adding and adding stuff until, well, until today. The project was originally started in
+[03:24.280 --> 03:34.040]  2014. So, just for one quick bit, I think at the time libGCCJet did not exist. So, it's not as bad
+[03:34.040 --> 03:42.280]  an idea as it is to add it to the entry GCC, to the GCC tree. And originally in 2014, if you
+[03:42.280 --> 03:48.280]  know a bit about the history of Rust, you didn't have a stable version yet. Rust version 1.0 released
+[03:48.280 --> 03:55.160]  in 2015. So, that meant that in 2014, there was a lot of churn within the language. If some of
+[03:55.160 --> 04:00.600]  you were here at the beginning, you remember maybe the tilde pointer, the add symbol that was used
+[04:00.600 --> 04:06.840]  for a lot of stuff, the garbage collector and so on and so on. So, eventually the project had to
+[04:06.840 --> 04:14.440]  drop because one, even though he was very, very into it, one developer could not just keep up.
+[04:14.440 --> 04:20.680]  It was revived in 2019, thanks to multiple people. First of all, open-source security
+[04:20.680 --> 04:26.680]  and then Mbaccosm, where the two companies sponsoring this project. It receives contribution to
+[04:27.400 --> 04:32.760]  from many GCC and non-GCC developers. So, I'm going to talk about that a bit later,
+[04:32.760 --> 04:37.080]  but we do have some people that have been working on GCC for a very long time
+[04:37.080 --> 04:43.800]  helping us and I'd like to thank them, but more on that later. So, why do we do that?
+[04:44.760 --> 04:50.280]  The goal is to upstream it with mainline GCC. So, that means that whenever you're going to
+[04:50.920 --> 04:55.720]  put your favorite Linux distribution, install GCC, you're going to have GCC Rust with it.
+[04:56.440 --> 05:03.480]  It's an alternative implementation of Rust. We hope that it helps maybe draw out and sort of
+[05:03.480 --> 05:09.000]  drive the specification effort and that we can help the Rust C team figure out some
+[05:09.720 --> 05:15.480]  pieces where the language isn't as clear as they'd like it to be. It reuses the GNU toolchain,
+[05:15.480 --> 05:23.320]  so GNU-LD, GNU-AS, GDB, but it does reuse the official Rust standard library,
+[05:23.320 --> 05:30.760]  so Libcore, Libasti, and so on. And because of the way GCC is sort of architecture,
+[05:31.320 --> 05:37.400]  once you get to that common GCC backend and common GCC intermediate representation,
+[05:37.400 --> 05:43.480]  you can basically reuse all of the plugins that have been written for GCC ever. And that means
+[05:43.480 --> 05:50.600]  a lot and a lot and a lot of plugins, security plugins, stuff like the static analyzers,
+[05:50.680 --> 05:55.720]  so you might have heard about that, the LTO, which is not really a plugin, but we can make use of it,
+[05:56.680 --> 06:03.960]  CFE, CFI security plugins, and so on. We also hope that because we're writing it in C++,
+[06:03.960 --> 06:10.280]  that means we can backport it, so to previous versions of GCC. And hopefully, that will help
+[06:10.920 --> 06:18.120]  some systems get Rust, hopefully. And then because GCC, as I said, is much older than LVM,
+[06:18.120 --> 06:24.680]  it has support for more architectures and more targets than LVM. I mean, it had. Now,
+[06:24.680 --> 06:30.920]  you guys have the M1 Mac, and we're still far on that. So technically, thanks to GCCRS,
+[06:30.920 --> 06:36.040]  you will now be able to run Rust on your favorite Soviet satellite and so on.
+[06:38.920 --> 06:46.440]  There's a link for that. The slides are on the talks page, and there's a lot of frequently asked
+[06:46.520 --> 06:54.440]  questions. So that's sort of the milestone tab that we put together in each and every one of our
+[06:54.440 --> 07:01.080]  weekly and monthly reports. And the takeaway from here is that the effort has been ongoing since
+[07:01.800 --> 07:07.000]  2020 and even a little bit beforehand, and we've done a lot of effort and a lot of progress.
+[07:07.960 --> 07:15.480]  Right now, we're around there. So we have upstreamed the first version of GCC Rust
+[07:15.480 --> 07:22.040]  within GCC. So next time, when you install GCC13, so sorry for the people on Ubuntu,
+[07:22.040 --> 07:29.400]  that's in like 10 years, but next time you update GCC, you'll have GCCRS in it. You can use it,
+[07:29.400 --> 07:34.360]  you can start hacking on it, you can please report issues when it inevitably crashes and dies
+[07:34.360 --> 07:42.280]  horribly. And yeah, we're sending more and more patches upstream and getting more and more
+[07:42.280 --> 07:47.640]  of our compiler whose development happens on GitHub towards and into GCC.
+[07:49.160 --> 07:57.240]  So currently, what we're working on is sort of, we have a base for const generics. So I'm not going
+[07:57.240 --> 08:02.440]  to get into details on that, just a cool feature of Rust that's not present in a lot of languages
+[08:03.320 --> 08:10.360]  except C++ and we're getting them working. We're working hard on intrinsics. So those are functions
+[08:10.360 --> 08:16.840]  declared in the standard library but implemented by the compiler. They are very LVM dependent
+[08:16.840 --> 08:22.680]  and we're running to some issues doing the translation. One big thing we're doing is some
+[08:22.680 --> 08:29.080]  work towards running the Rusty test suite. So because we want GCCRS to be an actual Rust
+[08:29.080 --> 08:35.400]  compiler and not a toy project or something that compiles a language that looks like Rust but
+[08:35.400 --> 08:41.000]  isn't Rust, we're striving to, I mean, we're trying really hard to get that test suite working
+[08:41.560 --> 08:48.040]  and we're almost, I think, almost done with compiling an earlier version of Lipcore, so 1.49,
+[08:48.040 --> 08:55.320]  which was released a few years ago. So a quick overview of our pipeline. Basically for a Rust
+[08:55.320 --> 09:00.680]  compiler, if you don't know anything about compilers, that's fine. What you're going to do is you're
+[09:00.680 --> 09:05.000]  going to do a parsing step. So you're going to take the Rust code and you're going to turn it
+[09:05.000 --> 09:10.520]  into a data structure, which is sort of a tree, which is called an abstract syntax tree, AST.
+[09:11.400 --> 09:15.240]  Then we're going to run an expansion on that. So anytime we're going to see a macro,
+[09:15.240 --> 09:20.840]  we're going to expand it and then replace it by its expansion. Name resolution that's basically
+[09:20.840 --> 09:26.440]  putting which use, any use linking it to its definition and so on. We're going to
+[09:27.320 --> 09:33.160]  do some more transformation on that AST and then finally type check it. And then we can do a lot
+[09:33.160 --> 09:39.080]  of error verifications, linting, so stuff like the warnings you get when you have an unused value
+[09:39.080 --> 09:43.640]  and that you can prefix it with an underscore, for example. Finally, when that's done,
+[09:43.640 --> 09:49.000]  we lower it to the GCC intermediate representation. So that's sort of similar to the last step of
+[09:49.000 --> 09:57.480]  Rust C, where it gets lower to LLVM IR. So as I said, we have an AST. We have an HIR. The advantage
+[09:57.480 --> 10:04.360]  of having these two sort of high level data structures to represent Rust code is that we can
+[10:04.920 --> 10:10.200]  desugar the AST. So remove the syntactic sugar that you have in Rust source code
+[10:10.200 --> 10:15.800]  to have sort of a simpler representation within the compiler. So one example, for example,
+[10:16.680 --> 10:21.960]  is that the difference, as you know, between methods and function calls is you got like
+[10:22.680 --> 10:29.400]  self.method. But within the compiler, it doesn't make any difference. A method is just a function
+[10:29.400 --> 10:35.080]  called with an extra argument. So that's how we represent them in the HIR and we sort of do these
+[10:35.080 --> 10:40.520]  other transformations such as removing macros because at this point they've already been expended
+[10:40.520 --> 10:45.160]  and we don't care about them anymore. And finally, as I said, the last intermediate
+[10:45.160 --> 10:51.240]  representation is called generic. And it's not generic at all. It's just the name and it's the
+[10:51.240 --> 10:58.280]  GCC intermediate representation. So one thing I'd like to get into is macro expansion. And the
+[10:58.280 --> 11:04.600]  reason I want to get into that is because, I mean, I wrote most of it in GCCRS. So I'm the one you
+[11:04.600 --> 11:11.080]  have to blame if it stops working when you try GCCRS. So as you know, macros in Rust are typed.
+[11:11.080 --> 11:17.560]  So you can have expressions, statements, path, and so on. And someone has to do that checking.
+[11:17.560 --> 11:24.440]  And so that's part of the macro expansion part. And as I said, macros are sort of like function
+[11:24.440 --> 11:30.920]  calls. You just expand them and then you paste the AST that was generated and you're done. And
+[11:31.800 --> 11:36.840]  actually, in Rust, you've got repetitions in your macro. And that's extremely annoying to take
+[11:36.840 --> 11:42.600]  care of. So repetitions, if you've ever written them, they're unreadable, but they're very useful.
+[11:43.480 --> 11:49.320]  You'll have sort of these operators, which are the clean star interrogation mark and plus sign,
+[11:50.040 --> 11:54.760]  which allow you to specify what I want between zero and infinite of something,
+[11:54.760 --> 12:00.520]  at least one of something, one or more of something. And because Rust is a very well thought out
+[12:00.520 --> 12:06.040]  language, it's actually got ambiguity restrictions to make sure that no matter how the language
+[12:06.040 --> 12:11.880]  evolves, your macro is not suddenly going to become ambiguous. And so again, someone has to do that
+[12:11.880 --> 12:19.800]  checking and make sure that your macro is not ambiguous. So that's me. So here, this is probably
+[12:19.800 --> 12:26.520]  like a very basic macro that you've maybe written or used or whatever. It's a macro that does an
+[12:26.520 --> 12:32.680]  addition and that takes any number of argument. You can see in green, I've highlighted the repetition
+[12:32.680 --> 12:40.360]  sort of operator marker thingy. And yeah, this basically expands to E plus adding the rest of
+[12:40.360 --> 12:48.600]  the expression. Okay. So that's a macro to make tuples. So basically, you're going to give it
+[12:48.600 --> 12:52.600]  a list of arguments on the left. A list of arguments on the right is going to make a list
+[12:52.600 --> 12:59.000]  of tuples. The thing I like to point out here is that whenever you don't have the same number of
+[12:59.000 --> 13:07.720]  arguments, if you're merging repetitions together, it's actually going to, well, it's going to go bad
+[13:07.720 --> 13:13.640]  and you have to check that. And again, on really complex macros, making sure that your merged
+[13:13.640 --> 13:18.680]  fragments are actually the same number of repetitions and so on, it gets very hard and very tedious.
+[13:19.160 --> 13:25.080]  And Rust macros are sort of a language within the language that needs to be taken care of.
+[13:26.360 --> 13:33.000]  And that's just one last example on how fun Rust macros are for the ambiguity restriction.
+[13:33.960 --> 13:38.840]  For example, you can't have a keyword after an expression because that keyword might become a
+[13:38.840 --> 13:44.120]  reserved keyword, might be another expression of good reasons for why it's an ambiguity.
+[13:44.920 --> 13:50.760]  And the thing here is if you look at the second sort of matching, second matcher,
+[13:50.760 --> 13:57.560]  in that macro, you can see that the operator means it's going to appear between zero and one time.
+[13:58.360 --> 14:02.200]  For the third matcher, it's going to happen like it's going to appear
+[14:02.200 --> 14:09.160]  between zero and plus infinity times, same for the fourth matcher. So the macro sort of checker
+[14:09.160 --> 14:13.960]  has to move forward and make sure that in the case where two doesn't appear,
+[14:13.960 --> 14:19.400]  three doesn't appear, and four doesn't appear, the thing after that is allowed in the set of
+[14:19.400 --> 14:24.280]  restrictions. In that case, it's not because, well, it's the same as above, so we have to error out.
+[14:25.080 --> 14:32.280]  And it gets really annoying. And there's more checks that are Rust specific that we can't really
+[14:32.920 --> 14:38.040]  copy paste from the other languages in GCC. So for example, you got privacy in Rust.
+[14:38.680 --> 14:42.840]  So you know how you mark your functions as public or just leave them as private.
+[14:42.840 --> 14:47.320]  But you've got fun privacy. So you can have a function that's public in a path,
+[14:47.320 --> 14:52.760]  so in a module, but not in another one. You can have a function that's public for your parent
+[14:52.760 --> 14:56.840]  module, but not anymore. You can have a function that's public for the entire create, but not for
+[14:56.840 --> 15:04.680]  users of that create. And yeah, lots of stuff. Same, you've probably come across unsafe.
+[15:04.680 --> 15:10.600]  So unsafe is a keyword that sort of unlocks superpowers and segfaults. And
+[15:12.840 --> 15:17.960]  basically, at the language level, it's just a keyword. So whether we're
+[15:17.960 --> 15:24.040]  dereferencing a row pointer or an actual safe pointer like box, it doesn't matter to the parser
+[15:24.040 --> 15:31.400]  or the AST. But we have to go afterwards in the HIR on that type check representation
+[15:31.400 --> 15:36.040]  and make sure that what we're dereferencing, well, if we're dereferencing something of type
+[15:36.040 --> 15:39.560]  row pointer, it can only happen in unsafe context.
+[15:42.760 --> 15:48.840]  Finally, macros are lazy. So if you're from Haskell, you know what that means. It means basically,
+[15:48.840 --> 15:52.760]  you're going to expend them as they go before expending the arguments given to them.
+[15:53.640 --> 15:58.120]  The fact is macros are not lazy because you got some built-in macros that need to be
+[15:58.200 --> 16:03.480]  expended eagerly. And so when you just spent like three months rewriting the expansion system to
+[16:03.480 --> 16:07.400]  make sure that they're expended lazily, and you realize that built-in macros need to be
+[16:07.400 --> 16:14.360]  expended eagerly, well, I guess really annoying. Finally, caught sharing between crates. So if
+[16:14.360 --> 16:19.960]  you've had the misfortune of writing CRC++, you know you have to write headers, basically declaring
+[16:19.960 --> 16:26.040]  your generic functions, your bubbling functions, and so on. How do you do that in Rust? The answer
+[16:26.040 --> 16:31.640]  is you don't. The compiler does it for you, and basically what it's doing is it's putting some
+[16:32.200 --> 16:39.240]  metadata magic in the L format, so the object file, and it's going to encode and serialize
+[16:39.240 --> 16:44.520]  all of your exported macros, the generic function, the generic types, the public macros, and so on,
+[16:44.520 --> 16:52.600]  and so on. Again, more fun stuff that no one in GCC has done. Maybe GCC go and we have to figure out.
+[16:52.840 --> 16:59.640]  Finally, the type system in Rust is extremely safe, complex, and powerful, as you know. There's
+[16:59.640 --> 17:04.920]  lots of fun stuff like the never type, generic associated types, and so on. You got some types,
+[17:05.800 --> 17:10.920]  and the fact is these constructs are not really present in any of the other languages
+[17:11.640 --> 17:18.520]  within GCC. So that's stuff that we sort of have to figure out. Figure out how to, first of all,
+[17:18.520 --> 17:25.400]  implement them, and then how to compile them, and translate them to the GCC internal representation.
+[17:26.440 --> 17:32.600]  Finally, the last one bit, you got inline assembly in Rust. It's not the same format as GCC's in
+[17:32.600 --> 17:39.800]  line assembly, so we have to do the translation. And if you look at Rust C code gen GCC, because
+[17:39.800 --> 17:45.720]  Antonio is much farther advanced than us in sort of the back in turn, it's a very fun, like,
+[17:45.720 --> 17:50.200]  thousand lines of code to translate from Rust's inline assembly to GCC.
+[17:55.160 --> 18:00.360]  As I said, I'm going to talk a little bit about contributing, reviewing, and so on,
+[18:00.360 --> 18:06.360]  our workflow, basically. So the workflow for GCCRS is inspired by Rust's workflow.
+[18:07.080 --> 18:12.520]  All of our development happens on GitHub. Our communication messaging and so on happens on
+[18:12.520 --> 18:19.720]  Zulip, and we use the bore spot to merge our PRs. But at the same time, because we're a GCC project,
+[18:19.720 --> 18:25.640]  we have an IRC channel, we have a mailing list, and we accept patches sent on the mailing list,
+[18:25.640 --> 18:35.080]  and so on. So the, sorry, the idea about that is that no matter your sort of background, whether
+[18:35.080 --> 18:43.320]  you're a new, very young Rust developer who's only used GitHub, or sorry, Thomas Dinosaur,
+[18:43.320 --> 18:48.680]  who's used IRC and mailing lists, you can send patches and we'll accept them, review them, and
+[18:48.680 --> 18:56.360]  make sure that your contributions get accepted. So GCC development is hard. I made that experience
+[18:56.360 --> 19:02.600]  firsthand because I'm not an IRC and mailing list kind of guy. I'm a GitHub kind of guy.
+[19:03.400 --> 19:09.160]  And sending patches via email, getting reviews, submitting them, and so on. It's very, very hard.
+[19:09.880 --> 19:13.720]  In GCC, you've got a fun thing that on your comments, you have to add change logs.
+[19:15.400 --> 19:19.720]  They have a specific format. They're annoying to write. They're very helpful, but they're annoying
+[19:19.720 --> 19:26.600]  to write. To send actually patches to get reviewed by GCC, you have to use getSendEmail.
+[19:26.600 --> 19:33.160]  So sort of something that sends the email for you and sends the patches in the meantime.
+[19:34.440 --> 19:39.240]  Because I wanted to, you know, make sure I didn't break anything, wasn't going to,
+[19:40.040 --> 19:45.320]  I don't know, blow up my computer, I decided to try getSendEmail to my own personal address
+[19:45.320 --> 19:51.080]  the first time. The one thing I didn't realize is that getSendEmail automatically adds every
+[19:51.080 --> 19:58.360]  contributor to the CC list. The first time I sent patches, I actually pinged like 150 people
+[19:58.360 --> 20:05.400]  three times, leaked my personal email address. That's fine. No one yelled at me. And so I removed
+[20:05.400 --> 20:11.160]  the option to automatically CC people. And so when I actually sent the patches, no one was CC'd.
+[20:11.160 --> 20:16.200]  When patches were getting reviewed, the authors weren't aware that their stuff was getting reviewed.
+[20:17.000 --> 20:25.480]  Very fun. So, yeah, we do that. I got used to getSendEmail. I'll do that for you. If you submit
+[20:25.480 --> 20:31.720]  comments on GitHub, pull requests, and so on, we'll take care of handling that. We have lots of
+[20:31.720 --> 20:38.520]  continuous interrogation to make sure that your comments pass the weird new coding style, to make
+[20:38.520 --> 20:43.240]  sure that they respect the change log format, to make sure that they build and pass the test,
+[20:43.240 --> 20:49.880]  and so on. And we're actually working on a little bot to generate the change log skeleton for you.
+[20:51.320 --> 20:57.160]  Furthermore, because of the way GCC works, development happens in stages. So right now,
+[20:57.160 --> 21:04.760]  we're in stage four. So basically between sort of January and May, you're not allowed to make
+[21:04.760 --> 21:11.560]  changes to common GCC parts. And this is a very good idea. It's to avoid breakage of sort of the
+[21:11.560 --> 21:16.760]  common structure of GCC that's going to affect the most languages. But that also means that
+[21:16.760 --> 21:22.680]  we have some patches that we cannot merge until May. And so, again, GCCRS takes care of that.
+[21:23.400 --> 21:28.040]  We have a staging branch and so on. We keep track of the stages for you. You can merge your stuff.
+[21:28.040 --> 21:35.560]  We'll do it for you. And make sure you don't get annoyed by that. So is that working? Are people
+[21:35.560 --> 21:43.240]  happy to contribute on GCCRS? I think so. In 2022, we've had over 50 contributors.
+[21:43.960 --> 21:48.840]  That's mostly code contributors. We've also had people helping us with the get stuff,
+[21:49.560 --> 21:55.560]  the email stuff, CI stuff, and so on. But I'm not counting here the people reporting issues,
+[21:55.560 --> 22:02.040]  because there's a lot more than that. We have a lot of students working on GCCRS,
+[22:02.120 --> 22:09.640]  which I'm really proud of. I actually started as a Google Summer of Code student on GCCRS,
+[22:09.640 --> 22:16.360]  and now I'm a full-time engineer. And we've got multiple internships that are also coming that
+[22:16.360 --> 22:22.680]  way. So, for example, we'll have a full-time six-month internship to take care of Libproc this year.
+[22:23.800 --> 22:31.240]  As I said, we also have a lot of GCC developers helping us. So people helping us with the get
+[22:31.240 --> 22:37.160]  stuff, with the emerging stuff, and so on. People providing very valuable input. And we have people
+[22:37.160 --> 22:41.720]  from the Rust team helping us, which is really nice. So people that are willing to work with us
+[22:42.520 --> 22:48.040]  on getting the test suite to pass, people that are explaining us how Rust works because it's
+[22:48.040 --> 23:04.600]  complex and just helping us not stray far from the path. So what's coming? When is GCCRS ready?
+[23:06.040 --> 23:12.760]  GCCRS, to be at least sort of useful, has to be able to compile Libcore. So if you're not
+[23:13.320 --> 23:19.080]  aware of this, the standard library in Rust is actually three kids in a trench coat, where you
+[23:19.080 --> 23:27.080]  got the core stuff that's necessary for things like additions, creating lemdas, itch raters,
+[23:27.080 --> 23:33.000]  four loops, and so on. On top of that, you got the alloc crate, which takes care of
+[23:33.640 --> 23:37.720]  all of the structures that need dynamical locations, so your vector, your box, and so on.
+[23:38.520 --> 23:43.160]  And all of that forms the Lib standard, which is used by most projects right now.
+[23:45.160 --> 23:53.480]  There's a lot of unstable stuff in Libcore. So that means that even if we target Rust 1.49,
+[23:53.480 --> 23:58.680]  we have to actually be able to compile a much more advanced version to compile the core library.
+[24:00.840 --> 24:06.600]  Finally, we also have to take care of Libproc. If you've never written a proc macro in your life,
+[24:07.320 --> 24:16.840]  well, you're missing out, but it's basically a very complex schmielblick that takes the AST,
+[24:16.840 --> 24:22.360]  sends it to a remote process communication, gets an AST back, and pastes it. And we have
+[24:22.360 --> 24:28.920]  to implement all of that sort of piping between the crate and the compiler, sending the AST tokens,
+[24:28.920 --> 24:34.280]  and so on, sending it to a location, all stuff like that. Finally, borrow checking.
+[24:34.280 --> 24:39.320]  If you've ever written Rust in your life, which I'm going to assume you have,
+[24:41.080 --> 24:47.400]  you've been sort of held at gunpoint by the borough checker. And that's really a core part
+[24:47.400 --> 24:52.600]  of the language experience. And we can't really be a Rust compiler without a borough checker.
+[24:53.240 --> 25:01.160]  So our aim for that is to reuse the upcoming Polonius project, which is a formalization
+[25:01.160 --> 25:07.080]  of the rules of borough checking, and make sure that we can integrate it to a GCCRS. So the way
+[25:07.080 --> 25:13.560]  we're going to do that, again, is make sure we have sort of an intentional representation that
+[25:13.560 --> 25:19.880]  works for Polonius, create that tiny FFI layer that allows us to speak to Rust from our C++
+[25:19.880 --> 25:27.000]  compiler, and ask Polonius to do the thing. Finally, we're part of this year's GSOC. So if any of
+[25:27.000 --> 25:33.240]  what I said interests you, there's probably a project you can work on. For example, last year
+[25:33.240 --> 25:40.840]  we had a student that ported the const evaluator from C++ over to our front end, meaning that we
+[25:40.840 --> 25:48.840]  can do, well, const evaluation now. So run const functions, do conditionals, for loops, and so on,
+[25:48.840 --> 25:59.000]  in const context. This year's GSOC at least includes the following four projects.
+[26:00.120 --> 26:04.200]  So adding a better debugging experience for a high-level intermediate representation,
+[26:04.760 --> 26:10.920]  adding proper Unicode support, proper metadata exports, so that stuff like the
+[26:11.480 --> 26:17.640]  DAI lib, Rust lib, C lib, and so on formats that you'll find when you're exporting Rust libraries.
+[26:18.840 --> 26:24.840]  And finally, better error handling for the user of GCCRS and starting to integrate the
+[26:24.840 --> 26:32.840]  Rust C error codes to allow us to pass the Rust C test suite. There's a lot of tooling around
+[26:32.840 --> 26:38.360]  GCCRS. So there's a test suite that takes like four hours that we run each night.
+[26:39.080 --> 26:43.960]  There's a test suite generator because it's a thousand lines of code. So to make sure that,
+[26:45.000 --> 26:48.680]  to make sure, well, we don't pass any of the test suites for now, but we have it.
+[26:49.240 --> 26:54.440]  So there's a Blake 3 cryptography library, which is quite nice and doesn't rely on the standard
+[26:54.440 --> 27:02.040]  library. And there's making sure we can compile libcore 1.49, making sure we can try and compile
+[27:02.040 --> 27:07.240]  all of the Rusty test suites, and we're running that every night. We have a generator for that,
+[27:07.240 --> 27:12.120]  as I meant. We have a website, a dashboard for the test suite. We have a report generator
+[27:12.120 --> 27:16.920]  because they're annoying to write as well. And we got cargo GCCRS, which will allow you to,
+[27:17.560 --> 27:24.280]  while instead of doing cargo build, use cargo GCCRS build to build your code with Rust with
+[27:24.280 --> 27:32.120]  GCCRS. And all of that tooling is written in Rust for two reasons. The first one is it's much
+[27:32.120 --> 27:39.800]  better than C++. The second one is it wouldn't be so freaking cool to compile our own tools with
+[27:39.800 --> 27:44.920]  our own compiler. And three reasons, actually. The most important one is to get people from
+[27:44.920 --> 27:50.600]  the Rust community to contribute to those tools. Actually, if you're interested in helping GCCRS
+[27:51.240 --> 27:57.320]  in one way or another, a good thing would be to, you know, start working on that tooling. And
+[27:57.320 --> 28:04.840]  it's all of just fun stuff. The web dashboard is Tokyo and Async and a rocket database and so on,
+[28:04.840 --> 28:11.640]  so not database, API. I'm not a web dev. So if you're interested in that, feel free to come and
+[28:11.640 --> 28:22.280]  contribute. Finally, can we rewrite GCC in Rust? Maybe. For bootstrapping purposes, so make sure
+[28:22.280 --> 28:27.240]  that we have a full bootstrapping chain. You can read a lot of papers on that, trusting, trust,
+[28:27.240 --> 28:34.760]  and so on. We'll have to write that compiler in Rust 1.49, which is going to be annoying. It's
+[28:34.760 --> 28:40.920]  still a ways off. And I'd like to really point out that the goal of GCCRS is not to break the
+[28:40.920 --> 28:47.960]  ecosystem. So we want to make sure that whenever someone compiles one of your crates with GCCRS,
+[28:47.960 --> 28:54.360]  they're not actually blaming you for the failure that's going to happen. And yeah, that they report
+[28:54.360 --> 28:58.840]  the issue to us because we're not a proper Rust compiler yet and you shouldn't have to suffer for
+[28:59.480 --> 29:07.000]  our hubris. The community, we got mugs. If you do pull requests, we'll send you a mug.
+[29:08.920 --> 29:12.920]  People that have helped with the compiler got this one. People that have helped with the merge
+[29:12.920 --> 29:19.560]  got the one on the right. Lots of links. You can attend them. We have, as I said,
+[29:19.560 --> 29:24.600]  maybe I didn't say it, but we have monthly and weekly calls on JetSea. You can attend them,
+[29:24.600 --> 29:29.480]  even if you're just interested in listening in. We have an IRC channel, a website, and so on.
+[29:30.360 --> 29:35.320]  The goal is to make compilers fun. The goal is to get contributions from everyone,
+[29:35.320 --> 29:37.800]  from the GCC community as well as the Rust community.
+[29:38.040 --> 29:43.480]  We have Google Summer of Code. There's lots of stuff for you to work on. We got good first
+[29:43.480 --> 29:51.240]  PR issues. If you're interested in compilers, come talk to us. We don't bite. We got reports every
+[29:51.240 --> 29:58.920]  week. We shout out contributors, so if you do pull requests, we'll tell you about it. We'll
+[29:58.920 --> 30:04.200]  tell people about it. We got monthly calls. Do you have any questions?
+[30:08.040 --> 30:25.400]  Hi. Awesome project. Thank you. You mentioned one of your goals was to help develop a spec of
+[30:25.400 --> 30:31.160]  Rust with the Rust C team. Can you share more about that? There's nothing really started. It's
+[30:31.240 --> 30:37.640]  just that you have the Rust reference at the moment, and it tells you how Rust works from
+[30:37.640 --> 30:42.040]  a user point of view, but not specifically from a language point of view. At the same time, we
+[30:42.040 --> 30:47.480]  don't want a Rust standard like you have with C or C++ where it gets really annoying to get features
+[30:47.480 --> 30:54.120]  done. There are efforts from people like Mara Boss and Josh Triplet and so on to have a Rust
+[30:54.120 --> 30:59.880]  specification. One of the goals of GCCRS is to say, well, we've had trouble with that because
+[30:59.880 --> 31:05.160]  that's not how it is in the reference, or it's not explained well enough, and we had to look at
+[31:05.160 --> 31:10.200]  the Rust C source code or try it out to figure out how that works. Stuff like dear reference
+[31:10.200 --> 31:19.480]  chains, what type actually gets used for a method call, and so on, and so on. We can point out and
+[31:19.480 --> 31:26.600]  say, well, maybe that could take some tweaking because that's not, yeah. Do you have a list already
+[31:26.680 --> 31:34.280]  of stuff like that? It's mostly type system stuff. I have some on macros. There's not really a formal
+[31:35.320 --> 31:40.760]  list. I think we have some, like we have an actual list somewhere, but yeah, I don't have it in my
+[31:40.760 --> 31:49.320]  head right now, sorry. Thanks. Thanks so much. Two questions perhaps related. First, on performance.
+[31:49.320 --> 31:54.040]  I wondered if you had any numbers at all on the performance comparison or what your goals are for
+[31:54.040 --> 32:00.440]  that. And secondly, I'm kind of surprised by how much you re-implemented in terms of the IRs. Was
+[32:00.440 --> 32:06.360]  that an intentional decision or was that because it needed to be in C++ or why not effectively consume
+[32:06.360 --> 32:13.800]  more of the Rust stack and then replace LLVM with GCC at the bottom? So regarding performance,
+[32:13.800 --> 32:20.680]  we're much faster because we do much less. But we actually don't know about performance yet. We
+[32:20.760 --> 32:26.200]  haven't measured it. No benchmarks. We have a ton of stuff missing. The code we emit, we're not trying
+[32:26.200 --> 32:33.400]  to optimize it sort of for Rust yet or at least not all the time. So yeah, we're just not there yet.
+[32:33.400 --> 32:40.760]  It's going to happen eventually. Regarding the internal representation, consuming the
+[32:41.720 --> 32:49.320]  Rust C stuff is difficult. There's a lot of, even if Rust is a very well designed compiler,
+[32:49.480 --> 32:56.360]  Rust C, there is some stuff that makes sense only in a Rust C context. And that's also one of the
+[32:56.360 --> 33:01.640]  things with Polonius that we're trying to work on is that it does depend on some Rust C specific
+[33:01.640 --> 33:06.920]  stuff. So we do aim to contribute to Polonius and make it so that it's a little bit more
+[33:07.720 --> 33:13.320]  compiler agnostic, I want to say, but not just to help us, just for it to make sort of more sense
+[33:13.320 --> 33:21.640]  and maybe be used by even more languages, who knows? But yeah, sorry. We needed representations.
+[33:23.320 --> 33:29.800]  I know it's still too far away, but is binary reproducibility a target of this?
+[33:31.080 --> 33:38.840]  No, not really. Sorry. It would be difficult. The Rust ABI is not stable. Rust C changes its
+[33:38.840 --> 33:43.960]  sort of internal formats and representations. I don't want to say often, but it does happen.
+[33:44.520 --> 33:50.440]  And it would be really difficult to keep up with that without sort of a stability guarantee or
+[33:50.440 --> 34:00.120]  a specification of that. It's really not one of our aims. Thanks for the talk. I was wondering
+[34:00.120 --> 34:07.960]  about your cargo re-implementation. Wouldn't it be easier to have a command line compatibility
+[34:08.040 --> 34:15.080]  with Rust C and then plug that thing into cargo to tell cargo don't use Rust C, use GCC Rust?
+[34:16.520 --> 34:22.520]  So it's not a cargo re-implementation. It's a cargo sub-comment. So it's the same as cargo
+[34:22.520 --> 34:28.760]  FMT, for example. How it actually works is that we intercept the Rust C command line,
+[34:28.760 --> 34:36.040]  as you mentioned, instead of saying, well, fork and start Rust C, we start GCCRS. And on top of
+[34:36.120 --> 34:42.440]  that, we do argument translation. So stuff like dash dash edition equals 2018 for Rust C is going
+[34:42.440 --> 34:49.400]  to become dash F Rust dash edition equals 2018 for GCCRS. So we have that list and we do the
+[34:49.400 --> 34:53.720]  translation and then just launch GCCRS and pipe the result back to cargo.
+[35:00.760 --> 35:04.440]  Thanks for the great talk. And one question or maybe a tip, I don't know if it's one,
+[35:04.440 --> 35:10.840]  but is there a project or some possibility to transform the LLVM IR to the GCC IR?
+[35:10.840 --> 35:16.280]  Because if it is, then you could maybe run some tests on it, like creating the IR via
+[35:17.000 --> 35:20.760]  normal Rust C and then your variant and then you can pair the IRs.
+[35:21.640 --> 35:26.440]  I think there is a project like that. I can't remember which way around it is if it's
+[35:27.000 --> 35:33.080]  an LLVM compiler that takes in GCC IR or a GCC sort of front end that takes in LLVM IR.
+[35:33.080 --> 35:37.960]  I think something like that exists. I don't know much about it. I think it's not
+[35:38.600 --> 35:49.000]  very famous or anything, but it could be interesting. Yeah.
+[35:49.320 --> 36:06.920]  Hello. Do you have a link with Rust in Linux project? Because if I remember,
+[36:06.920 --> 36:14.040]  Linux is compiled with GCC, right? Yes. So one of the big, big, big,
+[36:14.520 --> 36:22.120]  big targets of GCC IR is for you to be able to at least help or be usable in Rust for Linux.
+[36:23.880 --> 36:30.440]  Linux is compiled with GCC a lot. You also have efforts to compile it with Clang. At the moment,
+[36:30.440 --> 36:38.200]  what Rust for Linux does is use Rust C, so an LLVM tool chain, but it is one of the sort of
+[36:39.080 --> 36:48.440]  goals of the project to, yes, be able to have a fully comparable Linux project even using Rust
+[36:48.440 --> 36:52.280]  and C in the kernel. But, yeah.
+[36:52.280 --> 37:04.120]  Any other questions?
+[37:11.160 --> 37:18.280]  Thank you. I would guess that while re-implementing such a complex project from basically scratch,
+[37:19.240 --> 37:26.280]  you probably have a really good chance of finding some mistakes in the upstream,
+[37:26.280 --> 37:32.680]  in the original implementation. So do you contribute back to the upstream in such cases?
+[37:32.680 --> 37:36.360]  And maybe you remember some of such examples. Thank you.
+[37:38.840 --> 37:47.480]  So I don't have sort of these specific examples in my head, sorry. But we do have,
+[37:47.480 --> 37:55.160]  as I said, we did find some sort of stuff that didn't make a lot of sense in the specification,
+[37:55.160 --> 38:01.000]  sorry, the Rust reference that might have been fixed and so on. But, yeah, whenever we see something
+[38:01.000 --> 38:07.480]  that doesn't, to us, make a lot of sense or that deserves some explanation, we try and
+[38:07.480 --> 38:12.600]  let people know about it. We try and contribute back to the Rust C project. We're really not
+[38:12.600 --> 38:18.040]  treating Rust C as sort of a competitor or anything. And we do want to improve it. And
+[38:18.040 --> 38:24.840]  GCCRS is built by people that love Rust and that want to push it forward in our own way.
+[38:25.480 --> 38:35.400]  And for bugs regarding like Rust C bugs, GCCRS treats Rust C as sort of the overlord. So whenever
+[38:35.400 --> 38:41.720]  Rust C does something, we do the same thing. We don't want to sort of argue about what is
+[38:41.720 --> 38:45.880]  correct Rust and what is not correct Rust. Rust C is the Rust compiler. It's the Rust
+[38:45.880 --> 38:54.200]  implementation. When you ship a Rust version, you ship the compiler, the library, the sort
+[38:54.200 --> 39:00.120]  of the language is all of that, those three projects. So, yeah, we just try and stick with
+[39:00.120 --> 39:07.720]  that as a reference. And we don't want to step on any toes. Yep. Unfortunately, that's all the
+[39:07.720 --> 39:11.800]  time we have. I think we had a few more questions, but maybe we could do it in the hallway.
+[39:13.720 --> 39:22.600]  Let's thank our speaker.

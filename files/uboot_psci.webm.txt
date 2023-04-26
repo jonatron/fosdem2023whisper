@@ -1,0 +1,200 @@
+[00:00.000 --> 00:12.200]  Yeah, so let's start with this talk. My name is Marek Vashu and this talk is about Ubooth
+[00:12.200 --> 00:19.760]  as a PSCI provider. Now, PSCI stands for Power State Coordination Interface. It's a standard
+[00:19.760 --> 00:27.360]  drafted by ARM and it is used on ARM system. It defines a software interface that's used
+[00:27.360 --> 00:34.680]  by things like bootloader's operating systems to bring up CPU cores, stop the CPU cores,
+[00:34.680 --> 00:45.920]  do a system suspend, resume, perform, reboot and power off. The presence of the PSCI interface
+[00:45.920 --> 00:52.480]  is mandatory on ARM v8. It is optional on ARM v7 although you can find ARM v7 systems
+[00:52.520 --> 01:00.120]  which do also provide PSCI. There is a related interface which is called an SCMI and this
+[01:00.120 --> 01:07.440]  is used for clock management, power domain management of devices. You may sometimes see
+[01:07.440 --> 01:14.000]  that there are systems which misuse PSCI for this kind of functionality like power domain
+[01:14.000 --> 01:22.080]  on and off and this is wrong. So that all goes into SCMI. We will not talk about SCMI
+[01:22.120 --> 01:32.160]  however right now. The reason why PSCI exists is multiple fold. One of them is convenience.
+[01:32.160 --> 01:39.720]  The thing is doing these things like CPU core on, off, suspend, resume. This is a really
+[01:39.720 --> 01:45.160]  horribly complex process and hardware is full of bugs so implementing it correctly so that
+[01:45.160 --> 01:51.640]  your system doesn't randomly crash during suspend for example. The code is very complex and if you
+[01:51.680 --> 02:00.120]  want to run multiple OS's on an ARM machine there is a balancing act in place. Basically what
+[02:00.120 --> 02:07.440]  ARM decided was to implement this once, implement it properly and then expose to the operating
+[02:07.440 --> 02:13.520]  system an interface which allows it to say okay well now suspend or now bring up a CPU core.
+[02:13.520 --> 02:19.440]  And all this horrible complexity and all the work arounds for the hardware bugs they are
+[02:19.640 --> 02:26.040]  hidden in this sort of an interface which is implemented once. So it pretty much covers the
+[02:26.040 --> 02:32.560]  convenience, the complexity. The other thing is the thing which brings up CPU cores may interact
+[02:32.560 --> 02:40.040]  with say regulators and this could potentially damage the hardware if you do it wrong. So if the
+[02:40.040 --> 02:44.280]  hardware is very fragile it may also be a good idea to hide this from the operating system which
+[02:44.320 --> 02:48.560]  may crash and do something wrong and then potentially damage the hardware. That's why it's
+[02:48.560 --> 02:56.360]  hidden in the firmware. However what you may argue is that if we put this functionality in the
+[02:56.360 --> 03:00.640]  firmware what happens if the firmware is buggy then you have to update the firmware which
+[03:00.640 --> 03:08.200]  essentially means updating your boot loader which is dangerous operation unless you are very well
+[03:08.240 --> 03:14.640]  prepared for that. So it can break your machine if you do it wrong. So all of this is really a
+[03:14.640 --> 03:22.440]  balancing act why not put it into the OS or into the boot loader. One completely separate
+[03:22.440 --> 03:30.840]  reason for existence of this API is virtualization. So in a virtualized setup on ARM the secure
+[03:30.840 --> 03:35.960]  monitor firmware which is running in the highest privilege level provides a PSCI interface to
+[03:35.960 --> 03:45.240]  the OS running in lower privilege mode which is like the EL2 and that OS itself can provide the
+[03:45.240 --> 03:52.720]  same looking PSCI interface to the OS running in virtualization so in EL1 and to the OS this looks
+[03:52.720 --> 03:57.040]  very much identical whether it's running in virtualization or whether it's running on bare
+[03:57.040 --> 04:03.640]  metal. So for that purpose also there is the PSCI interface which allows you to bring up CPU cores
+[04:03.680 --> 04:10.120]  which in one case may be virtual in the other case they are the actual real CPU cores hardware ones.
+[04:10.120 --> 04:19.040]  Now the way PSCI is implemented is by means of SMC CC which stands for SMC call convention which is
+[04:19.040 --> 04:25.720]  another standard drafted by ARM and it basically tells you that on ARM64 there are two instructions
+[04:26.200 --> 04:35.440]  one of them SMC the other HVC instruction and they both trigger a synchronous exception. In case of
+[04:35.440 --> 04:43.360]  the SMC instruction the synchronous exception lands in exception level three in case of the HVC
+[04:43.360 --> 04:50.080]  the synchronous exception lands in EL2 and the SMC CC also tells you which CPU registers to set up
+[04:50.080 --> 04:58.200]  before you call the SMC and which CPU registers are then used as a return value from the SMC or HVC
+[04:58.200 --> 05:08.160]  instruction. As for the exception levels there is four of them on ARM64 EL3 to EL0 the EL3 is the most
+[05:08.160 --> 05:15.160]  privileged one this is where the secure monitor firmware runs and this is also where the code
+[05:15.240 --> 05:22.520]  which brings up the CPU cores and does the suspend resume and all this is running. EL2 is the
+[05:22.520 --> 05:27.240]  last privileged and this is where operating system is running the one which is running on bare
+[05:27.240 --> 05:35.560]  metal. You can use SMC from the EL2 into the EL3 to request services from the secure monitor. EL1 is
+[05:35.560 --> 05:44.520]  used for virtualized OS so an OS which is running in virtualization can do HVC which would trigger
+[05:44.520 --> 05:50.000]  synchronous exception in EL2 in the OS which is running on the bare metal and the OS running on the
+[05:50.000 --> 05:55.440]  bare metal may provide some services to the virtualized OS this way. You can read all about
+[05:55.440 --> 06:02.000]  these exception levels in the ARM specification. If you download the slides which are in PENTA you
+[06:02.000 --> 06:06.440]  can use all these links which will redirect you to all the specifications so we can just read all
+[06:06.440 --> 06:13.960]  about that. Suffice to say there are these four exception levels on ARM for now. The way the
+[06:14.360 --> 06:21.200]  SMC actually works is that if you want to do an SMC request you're supposed to set up CPU
+[06:21.200 --> 06:29.080]  register zero with a function ID which basically says what kind of request you want to do. You
+[06:29.080 --> 06:36.760]  want performed by the secure monitor or by the OS and then you're supposed to set up six additional
+[06:36.760 --> 06:42.480]  parameters 6.1 all the way to x6 which are parameters for this function which you want to trigger.
+[06:44.920 --> 06:51.760]  With this setup you have to do the SMC or HVC instruction. This instruction triggers synchronous
+[06:51.760 --> 07:00.080]  exception. The synchronous exception then makes the CPU elevate its exception level to the higher
+[07:00.080 --> 07:07.560]  one and trigger the exception handler which validates that the function ID is even okay for you to call
+[07:08.280 --> 07:15.880]  that the parameters for the function are okay at all and if all of this is correct then the
+[07:15.880 --> 07:20.920]  request which is represented by this function ID is then performed by the secure monitor firmware
+[07:20.920 --> 07:28.680]  or by the OS. Once the request is performed the secure monitor firmware or the OS will set up
+[07:29.560 --> 07:38.680]  for additional registers x0 to x3 with the return values and will return just past the SMC or HVC
+[07:38.680 --> 07:46.920]  instruction into the calling software and resume execution at the exception level of the calling
+[07:46.920 --> 07:53.960]  software and then the calling software can collect the result of this call in the registers x0 to x3
+[07:53.960 --> 08:02.520]  and do something about this. This is roughly how it works about these function IDs. These function
+[08:02.520 --> 08:09.320]  IDs are the requests you can do to the secure monitor firmware or to the OS running in the bare
+[08:09.320 --> 08:16.200]  metal. You can actually not find them in the SMCCC specification because the SMCCC specification
+[08:16.200 --> 08:22.600]  just says there are function IDs but the blocks of these function IDs are distributed across
+[08:22.600 --> 08:27.960]  various specifications like the PSCI specification which has two blocks carved out of the function
+[08:27.960 --> 08:36.920]  IDs or the SCMI specification which has its own set of function IDs. The PSCI specification has
+[08:36.920 --> 08:43.720]  two sets of function IDs. One is for 32-bit PSCI calls, the other is for 64-bit PSCI calls.
+[08:44.920 --> 08:51.560]  The only reason for this is that 64-bit PSCI calls just take 64-bit parameters so the function
+[08:51.560 --> 08:57.960]  signature is slightly different. But beyond that it's very much compatible the 32-bit and 64-bit
+[08:58.760 --> 09:06.360]  PSCI functions and function implementations. So you can look up the function IDs obviously in the
+[09:06.360 --> 09:10.840]  PSCI specification. You can also look them up in the UBOOT sources. You can look them up in the
+[09:10.840 --> 09:16.440]  Linux kernel sources. This stuff here is coming from the UBOOT sources. Hello.
+[09:17.160 --> 09:26.600]  So what you can see here is for example CPU on PSCI function which is actually a macro which is
+[09:26.600 --> 09:42.040]  expanded to like C4 plus 3. So this would actually go into the SMC register x0 before you call the
+[09:42.040 --> 09:53.960]  SMC instruction. Now there are multiple callers of the SMC instruction as well as multiple handlers.
+[09:54.840 --> 10:02.280]  There are callers in UBOOT. This is all built around this FV call that see SMC call and HVC call
+[10:02.280 --> 10:10.280]  implementation. In Linux the PSCI implementation lives in driver's firmware PSCI PSCI. The handlers
+[10:10.280 --> 10:21.000]  are either in ATF or in UBOOT itself. The UBOOT SMC callers are all built around this SMC call
+[10:22.280 --> 10:27.480]  function. So like anything in UBOOT which does PSCI interaction is essentially SMC call
+[10:28.680 --> 10:35.480]  PSCI function name and then some parameters for the PSCI function. If you look at the SMC
+[10:35.480 --> 10:42.040]  call and UBOOT actually it very much copies what's in the SMC CC. So that means set up register
+[10:42.040 --> 10:49.320]  x0 with function ID, set up a couple of parameter registers x1 to x6, then trigger the SMC instruction.
+[10:50.040 --> 10:56.200]  Once the SMC instruction request is done the execution will return past the SMC instruction
+[10:57.000 --> 11:05.640]  and continue here where the UBOOT code will collect the registers which were set up by the
+[11:05.640 --> 11:10.440]  secure monitor firmware as the return values from the SMC instruction and then you can use them
+[11:10.440 --> 11:18.360]  in the UBOOT code. There is a matching HVC call a little bit further in this FV call that see
+[11:18.360 --> 11:23.000]  in UBOOT if you want to look it up which is used for the EL2 HVC call.
+[11:23.880 --> 11:31.080]  UBOOT has the bonus thing that it actually has a command which is called NSMC. So in the UBOOT
+[11:31.080 --> 11:40.040]  command line you can experiment with the SMC calls and it's a command which takes seven parameters
+[11:40.040 --> 11:46.600]  up to seven parameters. The first parameter is the SMC function ID and then the six additional
+[11:46.600 --> 11:52.680]  parameters are the parameters for the SMC function. So if you want to do like a PSCI call
+[11:52.680 --> 11:58.040]  I think this one is like PSCI version here you can do it like from the UBOOT command line and
+[11:58.040 --> 12:08.360]  you can experiment with this all you want. The return value from the SMC command is four values
+[12:08.360 --> 12:19.240]  which is the x0 x1 x3 and x0 x1 x2 and x3 CPU registers. So you can then analyze what you
+[12:19.240 --> 12:28.120]  got out of the SMC call if it didn't fail obviously. As for the Linux kernel there is this
+[12:28.120 --> 12:35.400]  additional thing in Linux then when the PSCI firmware driver is probing Linux has to figure out
+[12:35.400 --> 12:40.760]  whether it is running on bare metal or in virtualization. So if Linux is running on bare metal
+[12:40.760 --> 12:46.120]  then it uses the SMC instruction to communicate with the secure monitor firmware otherwise it's
+[12:46.120 --> 12:51.560]  using the HVC instruction if it's running in virtualization to communicate with the OS that's
+[12:51.560 --> 12:59.720]  running on the bare metal. But beyond that the PSCI firmware driver in Linux just exposes the PSCI
+[12:59.720 --> 13:10.840]  functions as a wrapper around SMC calls and the actual SMC instruction call and the setup of the
+[13:10.840 --> 13:20.840]  x0 all the way to x6 registers. This is implemented in smccc call.s in Rx64 so it's very much yet
+[13:20.840 --> 13:26.680]  again a wrapper around the SMC instruction no matter whether it's UBOOT whether it's Linux.
+[13:29.880 --> 13:36.680]  But now let's talk about the more interesting part which are the handlers and for one to be an
+[13:36.680 --> 13:45.640]  SMC handler the CPU core has to fulfill a couple of requirements. The main requirement to handle
+[13:46.520 --> 13:53.080]  SMC exceptions is to be able to even receive the exceptions. So the CPU core basically has to be
+[13:53.080 --> 14:01.320]  able to receive exception in EL3 if it wants to handle SMC. If you are on an SMP system you also
+[14:01.320 --> 14:08.360]  have to be able to receive IPIs inter processor interrupts because in order to bring up secondary
+[14:08.360 --> 14:14.680]  cores it is necessary for the secondary cores to be able to receive IPIs to break them out of
+[14:17.640 --> 14:24.760]  a loop in the PSCI provider firmware because the OS is not immediately ready for the secondary
+[14:24.760 --> 14:34.760]  cores. I'll explain that in a bit. In UBOOT most of this PSCI and synchronous exception handling
+[14:34.760 --> 14:40.280]  code is actually in place already and it's all generic code. So the UBOOT entry point
+[14:41.960 --> 14:47.480]  the UBOOT entry point is very much here in the startup.s and the PSCI synchronous exception
+[14:47.480 --> 14:54.520]  handling code is here in PSCI.s. It's there both for ARM32 and ARM64 it's just in different
+[14:54.520 --> 15:01.720]  subdirectories. All you as a user actually have to implement is the PSCI.C which are the C callbacks
+[15:01.720 --> 15:11.160]  of the actual PSCI functionality which perform the stuff which the PSCI function are supposed to do
+[15:11.160 --> 15:19.560]  with the hardware like start the CPU core, stop the CPU core. So all this stuff is generic,
+[15:19.560 --> 15:27.400]  all this stuff is so specific and if you decide to implement PSCI provider in UBOOT you have to fill
+[15:27.400 --> 15:37.240]  that in. Now if a UBOOT is configured as a PSCI provider then UBOOT is running in EL3 that means
+[15:37.240 --> 15:44.200]  in the highest execution level, exception level. That means UBOOT is not able to perform any
+[15:45.160 --> 15:50.280]  SMC calls so you have to make sure there are none because otherwise the system would just hang on
+[15:50.280 --> 15:58.120]  boot. The OS will be running in EL2 and it will be able to do SMC calls into the UBOOT synchronous
+[15:58.120 --> 16:03.720]  exception handler so this is something to keep in mind. Beyond that if UBOOT is configured to be a
+[16:03.720 --> 16:10.440]  PSCI provider there is only really a little bit of additional setup when the UBOOT starts up
+[16:11.320 --> 16:17.560]  in this MV8 setup PSCI and this code does basically that it takes
+[16:19.400 --> 16:26.440]  parts of UBOOT which are marked with attribute secure which is essentially the PSCI handling
+[16:26.440 --> 16:34.200]  code. It copies it into an SRAM then it setups MMU tables and flags this SRAM with a secure bit.
+[16:34.920 --> 16:41.560]  That means no code running in not EL3 that means anything lower than EL3
+[16:41.560 --> 16:49.800]  will be able to modify this secure handling code. Finally the UBOOT sets up an exception
+[16:49.800 --> 16:55.960]  vectors so that when the synchronous exception happens it will land in the UBOOT synchronous
+[16:55.960 --> 17:02.440]  exception handler and then enter the PSCI code. When such a synchronous exception happens
+[17:04.600 --> 17:12.440]  the UBOOT synchronous exception handler is entered so when like an OS does
+[17:14.440 --> 17:21.480]  SMC call it will land here in the MV8 PSCI.S handle thing
+[17:22.680 --> 17:27.960]  and at that point the synchronous exception can be anything so first we have to figure out whether
+[17:27.960 --> 17:33.960]  this is even an SMC at all or it could be a hardware fault it could be an unknown SMC exception
+[17:33.960 --> 17:39.720]  which we cannot even handle. If it is an SMC exception we need to figure out whether it's
+[17:39.720 --> 17:49.320]  32-bit one or 64-bit one assuming it's an SMC 64 on MV8 we still need to figure out whether
+[17:49.320 --> 17:57.480]  this is a even a PSCI exception or it could be another type of an SMC. If it is a PSCI then
+[17:57.480 --> 18:07.000]  UBOOT looks up the callback function which implements the PSCI function ID if it even exists
+[18:07.000 --> 18:14.440]  in UBOOT and if it does then it sets up C runtime environment and jumps onto the C function which
+[18:14.440 --> 18:21.000]  then looks very much like this and in this C function you can just do like a write into a
+[18:21.000 --> 18:27.000]  register and for example in this case power of the system and like you don't have to care about
+[18:27.000 --> 18:32.360]  the assembler before that all you have to care about with the PSCI provider is very much this
+[18:32.360 --> 18:38.600]  because this is so specific and this is something you have to implement. Now on SMP
+[18:40.360 --> 18:47.640]  there is this additional problem in that when the operating system running in EL2 requests
+[18:47.640 --> 18:53.080]  from the PSCI provider that it wants to bring up secondary core the operating system will pass
+[18:53.080 --> 19:00.600]  through the PSCI a pointer for the OS entry point but you cannot just turn on the secondary core
+[19:00.600 --> 19:05.560]  which will start up in EL3 and point it into the OS entry point because this would be a
+[19:05.560 --> 19:10.680]  security violation you would essentially start the CPU core which is running in the highest
+[19:10.680 --> 19:15.320]  privilege level and make it enter the operating system in some sort of a highest privilege level
+[19:15.320 --> 19:20.440]  state even though the OS is running in lower privilege state so what happens there is the
+[19:20.440 --> 19:29.080]  CPU core actually has to enter Uboot in the Uboot init code the CPU core gets configured gets set in
+[19:29.080 --> 19:38.280]  a defined state so that it can enter the OS the CPU core GIC the interrupt controller registers are
+[19:38.280 --> 19:46.760]  configured so that it can receive an IPI then the CPU core drops into EL2 and then the CPU core
+[19:46.760 --> 19:51.960]  starts spinning and waiting for an IPI so that when the operating system is actually ready
+[19:52.680 --> 20:01.320]  to receive the CPU core it can ping it with an IPI and the CPU core will then be released to the
+[20:01.320 --> 20:05.560]  operating system and it jumps to the operating system entry point and then the operating system
+[20:05.560 --> 20:14.920]  runs on two cores so this is the detail with an smp finally here is a summary of
+[20:16.440 --> 20:22.360]  what to do in case you want to use Uboot as a psci provider so you have to look up the
+[20:22.360 --> 20:27.000]  gig distributor and redistributor base this is something which you find out in your SOC
+[20:27.000 --> 20:32.200]  datasheet or if there is a linux device today it's already there and define these two macros gig
+[20:32.200 --> 20:38.840]  debase and gigar base then you have to make sure that your DRAM is marked as non-secure because
+[20:38.840 --> 20:45.560]  sometimes it is marked as secure and if it is marked as secure in the MMU tables then your OS
+[20:45.560 --> 20:51.160]  will not be able to access DRAM and it will crash you potentially have to configure other
+[20:51.160 --> 20:57.160]  security related registers of the CPU this is again SOC specific you have to look it up in
+[20:57.160 --> 21:05.240]  your SOC datasheet then finally the main part of the implementation is fill in your psci.c
+[21:05.240 --> 21:13.960]  callback implementation against SOC specific and then remove the previews pl31 psci implementation
+[21:13.960 --> 21:21.880]  block which potentially was atf enable these Uboot config options give or take in the Uboot
+[21:21.880 --> 21:30.120]  port config and compile and then it should basically work and in case it doesn't work
+[21:30.120 --> 21:36.120]  Uboot has the debug UART functionality so if you have two UARTs on your machine you can point the
+[21:36.120 --> 21:42.440]  debug UART into the other UART not the console UART and use this dedicated lightweight printing
+[21:42.440 --> 21:51.800]  mechanism to essentially print some sort of debug output from the Uboot psci provider the secure part
+[21:51.800 --> 21:57.240]  even while the Linux kernel is running it is possible to get some debug UART prints out of this
+[21:58.840 --> 22:04.680]  here are the config options which you used for that okay and now since I am through my slides
+[22:05.400 --> 22:14.680]  I promised an example so this will be very boring here is Uboot and if you are familiar with Uboot
+[22:14.680 --> 22:20.040]  this is how it looks and it just looks all the same except if you are familiar with Uboot on
+[22:20.040 --> 22:27.400]  imx8m plus or imx8m in general you may notice that there is no notice here the notice comes from
+[22:27.400 --> 22:33.240]  the atfpl31 blob and the blob is not there because the Uboot is the provider of that functionality
+[22:33.240 --> 22:38.840]  now but beyond that I can boot the Linux kernel all the same the Linux kernel detects that there
+[22:38.840 --> 22:45.480]  is a psci interface in the firmware which is now provided by the Uboot the Linux kernel brings up
+[22:45.480 --> 22:50.840]  the cpu course the cpu course show up in proc cpu info and the cpu course just work
+[22:52.200 --> 22:58.280]  and that's actually all there is to show it's exactly the same as it was with the blob except
+[22:58.280 --> 23:06.360]  now you have one less entry in the s-point so you no longer need the atfpl31 blob which is
+[23:06.360 --> 23:11.160]  bundled with Uboot because Uboot can do it now for you and by the way this stuff is now upstream
+[23:11.160 --> 23:18.680]  since two days ago in case you enable the debug uart you will see some sort of a debug
+[23:18.680 --> 23:28.840]  print out of the secure part of Uboot for example here is psci cpu 164 this is the Linux kernel
+[23:28.840 --> 23:36.600]  sending the psci request to Uboot and Uboot just brings up the cpu code for the Linux kernel
+[23:37.240 --> 23:38.760]  and that's it thank you for your attention
+[23:49.080 --> 23:49.960]  questions yeah
+[23:52.360 --> 23:58.360]  so if you have an existing atf implementing psci and you want to move to Uboot you have to
+[23:58.360 --> 24:05.160]  convert everything at once there's no way to like step by step move functionality over
+[24:05.160 --> 24:09.560]  so you see the functionality is actually super simple i mean all you have to do is like turn on
+[24:09.560 --> 24:17.480]  cpu code turn off cpu code and suspend and power off and reset and this is like 200 lines of code
+[24:18.360 --> 24:24.040]  so it's like super simple really um and it's actually all now upstream for imx 8m
+[24:25.400 --> 24:28.680]  plus so we can actually just use that as an inspiration

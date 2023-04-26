@@ -1,0 +1,131 @@
+[00:00.000 --> 00:14.200]  So, I'm João. I work at SUSE, at the storage team. I used to work on SAF. Our storage team
+[00:14.200 --> 00:22.000]  used to work on SAF, but due to restructurings, that's no longer the case. I'm going to talk
+[00:22.000 --> 00:29.200]  to you about one of our latest projects, Yes Free Gateway, and I'm going to tell you why
+[00:29.200 --> 00:37.640]  we're doing this mostly. What is S3 Gateway? How we're doing it? Hopefully there will be
+[00:37.640 --> 00:48.800]  a demo, and then the next steps and what's ahead of us. So, why are we doing this? So,
+[00:48.800 --> 01:01.320]  essentially, after our product was restructured, we needed to find something else to work on,
+[01:01.320 --> 01:20.520]  and one of the ideas we had was to find a way to, on the one hand, to figure out a way to provide,
+[01:20.520 --> 01:29.520]  I'm lacking the word, provide something that was lacking in the SUSE Rancher portfolio,
+[01:29.520 --> 01:38.400]  which is basically an S3 service for local clusters, for local storage within a Kubernetes
+[01:38.400 --> 01:46.720]  cluster, and what we aimed at was something as easy to deploy, as easily forgettable,
+[01:46.720 --> 01:56.000]  and that just works for ideally local workloads, not necessarily something that is complex to
+[01:56.000 --> 02:03.720]  manage. We didn't want anything that would be, we wanted something as light as possible,
+[02:03.720 --> 02:15.360]  and that's what eventually became the S3 Gateway. It's an open source project as usual. It's driven
+[02:15.360 --> 02:27.720]  by our team at SUSE, and ideally it will be an easy to use project that you just deploy
+[02:27.720 --> 02:33.640]  on a Kubernetes cluster and it will just provide you an S3 service within your cluster. I say,
+[02:33.640 --> 02:40.600]  ideally, because this has six months worth of development, and there are a lot of things still
+[02:40.600 --> 02:50.080]  lacking, far more than I would actually like, but that's just how life is. It complements the
+[02:50.080 --> 02:56.320]  Rancher portfolio, as I mentioned, but this was not necessarily the main driver when developing
+[02:56.320 --> 03:07.240]  the S3 Gateway. It just happens to fit nicely within the stack. It helps doing backups of local
+[03:07.280 --> 03:18.680]  Longhorn volumes, backups for other stuff within the stack, and one of our main criteria initially
+[03:18.680 --> 03:26.720]  was that we would serve our storage from any PVC that a Kubernetes cluster could provide,
+[03:26.720 --> 03:34.040]  and this just happens to be nice because given Longhorn allows us to put stuff on a Longhorn
+[03:34.480 --> 03:40.400]  persistent volume, Longhorn will deal with all the nasty things like replication and whatnot
+[03:40.400 --> 03:47.880]  so that we don't have to deal with that. Of course, we wanted a pretty UI for all of the
+[03:47.880 --> 03:57.640]  operations and management, which is still ongoing, but we'll get there. How we're leveraging this,
+[03:57.960 --> 04:08.000]  though, is basically using Rados Gateway from SEF. We didn't want to start something from scratch
+[04:08.000 --> 04:16.160]  because we thought it would be a waste of time and resources, so we decided to leverage the
+[04:16.240 --> 04:29.200]  Rados Gateway from SEF, which is quite amazing because it can be run standalone. Given the already
+[04:29.200 --> 04:38.680]  built-in zipper layer of which there is a talk next, I think, we basically just had to create a new
+[04:38.720 --> 04:51.480]  backend that is basically file-based on which our data is stored on the file-based backend instead
+[04:51.480 --> 05:00.200]  of, say, the Rados store. Hence, we don't need a whole SEF cluster, we just need the binary
+[05:00.240 --> 05:12.760]  running standalone. Essentially, as I was saying, we have the Rados Gateway consuming a file system,
+[05:12.760 --> 05:20.320]  essentially whatever that file system is on. We keep a SQLite database for metadata for the
+[05:20.360 --> 05:34.400]  objects and the directory hierarchy for the data. We decided to do this so that essentially all the
+[05:34.400 --> 05:47.760]  things that can be indexed and to be essentially abstract could be kept as metadata in the SQLite,
+[05:47.840 --> 05:54.960]  which will allow us to more easily search things, index things instead of having to go through
+[05:56.880 --> 06:03.760]  a directory hierarchy to find, for instance, buckets and whatnot. So buckets are essentially a mapping
+[06:03.760 --> 06:12.720]  of a name to a UUID and objects, as well, end up being entries in a database that associate
+[06:12.800 --> 06:19.840]  the bucket name, the object name, and our map to a UUID. The data for the objects, though,
+[06:20.640 --> 06:27.680]  will be based on the UUID and we will grab the UUID and create a directory hierarchy based on the
+[06:28.720 --> 06:40.640]  first bytes of the UUID. The reasoning behind this was mostly because, given typically some
+[06:40.640 --> 06:46.960]  buckets tend to grow larger than other buckets, if we were creating a directory hierarchy that
+[06:46.960 --> 06:53.520]  was per bucket, per bucket name, we could end up with very large directories. This way, we kind
+[06:53.520 --> 07:03.840]  of spread the objects around and even if we end up with larger directories, we don't have to list
+[07:03.840 --> 07:09.680]  the directories themselves to find where the objects are or which objects are within those
+[07:09.680 --> 07:16.800]  directories. We just have that stuff in the metadata devils within SQLite.
+[07:18.880 --> 07:26.960]  Now, this is not pretty, I admit it, but it's the best I could do. This is roughly what translates
+[07:26.960 --> 07:34.720]  to being the S3 gateway stuff being deployed on a Kubernetes cluster. We are essentially
+[07:34.720 --> 07:42.160]  deploying two containers, one for the back end, which is rather a gateway, and another one for the
+[07:42.160 --> 08:01.200]  UI. We deploy our store on whatever is the, whatever is supplying us with storage. In this case,
+[08:01.280 --> 08:09.760]  this slide has Longhorn on it, which will deal with all the replication and availability and
+[08:09.760 --> 08:15.280]  whatnot for us so that we don't have to care about this, but this runs as well in a local,
+[08:15.280 --> 08:23.680]  I'm running this on my Synology NAS. I just have a volume that is exported through the back end.
+[08:24.400 --> 08:34.800]  It really doesn't care about which whatever is providing the file system to it. The UI speaks
+[08:34.800 --> 08:44.800]  directly with the back end and the user just consumes the S3 gateway if outside of the cluster
+[08:44.800 --> 08:50.240]  through an ingress, if inside the cluster through magic, that I don't understand very well.
+[08:50.400 --> 09:04.880]  I promise the demo, which might work or might not. It has been working 50% of the time in my computer,
+[09:06.560 --> 09:10.720]  so let me see if I can get this to not this.
+[09:11.440 --> 09:20.880]  So, you're not seeing anything, of course not. How do I, Jan, how do I...
+[09:20.880 --> 09:49.120]  So, ideally what we'll see
+[09:50.880 --> 10:17.040]  is already deployed K3S, which is running things, but it's not running
+[10:17.040 --> 10:31.440]  the S3 gateway yet. What I'm going to do is to deploy with our chart, which usually works
+[10:31.440 --> 10:43.200]  for people. My laptop is being difficult, so let me just see if I remember its home.
+[10:43.760 --> 10:50.320]  So, basically we install this using the default values,
+[10:53.040 --> 11:02.640]  and supposedly we will have the UI available at this URL here, not this one.
+[11:03.520 --> 11:14.960]  Now, there is still a lot of kinks to figure out with this stuff. We have the UI being run
+[11:14.960 --> 11:34.800]  here, but the UI right now is unable to talk with the back end, and this is because
+[11:35.360 --> 11:46.080]  certificates. Because we are using a self-signed certificate that the browser does not understand,
+[11:46.080 --> 11:52.160]  and the browser is directly talking to the back end through the UI, there is no
+[11:53.920 --> 12:03.840]  actual demon in between the UI and the back end. What happens is that we have to
+[12:05.360 --> 12:19.680]  go to the back end and accept the certificate, which is hilarious,
+[12:22.080 --> 12:31.120]  and once this is done, we can log in to the UI. So, right now the UI is still under heavy
+[12:31.120 --> 12:38.240]  development, and the UI cannot do a lot more than the back end does. We are still lacking
+[12:38.880 --> 12:46.240]  a bunch of things implemented in the back end driver, but I just want to show you that if we
+[12:46.240 --> 12:59.120]  do things on against the back end, it will actually happen in the front end. So, let me see.
+[13:00.160 --> 13:10.560]  This is where this stuff is. It has three commands. If I put a one gigabyte object
+[13:11.520 --> 13:24.080]  onto a bucket that I actually need to create first, if I create a bucket foo on the back end,
+[13:24.720 --> 13:33.280]  it will actually show on the front end, which is expected, and it would suck if it didn't work.
+[13:33.440 --> 13:42.240]  Putting an object there will also allow us to do some exploration.
+[13:43.920 --> 13:50.480]  This is a big object, so you can see that multi-part upload actually works. I'm very proud of this part.
+[13:51.200 --> 14:06.480]  It should be done to some extent. So, if we explore bucket foo, we have a one gigabyte
+[14:06.480 --> 14:15.600]  object here that we could also download, and hopefully that works, or maybe it doesn't because of my
+[14:16.560 --> 14:22.720]  but it should be downloadable. I think something is blocking my requests.
+[14:24.720 --> 14:32.960]  Anyway, that was about it for the demo, but if we turn on the administration
+[14:34.400 --> 14:37.120]  that we could also technically manage the users,
+[14:38.000 --> 14:52.480]  I think. It's just been difficult. Oh yeah, and I got the object downloading now. Amazing.
+[14:54.720 --> 15:02.080]  But yeah, we could create new users. We still don't support user quota, bucket quota, stuff like that.
+[15:03.040 --> 15:05.680]  All of this is still very much work in progress.
+[15:10.080 --> 15:19.120]  Creating buckets can also be done via the UI.
+[15:20.080 --> 15:29.120]  We could enable versioning. Versioning is already supported.
+[15:31.520 --> 15:36.480]  I'm just not doing that because I don't remember how to demo that part.
+[15:39.280 --> 15:46.240]  We have tests for that stuff. Okay, so this is as far as the demo goes.
+[15:46.800 --> 15:55.920]  Let me just list the buckets here so that you see that a bucket bar has been created,
+[15:56.480 --> 16:05.520]  and we have a bucket bar over there. That's thrilling. Okay, let me just go back to
+[16:05.680 --> 16:10.800]  the other thing
+[16:15.120 --> 16:16.960]  and go back to the presentation.
+[16:23.200 --> 16:34.560]  Slideshell, so from current slides. Okay, so next steps. So for now our roadmap is to actually
+[16:34.640 --> 16:38.240]  increase the number of operations that we actually support because
+[16:40.800 --> 16:47.840]  the operations, the RGW basically supports everything that exists, but then the driver
+[16:47.840 --> 16:57.840]  behind it needs to comply with the expected semantics and the expected, you know, you request
+[16:57.840 --> 17:03.920]  data to the backend and the backend should probably return the appropriate data so that
+[17:03.920 --> 17:13.360]  the client is able to perform the operations. And we've been doing this gradually. There has been
+[17:13.360 --> 17:22.880]  some challenges there of which, so we are in the process of implementing life cycle management
+[17:23.440 --> 17:29.440]  for buckets, retention policies. The performance currently is far from ideal,
+[17:29.440 --> 17:38.800]  but we're working towards that. And I really want statistics on the UI. I mean, having as much
+[17:38.800 --> 17:47.600]  information that is useful to the user through the UI is something that is very much on my
+[17:49.760 --> 17:55.680]  to the list, not necessarily on the to the list for the project, but that's another thing.
+[17:56.160 --> 18:02.240]  In terms of challenges that we currently face is a semantic compliance with the S3 API. As I was
+[18:02.240 --> 18:14.880]  saying, we have, we've been having some challenges ensuring that our driver replies or provides the
+[18:15.840 --> 18:31.120]  right information when processing the operations that are requested by RGW. Fortunately, there is an
+[18:31.120 --> 18:38.560]  amazing project called S3 tests within the self repository, which covers pretty much all of the
+[18:38.880 --> 18:49.520]  API as far as we understand. And it's very, it's very good to actually ensure that we are in
+[18:49.520 --> 18:56.960]  compliance with the API. Then we have performance. This has been a big learning curve, especially
+[18:56.960 --> 19:06.560]  with SQLite. There have been decisions that were made during the implementation of the project,
+[19:07.280 --> 19:18.160]  especially surrounding new taxes that bid us eventually. But fortunately, we have a Marcel
+[19:18.160 --> 19:29.440]  actually looking into this stuff. So if, and that's one of the things that we have here, we have
+[19:29.520 --> 19:37.040]  here a comparison of our performance, previous performance with the performance that comes with
+[19:37.040 --> 19:43.680]  some of the work Marcel has been doing, it may not look like a lot, especially when we compare
+[19:43.680 --> 19:55.440]  with FIO. But I mean, he filled with a few mutexes and we got a significant speed up on a very
+[19:55.920 --> 20:05.600]  let's say that the machine is far from current. So we are also believing that we are CPU bound
+[20:06.240 --> 20:12.000]  some extent and not taking full advantage of the IO path. But that's neither here nor there.
+[20:12.640 --> 20:20.560]  What matters is that we are performing gradual performance improvements that will eventually
+[20:21.520 --> 20:32.560]  pay off. This is just the latency distribution. So the YOLO branch is what Marcel called that
+[20:32.560 --> 20:41.280]  branch mostly because it removed a bunch of mutexes. What we see here is that to some extent
+[20:42.160 --> 20:48.880]  the latencies dropped a bit for put, even though they increased significantly forget.
+[20:48.880 --> 20:56.240]  But we are also believing that we are, given that we are also having more operations in flight
+[20:58.160 --> 21:05.040]  that we may actually be CPU bound and the operations may not be finishing because of
+[21:07.040 --> 21:16.000]  concurrency issues and whatnot. After that, eventually world domination, I think, but probably
+[21:16.000 --> 21:24.720]  not. But that's the hope. And that's it. If you want to find us, we are at S3 Gateway IO.
+[21:26.480 --> 21:37.600]  And that's about it. Thank you for enduring my presentation. Thank you. Any questions?
+[21:37.600 --> 21:50.320]  No? Awesome sauce. Great. Thank you.

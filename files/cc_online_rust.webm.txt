@@ -1,0 +1,194 @@
+[00:00.000 --> 00:11.520]  Hello everyone, today I'm happy to join Confidential Computing Dev Room to share the information
+[00:11.520 --> 00:16.400]  rust-based shim firmware for Confidential Container.
+[00:16.400 --> 00:19.360]  I'm Jay Wen-Yao, Principal Engineering Intel.
+[00:19.360 --> 00:26.680]  I have been engaged as a firmware developer for about 20 years working on UEFI, TCG, DMTF,
+[00:26.680 --> 00:28.880]  Industrial Standard Working Group.
+[00:28.880 --> 00:33.760]  I'm an architect for the TDX virtual firmware.
+[00:33.760 --> 00:35.160]  Here is today's agenda.
+[00:35.160 --> 00:40.480]  First, I will show you some background of the firmware while we need the shim firmware
+[00:40.480 --> 00:44.560]  and the TDShim internals.
+[00:44.560 --> 00:50.000]  Today, the industry is adding hardware-based Confidential Computing support, for example
+[00:50.000 --> 00:53.280]  AMD, SCV, or Intel TDX.
+[00:53.280 --> 00:57.840]  This figure demonstrated the concept of the Confidential Computing.
+[00:57.840 --> 01:01.160]  The hypervisor VMM is on the bottom.
+[01:01.160 --> 01:06.160]  On the left-hand side, the red box shows the legacy VMs.
+[01:06.160 --> 01:10.080]  This is a traditional VM hypervisor environment.
+[01:10.080 --> 01:17.320]  The hypervisor has the highest privilege it can access or modify the VM environment.
+[01:17.320 --> 01:21.840]  On the right-hand side, the green box is a Confidential Computing environment.
+[01:21.840 --> 01:26.000]  We call it TE, Trusted Exclusion Environment.
+[01:26.000 --> 01:31.920]  Like a virtual machine, it includes the virtual firmware, guest OS, and user APP.
+[01:31.920 --> 01:35.320]  The VMM on the bottom is untrusted.
+[01:35.320 --> 01:43.600]  With the help of hardware SOC such as TDX or SCV, the TE is isolated from the VMM and
+[01:43.600 --> 01:45.600]  other TEs.
+[01:45.600 --> 01:53.760]  Inside the TE, the memory and CPU state confidentiality and integrity is provided to keep the sensitive
+[01:53.760 --> 01:59.760]  IP or workload data secure from the most hardware-based tech.
+[01:59.760 --> 02:07.480]  Since the VMM is still the owner of the whole system resource, such as memory and CPU, also
+[02:07.480 --> 02:15.120]  the VMM manages the TE launch and teardown, so the denial of service tech is out of scope.
+[02:15.120 --> 02:20.080]  In a traditional VM hypervisor environment, we need a virtual firmware to provide the
+[02:20.080 --> 02:22.760]  services to the guest OS.
+[02:22.760 --> 02:30.000]  For example, the EDK2 OVMF, Open Virtual Machine Firmware, provides the UEFI services in the
+[02:30.000 --> 02:31.680]  virtual firmware.
+[02:31.680 --> 02:34.960]  This is also true for the TE environment.
+[02:34.960 --> 02:39.840]  For example, we need to modify the OVMF to add the TE support.
+[02:39.840 --> 02:47.160]  The TE virtual firmware owns its first instruction of a TE, which is a reset vector at all OS.
+[02:47.160 --> 02:53.320]  Similar to the traditional virtual firmware, the TE virtual firmware loads the guest OS
+[02:53.320 --> 02:55.920]  loader and jump to the OS loader.
+[02:55.920 --> 03:01.560]  The TE virtual firmware enables the trusted boot capability to build a chain of trust
+[03:01.560 --> 03:07.880]  from the hardware to the TE OS.
+[03:07.880 --> 03:12.680]  Here we list the existing virtual firmware solution as an example.
+[03:12.680 --> 03:16.360]  The CBIOS is a legacy 16-bit BIOS solution.
+[03:16.360 --> 03:23.120]  It is used to boot legacy guest OS, such as Windows XP or non-UEFI Linux.
+[03:23.120 --> 03:30.320]  Currently, the most widely used UEFI solution is OVMF, the Open Virtual Machine Firmware.
+[03:30.320 --> 03:37.400]  Then NKVM are using OVMF to boot the guest UEFI OS UEFI Linux.
+[03:37.400 --> 03:43.440]  The cloud hypervisor firmware is used by the cloud hypervisor as a lightweight solution.
+[03:43.440 --> 03:47.040]  This does not have UEFI services.
+[03:47.040 --> 03:53.160]  The TE hardware solution may have special requirements for the TE virtual firmware.
+[03:53.160 --> 03:58.200]  Take TDX as an example, the entry point must be 32-bit.
+[03:58.200 --> 04:03.160]  It needs a special multiple processor wake-up structure for the guest OS.
+[04:03.160 --> 04:08.160]  The TE needs explicit accept the assigned memory before use it.
+[04:08.160 --> 04:13.600]  The DMA for the virtual device is a shared private memory attribute switch.
+[04:13.600 --> 04:19.720]  The TE virtual firmware must support the measurement extension to the next component to build the
+[04:19.720 --> 04:22.720]  chain of trust for the TE.
+[04:22.720 --> 04:29.800]  To meet those special requirements, the UEFI solution OVMF needs added TDX support and
+[04:29.800 --> 04:30.800]  ACV support.
+[04:30.800 --> 04:37.360]  We call TDVF, which stands for the TDX virtual firmware.
+[04:37.360 --> 04:44.200]  The TDXM is the guest firmware solution for replace the cloud hypervisor firmware to support
+[04:44.200 --> 04:48.440]  the confidential container use case.
+[04:48.440 --> 04:55.440]  TDXM is a lightweight virtual firmware for confidential container environment.
+[04:55.440 --> 05:01.680]  It's written in Rust program language, currently it's supporting the TDX, it's located in the
+[05:01.680 --> 05:07.960]  confidential container community toward development work is open sourced.
+[05:07.960 --> 05:11.080]  We have three release tag now.
+[05:11.080 --> 05:17.560]  The responsibility of the TDXM is to own the first instruction or reserve actor of a TD.
+[05:17.560 --> 05:23.360]  It provides the required boot information such as memory map, virtual CPU information
+[05:23.360 --> 05:26.680]  to the next phase, which we call the payload.
+[05:26.680 --> 05:33.560]  The payload could be the OS kernel or a biometric execution environment for the service TD.
+[05:33.560 --> 05:42.080]  The TDXM need to build the chain of trust from the inter-TDX module to the payload.
+[05:42.080 --> 05:46.480]  Here is the boot flow comparison between the TDXM and the TDVF.
+[05:46.480 --> 05:51.480]  The right hand side is a TDVF based solution.
+[05:51.480 --> 06:00.040]  The VMM passes TDHOP to the TDVF as input parameter, it's input memory information.
+[06:00.040 --> 06:07.360]  The TDVF build the UEFI memory map, create the UEFI services and ACPR tables, then load
+[06:07.360 --> 06:13.360]  and launch the UEFI OS loader and the UEFI OS.
+[06:13.360 --> 06:20.880]  The left hand side is the TDXM, VMM pass the TDHOP to the TDXM same as the TDVF.
+[06:20.880 --> 06:28.640]  The TDXM build the E820 memory map and create the static ACPR table, then load and jump
+[06:28.640 --> 06:31.640]  to the Linux guest kernel directly.
+[06:31.640 --> 06:37.200]  The OS loader in the middle can be skipped.
+[06:37.200 --> 06:41.400]  Here is the comparison between TDXM and the TDVF features.
+[06:41.400 --> 06:49.400]  From a use case perspective, TDVF is for the confidential VM or the rich service TD environment.
+[06:49.400 --> 06:54.560]  The TDXM can be used for the confidential container and the parameter of small service
+[06:54.560 --> 06:55.560]  TD.
+[06:55.560 --> 07:06.040]  The TDVF is written in C while the TDXM is written in Rust without STD support.
+[07:06.040 --> 07:13.000]  The TDXM does not provide any UEFI services, OS runtime or device drivers, which is different
+[07:13.000 --> 07:15.400]  from TDVF.
+[07:15.400 --> 07:21.520]  In order to support multiple processors, the TDXM still provides the static ACPR table,
+[07:21.520 --> 07:28.400]  such as MADT and PUICUP structure, which is same as TDVF.
+[07:28.400 --> 07:36.840]  The virtual device RQ information is in DSDT in the TDVF case, but DSDT is not required
+[07:36.840 --> 07:39.000]  in the TDXM use case.
+[07:39.000 --> 07:47.800]  As such, the virtual RQ information can be passed as part of boot parameter in the TDXM.
+[07:47.800 --> 07:55.400]  For memory map, the TDXM uses E820 table to provide the TE memory map information, while
+[07:55.400 --> 07:59.640]  the TDVF uses EFI memory map.
+[07:59.640 --> 08:04.680]  The trusted boot support is same between TDXM and TDVF.
+[08:04.680 --> 08:11.280]  Both solutions need to extend the next component to the RTMR and build the event log for the
+[08:11.280 --> 08:13.280]  measurement.
+[08:13.280 --> 08:17.280]  Secure Boot is also supported in both TDXM and TDVF.
+[08:17.280 --> 08:24.320]  The difference is that TDVF uses standard UEFI secure boot, while the TDXM uses customized
+[08:24.320 --> 08:26.080]  secure boot solution.
+[08:26.080 --> 08:29.080]  We will introduce that later.
+[08:29.080 --> 08:31.360]  The size of the image is different.
+[08:31.360 --> 08:37.920]  By default, the TDVF OVM map is 4 MB, it keeps increasing recently.
+[08:37.920 --> 08:49.200]  But the TDXM without secure boot only has 140 kb, even with secure boot is only 270 kb.
+[08:49.200 --> 08:55.320]  That's why we call it as a SHIM firmware.
+[08:55.320 --> 08:59.120]  Now we can introduce more TDXM internal information.
+[08:59.120 --> 09:07.000]  In TDXM project, we define the TDXM specification to standardize the interface between VMM and
+[09:07.000 --> 09:12.560]  the TDXM, and the interface between TDXM and the payload.
+[09:12.560 --> 09:15.680]  The TDXM itself includes the reset vector.
+[09:15.680 --> 09:19.760]  The reset vector is written in a symbolic language.
+[09:19.760 --> 09:28.120]  The code runs by the bootstrap processor BSP, whose virtual CPU index is always zero.
+[09:28.120 --> 09:36.880]  The BSP will park other application processor APs and switch to X64 long mode, set stack
+[09:36.880 --> 09:43.400]  for the Rust code, then jump to the SHIM main function.
+[09:43.400 --> 09:47.760]  The SHIM main function is written in the Rust language.
+[09:47.760 --> 09:51.800]  This will pass the TDHUB input from the VMM.
+[09:51.800 --> 10:00.840]  It measures the TDHUB, gets the memory mapping information, and builds the 820 table.
+[10:00.840 --> 10:10.240]  Then it accepts the memory and loads the payload and jumps to the payload.
+[10:10.240 --> 10:13.440]  People may use different payloads in a different use case.
+[10:13.440 --> 10:19.080]  For example, in a normal confidential container use case, the TDSHIM can boot a Linux kernel
+[10:19.080 --> 10:23.640]  directly based upon the Linux boot protocol.
+[10:23.640 --> 10:29.800]  Service TD use case, the TDSHIM can boot the migration TD core to make it for migration
+[10:29.800 --> 10:30.800]  TD.
+[10:30.800 --> 10:42.640]  The migration TD is a service TD used in TDX 1.5 to support the guest OS live migration.
+[10:42.640 --> 10:48.320]  Now we will introduce two important features in the TDSHIM, trust boot and secure boot.
+[10:48.320 --> 10:51.520]  They are all documented in the TDSHIM specifications.
+[10:51.520 --> 10:56.080]  First, let's take a look at trust boot.
+[10:56.080 --> 11:02.720]  In the trust boot flow, one component must measure the next level component before transfer
+[11:02.720 --> 11:05.040]  control to it.
+[11:05.040 --> 11:10.880]  Later, a remote verifier can get the measurement data with digital signature signed by the
+[11:10.880 --> 11:16.920]  trusted entity, and verify the TD environment launch as expected.
+[11:16.920 --> 11:20.320]  This flow is called remote agitation.
+[11:20.320 --> 11:26.160]  The TDSHIM supports the boot flow by extending the measurement to the TD runtime measurement
+[11:26.160 --> 11:27.680]  register.
+[11:27.680 --> 11:35.040]  The TD measured component includes the TDHUB, payload, and the boot parameter, etc.
+[11:35.040 --> 11:42.880]  At the same time, TDSHIM provides a confidential computing event log called CCEL to the verifier.
+[11:42.880 --> 11:50.040]  The event log may be used to reproduce the digest value recorded in RTMR.
+[11:50.040 --> 11:57.520]  As such, the verifier can check each individual component described in the event log.
+[11:57.520 --> 12:03.000]  The final attestation can be based on the hash of the measurement register or the hash
+[12:03.000 --> 12:08.840]  of the event log.
+[12:08.840 --> 12:17.880]  The TDX architecture provides one MRED and four RTMR measurement registers to map the
+[12:17.880 --> 12:20.560]  TPM PCR-based measurement.
+[12:20.560 --> 12:29.000]  MRTD1 maps the PCR0 as a firmware boot code, which is the TDSHIM itself.
+[12:29.000 --> 12:36.680]  The RTMR0 maps the PCR1 and the PCR7 as a firmware configuration, such as TDHUB for the VMM or
+[12:36.680 --> 12:38.180]  secured policy.
+[12:38.180 --> 12:46.120]  RTMR1 maps the PCR2 to PCR6 as the OS or payload information.
+[12:46.120 --> 12:58.000]  The RTMR2 will map the PCR8 to 15 as application information.
+[12:58.000 --> 13:03.720]  From the transfer boot, the secure boot requires one component to verify the digital signature
+[13:03.720 --> 13:08.520]  of the next-level component before transfer control to it.
+[13:08.520 --> 13:14.840]  In order to support such verification, the TDSHIM needs to provision a non-good public
+[13:14.840 --> 13:22.000]  key and the minimum secure version number, called SVM.
+[13:22.000 --> 13:29.600]  The payload itself should include the image, digital signature, as well as the SVM value.
+[13:29.600 --> 13:34.720]  The secure boot in a TDSHIM includes two step verification.
+[13:34.720 --> 13:40.800]  In step one, the TDSHIM needs to verify its public key matches the public key hash in
+[13:40.800 --> 13:46.480]  the TDSHIM image, then the TDSHIM needs to verify the digital signature of the payload
+[13:46.480 --> 13:49.040]  according to the public key.
+[13:49.040 --> 13:54.800]  The digital signature needs to cover both the payload image and the SVM value to prevent
+[13:54.800 --> 13:57.240]  the SVM modification.
+[13:57.240 --> 14:03.360]  In step two, the TDSHIM needs to verify the SVM in the payload to ensure it's equal to
+[14:03.360 --> 14:09.000]  or bigger than the minimum SVM provision in the TDSHIM image.
+[14:09.000 --> 14:13.240]  That is to prevent the payload-rollback attack.
+[14:13.240 --> 14:19.160]  If the secure boot with SVM is enabled, the payload-remote attack station can be used in
+[14:19.160 --> 14:21.600]  different verification policy.
+[14:21.600 --> 14:27.960]  The verification can be based on the SVM on the image, not the image hash.
+[14:27.960 --> 14:34.720]  This can be achieved without secure boot because there's no other secure way to allow the payload
+[14:34.720 --> 14:39.160]  to pass the SVM information to the TDSHIM.
+[14:39.160 --> 14:47.480]  With secure boot, the SVM value can be tampered by the adversary without being noticed.
+[14:47.480 --> 14:53.240]  The measurement with secure boot is almost the same as the one without secure boot.
+[14:53.240 --> 14:59.760]  The only difference is that the SVM value of the payload is extended to the RTMR1 as a
+[14:59.760 --> 15:01.800]  specific entry.
+[15:01.800 --> 15:07.440]  As such, the verifier can check the specific SVM entry in the event log.
+[15:07.440 --> 15:13.240]  The policy could be, I require the TD payload bigger than SVM4.
+[15:13.240 --> 15:20.920]  It could be any SVM with SVM5, SVM6, etc.
+[15:20.920 --> 15:29.120]  To follow the secure best practice, the TDSHIM enables the protection such as data execution
+[15:29.120 --> 15:30.620]  protection.
+[15:30.620 --> 15:36.800]  It marks the code page to be read only and the data page to be non-skewable.
+[15:36.800 --> 15:42.840]  It's useful to break the exploitation, even if the environment is compromised as such
+[15:42.840 --> 15:50.000]  as buffer overflow or stack overflow, the attacker cannot inject the code.
+[15:50.000 --> 15:55.960]  We're also trying to enable the control flow guard, CET, such as shadow stack and indirect
+[15:55.960 --> 15:57.560]  branch tracking.
+[15:57.560 --> 16:04.000]  That is still working on progress, and that work depends on the rest compiler.
+[16:05.000 --> 16:08.720]  TDSHIM project provides a set of tools.
+[16:08.720 --> 16:16.000]  For example, the TE InfoHash tool allows you to calculate the MRTD-based TE InfoHash value.
+[16:16.000 --> 16:20.400]  As such, you can predict the value in the TD report.
+[16:20.400 --> 16:25.600]  Payload reference calculator can be used to calculate the TD payload reference value by
+[16:25.600 --> 16:30.360]  a big image, a busy image, and a kernel parameter.
+[16:30.360 --> 16:37.760]  The metadata checker tool accepts the TDSHIM files as an input, and extracts the TDX metadata
+[16:37.760 --> 16:43.480]  and verifies if the metadata is valid, then dumps them with metadata.
+[16:43.480 --> 16:51.880]  Finally, we enable the set of tests for the TDSHIM project, for example, the fuzzing test
+[16:51.880 --> 16:59.600]  with AFL fuzz and the cargo fuzz, which are two popular ones in the rust fuzzing.
+[16:59.600 --> 17:07.520]  We enable the cargo clipy, and it runs the Rudra, Christie, MR, AI static analysis tools,
+[17:07.520 --> 17:10.240]  and fix the reported issues there.
+[17:10.240 --> 17:16.360]  Unfortunately, we notice that some tools cannot work with the latest rust compiler, such as
+[17:16.360 --> 17:17.360]  Rudra.
+[17:17.360 --> 17:26.160]  Argo Deny is integrated in CI to ensure that the great TDSHIM rely on does not have any
+[17:26.160 --> 17:28.160]  known secure vulnerabilities.
+[17:28.920 --> 17:35.960]  Beyond that, we also run the unit test and collect the coverage as well to ensure the
+[17:35.960 --> 17:37.600]  quality of the project.
+[17:40.120 --> 17:45.800]  Based on that, that's all for the TDSHIM introduction, and thank you for your attention.
+[17:45.800 --> 17:48.800]  Please let me know if there is any question or that.
+[17:58.160 --> 17:59.160]  Thank you.

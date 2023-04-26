@@ -1,0 +1,206 @@
+[00:00.000 --> 00:10.840]  So actually, I'm going to talk about three subjects, connect my name, proxy control
+[00:10.840 --> 00:16.320]  option and also a little bit of rust throwing at the end as a bonus.
+[00:16.320 --> 00:24.640]  So my name is Philip Holmberg and since a bit more than a year, I now work for NLNetLabs.
+[00:24.640 --> 00:31.640]  So the question that has probably been posed by many people is can you have just a function
+[00:31.640 --> 00:37.160]  that in comes a house name and a surface and you get a socket back.
+[00:37.160 --> 00:42.000]  And sort of the starting point for this project, because we've got some funding, so we officially
+[00:42.000 --> 00:48.840]  defined that as Mikael Aberson in the ITF one suggested that something like that should
+[00:48.840 --> 00:50.560]  be done.
+[00:50.560 --> 00:55.960]  And of course, we want to have options so we can have a slightly more modern version
+[00:55.960 --> 01:00.800]  where you have a context as the first thing and it returns an error code in place of
+[01:00.800 --> 01:04.600]  overloading that with the socket, but general idea.
+[01:04.600 --> 01:08.600]  Of course, this is completely bad because this is blocking.
+[01:08.600 --> 01:11.000]  This is what we now want.
+[01:11.000 --> 01:17.720]  Unfortunately, because we only at NLNetLabs basically do DNS when it comes to name resolution,
+[01:17.720 --> 01:20.680]  this talk ignores every other possible thing.
+[01:20.680 --> 01:27.280]  We don't even do MDNS, but we definitely don't do anything fancy, but it should not
+[01:27.280 --> 01:28.280]  be precluded.
+[01:28.280 --> 01:34.000]  I mean, if people want to add it, why not?
+[01:34.000 --> 01:43.320]  So to make it non-blocking, the obvious way to extend it is to take an event framework
+[01:43.320 --> 01:50.120]  like LibEvent and then in LibEvent speak it is, well, you create an event base, you do
+[01:50.120 --> 01:56.160]  a bit of initialization where you pass the event base to the asynchronous library function,
+[01:56.160 --> 02:00.680]  you start it, it returns to say, well, okay, I'm busy.
+[02:00.680 --> 02:06.080]  Then at some point it does a couple of callbacks, like this callback function that you pass,
+[02:06.080 --> 02:12.480]  but the main loop is called event-based dispatch and as long as your entire application is
+[02:12.480 --> 02:17.600]  written around it, then the application just calls this one and then you can call this
+[02:17.600 --> 02:22.000]  connect by name as many times as you like.
+[02:22.000 --> 02:28.920]  So if you want to make this practical more complex and do a release engineering, for
+[02:28.920 --> 02:34.760]  example, getDNS has support for, I think, three event frameworks and you can define
+[02:34.760 --> 02:36.760]  your own event framework and stuff like that.
+[02:36.760 --> 02:43.720]  I'll ignore this, the only thing you're going to get here is LibEvent.
+[02:43.720 --> 02:50.040]  But there's a couple of practical things that we would like to add, so now we get another
+[02:50.040 --> 02:57.920]  full slide and so far I said you get a socket back, implicitly a socket back means TCP because
+[02:57.920 --> 03:04.080]  while UDP is way too complex, but then in practice, who does TCP anymore?
+[03:04.080 --> 03:08.400]  I mean, the thing is if you have a TCP socket, then you immediately call your SSL library
+[03:08.400 --> 03:12.440]  and you want a TLS connection, I mean, at least I hope that people are not writing new
+[03:12.440 --> 03:18.080]  codes that ships unencrypted data over the internet.
+[03:18.080 --> 03:24.400]  Now within LibEvent, you're lucky because they have a concept called buffer event, that's
+[03:24.400 --> 03:32.240]  why the callback there gets a buffer event, and LibEvent can transparently do SSL, so
+[03:32.240 --> 03:36.640]  you just return right to the buffer event and then LibEvent, well, if it knows that
+[03:36.640 --> 03:44.280]  it is a TLS, then it sends it to open SSL and if it's just a normal TCP connection, then
+[03:44.280 --> 03:46.760]  it sends it to the socket.
+[03:46.760 --> 03:53.680]  So that solves that problem and that allows the library to also do a couple of other interesting
+[03:53.680 --> 04:00.800]  things as we will see on the other slide, but because we are an organization that is
+[04:00.800 --> 04:07.480]  focused on DNS, we focused on all of the complexity of stuff that you can do with DNS.
+[04:07.480 --> 04:13.200]  So for example, one thing that the library does, I forgot to mention, is that if you
+[04:13.200 --> 04:18.160]  get multiple addresses back, then the traditional way is you write a for loop, you do connect
+[04:18.160 --> 04:22.360]  to the first address and then to the second address and there's, I don't know, many minutes
+[04:22.360 --> 04:27.440]  timeout on the TCP connection, so if the first address doesn't work, then it takes forever.
+[04:27.440 --> 04:32.760]  So your library needs to do happy eyeballs such that you start to connect, wait not that
+[04:32.760 --> 04:39.080]  long and then start the next connect, which also means that any timer system is not in
+[04:39.080 --> 04:43.320]  the order of seconds, it should be definitely in order of milliseconds because it should
+[04:43.320 --> 04:51.320]  be within human response levels and not like, okay, the network is down, we wait seconds.
+[04:51.320 --> 04:59.080]  So that is stuff that this library can hide and that the prototype also does, but to get
+[04:59.080 --> 05:05.280]  to the DNS part, if you have a modern web browser, then the web browser has an option
+[05:05.280 --> 05:12.800]  to configure DNS and that's highly controversial because it goes over HTTP, but it's something
+[05:12.800 --> 05:18.160]  where applications have now said, okay, we are done with, et cetera, resolve.golf, we
+[05:18.160 --> 05:23.520]  from an application point of view want to be able to do, decide which is our upstream
+[05:23.520 --> 05:31.000]  resolver, so we added configuration options that you can say, well, I want to have an
+[05:31.000 --> 05:36.120]  upstream resolver that has authenticated encryption.
+[05:36.120 --> 05:43.400]  I don't really like quick and I have no clue, so I say the only allowed transport protocols
+[05:43.400 --> 05:49.080]  is plain old DNS over 53, which will always fail because it cannot do any encryption,
+[05:49.080 --> 05:57.400]  but we do allow DNS over TCP, we do allow DNS over HTTP too, but none of the fancy quick
+[05:57.400 --> 06:04.640]  things, we have a name for authentication and of course we can go completely overboard
+[06:04.640 --> 06:09.080]  and also do SVC parameters.
+[06:09.080 --> 06:17.080]  So that extends the call a bit because now the context has a way that you can say, well,
+[06:17.080 --> 06:21.760]  this is my DNS policy and then it goes out and do it.
+[06:21.760 --> 06:29.720]  I mean, basic interface is still more or less the same.
+[06:29.720 --> 06:39.280]  So we worked on connect by name, we built a prototype and a grant from an LNET foundation,
+[06:39.280 --> 06:45.840]  we support asynchronous resolution, well, of course, asynchronous also mean that your
+[06:45.840 --> 06:52.480]  A or what A query should go in parallel, happy eyeballs, then of course the DNS community
+[06:52.480 --> 06:59.360]  invented Dane, so if you do GLS then you also have to do the Dane query immediately and
+[06:59.360 --> 07:08.200]  I forgot to list here, we also do SVCB and if you have the patience to configure experimental
+[07:08.200 --> 07:16.560]  open SSL libraries, you can also do the encrypted client hello from SVCB into open SSL and stuff
+[07:16.560 --> 07:21.840]  like that and the nice thing is you can all hide it in a single library.
+[07:21.840 --> 07:28.760]  So what I would like from the community is sort of one is sort of what doesn't work,
+[07:28.760 --> 07:34.680]  what extra stuff that we need, but we also have a problem with how do we go further with
+[07:34.680 --> 07:35.680]  this.
+[07:35.680 --> 07:41.560]  I mean, we built a prototype, but we cannot really ourselves make it into a product for
+[07:41.560 --> 07:49.080]  various reasons, so take a look at it if you are interested and let us know if you want
+[07:49.080 --> 07:51.200]  to do something.
+[07:51.200 --> 07:58.600]  Current problem for me is it's on top of KTNS, KTNS is extremely nice library, but it tries
+[07:58.600 --> 08:04.040]  to do everything, so it's also a very heavy weight library, so there it is like, it's
+[08:04.040 --> 08:09.520]  a library that you want to link with potentially all applications should that be that heavy
+[08:09.520 --> 08:11.640]  weight.
+[08:11.640 --> 08:18.400]  So that's how we got to the next subject.
+[08:18.400 --> 08:25.960]  This is sort of now what the ITF has created as what ASTAPS resolvers should do and I left
+[08:25.960 --> 08:32.480]  out a case and other things because ADD is busy and I don't know, there's probably quite
+[08:32.480 --> 08:34.400]  a few other working groups.
+[08:34.400 --> 08:40.440]  So the stop resolver, which was a very simple thing with a recent that sends a query over
+[08:40.920 --> 08:47.840]  port 53, has to do more and more and more stuff.
+[08:47.840 --> 08:56.840]  So many applications, ASTAPS resolvers, how many libraries will implement all of those
+[08:56.840 --> 09:02.080]  transports, especially if it's also implemented in different languages.
+[09:02.080 --> 09:09.440]  It used to be that a stop resolver had basically no state, but if you do DOT, DOH, UQ, then
+[09:09.440 --> 09:16.000]  you have connection setup, you generate load in a recursive resolver because if you're
+[09:16.000 --> 09:23.080]  constantly setting up, say, DOT, DOH connections, then it has a way higher load than if it's
+[09:23.080 --> 09:31.080]  just a simple UDP query and it's definitely bad for short-lived applications like Ping
+[09:31.080 --> 09:37.840]  that have a way higher overhead setting up a connection to the local recursive resolver
+[09:37.840 --> 09:43.520]  than the actual work that the application is doing.
+[09:43.520 --> 09:50.960]  So the simple way to solve that, we thought, you introduce a local proxy.
+[09:50.960 --> 09:58.480]  That's not really something new because lots of people are unbound as a local DNS proxy.
+[09:58.480 --> 10:05.480]  Well, we also, as part of the GetDNS project created, Stubby, that focuses more on doing
+[10:05.480 --> 10:15.320]  DNS all the time, there is things like DNS dist, DNS mask, system D, resolve D, so it
+[10:15.320 --> 10:23.080]  looks like, okay, we don't have to worry about that, we can just talk to a local proxy.
+[10:23.080 --> 10:29.680]  But then, if we go back to the example config I had for connect by name for the Firefox
+[10:29.680 --> 10:35.440]  that wants to talk, DOH, how do you tell your local proxy that you actually want
+[10:35.440 --> 10:38.960]  to have an authenticated connection?
+[10:38.960 --> 10:44.520]  What if your proxy is just sending it, I don't know, to one of the public resolvers
+[10:44.520 --> 10:50.440]  over port 53, maybe that's not what your application wants.
+[10:50.440 --> 10:59.600]  And then, this whole local proxy falls down and you get, say, a browser again implementing
+[10:59.600 --> 11:06.080]  its own step resolver because it doesn't have any control.
+[11:06.080 --> 11:17.040]  So we thought about it for a while and created a draft in the ITF with a new ETNS zero option.
+[11:17.040 --> 11:23.760]  And basically, when you send the request to your step resolver, then you can encode all
+[11:23.760 --> 11:30.680]  of the stuff that you want to have as a policy in such an option.
+[11:30.680 --> 11:36.920]  So you can be very basic and set a flag like, well, only give me an authenticated connection.
+[11:36.920 --> 11:41.520]  If you can't do it and just report like it doesn't work or you could say, well, this
+[11:41.520 --> 11:48.120]  is the recursive resolver that I want you to use, please use that.
+[11:48.120 --> 11:57.800]  And then applications can trust the local proxy because they can control it.
+[11:57.800 --> 12:07.160]  And it provides a nice way to basically reduce the step resolver footprint a bit by moving
+[12:07.160 --> 12:13.000]  all of the difficult transports to the proxy.
+[12:13.000 --> 12:21.280]  We have a proof of concept for that, though I have to warn you that we revised the layout
+[12:21.280 --> 12:25.880]  of the option in the draft that is listed here and what the proof concept does is an
+[12:25.880 --> 12:26.880]  older draft.
+[12:26.880 --> 12:34.960]  But if you want to play with it with the general concept, then that is there.
+[12:34.960 --> 12:44.200]  So we decided that, well, we can continue writing code in C and, of course, for our
+[12:44.200 --> 12:50.160]  existing products like unbound NSD, we will just maintain them in C because they are written
+[12:50.160 --> 12:58.680]  in C. But we would like to try to move to Rust for new code.
+[12:58.680 --> 13:08.120]  And I just copied a little bit of stuff from a prototype.
+[13:08.120 --> 13:20.440]  First thing uses Rust in creative ways and that is something where it's now a prototype
+[13:20.440 --> 13:25.920]  and we definitely need feedback from users of the library like, okay, it's very great
+[13:25.920 --> 13:30.320]  that you can have a message builder that takes a static or press or type and it has
+[13:30.320 --> 13:34.720]  a stream target but probably you don't want to write code like that.
+[13:34.720 --> 13:42.080]  So it's built at the moment to be flexible and use the language but it should be somewhere
+[13:42.080 --> 13:45.720]  modified to be more usable.
+[13:45.720 --> 13:53.080]  Then here in the middle, you basically get the main thing because the whole thing is
+[13:53.080 --> 13:58.000]  generic if you want to send a query, then you have to go to the question section and
+[13:58.000 --> 14:05.280]  then you say, well, I want to push a question there and then there is again a bit of a usability
+[14:05.280 --> 14:12.840]  problem where you say, okay, I need this back to a builder and I need a clone of it.
+[14:12.840 --> 14:18.400]  So this is the part that I experimented with.
+[14:18.440 --> 14:26.520]  If you want to have a TCP upstream, then you say create the TCP connection and the nice
+[14:26.520 --> 14:35.160]  thing with Rust is that it can do all of the asynchronous stuff with a nice syntax.
+[14:35.160 --> 14:42.200]  So basically you say, do this connect here and wait until the connect is done but because
+[14:42.200 --> 14:49.840]  this function is implicitly asynchronous, as a programmer you can just write this as
+[14:49.840 --> 14:54.880]  if it's sequential code but the caller can just call this as an asynchronous function
+[14:54.880 --> 15:00.040]  and you don't have to do anything extra.
+[15:00.040 --> 15:08.200]  Here I have to do a bit more work to really figure out how it fits in the Rust ecosystem
+[15:08.880 --> 15:17.120]  because the thing with if you have a TCP connection upstream to a DNS resolver and I wanted to
+[15:17.120 --> 15:24.400]  have this as just the basics for maybe DOH or whatever is that you want to set up the
+[15:24.400 --> 15:29.720]  connection once but then you want to potentially send many queries over it.
+[15:29.720 --> 15:37.920]  So I need to have a separate thing that actually talks TCP as a worker threat but then because
+[15:37.960 --> 15:45.640]  it's all asynchronous this is basically getting an asynchronous worker and then I also say
+[15:45.640 --> 15:52.560]  well give me an asynchronous query and then in Rust you can say okay you have two asynchronous
+[15:52.560 --> 15:59.080]  things that you want to do at the same time well just do them both at the same time and then
+[15:59.080 --> 16:05.160]  normally we expect to be here that we got a reply and then we print a reply and we are done.
+[16:06.080 --> 16:15.680]  So this is sort of the direction we want to go to which is also why we have a bit of a problem
+[16:15.680 --> 16:20.880]  developing the connect by name prototype that we now have because it is like okay we don't really
+[16:20.880 --> 16:25.040]  want to have a new prototype in C what do we want to do with it.
+[16:25.040 --> 16:33.040]  So that's what I wanted to tell today there is I think plenty of space for questions.
+[16:33.040 --> 16:50.040]  I love the idea of having a function which can deal with not just name a resolution but DNS name a
+[16:50.040 --> 16:56.000]  resolution and also the cryptography but as a distribution maintainer I have to say that
+[16:56.560 --> 17:03.200]  having something a library function which makes applications behave differently from all other
+[17:03.200 --> 17:09.800]  applications is really a non-starter so I think that you need to consider in some way to support
+[17:09.800 --> 17:19.280]  NSS and the NSS plugins through the libc or however it's better. You mentioned that probably
+[17:20.240 --> 17:29.160]  a demon is needed to get good performance so maybe the DNS part is the less important one
+[17:29.160 --> 17:39.880]  that you can delegate to some other component. I'll try to summarize you say there's something
+[17:39.960 --> 17:49.600]  with distributing this and there is something with if you run a local proxy then you don't have to
+[17:49.600 --> 17:58.840]  focus as much on DNS if I got that correct. There are already some projects in this space
+[17:58.840 --> 18:09.520]  that you mentioned and they are expected to work with the normal libc NSS plugins and I think
+[18:09.520 --> 18:18.520]  that your library to be universally used that I think that's the task to be your goal you need
+[18:18.520 --> 18:25.120]  to support the normal name resolution which is expected by any current applications so it has
+[18:25.120 --> 18:35.880]  to support the libc plugins. You say the library will only be adopted if it supports the libc
+[18:36.360 --> 18:44.840]  plugins. Yes I agree I mean that's why we made the prototype because we were looking into what
+[18:44.840 --> 18:51.480]  should the interface to the library be how should the library behave stuff like that sort of the
+[18:51.480 --> 18:59.360]  high-level stuff and fully expecting that any production quality implementation of the library
+[18:59.360 --> 19:07.160]  has to take a lot of this stuff into account and certainly dealing with nestwitch.conf is I guess
+[19:07.160 --> 19:18.040]  mandatory for any production quality library. For the proxy control option because there are lots
+[19:18.040 --> 19:25.240]  of demons in that space of course it's best if those adopt the option once it is actually standardized
+[19:25.240 --> 19:31.960]  by the ITF. I mean it's not that we want to write another proxy it's just like we have a very
+[19:31.960 --> 19:38.960]  specific problem that we want to solve if we want to make stuff resolve a small and still give them
+[19:38.960 --> 19:48.560]  access to all of the encrypted transports but yeah if for example system dresolve they would also do
+[19:48.560 --> 19:54.120]  the proxy control option then it would be perfectly fine I mean there's no new reason to write a new
+[19:54.720 --> 20:12.440]  one for the proxy control option. Is it only the step resolver that will tell the proxy server that
+[20:12.440 --> 20:18.000]  it wants those policies applied or does the proxy also communicate back to the step resolver that
+[20:18.000 --> 20:23.560]  is actually implying those policies because in the initial situation where nothing supports it,
+[20:23.560 --> 20:30.600]  which you always have. So the question is what happens if you send a proxy control option
+[20:30.600 --> 20:38.800]  to an older step resolver that may not be aware. So I didn't want to go over the entire draft,
+[20:39.720 --> 20:50.960]  so we thought about that. But basically there are some priming queries. I forgot the exact name.
+[20:50.960 --> 21:00.080]  Is it resolver.ARPA that is proposed? Something like that. So try to look up resolver.ARPA,
+[21:00.080 --> 21:07.080]  see if you get the right response. If you don't, then the only thing you leaked is that you were
+[21:07.080 --> 21:13.080]  trying to look up resolver.ARPA. We assume that that is safe and then if you do get it,
+[21:13.080 --> 21:19.280]  then you know that the proxy understands it. Yeah. Any more questions? Okay, yeah.
+[21:19.280 --> 21:24.320]  There's actually a comment on both this presentation and the previous one. You're
+[21:24.320 --> 21:29.040]  tackling three moving targets at the same time. You're trying to figure out how to integrate
+[21:29.040 --> 21:33.200]  with the event loop. You're trying to figure out what your API to the application looks like
+[21:33.200 --> 21:40.680]  and you need to figure out what your integration with NSS or system. The complexity is multiplicative,
+[21:40.680 --> 21:47.160]  so you're curbing this. This is a horrible idea. You can at least remove the event loop
+[21:47.160 --> 21:53.600]  integration as a moving target. There is an existing project called libverto which tried
+[21:53.600 --> 21:59.000]  to just solve that one problem by providing four libraries and API to integrate with an
+[21:59.000 --> 22:07.160]  arbitrary event loop provided by the application. I think you need to remove the number of moving
+[22:07.160 --> 22:14.120]  targets like reduce it and maybe the event loop is the one to kick out first and try to put in
+[22:14.120 --> 22:24.040]  a separate consideration how to solve that and then continue from there. So the question was
+[22:24.040 --> 22:33.280]  basically it tries to deal with too much stuff at the same time. Event loops, figuring out an
+[22:33.280 --> 22:40.640]  API and then also figuring out how to deal with an S-switch. There's an existing library called
+[22:41.360 --> 22:50.720]  virto. That makes it easier to be flexible with respect to event loops. That's definitely a
+[22:50.720 --> 22:56.880]  good point. I'll try to look at it, but I specifically decided to only focus on libEvent
+[22:56.880 --> 23:06.560]  to just get virto. To get something, a prototype up and running and not try to support arbitrary
+[23:06.560 --> 23:18.280]  things like that. More questions, some more time. Okay, it seems that we have run out of questions.

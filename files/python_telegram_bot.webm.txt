@@ -1,0 +1,242 @@
+[00:00.000 --> 00:11.160]  Hello, everybody. Welcome to the Python, the room of UsDem. I'm really happy to welcome
+[00:11.160 --> 00:18.500]  all of you here and to welcome Marc-André for his talk, an introduction to async programming.
+[00:18.500 --> 00:23.920]  Thanks for everyone for coming, also, so early for this talk that I'm really looking forward
+[00:23.920 --> 00:27.560]  to see with you. Thank you very much and thank you for the
+[00:27.600 --> 00:32.520]  introduction. It's really nice to see so many people here on a Sunday morning at 9 o'clock.
+[00:32.520 --> 00:38.960]  I'm really happy about this. I wouldn't have expected so many people. I hope this is going to be
+[00:38.960 --> 00:44.720]  interesting for you. There is a lot of text on these slides. I uploaded the slides to the
+[00:44.720 --> 00:50.240]  website so you don't have to, you know, write down everything and read everything. There's a lot
+[00:50.240 --> 00:56.120]  to talk about in async. So what I wanted to do is I wanted to give a short introduction to async
+[00:56.120 --> 01:01.680]  and I wanted to frame everything into writing a telegram bot because that was, you know,
+[01:01.680 --> 01:09.240]  the motivation behind the talk and how I came to doing this. So a few words about myself.
+[01:09.240 --> 01:15.320]  I'm Marc-André Lamberg. I'm from Düsseldorf in Germany. I've been with Python for a very
+[01:15.320 --> 01:22.800]  long time since 1994. I'm a core developer. I've done lots of work in the various organizations
+[01:22.880 --> 01:29.120]  around Python. So I was your Python chair, for example. I was on the board of the PSF. I'm a
+[01:29.120 --> 01:36.200]  PSF fellow and I've done lots of work in that area. In my day job, I am a consulting CTO or do
+[01:36.200 --> 01:44.480]  senior architectures. Also do coaching a bit. So if you have a need in that area, just ping me.
+[01:44.480 --> 01:51.040]  So the motivation for the talk is writing a telegram and a spam bot. Now, why did we have to
+[01:51.120 --> 01:57.360]  do that? We have a user group in Germany, the Python meeting Düsseldorf, and we're using a
+[01:57.360 --> 02:05.320]  telegram group to communicate. And early last year, we started seeing lots of signups to that
+[02:05.320 --> 02:10.120]  group because it's a public group. Anyone can just sign up to that group. We started seeing
+[02:10.120 --> 02:17.600]  lots of signups from strange people. And the people then usually started to, you know,
+[02:17.680 --> 02:27.120]  send spam, send crypto links, you know, link spam. Many of those people were actually not people,
+[02:27.120 --> 02:32.760]  but bots, and they scraped the contact info and started sending DMs to the various members. So
+[02:32.760 --> 02:40.680]  it was, you know, getting to a point where it was not possible for us as admins to handle this
+[02:40.680 --> 02:45.720]  anymore because most of these people or bots, they were actually signing up during the night. So
+[02:45.760 --> 02:51.840]  there was no one there to handle these. And so the idea was to write a bot which basically tries to,
+[02:51.840 --> 02:58.720]  you know, check whether people are human, check whether the signups are actually from people
+[02:58.720 --> 03:07.320]  who know Python. And that's what it did last year. So the idea was to have a scalable bot
+[03:07.320 --> 03:14.680]  because it needs to run 24-7. It also needs to be very stable because, you know, at night,
+[03:14.760 --> 03:20.760]  no one is there to basically restart it. We needed something that is low resource because
+[03:20.760 --> 03:27.880]  we wanted to have it on one of the VMs that we have to run. And so we decided to look out for,
+[03:27.880 --> 03:33.160]  you know, a library that we could use. And there is a very nice library called Pyrogram,
+[03:33.160 --> 03:42.240]  which you can use for creating these bots. It's LTPL3. It's fairly new. It's well documented,
+[03:42.320 --> 03:48.760]  and it's actually maintained. So basically all the checks are there. And we started to use that,
+[03:48.760 --> 03:57.600]  and we had great success with it. It is an async library. So what is this asynchronous
+[03:57.600 --> 04:03.560]  programming? I'm going to go through the three different models that you have for execution
+[04:03.560 --> 04:10.240]  in Python. And let's start with the synchronous execution. So what is synchronous execution?
+[04:10.240 --> 04:15.840]  Basically you write your program from top to bottom. The Python interpreter then takes all
+[04:15.840 --> 04:20.320]  the different steps that you have in your program and runs them one by one, one after the other.
+[04:21.120 --> 04:28.400]  So there's no parallel processing going on. Everything happens one after the other thing.
+[04:28.400 --> 04:34.080]  If you have to wait for IO, for example, then you just do the cord just sits there, doesn't do
+[04:34.080 --> 04:40.000]  anything. And of course, waiting is not really very efficient. So what can you do about that?
+[04:40.000 --> 04:48.480]  If you want to scale up. One way to scale up in Python is to use threads. And probably many of you
+[04:48.480 --> 04:53.360]  know about the GIL. I'm going to talk about that in a bit. But let's just mention what
+[04:53.360 --> 04:59.680]  was threaded programming is. Thread programming is where the operating system basically assigns
+[04:59.680 --> 05:05.520]  slices to your application. And then each slice can run for a certain amount of time. And then
+[05:05.600 --> 05:11.440]  the operating system switches to the next slice and the next thread. So everything is controlled
+[05:11.440 --> 05:17.360]  by the OS. This is a very nice and very elegant way to scale up. You can use all the cores that
+[05:17.360 --> 05:24.240]  you have in your CPU. You can, you know, in the past you usually had multiple processes in the
+[05:24.240 --> 05:30.240]  servers and you could use those multiple processes as well. There's one catch though with thread
+[05:30.240 --> 05:34.560]  programming because it's controlled by the OS and not by the application. So not by Python.
+[05:36.320 --> 05:43.040]  It is possible for two threads to try to access the same object, let's say, or same memory area
+[05:43.040 --> 05:49.520]  in your application and do things on those memory areas. For example, you know, take a list, append
+[05:49.520 --> 05:56.000]  to it, delete from it and so on. And if two threads start doing that at the same time, you can have
+[05:56.000 --> 06:00.560]  clashes. And in order to prevent that, because you don't want to have data loss, for example,
+[06:01.600 --> 06:08.160]  you have to put locks around these things to make everything work. So there is a bit of extra work
+[06:08.160 --> 06:13.360]  to be done there. You have to consider how things work in the thread environment and you have to
+[06:13.360 --> 06:19.040]  put locks around areas that can be shared between the different threads that you have. It is an
+[06:19.040 --> 06:25.360]  efficient use of resources. So this is actually something that people try to get working. With
+[06:25.440 --> 06:32.960]  Python, it's a bit harder. And because it's a bit harder, some years ago, async support was added
+[06:32.960 --> 06:38.560]  to Python. So what is asynchronous? Asynchronous is basically focusing on a single thread, on a
+[06:38.560 --> 06:46.160]  single core. It looks very much like a synchronous program, except that whenever you do IO, the
+[06:46.160 --> 06:52.240]  application, Python in that case, can then say, okay, I'm going to run this function until I hit
+[06:52.240 --> 06:57.840]  a spot where I have IO, for example, or I have to wait for something. And then I give back control
+[06:57.840 --> 07:02.000]  to something called an event loop. And that event loop is then going to take,
+[07:03.120 --> 07:07.680]  it's going to go through the list of everything that is scheduled to be executed and then just
+[07:07.680 --> 07:13.840]  run the next thing that's on that list. And so whenever you wait for IO, you can tell the program,
+[07:13.840 --> 07:20.160]  okay, I'm done with this part of the application. And now I'm going to switch to a different part
+[07:20.160 --> 07:27.200]  and run that part. So that's a way to work around the threading issues I just talked about. It's
+[07:27.200 --> 07:36.320]  also a way to write code that scales up very neatly, very fast. It's a bit limited in terms of
+[07:37.120 --> 07:43.360]  focusing on just one core. So you, for example, you cannot use multiple cores that way,
+[07:43.360 --> 07:49.280]  not that easily. If you want to use multiple cores, you can push work that is being done in the
+[07:49.280 --> 07:56.000]  application that's not running Python on these other cores, that's certainly possible. But if you
+[07:56.000 --> 08:01.760]  want to scale up, use all the cores, then you basically have to use multiple of these applications,
+[08:01.760 --> 08:07.840]  run them in different processes, and then use up all the cores that you have. There's one catch with
+[08:07.840 --> 08:13.840]  this. I mean, there's no free lunch, right? So all the parts in your code have to collaborate.
+[08:14.720 --> 08:20.320]  Because it's application driven, all the parts that you have need to have certain places where
+[08:20.320 --> 08:25.200]  they say, okay, I'm going to give up control back to the event loop at this point because I'm waiting
+[08:25.200 --> 08:30.400]  for something. Because Python cannot know that you're trying to wait for something. And so you
+[08:30.400 --> 08:39.440]  have to tell Python that this is a good place to give up control. Now, why do we need this? And
+[08:39.440 --> 08:43.280]  this slide is about the global interpreter lock. How many of you know the global interpreter lock?
+[08:44.800 --> 08:55.040]  Just a few. That's interesting. So what Python does is it keeps a one big lock around the Python
+[08:55.040 --> 09:00.880]  virtual machine that executes the Python bytecode. And it does this because it wants to support
+[09:00.880 --> 09:09.840]  multiple threads. But at the time when this was added, threading was actually very new.
+[09:10.800 --> 09:19.520]  Python is, it's more than 30 years old now. So there's been a lot of development going on
+[09:19.520 --> 09:25.200]  since Python started. And because Guido wanted to start supporting threading right from the
+[09:25.200 --> 09:31.120]  beginning, he added this global interpreter lock to make sure that the logic that's inside Python
+[09:31.680 --> 09:41.280]  is only used by one thread at any point in time. So what happens is the Python starts running
+[09:41.280 --> 09:49.200]  code, Python code in one thread, then reaches a certain point and then gives up control back to
+[09:49.200 --> 09:54.480]  the OS and says, okay, you can switch to a different thread now. But it does this under the
+[09:54.480 --> 09:59.360]  control of this global interpreter lock. So it makes sure that no other thread is running Python
+[09:59.360 --> 10:05.600]  at the moment. When it gives up control to a different thread, then that thread will have
+[10:05.600 --> 10:11.440]  been waiting for the Python interpreter lock to get the lock. And then we'll start executing.
+[10:11.440 --> 10:16.880]  And this goes on for all the threads that you have in your application. So in a multi-threaded
+[10:16.880 --> 10:23.840]  program that's running Python, you can just have one thread execute Python code at any point in
+[10:23.840 --> 10:33.360]  time. And this is something that, of course, is not very scalable. It's also not a very big issue,
+[10:33.360 --> 10:41.680]  as some may tell you. Because if you're clever and you put all the logic that you need to run
+[10:41.680 --> 10:48.560]  a multiple course or multiple threads into parts of the program that don't need Python, for example,
+[10:48.560 --> 10:53.760]  if you're running machine learning and you want to train a model, then you can just easily
+[10:53.760 --> 10:59.840]  push off everything into C code, which doesn't need Python. And that can very well run next to
+[10:59.840 --> 11:07.440]  Python in another thread. So that's certainly possible. But, of course, sometimes you don't
+[11:07.440 --> 11:11.280]  have a chance to do that. And then you need to look for other things. And this is where async
+[11:11.280 --> 11:19.440]  becomes very nice. So let's have a look at how thread code executes in Python. The image on
+[11:19.440 --> 11:28.880]  the right basically explains how Python works. So you have three threads. The orange is Python
+[11:28.880 --> 11:34.720]  running. Then the yellow is basically the thread, the Python interpreter in those threads waiting
+[11:34.720 --> 11:42.400]  for the gil. And then you have some waiting for IO that happens in between. So if you look closely,
+[11:42.400 --> 11:47.680]  you will see that it's not a very efficient use here, because there's lots of waiting, lots of
+[11:47.680 --> 11:55.520]  yellow in there waiting for the gil, lots of blue waiting for IO. Let's have a closer look at this.
+[11:55.520 --> 12:01.360]  So this again is the picture that I had on the other slide. And I moved out all the waiting
+[12:01.360 --> 12:06.800]  and all the execution. And if you move all the execution together, you will see that only one
+[12:06.800 --> 12:12.720]  thread is running at any point in time. So the other threads are basically just sitting there
+[12:12.800 --> 12:23.120]  doing nothing. Now, how can you work around this? You can use async programming for this. And async
+[12:23.120 --> 12:29.280]  programming has the need feature that you can actually saturate a single core very efficiently
+[12:29.280 --> 12:35.360]  without doing too much work. So again, you have the execution here. You don't have three threads.
+[12:35.360 --> 12:42.160]  This is just one thread that you have for one core, but you have three tasks running in that
+[12:42.160 --> 12:48.960]  one thread. And the different tasks, they share the execution. And again, you have the orange here
+[12:48.960 --> 12:54.160]  executing Python. You have some waiting for IO in here or could also be waiting for calculations
+[12:55.040 --> 13:01.440]  to happen. And if you move everything together, you will see that it's really the thread, the core
+[13:01.440 --> 13:08.480]  is saturated. So everything is working out nicely. And it's very efficient. So how does this work?
+[13:08.480 --> 13:17.360]  How many of you know coroutines? Okay, about like one third. So a coroutine basically is very much
+[13:17.360 --> 13:25.760]  like a normal function, except that it's possible to have certain spots in the coroutine in the
+[13:25.760 --> 13:31.120]  function where it says, okay, at this point, you can give up control back to the caller of that
+[13:31.120 --> 13:36.240]  function. And this is essentially how async programming works. You have something called an
+[13:36.240 --> 13:42.400]  event loop. The event loop calls these coroutines. The coroutine executes until it hits one of these
+[13:43.520 --> 13:48.800]  the spots where you can give up control. The function, the coroutine gives back control
+[13:48.800 --> 13:53.040]  to the event loop at that point. And then the event loop can execute something else in your
+[13:53.040 --> 13:58.720]  application. And then at a later point, it comes back to that coroutine and continues executing
+[13:58.720 --> 14:05.040]  where it left off. In order to make that easy to define and easy to use in Python, we have new
+[14:05.040 --> 14:13.280]  keywords. We have async def, which is a way to define these coroutines. And we have these await
+[14:14.800 --> 14:22.240]  statements in Python, which are basically places where the coroutine says, okay, you can give up
+[14:22.240 --> 14:28.320]  control and you can pass back control to the event loop because I'm waiting for, let's say, IO or for
+[14:28.320 --> 14:37.360]  a longer running calculation that you want to do. And everything around this, all the support for
+[14:37.360 --> 14:42.320]  this is bundled in this package called async IO, which is part of the standard library.
+[14:44.160 --> 14:50.080]  So let's have a look at how this works in Python to compare synchronous code and async code.
+[14:50.880 --> 14:55.280]  So on the left, you have a very simple function. You have a time sleep in there,
+[14:55.280 --> 15:01.040]  which is like a simulation for the IO. So something, the application needs to wait for something.
+[15:02.720 --> 15:09.520]  And then you call that function. And if you run the simple example, then you see that,
+[15:09.520 --> 15:14.080]  you know, it starts executing, it starts working. Then it sleeps for two seconds,
+[15:14.080 --> 15:19.360]  and then it's done. And then it's the end of that function. Now, in the async case,
+[15:19.360 --> 15:24.080]  it works a bit differently. So what you do is you put the async in front of the function. So you
+[15:24.080 --> 15:30.080]  have to turn it into a coroutine. And then inside that function, we use the await statement
+[15:30.880 --> 15:35.760]  to say, okay, at this point, I can give up control back to the event loop. And so what
+[15:35.760 --> 15:42.960]  happens here is that you have a special function called async IO sleep, which is a way to, you
+[15:42.960 --> 15:51.520]  know, wait for a certain amount of time in async. But when waiting for these two seconds,
+[15:51.520 --> 15:58.000]  you can actually go back and you can execute something else. It's not possible to use await
+[15:58.000 --> 16:03.120]  and then time dot sleep for this, because time dot sleep is actually a blocking function,
+[16:03.120 --> 16:09.120]  right? It doesn't give back control. So you have to make sure that whatever you use with await
+[16:10.240 --> 16:17.280]  is actually a coroutine so that it can pass back control to your coroutine that's calling
+[16:17.280 --> 16:22.640]  this coroutine. And this is what I meant with everything has to collaborate. If you have places
+[16:22.640 --> 16:27.440]  in your application that are not compatible with async, you have to be careful and you have to
+[16:27.440 --> 16:35.200]  use certain workarounds to make it happen. So the next thing is that, you know, now you have a
+[16:35.200 --> 16:42.240]  coroutine calling the coroutine will do nothing. Basically, all that happens is you get back a
+[16:42.240 --> 16:48.800]  coroutine object. So it doesn't run. So in order to run it, you have to actually start the coroutine
+[16:48.800 --> 16:53.840]  inside the event loop. And this is what async IO dot run does at the very bottom.
+[16:55.680 --> 17:03.760]  And this, if you look at it, it takes, it defines two tasks. So basically two instances
+[17:03.760 --> 17:10.800]  of that coroutine puts them into this tuple. The tuple is passed to this async IO gather,
+[17:10.800 --> 17:13.360]  which is a special function I'm going to come to in one of the next slides.
+[17:14.400 --> 17:19.360]  It basically just takes these, the coroutines, creates task objects,
+[17:20.480 --> 17:25.840]  and then executes them until all of them are done and then passes back control. So this is how you
+[17:25.840 --> 17:34.000]  would run an async application. I already went through these so I can basically just skip these.
+[17:34.320 --> 17:40.480]  So what are the, you know, things in the async IO package or module?
+[17:41.920 --> 17:47.120]  A very important function is this async IO run. This is basically the function that needs to be
+[17:47.120 --> 17:52.640]  called in order to set up the event loop to run everything in that event loop. You typically
+[17:52.640 --> 17:57.040]  just have one of these calls in your application, basically starting the event loop and then running
+[17:57.040 --> 18:04.160]  anything that's being scheduled. Then you have this gather function. Gather is, like I already
+[18:04.160 --> 18:12.160]  mentioned, it's a function where you can pass in coroutines or tasks. And then it runs all these
+[18:12.160 --> 18:17.760]  tasks until completion and then it returns. Async IO sleeper already mentioned. You also have a
+[18:17.760 --> 18:22.000]  couple of functions down here for waiting for certain things. So sometimes in an application
+[18:22.000 --> 18:27.200]  you need to synchronize between various different parts. So there are some handy functions for
+[18:27.200 --> 18:34.560]  this as well. Now what is this task object? I keep mentioning. Task objects are basically just
+[18:34.560 --> 18:40.400]  coroutine calls that are being scheduled. And it's a way for the event loop to manage everything
+[18:40.400 --> 18:47.760]  that happens in the event loop. So whenever something is scheduled to be run, you create a task
+[18:47.760 --> 18:52.560]  object. And this is done behind the scenes for you. You don't have to create these objects yourself.
+[18:53.280 --> 18:57.760]  In fact, you should not create these objects yourself. You should always use one of the functions
+[18:57.760 --> 19:05.600]  for this, like this create task that you have down here. And then these task objects go into the
+[19:05.600 --> 19:11.040]  event loop or run and everything happens for you. There are also some query functions down here if
+[19:11.040 --> 19:15.680]  you're interested in what's currently scheduled on the event loop. You can have a look at the
+[19:15.680 --> 19:23.680]  documentation for those. So how does this event loop work? It's basically just a way to do the
+[19:23.680 --> 19:28.880]  same kind of management as the OS is doing for threads, except that it's done in Python.
+[19:29.760 --> 19:37.840]  And the async.io package manages one of these event loops. Now event loops can actually be
+[19:37.840 --> 19:44.080]  defined by multiple different libraries. But what's important is that there should only be
+[19:44.080 --> 19:51.200]  one event loop per thread. So you can have multiple threads, of course, also run. Then again,
+[19:51.200 --> 19:59.440]  you hit the same kind of roadblock as you've seen with the GIL. But there might be ways to,
+[19:59.440 --> 20:04.400]  in your application, to make use of that. So that would be possible as well. Typically,
+[20:04.400 --> 20:10.240]  what you have in an async program is you just have a single thread. And so you just call this
+[20:10.240 --> 20:17.200]  run function once. Now, I mentioned blocking code. So blocking code basically is code that
+[20:17.200 --> 20:24.000]  doesn't collaborate with this async logic. And you have that quite often in Python. For example,
+[20:24.000 --> 20:29.280]  let's say you're using one of the database modules. Not one of the async ones, but the regular ones.
+[20:29.280 --> 20:36.720]  Those will all be synchronous. So you call, let's say, an execute to run some SQL. And that will
+[20:36.720 --> 20:42.800]  actually wait until the database comes back with results. So in order to run this kind of code
+[20:42.800 --> 20:49.120]  in an async application, you have to use special functions. There's a very nice function called
+[20:49.120 --> 20:58.800]  async.io2 thread, which was added in Python 3.9, which makes this easy. So what these functions do
+[20:58.800 --> 21:07.200]  is say they spin up a thread in your async application, run the code inside that thread,
+[21:07.200 --> 21:13.280]  and then pass back control via the threading logic to your event loop. So you can still run
+[21:13.280 --> 21:17.920]  synchronous code because the synchronous code is most likely going to give up the GIL. For example,
+[21:18.800 --> 21:24.320]  if you have a good database module, then when you execute something, typically what these
+[21:24.320 --> 21:30.720]  database modules do is they give back control to other threads running Python code because they're
+[21:30.720 --> 21:35.680]  just running C code at that time. So this is a way to make everything work together.
+[21:37.920 --> 21:42.080]  And of course, there's lots more. I'm not going to talk about these things because I don't have
+[21:42.080 --> 21:48.480]  enough time for that. In fact, I'm already almost out of time. So I have to speed up a bit. Let's
+[21:48.480 --> 21:55.520]  just do a very quick overview of what's in the async ecosystem. So of course, we have the
+[21:55.520 --> 22:02.000]  async.io standard library package. We have event loops inside the async.io package. If you want
+[22:02.000 --> 22:07.040]  fast loops, then you can use UV loop, which is a faster implementation, speeds up your async
+[22:07.600 --> 22:13.280]  by almost four times. You can also have a look at other stacks that implement event loops,
+[22:13.360 --> 22:19.120]  like Trio, for example, where you can use the package any.io, which abstracts these things. So
+[22:19.120 --> 22:25.280]  you can use basically Trio or you can use async.io loops underneath in your application
+[22:26.240 --> 22:33.200]  when using any.io and it abstracts away all the details. Now, there's a rather large system of
+[22:34.400 --> 22:41.520]  modules and packages around the async world in Python. Many of these are grouped under the
+[22:41.520 --> 22:49.280]  aio-lips. So if you go to GitHub to that URL, then you will find lots of examples there.
+[22:49.280 --> 22:54.640]  There are database packages there. There are things for doing HTTP, DNS, and so on. Something to
+[22:54.640 --> 23:02.400]  watch out is the database modules typically don't support transactions, which can be a bummer
+[23:02.400 --> 23:08.160]  sometimes. At the higher level, you have, of course, web frameworks again because, you know,
+[23:08.240 --> 23:14.800]  everyone loves web frameworks. And, of course, you have API frameworks. The most popular one right
+[23:14.800 --> 23:22.640]  now is FastAPI for doing the REST APIs, and then Strawberry is coming very strongly as a GraphQL
+[23:22.640 --> 23:30.960]  server. Both operate async. Even Django does, or starts, is starting to do async right now. It's
+[23:30.960 --> 23:37.120]  not fully there yet. If you're using Flask for synchronous code, then you might want to look
+[23:37.120 --> 23:43.840]  at a quad, which is like an async implementation using a similar API. And the most famous one
+[23:43.840 --> 23:51.440]  probably in the async space is Tornado, which some of you may know. It's very fast. Right. So
+[23:51.440 --> 23:57.200]  let's go back to the bot. If you want to see the bot code, it's on GitHub. Just search for
+[23:57.200 --> 24:04.000]  Eugenics Telegram, and then you'll find it. How does it work? Very easy. You just subclass the client
+[24:04.000 --> 24:09.760]  of that package. You do some configuration. You do some observability, so logging for things.
+[24:10.640 --> 24:16.080]  I'm lazy, so I'm just, you know, put all the admin messages into another telegram chat that I can
+[24:16.080 --> 24:19.680]  manage so I can see what's happening without having to go to the server.
+[24:22.720 --> 24:29.120]  Because we actually want to catch all the messages of these people signing up to the
+[24:29.120 --> 24:34.400]  telegram group, and not just people who want to run bot commands, you know, slash something.
+[24:35.680 --> 24:39.920]  We have to use the catch all in here, and that's also why we need something that's very scalable,
+[24:39.920 --> 24:45.680]  because it literally, the bot sees all the messages that go into that group, and it has to
+[24:45.680 --> 24:51.120]  handle all these messages. And then what you do is basically you just do these awaits to
+[24:52.640 --> 24:58.080]  whenever you have to do IO. And if you look at it, it looks very much like synchronous code,
+[24:58.400 --> 25:02.480]  except that you have these awaits in front of certain things. Wherever something happens,
+[25:02.480 --> 25:08.000]  where you need to do some IO, you put the await in front of it, and then everything
+[25:08.000 --> 25:13.120]  else looks very natural, looks like a very, you know, very much like a synchronous program.
+[25:16.000 --> 25:24.160]  So what are the results of doing this? Writing this bot, it's actually helped us a lot. We've,
+[25:24.160 --> 25:32.320]  you know, had over almost 800 spam signups since April 2022, when we started to use it.
+[25:34.400 --> 25:39.200]  And this has, I mean, this is one part, this is just the admin part that saved us a lot of work,
+[25:39.200 --> 25:42.960]  but of course, you know, every single signup would have cost spam messages.
+[25:43.760 --> 25:48.480]  And so that was very successful. So the time spent on actually writing things
+[25:49.440 --> 25:55.520]  is, was well invested and basically mission accomplished. So what's the main takeaway of
+[25:55.520 --> 26:03.360]  the talk? I think it's great. And give it a try if you can. Thank you for your attention.
+[26:04.320 --> 26:21.760]  Thank you Mark Andre. Thanks everyone for attending this talk. Don't hesitate to reach to Mark Andre
+[26:21.760 --> 26:28.560]  if you have any question or want to discuss this further. Thanks a lot. Thank you. Thank you very
+[26:28.560 --> 26:43.760]  much for coming. Let me just do a picture. Excellent.

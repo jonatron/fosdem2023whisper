@@ -1,0 +1,163 @@
+[00:00.000 --> 00:11.720]  Yeah, hello everyone, today me and Nikita and my colleague Ariti senior engineers Fortanix
+[00:11.720 --> 00:18.400]  want to talk about the confidential computing project to build at Fortanix using latest
+[00:18.400 --> 00:28.840]  technology from Amazon called Nitro Enclaves.
+[00:28.840 --> 00:35.280]  Now Nitro Enclaves provides environment run application confidentially meaning that no
+[00:35.280 --> 00:40.320]  one should be able to temper with the application while it runs during the execution compared
+[00:40.320 --> 00:46.000]  to your regular operating system or in other words, you know, if your program is quite
+[00:46.000 --> 00:53.940]  shy and doesn't want to be poked by the outsiders or something, we kind of provide like a safe
+[00:53.940 --> 01:02.900]  environment for it to execute or a safe space, if you will.
+[01:02.900 --> 01:09.900]  Before I start talking about the project itself, I want to give a little bit of context about
+[01:09.900 --> 01:14.700]  what parts Nitro consists of.
+[01:14.700 --> 01:21.180]  The Nitro system is Nitro system, Nitro Enclaves built on, it consists of three main parts.
+[01:21.180 --> 01:30.860]  We have a Nitro hypervisor, that is a combined piece of software and hardware tech which
+[01:30.860 --> 01:35.900]  provides CPU and memory utilization capabilities for the VM.
+[01:35.900 --> 01:41.900]  The Nitro chip which is a hardware tech, it provides a root of trust which tells you if
+[01:41.900 --> 01:50.860]  you're like running a tainted hypervisor or not and there are Nitro cards which are
+[01:50.860 --> 01:56.340]  responsible for memory encryption.
+[01:56.340 --> 02:10.140]  Now how it looks like from a VM standpoint, as you can see in the picture we have two parts.
+[02:10.140 --> 02:16.620]  We have an untrusted parent VM and a trusted Nitro Enclave VM.
+[02:17.620 --> 02:28.340]  They are completely separated and they run their own kernels.
+[02:28.340 --> 02:34.980]  And the Nitro Enclave is the VM that you run your application on.
+[02:34.980 --> 02:42.660]  Now the enclave and parent VMs they talk through and can only talk through a socket
+[02:42.660 --> 02:43.660]  called Vsoc.
+[02:43.660 --> 02:49.220]  There is a special socket connection specifically designed to provide a communication between
+[02:49.220 --> 02:53.700]  an enclave VM and the hypervisor.
+[02:53.700 --> 03:00.860]  Now we believe that any program doesn't matter how shy it is, it still wants to socialize
+[03:00.860 --> 03:09.300]  with the outside world because complete hermits are quite rare after all and it also wants
+[03:09.300 --> 03:16.740]  to keep some personal diary with all the data and things it's done so it can reread
+[03:16.740 --> 03:19.100]  it after the enclave has finished.
+[03:19.100 --> 03:21.700]  Now bare Nitro doesn't provide all of those.
+[03:21.700 --> 03:30.540]  As you can see it has no network capability out of the box and no durable storage.
+[03:30.540 --> 03:35.340]  It gives no networking capabilities inside the enclave meaning that the application inside
+[03:35.340 --> 03:41.180]  the enclave can't connect to anything from the outside world and vice versa.
+[03:41.180 --> 03:49.500]  And for the persistent storage Nitro doesn't provide any form of that.
+[03:49.500 --> 03:55.380]  The kernel inside Nitro VM is running on a RAM disk and it gets cleared after the enclave
+[03:55.380 --> 03:58.540]  finishes.
+[03:58.540 --> 04:03.940]  So all of it kind of drastically limits the number of useful applications can be run.
+[04:03.940 --> 04:09.740]  On a bare Nitro for example if you want to run like a web server or a database you can't
+[04:09.740 --> 04:16.740]  do it on a bare Nitro but it won't provide much value to the end user because yeah the
+[04:16.740 --> 04:21.980]  big portion of functionality of those programs just is not supported.
+[04:21.980 --> 04:26.980]  And the salmic project that we created aims to solve those limitations by providing confidential
+[04:26.980 --> 04:34.420]  program execution environment without sacrificing fundamental systems capabilities.
+[04:34.420 --> 04:40.620]  On a higher level the project looks like this.
+[04:40.620 --> 04:47.340]  Fundamentally it is a yeah it is a it's a Docker image that runs on a VM with a Nitro
+[04:47.340 --> 04:48.820]  enclave enabled.
+[04:49.820 --> 04:57.180]  The only required argument that needs to be passed is the Nitro socket here on the right.
+[04:57.180 --> 05:01.340]  And after that it behaves like any other Docker image would.
+[05:01.340 --> 05:10.740]  You can you know you can start, stop it, monitor its status using your standard Docker commands.
+[05:10.740 --> 05:14.620]  Functionally the image can be divided into two parts.
+[05:14.620 --> 05:18.140]  One is called a parent and one called an enclave.
+[05:18.140 --> 05:26.100]  Those are internal names not to be confused with parent VM or Nitro enclave VM.
+[05:26.100 --> 05:35.860]  The enclave contains client application as well as a runner program of our creation.
+[05:35.860 --> 05:42.220]  Parent contains only a runner program and responsible for setting up networking and the file system
+[05:42.220 --> 05:48.780]  as well as network enclave creation, its monitoring and termination.
+[05:48.780 --> 05:56.140]  So and the only communication channel between those two is the VSOC connection.
+[05:56.140 --> 06:02.340]  This VSOC connection effectively creates like a confidational boundary between those two
+[06:02.340 --> 06:03.340]  parts.
+[06:03.340 --> 06:19.340]  Yeah and shown the architectural area can go further to discuss how we implement networking.
+[06:19.340 --> 06:25.140]  So I'll make abstracts networking communication between client application and this outside
+[06:25.140 --> 06:30.380]  world meaning that if someone wants to connect to the application inside the enclave the
+[06:30.380 --> 06:36.220]  only thing one need is a networking address so it works the same as you would connect
+[06:36.220 --> 06:42.100]  to any other service running on the internet and the other way around the application
+[06:42.100 --> 06:48.020]  inside the enclave can connect to anything on the internet it also needs only the internet
+[06:48.020 --> 06:57.140]  address and the application inside the enclave doesn't know that it runs inside the enclave.
+[06:57.140 --> 07:01.980]  The common example of applications would be your common I don't know nginx web server
+[07:01.980 --> 07:16.340]  that runs inside the enclave you can send web requests to it and it will answer to whomever.
+[07:16.340 --> 07:21.780]  So in details networking is implemented using a two part program called VSOC proxy as you
+[07:21.780 --> 07:28.260]  can see this is also a two part program similar to parent in the enclave on a previous slide
+[07:28.260 --> 07:34.820]  one runs inside the enclave one runs inside the parent they are both connected to and
+[07:34.820 --> 07:41.020]  only VSOC.
+[07:41.020 --> 07:48.700]  So one of the responsibilities of the parent and it is an entry point and the startup is
+[07:48.700 --> 07:56.980]  to copy all the necessary network configuration of the network device on the right this is
+[07:56.980 --> 08:03.260]  a Docker network device propagate those settings inside the enclave and the enclave part of
+[08:03.260 --> 08:09.820]  the VSOC proxy will recreate said network device or devices effectively mirroring it
+[08:09.820 --> 08:16.260]  inside the enclave but instead it will use virtual network device which is a functionality
+[08:16.260 --> 08:23.740]  provided by Linux kernel it's called tune or tap this is a functionality to read and
+[08:23.740 --> 08:28.780]  write networking packets using program and user space.
+[08:28.780 --> 08:34.180]  If you are more interested in that you can check kernel.org they have a lot of information
+[08:34.180 --> 08:37.260]  about it.
+[08:37.260 --> 08:43.820]  So after said devices have been created both parts VSOC proxy will start forwarding packets
+[08:43.820 --> 08:49.340]  will forward from you know external network inside the enclave and the virtual device
+[08:49.340 --> 08:56.180]  inside the enclave will forward them in the opposite direction.
+[08:56.180 --> 09:03.580]  Yeah sure so the only difference between those two becomes yeah effectively the direction
+[09:03.580 --> 09:08.580]  they are transmitting networking packets.
+[09:08.580 --> 09:12.380]  Set architecture also supports multiple network interfaces as well as a private network between
+[09:12.380 --> 09:17.380]  parent and enclave private network makes two independent entities between parent and
+[09:17.380 --> 09:27.100]  the enclave and it allows us to enable instant protocol between those two on top of the VSOC.
+[09:27.100 --> 09:31.140]  This lays the foundation for a file system solution and this will be presented by my
+[09:31.140 --> 09:39.140]  colleague Arithi and I will pass you a mic.
+[09:39.140 --> 09:54.180]  Okay hello everyone I will dive deeper into how we support persistent file system with
+[09:54.180 --> 09:59.700]  Nitro enclaves in our project from IAC.
+[09:59.700 --> 10:08.700]  So I first wanted to go over how you actually create an enclave image using AWS Nitro.
+[10:08.700 --> 10:15.140]  AWS does provide us with a command line tool Nitro CLI.
+[10:15.140 --> 10:22.300]  It's used for managing the life cycles of Nitro enclaves you can build an enclave you
+[10:22.300 --> 10:29.300]  can run it you can check its status whether it's running or not how much CPU it's using
+[10:29.300 --> 10:35.860]  or memory it's using and in particular I wanted to discuss the build enclave command
+[10:35.860 --> 10:44.100]  which allows you to provide as input a docker image which has your application that you
+[10:44.100 --> 10:52.940]  want to run inside an enclave and it gives you an enclave image file and along with an
+[10:52.940 --> 11:01.180]  enclave image file it also gives you enclave measurements which are later used by the
+[11:01.180 --> 11:08.580]  enclave itself to prove its identity and build trust with an external service that's basically
+[11:08.580 --> 11:14.660]  Amazon.
+[11:14.660 --> 11:20.540]  So how do we do it different in SOMIAC project?
+[11:20.540 --> 11:29.340]  We don't just create an enclave image file we create a Nitro docker image from the input
+[11:29.340 --> 11:34.860]  image that we get.
+[11:34.860 --> 11:43.860]  So the first step that we do is look at the input docker image and export the image file
+[11:43.860 --> 11:53.300]  system into a block file let's call it init image and we store it into a block file with
+[11:53.300 --> 12:02.740]  the help of DM verity it's a Linux kernel device mapper tool it uses the kernel scriptor
+[12:02.740 --> 12:14.220]  API to protect the integrity of the initial input image so what happens at the time of
+[12:14.220 --> 12:22.180]  creating an enclave image is that it creates a hash tree of the storage blocks present
+[12:22.180 --> 12:29.220]  in the device and it ends up giving us a root hash and we store this root hash in the enclave
+[12:29.220 --> 12:40.260]  image file and we also create another empty block file let's call it run dot image and
+[12:40.260 --> 12:46.660]  I'll discuss more about it in the future slides so as you can see here the input docker image
+[12:46.660 --> 12:54.420]  is converted into a Nitro docker image which consists of the block files the enclave image
+[12:54.420 --> 13:05.060]  file and foot annex software which is Somiak so the next step is what happens at runtime
+[13:05.060 --> 13:11.500]  and how do we make these block files which were present in the docker image inside the
+[13:11.500 --> 13:22.340]  enclave so we use nbd the network block device protocol to be able to serve these block files
+[13:22.340 --> 13:33.260]  which are present in the parent docker container into the enclave and it's over the network
+[13:33.260 --> 13:41.820]  so we take we make use of the VSOC proxy that Nikita discussed earlier so each block file
+[13:41.820 --> 13:54.460]  is is served through the nbd server program which runs on the parent side and they both
+[13:54.460 --> 14:00.340]  use different ports on the server and inside the enclave we have the nbd client program
+[14:00.340 --> 14:07.500]  which runs we have two clients which access the server on two separate ports to provide
+[14:07.500 --> 14:24.180]  us with two devices let's call it dev read and dev write okay so once we have the once
+[14:24.180 --> 14:36.340]  we have the block devices in the inside the enclave how do we actually mount it we use
+[14:37.180 --> 14:43.540]  I think I made a mistake here in the previous slide I did mention the read and dev write
+[14:43.540 --> 14:53.740]  I want to change that to dev init so we use the emberty again to open the dev init device
+[14:53.740 --> 15:00.660]  and when we do use the emberty we provide the root hash from the enclave image file
+[15:00.660 --> 15:08.580]  so when the emberty opens up the block device it makes sure that the hash tree it constructed
+[15:08.580 --> 15:18.020]  at enclave image creation time matches what it finds at runtime so this way the initial
+[15:18.020 --> 15:25.780]  contents of your client image are preserved it provides integrity protection this way
+[15:25.780 --> 15:40.900]  and let's say we mounted at a location mount lower and we have a second device which was
+[15:40.900 --> 15:51.260]  mounted as dev run so this device is open using dmcrypt it is another device mapper
+[15:51.260 --> 16:02.020]  tool provided by the Linux kernel it is used to encrypt a block device and on the first
+[16:02.020 --> 16:11.020]  launch of the application what we do is we format this device into loops to device and
+[16:11.020 --> 16:19.140]  create an exe force file system on it and right now we're using the default cipher and
+[16:19.140 --> 16:29.220]  the encryption key used can either be generated randomly or you can use an external key service
+[16:29.220 --> 16:38.780]  to use the encryption key so let's say we mount this dev run device at directory mount
+[16:38.780 --> 16:51.500]  upper so we have two sets of file system layers here mount upper and mount lower and
+[16:51.500 --> 16:58.060]  we need to combine this and provide it to our client application that we want to run
+[16:58.060 --> 17:09.020]  so we use an overlay mount here to merge the two the merge the two and provide it as mount root
+[17:09.900 --> 17:19.340]  so this allows the client application to read verified data from the image block file which
+[17:19.340 --> 17:29.140]  is presented as mount lower as you can see and any changes in the state of the file system
+[17:29.140 --> 17:39.500]  during enclave runtime is saved or the state is saved in mount upper which is basically the run
+[17:40.260 --> 17:59.220]  image block file and yeah so once we set up the overlay file system we need to change the root of
+[17:59.540 --> 18:07.700]  the file system here so that the client application is unaware of these different
+[18:07.700 --> 18:19.100]  layers that we have so we use to root to change the root of the client file system and once we
+[18:19.860 --> 18:27.700]  root and we also bind on some of the system directories such as dev proxies
+[18:27.700 --> 18:40.580]  yeah I think that should give the client application everything it needs to run its
+[18:40.660 --> 18:58.540]  application and yeah save any state changes into the block device and yeah I think that's all I
+[18:58.540 --> 19:06.500]  have if you have any questions about any of the networking or the file system persistence
+[19:07.100 --> 19:08.940]  you can ask me on the key to about it
+[19:17.380 --> 19:18.380]  yeah
+[19:18.380 --> 19:22.780]  maybe talk a little bit about performance I mean you're telling everything through the VSOC
+[19:22.780 --> 19:36.180]  is there any boundaries you hit or I would see we have okay the question is how does it impact
+[19:36.220 --> 19:44.340]  performance of the application we haven't yet measured what is the performance implications
+[19:44.340 --> 19:52.660]  of it yet but this was more of being able to support what was initially not supported by AWS
+[19:52.660 --> 19:57.340]  Nitro any other questions
+[20:10.340 --> 20:18.620]  is this one yes okay the question is is the DEE architecture of Nitro similar to TDX and
+[20:18.620 --> 20:26.500]  SCV I suppose it is a closed system by AWS only so how can users verify that Nitro is secure
+[20:26.500 --> 20:43.060]  okay I'm afraid I I don't know the comparison with SCV and the other platform mentioned here
+[20:43.060 --> 20:51.300]  but you need to be able to trust AWS if you trust AWS you trust the system apart from AWS
+[20:51.300 --> 20:58.780]  there's no one else that can access the contents as far as we know the Nitro Sela is open
+[21:06.780 --> 21:10.900]  yeah so as far as I know I mean the Nitro Sela is open source right but the hardware that
+[21:10.900 --> 21:17.260]  Dunkleys run on it's done by Amazon I don't know probably ordered by them whatever so you have
+[21:17.260 --> 21:22.500]  to trust them for the hardware yeah that's it

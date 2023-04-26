@@ -1,0 +1,989 @@
+[00:00.000 --> 00:11.000]  Next speaker is Ryan. He's going to talk about bulk loading data to Postgres.
+[00:11.000 --> 00:22.000]  Hello. All right. Can you hear me? There we go. All right. Thank you so much for coming.
+[00:22.000 --> 00:28.000]  It is a pleasure to see you all. This is my first time in Belgium and in Brussels. It's been a great couple of days.
+[00:28.000 --> 00:33.000]  Specifically FOSM, it was really interesting coming into the event.
+[00:33.000 --> 00:42.000]  My very first tech event many, many years ago, I hope I look younger than I am, was at a small university very much set up like this.
+[00:42.000 --> 00:48.000]  And it just brought back a lot of memories of having packed rooms and the stadium seating and the wooden table.
+[00:48.000 --> 00:51.000]  So it's been really fun to be here and appreciate the opportunity.
+[00:51.000 --> 00:57.000]  This is a little bit briefly about me. I currently work at a company called Redgate. I've been there a few months.
+[00:57.000 --> 01:01.000]  You might know them by a tool they have acquired over the last few years called Flyway.
+[01:01.000 --> 01:10.000]  It is a database migration tool. And they've been very well known within the SQL server space in Microsoft.net for many, many years.
+[01:10.000 --> 01:21.000]  And they're bringing some of that technology into the open space, open source database platforms as well for migrations and a way to generate scripts and things of that nature.
+[01:21.000 --> 01:24.000]  There's some of my details, blog and so forth.
+[01:24.000 --> 01:29.000]  Very quickly about me, I thought this was relevant. So my wife and I have six children.
+[01:29.000 --> 01:33.000]  So I know a little bit about bulk loading things like vans and cars.
+[01:33.000 --> 01:46.000]  And so I felt that was somewhat relevant. If you ever run into me again or you want to talk to me yet today and get me talking about something other than Postgres and databases, family for sure because I have a lot of it.
+[01:46.000 --> 01:51.000]  Music, I am an amateur beekeeper. I've been doing that for about five or six years now and I love it.
+[01:51.000 --> 01:56.000]  I actually do live streams sometimes on YouTube when I'm checking out the hives.
+[01:56.000 --> 02:02.000]  And I roast male and coffee. I didn't drink coffee until about seven years ago and now I can't go without it and I love it.
+[02:02.000 --> 02:06.000]  So if you want to talk about any of those, I'll chew your ear off for a couple of hours.
+[02:06.000 --> 02:10.000]  You can get this presentation. I actually uploaded it before this talk.
+[02:10.000 --> 02:17.000]  It might be a first for me in a long time. So the newest version is up there of these slides and the scripts that you're going to see in a minute.
+[02:17.000 --> 02:21.000]  And I'll put this up at the end again in case you miss it.
+[02:21.000 --> 02:25.000]  Four sections. Number one, death by a thousand inserts.
+[02:25.000 --> 02:28.000]  Then we're going to actually talk about four plus methods of bulk loading.
+[02:28.000 --> 02:33.000]  I say plus because there's definitely more than four and lots of little nuances.
+[02:33.000 --> 02:40.000]  And as I've given this talk, some people have asked questions and so I've tweaked some things and so I just didn't feel like continuing to change that number.
+[02:40.000 --> 02:45.000]  I'm going to give you a couple quick demos and then we'll talk, that is not the fourth point.
+[02:45.000 --> 02:51.000]  Well, I did everything else but change at one point. I went over this many times. Just a couple parting thoughts.
+[02:51.000 --> 02:53.000]  Death by a thousand inserts. What do I mean?
+[02:53.000 --> 02:59.000]  So what I used to find, so I worked at timescale. I didn't put my history up here, but I worked at timescale for a couple of years.
+[02:59.000 --> 03:05.000]  Partially open source extension into Postgres for time series data.
+[03:05.000 --> 03:12.000]  And we would see a lot of folks complaining, frustrated about the rate of insert of their data.
+[03:12.000 --> 03:20.000]  And so we would try to help them and recognize that this is something we're all doing all the time, all day long.
+[03:20.000 --> 03:25.000]  And yet we often are underperforming, not getting the results that we'd want.
+[03:25.000 --> 03:29.000]  It could be any kind of data. It might be binary data in some way. It might be large objects.
+[03:29.000 --> 03:32.000]  It might be JSON that you're parsing and you're doing something with.
+[03:32.000 --> 03:37.000]  It could just be a simple CSV file with some of your data science work that you're doing.
+[03:37.000 --> 03:42.000]  But you need to get a lot of it and you need to get a lot of it into Postgres.
+[03:42.000 --> 03:47.000]  And what we would find is we would see work like this often because it just makes sense.
+[03:47.000 --> 03:52.000]  We're so used to typing, insert into a table and some columns and insert some data.
+[03:52.000 --> 03:58.000]  And we would see stuff like this and I have to admit that I've certainly done this many times myself,
+[03:58.000 --> 04:03.000]  particularly when you're rushing to figure out how to get something done, get something in,
+[04:03.000 --> 04:05.000]  how to parse that data packet you just got.
+[04:05.000 --> 04:07.000]  And you don't realize what you just did.
+[04:07.000 --> 04:11.000]  It created a loop of thousands and millions of individual insert statements.
+[04:11.000 --> 04:16.000]  And that's really, really slow, right?
+[04:16.000 --> 04:19.000]  And it's slow for a couple of reasons.
+[04:19.000 --> 04:21.000]  These are just a few to kind of put out there.
+[04:21.000 --> 04:26.000]  But the reality is it's so easy to forget when we're using our tooling
+[04:26.000 --> 04:31.000]  that every one of those insert statements has some kind of overhead, some of which is listed.
+[04:31.000 --> 04:33.000]  Now, there's certainly other factors here.
+[04:33.000 --> 04:38.000]  But this is the one part that most developers, particularly newer developers, forget about.
+[04:38.000 --> 04:41.000]  That insert statement doesn't just start here.
+[04:41.000 --> 04:42.000]  It has to go across the wire.
+[04:42.000 --> 04:44.000]  The data reserver has to do something.
+[04:44.000 --> 04:48.000]  Depending on your commit settings, you might have to get a response back.
+[04:48.000 --> 04:50.000]  Then your program has to do something else.
+[04:50.000 --> 04:51.000]  There's a latency.
+[04:51.000 --> 04:53.000]  There's indexes and constraints.
+[04:53.000 --> 04:54.000]  And we forget about all those pieces.
+[04:54.000 --> 04:58.000]  And now you say, I want to insert a million rows a second,
+[04:58.000 --> 05:03.000]  and you wonder why it's not working when you're doing it with individual statements.
+[05:03.000 --> 05:07.000]  The analogy to me is I almost put my children's faces on here.
+[05:07.000 --> 05:10.000]  To say, like, if I wanted to shutter my children somewhere,
+[05:10.000 --> 05:13.000]  for those of you coming in don't know, I have a lot of kids.
+[05:13.000 --> 05:17.000]  If I shuttered them one at a time with a bicycle, it would just take a long time, right?
+[05:17.000 --> 05:22.000]  If we do that data packet one at a time, insert after insert after insert,
+[05:22.000 --> 05:23.000]  it just ends up being slow.
+[05:23.000 --> 05:28.000]  Now, if we could take more of those things, maybe we take something like, you know,
+[05:28.000 --> 05:30.000]  the analogy, get this pickup truck.
+[05:30.000 --> 05:33.000]  And we can at least get a few more packets in there.
+[05:33.000 --> 05:37.000]  We have to take fewer trips, and we get the same amount of data.
+[05:37.000 --> 05:42.000]  The ultimate goal is we want to try and figure out that ability.
+[05:42.000 --> 05:44.000]  What's the largest payload?
+[05:44.000 --> 05:48.000]  What's the largest amount of data we can pull across the wire at one time
+[05:48.000 --> 05:54.000]  so that the database server just has to do its work one time per bulk set of statements?
+[05:54.000 --> 05:55.000]  All right?
+[05:55.000 --> 05:58.000]  And so the goal, and a lot of things we're going to talk about today,
+[05:58.000 --> 06:03.000]  are how can we take the data, the massive amounts of data, these files, the streams we're taking,
+[06:03.000 --> 06:06.000]  and get them into Postgres as quickly as possible?
+[06:06.000 --> 06:07.000]  All right?
+[06:07.000 --> 06:12.000]  We're going to tend towards larger payloads, things on your right,
+[06:12.000 --> 06:14.000]  and not the things on your left.
+[06:14.000 --> 06:16.000]  All right?
+[06:16.000 --> 06:18.000]  Now, we aren't going to be able to talk about today,
+[06:18.000 --> 06:22.000]  but then there are also things like, because I actually was trying to get a demo
+[06:22.000 --> 06:24.000]  as I was sitting in the hotel the other night.
+[06:24.000 --> 06:25.000]  It's like, maybe I can do this.
+[06:25.000 --> 06:28.000]  It was a little bit too complicated and based on where we're going to be,
+[06:28.000 --> 06:29.000]  I won't be able to do it today.
+[06:29.000 --> 06:32.000]  But I will tell you about at least one or two tools.
+[06:32.000 --> 06:37.000]  If you could take multiple connections and somehow split your data up,
+[06:37.000 --> 06:39.000]  you'll find that you also get even more.
+[06:39.000 --> 06:44.000]  So larger payloads, again, depending on your server, your configuration, your abilities,
+[06:44.000 --> 06:46.000]  there's going to be a sweet spot.
+[06:46.000 --> 06:49.000]  But if you're willing to do the work, you can find it,
+[06:49.000 --> 06:51.000]  whether it's two, whether it's four.
+[06:51.000 --> 06:54.000]  There are ways that we used to do testing at least with timescale.
+[06:54.000 --> 06:57.000]  We've done it with Postgres native partition as well,
+[06:57.000 --> 07:01.000]  and many threads taking large payloads up to a certain size,
+[07:01.000 --> 07:04.000]  depending on your configuration, can really improve your ingest performance.
+[07:04.000 --> 07:06.000]  So things to consider.
+[07:06.000 --> 07:11.000]  So let's look at these four methods, and then I'll do my best to demo each of them.
+[07:11.000 --> 07:16.000]  The first, and believe it or not, sometimes often forgot about,
+[07:16.000 --> 07:19.000]  is a simple multi-valued insert.
+[07:19.000 --> 07:21.000]  So what does a multi-valued insert look like?
+[07:21.000 --> 07:24.000]  This is what it looks like in something like just plain SQL.
+[07:24.000 --> 07:30.000]  And again, for folks that are coming from, we heard talk earlier about Go and using ORMs,
+[07:30.000 --> 07:36.000]  don't know SQL well, it's easy to forget that you can do this.
+[07:36.000 --> 07:41.000]  You simply say insert into table, you have your parentheses with your values of data,
+[07:41.000 --> 07:44.000]  you can just say comma and add another set of parentheses,
+[07:44.000 --> 07:49.000]  and you can do that for a long time, and you will get a better performance.
+[07:49.000 --> 07:50.000]  I'll show you some of that.
+[07:50.000 --> 07:53.000]  Now on code, the reason I bring this one up is for a lot of people,
+[07:53.000 --> 07:57.000]  and I'm using Python, it doesn't really matter what the language is,
+[07:57.000 --> 08:00.000]  a lot of people do that individual insert statement,
+[08:00.000 --> 08:04.000]  and honestly, if you don't have time right now, you want to improve your performance,
+[08:04.000 --> 08:10.000]  but you don't have a lot of time, you can simply just put a little loop in there that says,
+[08:10.000 --> 08:16.000]  hey, just append to this string for so many iterations, and then send the query.
+[08:16.000 --> 08:19.000]  And you'll be surprised how quickly that improves your performance.
+[08:19.000 --> 08:23.000]  So a really small change can make a big difference.
+[08:23.000 --> 08:28.000]  Multi-valued inserts requires a little bit of extra programming work depending on what you're doing.
+[08:28.000 --> 08:32.000]  And we'll talk briefly about ORMs at the end, how many of them,
+[08:32.000 --> 08:35.000]  or at least some of them, can help you do some things like this.
+[08:35.000 --> 08:38.000]  Multi-valued inserts is part of SQL standard.
+[08:38.000 --> 08:40.000]  It's supported regardless.
+[08:40.000 --> 08:43.000]  If you can create a string, and you can append these things together,
+[08:43.000 --> 08:47.000]  you can send it to the server, and the server will handle it correctly.
+[08:47.000 --> 08:49.000]  It's usually at least moderately faster.
+[08:49.000 --> 08:51.000]  I'll show you an example in a minute.
+[08:51.000 --> 08:55.000]  And it just really requires that you have some kind of batching in your application.
+[08:55.000 --> 08:57.000]  So you go back to this Python example.
+[08:57.000 --> 09:01.000]  I just had to put something that says, hey, once you reach some limit,
+[09:01.000 --> 09:04.000]  go ahead and send the statement, and then let's start over again.
+[09:04.000 --> 09:06.000]  So it's not that hard to do.
+[09:06.000 --> 09:11.000]  It's pretty quick to iterate in your application now to get a lot better performance.
+[09:11.000 --> 09:15.000]  The second one is a little bit interesting, and it's really unique to Postgres.
+[09:15.000 --> 09:17.000]  And I bring this up for one specific reason.
+[09:17.000 --> 09:20.000]  It's called using arrays to do your inserts.
+[09:20.000 --> 09:24.000]  Now, if you are new to Postgres, and you're not really, you don't know this,
+[09:24.000 --> 09:28.000]  Postgres is maybe the only, it's one of the few, at least that I know of,
+[09:28.000 --> 09:31.000]  that supports an actual array as a data type.
+[09:31.000 --> 09:37.000]  And so you can actually put together a bundle of values as an array,
+[09:37.000 --> 09:40.000]  or multiple values as an array.
+[09:40.000 --> 09:42.000]  Sorry, I had a box to highlight it.
+[09:42.000 --> 09:46.000]  And that then is treated as one value element,
+[09:46.000 --> 09:51.000]  which can then be what we call a nest, split back apart and put into the database.
+[09:51.000 --> 09:54.000]  Now, the reason I bring this up is, at timescale,
+[09:54.000 --> 10:01.000]  we had an application that, using an older version of Go, was doing a lot of inserts.
+[10:01.000 --> 10:05.000]  And we ran into the problem of, and I'll talk about this in just a second,
+[10:05.000 --> 10:10.000]  in Postgres currently, when a SQL statement is parameterized,
+[10:10.000 --> 10:12.000]  so we'll say something like insert into table,
+[10:12.000 --> 10:16.000]  and then it puts an internal parameter, which is a question mark.
+[10:16.000 --> 10:20.000]  And you can only do 65,000 of those question marks.
+[10:20.000 --> 10:22.000]  And so if you're trying to insert lots of data,
+[10:22.000 --> 10:27.000]  you have to make sure that you don't have more than 65,000 some odd parameters.
+[10:27.000 --> 10:30.000]  And so when we wanted to, tracking that can be difficult,
+[10:30.000 --> 10:35.000]  and we realized that we could bundle up all of these values into just arrays,
+[10:35.000 --> 10:39.000]  and we're technically only sending, in this case, I'm only sending three values,
+[10:39.000 --> 10:42.000]  even if there are 10,000 elements in each array.
+[10:42.000 --> 10:44.000]  And so that was a way to overcome that,
+[10:44.000 --> 10:46.000]  and that's one of the reasons I bring this forward.
+[10:46.000 --> 10:51.000]  Now, in some cases, it can actually be faster than something like a multi-valued insert.
+[10:51.000 --> 10:54.000]  Now, again, it depends on the tooling.
+[10:54.000 --> 10:58.000]  It turns out that even in Python, just got a new version of PsychoPG,
+[10:58.000 --> 11:01.000]  and this one is not as fast as it was before,
+[11:01.000 --> 11:03.000]  and I'm not sure why I haven't had a chance to look at it.
+[11:03.000 --> 11:05.000]  This is what it might look like in Python.
+[11:05.000 --> 11:07.000]  Again, we'll show you that in just a minute.
+[11:07.000 --> 11:11.000]  Probably the biggest reason to consider using something like this, depending on your ORM.
+[11:11.000 --> 11:16.000]  Now, again, we specifically ran into this because of an older version of a Go library
+[11:16.000 --> 11:19.000]  that we were using, and we were hitting that connection limit,
+[11:19.000 --> 11:24.000]  and then we found that this actually, in some cases, performed better.
+[11:24.000 --> 11:29.000]  And so you basically take your elements, you put it into a list, again, in Python,
+[11:29.000 --> 11:32.000]  depending what your language is, your support might be slightly different,
+[11:32.000 --> 11:35.000]  and then you can put that into your statement,
+[11:35.000 --> 11:40.000]  and you're essentially sending the string again, depending on what the ORM does,
+[11:40.000 --> 11:43.000]  or the driver, how it sends it is independent.
+[11:43.000 --> 11:48.000]  But once it gets to the server, PostgreSQL simply unests that and goes to Tenom.
+[11:48.000 --> 11:51.000]  It can be faster in some instances.
+[11:51.000 --> 11:52.000]  I'll show you in a second.
+[11:52.000 --> 11:54.000]  It avoids the parameter limit, as I said.
+[11:54.000 --> 11:59.000]  The one interesting thing here is that it doesn't, in this case,
+[11:59.000 --> 12:01.000]  doesn't specifically handle custom types.
+[12:01.000 --> 12:06.000]  So if you have a custom type, that might not work for you.
+[12:06.000 --> 12:09.000]  The third is something that hopefully everyone here knows about.
+[12:09.000 --> 12:10.000]  It's called copy.
+[12:10.000 --> 12:16.000]  Now, copy is one of the oldest kind of long-standing commands out of Postgres.
+[12:16.000 --> 12:25.000]  It actually existed prior to Postgres in its prior form before what we know is Postgres today.
+[12:25.000 --> 12:29.000]  It is the preferred and optimized tool, and it's used in any...
+[12:29.000 --> 12:31.000]  It can often use a lot of forks of Postgres.
+[12:31.000 --> 12:33.000]  I know, for instance, I used to use Redshift,
+[12:33.000 --> 12:37.000]  and so Redshift, that's one of the primary methods for getting data into Redshift,
+[12:37.000 --> 12:39.000]  is to use copy.
+[12:39.000 --> 12:43.000]  It can read from files or to the standard input.
+[12:43.000 --> 12:47.000]  And then the one thing you recognize here is if you are used to Postgres,
+[12:47.000 --> 12:50.000]  and you use PCQL, which you'll see me use in just a little bit,
+[12:50.000 --> 12:53.000]  this is not the same thing as the slash copy command.
+[12:53.000 --> 12:58.000]  So essentially, what PCQL slash copy is doing is taking a file that's...
+[12:58.000 --> 12:59.000]  And this is the difference.
+[12:59.000 --> 13:03.000]  When you say SQL copy, and I think I said it here, it's not part of the SQL standard,
+[13:03.000 --> 13:05.000]  so it is only Postgres.
+[13:05.000 --> 13:10.000]  When you say copy, it's looking on the local server wherever that is.
+[13:10.000 --> 13:14.000]  So if you're using Docker, the file has to be on your Docker image.
+[13:14.000 --> 13:15.000]  If you're using...
+[13:15.000 --> 13:17.000]  And so that means you can't use your local one.
+[13:17.000 --> 13:20.000]  That's what the PCQL copy command is for.
+[13:20.000 --> 13:22.000]  It will allow you to use your local file,
+[13:22.000 --> 13:26.000]  and it does a stream into the standard in on the server,
+[13:26.000 --> 13:28.000]  and then uses copy there.
+[13:28.000 --> 13:32.000]  So they are hand-in-hand, but they're not exactly the same thing.
+[13:32.000 --> 13:34.000]  It does have a couple limitations, however.
+[13:34.000 --> 13:36.000]  So it's designed to be very fast,
+[13:36.000 --> 13:38.000]  and it's been doing this for a long time,
+[13:38.000 --> 13:42.000]  and it basically, the way it opens up a stream and to record the records,
+[13:42.000 --> 13:44.000]  very, very efficient.
+[13:44.000 --> 13:48.000]  It is, however, only single-threaded in a single transaction.
+[13:48.000 --> 13:52.000]  You can't say start multiple transactions for it, multiple threads,
+[13:52.000 --> 13:54.000]  and do inserts in parallel.
+[13:54.000 --> 13:56.000]  It doesn't work that way.
+[13:56.000 --> 13:59.000]  Until Postgres 14, there is no way to see the progress.
+[13:59.000 --> 14:04.000]  So if you had a 10-billion-line file that you were doing copy on,
+[14:04.000 --> 14:08.000]  it's had to wait and see if it's going to finish.
+[14:08.000 --> 14:09.000]  And how do I know?
+[14:09.000 --> 14:11.000]  Because you can't see it, right?
+[14:11.000 --> 14:13.000]  Because it's not committed yet.
+[14:13.000 --> 14:14.000]  So how do you know the progress?
+[14:14.000 --> 14:16.000]  And so in Postgres 14 and above,
+[14:16.000 --> 14:18.000]  we do now have a view.
+[14:18.000 --> 14:20.000]  Again, I'll show you that as part of the demo.
+[14:20.000 --> 14:22.000]  Very helpful.
+[14:22.000 --> 14:24.000]  We do have large files to know about that.
+[14:24.000 --> 14:26.000]  Minimal format configuration?
+[14:26.000 --> 14:27.000]  No, there's some.
+[14:27.000 --> 14:29.000]  I mean, again, copy is a great tool,
+[14:29.000 --> 14:31.000]  but it was designed a long time ago
+[14:31.000 --> 14:33.000]  and has a very specific set of use cases.
+[14:33.000 --> 14:37.000]  There are some new tooling that are kind of using copy
+[14:37.000 --> 14:40.000]  above putting a superset of tooling above it
+[14:40.000 --> 14:42.000]  so that copy can be more efficient.
+[14:42.000 --> 14:44.000]  And there is no failure tolerance.
+[14:44.000 --> 14:47.000]  This is one thing that I actually didn't know until recently.
+[14:47.000 --> 14:51.000]  When you insert data with copy, if it fails,
+[14:51.000 --> 14:53.000]  so let's say you have a format error.
+[14:53.000 --> 14:55.000]  If you've used copy, you've surely run into this
+[14:55.000 --> 14:57.000]  where you forget that you have a header line
+[14:57.000 --> 15:00.000]  or you forget there's something part way down the file
+[15:00.000 --> 15:02.000]  and the format's just wrong,
+[15:02.000 --> 15:05.000]  and it has actually copied maybe, you know,
+[15:05.000 --> 15:07.000]  millions of lines and then errors.
+[15:07.000 --> 15:09.000]  Transaction's done, it stops,
+[15:09.000 --> 15:12.000]  but under the covers, those records,
+[15:12.000 --> 15:15.000]  they're bypassing a little bit of the typical work of Postgres.
+[15:15.000 --> 15:17.000]  They actually are taking space in your table
+[15:17.000 --> 15:18.000]  until the next vacuum.
+[15:18.000 --> 15:20.000]  They're a part of the transaction
+[15:20.000 --> 15:22.000]  that is essentially partially complete.
+[15:22.000 --> 15:24.000]  It actually states it's in the documentation.
+[15:24.000 --> 15:26.000]  I think a lot of folks don't actually see that.
+[15:26.000 --> 15:30.000]  And so if you're doing a lot of really large file processing,
+[15:30.000 --> 15:32.000]  this is important to know about.
+[15:32.000 --> 15:36.000]  If it fails, you really need to run a vacuum after the fact
+[15:36.000 --> 15:39.000]  to make sure that those things are happening
+[15:39.000 --> 15:41.000]  more regularly in those instances.
+[15:41.000 --> 15:44.000]  Again, the point is, it is intended to do one job,
+[15:44.000 --> 15:47.000]  two jobs, really, really well.
+[15:47.000 --> 15:50.000]  Import data quickly and export data easily.
+[15:50.000 --> 15:52.000]  So you can use copy as well to get data out
+[15:52.000 --> 15:55.000]  into like a CSV format or something of that nature,
+[15:55.000 --> 15:57.000]  and it does it really well.
+[15:57.000 --> 16:01.000]  There are two tools that you can use to thine know of,
+[16:01.000 --> 16:04.000]  and I'm sure there are more, but I've used both of these tools.
+[16:04.000 --> 16:06.000]  So one is PGloader.io.
+[16:06.000 --> 16:08.000]  If you have never used it or don't know about it
+[16:08.000 --> 16:10.000]  and you're doing lots of work,
+[16:10.000 --> 16:13.000]  it uses copy under the covers.
+[16:13.000 --> 16:16.000]  And it's been written and written by Dmitri Fontaine,
+[16:16.000 --> 16:19.000]  well-known in the Postgres community.
+[16:19.000 --> 16:23.000]  It's a CLI application, and basically he designed it
+[16:23.000 --> 16:25.000]  in a way that it will take your format
+[16:25.000 --> 16:27.000]  and then people have contributed to this
+[16:27.000 --> 16:29.000]  so it can actually even just do conversions.
+[16:29.000 --> 16:32.000]  So you might have a file, you might have a CSV file,
+[16:32.000 --> 16:35.000]  or you might have a database that is a different database,
+[16:35.000 --> 16:38.000]  like SQL Server or Redshift or MySQL.
+[16:38.000 --> 16:41.000]  People have contributed converters
+[16:41.000 --> 16:44.000]  so that you can basically say, there's my database,
+[16:44.000 --> 16:47.000]  it will pipe through the database,
+[16:47.000 --> 16:49.000]  get the schema, create the schema,
+[16:49.000 --> 16:52.000]  and then use copy as the background tooling
+[16:52.000 --> 16:55.000]  to make the work much more efficient.
+[16:55.000 --> 16:57.000]  So it's a really interesting and neat tool,
+[16:57.000 --> 16:59.000]  and then it does other stuff which is really great.
+[16:59.000 --> 17:01.000]  It does error checking.
+[17:01.000 --> 17:03.000]  You can actually put rule sets in for error checking.
+[17:03.000 --> 17:06.000]  It can cast data for you.
+[17:06.000 --> 17:09.000]  This kind of value in MySQL
+[17:09.000 --> 17:11.000]  does not exist in this way over here in Postgres.
+[17:11.000 --> 17:13.000]  Here's how we like it to be cast.
+[17:13.000 --> 17:15.000]  So it's a really neat tool.
+[17:15.000 --> 17:17.000]  If you've never heard of it, please go check it out,
+[17:17.000 --> 17:19.000]  and there's a lot more that it can do,
+[17:19.000 --> 17:21.000]  continuous migrations, things like that.
+[17:21.000 --> 17:23.000]  The other one is Timescale Parallel Copy.
+[17:23.000 --> 17:25.000]  Now, again, I mentioned this because I used to work
+[17:25.000 --> 17:27.000]  at timescales and time series database.
+[17:27.000 --> 17:30.000]  We're used to people having millions and millions
+[17:30.000 --> 17:33.000]  and hundreds and millions and billions of rows in a file
+[17:33.000 --> 17:36.000]  that they're trying to insert and ingest.
+[17:36.000 --> 17:38.000]  And time series data is really interesting
+[17:38.000 --> 17:41.000]  because it's typically in rough time order.
+[17:41.000 --> 17:44.000]  And so when you're doing things like partitioning,
+[17:44.000 --> 17:47.000]  you could have multiple threads
+[17:47.000 --> 17:50.000]  essentially inserting into multiple tables
+[17:50.000 --> 17:52.000]  under the covers behind the scenes.
+[17:52.000 --> 17:55.000]  Again, copy itself is not multi-threaded,
+[17:55.000 --> 17:57.000]  but this is another tool.
+[17:57.000 --> 17:59.000]  It's a Go program that can take time series data,
+[17:59.000 --> 18:02.000]  splits it up into batches for you,
+[18:02.000 --> 18:04.000]  and then will start up multiple threads
+[18:04.000 --> 18:07.000]  to do those copies in parallel.
+[18:07.000 --> 18:10.000]  This can just be really useful on a high latency system.
+[18:10.000 --> 18:13.000]  So, again, when I actually first started at Timescale,
+[18:13.000 --> 18:16.000]  I was running, at first day, I was running their demo,
+[18:16.000 --> 18:18.000]  and it had 10 million rows.
+[18:18.000 --> 18:20.000]  I live in the country.
+[18:20.000 --> 18:22.000]  I don't have the best internet connection in the world.
+[18:22.000 --> 18:24.000]  And after 20 minutes, I said,
+[18:24.000 --> 18:26.000]  are we sure this thing is working correctly?
+[18:26.000 --> 18:28.000]  It just turns out using just a plain copy
+[18:28.000 --> 18:31.000]  over a very latent connection to a data center
+[18:31.000 --> 18:33.000]  on the other side of the country
+[18:33.000 --> 18:35.000]  was not terribly efficient.
+[18:35.000 --> 18:37.000]  Using parallel copy, it was done in a minute, right?
+[18:37.000 --> 18:40.000]  So, a lot of ways to go about it.
+[18:40.000 --> 18:42.000]  And then the last thing to consider
+[18:42.000 --> 18:45.000]  if you're doing a lot of data insert is unlogged tables.
+[18:45.000 --> 18:48.000]  Now, again, in Postgres, a lot of people that I've run into,
+[18:48.000 --> 18:51.000]  myself included, forget about this often.
+[18:51.000 --> 18:53.000]  But if you need to insert a lot of data
+[18:53.000 --> 18:56.000]  and you can deal with some of the ramifications,
+[18:56.000 --> 18:58.000]  it's a great option for just giving you
+[18:58.000 --> 19:00.000]  that one other little edge.
+[19:00.000 --> 19:03.000]  Unlogged tables simply mean that your work
+[19:03.000 --> 19:06.000]  is not logged to what we call the right-ahead log.
+[19:06.000 --> 19:09.000]  Now, that means it's not fail-safe, right?
+[19:09.000 --> 19:12.000]  So, if there's a crash, that data is gone.
+[19:12.000 --> 19:14.000]  You can't recover it.
+[19:14.000 --> 19:17.000]  But this is really good for things like ETL jobs, right?
+[19:17.000 --> 19:20.000]  So, if you're getting lots and lots of data
+[19:20.000 --> 19:22.000]  that you have to process maybe every night
+[19:22.000 --> 19:24.000]  or every hour or whatever,
+[19:24.000 --> 19:27.000]  you might find that you can get 20%, 30% improvement
+[19:27.000 --> 19:30.000]  in your ingest speed by using an unlogged table,
+[19:30.000 --> 19:33.000]  maybe even more, depending on what it is.
+[19:33.000 --> 19:36.000]  And if it fails, it's fine. You still have to file.
+[19:36.000 --> 19:38.000]  Try again, right?
+[19:38.000 --> 19:40.000]  So, that's a really useful tool to know about.
+[19:40.000 --> 19:43.000]  You can take any table, turn it to unlogged.
+[19:43.000 --> 19:45.000]  Obviously, you want to put it back to log when you're done,
+[19:45.000 --> 19:48.000]  unless it's just a throwaway table of some sort.
+[19:48.000 --> 19:50.000]  So, I use it again.
+[19:50.000 --> 19:52.000]  It's really great for ETL processes.
+[19:52.000 --> 19:55.000]  It's really good for intermittent but repeatable work, right?
+[19:55.000 --> 19:58.000]  So, again, any kind of those bash jobs you're handling,
+[19:58.000 --> 20:01.000]  maybe you're rerunning a data processing simulation
+[20:01.000 --> 20:03.000]  over and over again.
+[20:03.000 --> 20:06.000]  It's a great way to do it because who cares if it's not in the log.
+[20:06.000 --> 20:08.000]  And it also means your wall is not increasing
+[20:08.000 --> 20:11.000]  for this stuff that you're just iterating over and over again,
+[20:11.000 --> 20:13.000]  which that can be helpful.
+[20:13.000 --> 20:15.000]  I did forget to specifically say back here,
+[20:15.000 --> 20:17.000]  obviously, this is not accessible.
+[20:17.000 --> 20:20.000]  This data will not be accessible on any replication servers.
+[20:20.000 --> 20:22.000]  It's not in the log.
+[20:22.000 --> 20:25.000]  It's the way that Postgres does replications with the wall.
+[20:25.000 --> 20:27.000]  And so, if it isn't in there, it won't replicate.
+[20:27.000 --> 20:30.000]  Again, that might actually be really beneficial
+[20:30.000 --> 20:34.000]  for that kind of transactional data that you're doing.
+[20:34.000 --> 20:36.000]  All right.
+[20:36.000 --> 20:39.000]  I'll pause there to quickly first see if you have any questions
+[20:39.000 --> 20:41.000]  and then I'm going to flip over to demos.
+[20:41.000 --> 20:43.000]  Any questions? Yes, one in the back.
+[20:43.000 --> 20:46.000]  And I can shout it out.
+[20:46.000 --> 20:50.000]  Can you turn on the log with just one question?
+[20:50.000 --> 20:54.000]  That's a great question that I'm going to say probably yes
+[20:54.000 --> 20:57.000]  because it's just a table technically under the covers.
+[20:57.000 --> 21:00.000]  And I'm getting a nod from down here, too.
+[21:00.000 --> 21:02.000]  So good. Good question.
+[21:02.000 --> 21:04.000]  Oh, yes. I apologize. I meant to repeat the question.
+[21:04.000 --> 21:07.000]  I didn't. The question was, can you set a partition
+[21:07.000 --> 21:10.000]  to unlock one table in the partition?
+[21:10.000 --> 21:12.000]  And so the answer there would be yes,
+[21:12.000 --> 21:14.000]  because again, the way that we do partitioning is there.
+[21:14.000 --> 21:16.000]  Technically, there are no tables.
+[21:16.000 --> 21:18.000]  We're going to talk about that in a minute.
+[21:18.000 --> 21:22.000]  One thing I want to say, that slowness in PsychoPG3
+[21:22.000 --> 21:24.000]  was fixed in December.
+[21:24.000 --> 21:28.000]  So now, possibly, it should be as fast as PsychoPG2.
+[21:28.000 --> 21:32.000]  And I want to ask you if you also have tested
+[21:32.000 --> 21:34.000]  the new copy support in PsychoPG3,
+[21:34.000 --> 21:37.000]  where there is direct copy from Python objects
+[21:37.000 --> 21:39.000]  to the copy protocol.
+[21:39.000 --> 21:42.000]  So it's a great question. I'm going to show you a little bit of Python.
+[21:42.000 --> 21:44.000]  And so at the end, I actually was going to talk about that.
+[21:44.000 --> 21:46.000]  I've been starting to play with PsychoPG3.
+[21:46.000 --> 21:49.000]  The demo, I actually converted to three.
+[21:49.000 --> 21:52.000]  And there's one or two things that it can't do, that two could.
+[21:52.000 --> 21:54.000]  I wanted to demo that.
+[21:54.000 --> 21:58.000]  But yeah, I will talk briefly about a couple of those situations.
+[21:58.000 --> 22:01.000]  Okay. I peed to have a chat about that because I wrote it.
+[22:01.000 --> 22:04.000]  You look familiar, so I was assuming that was the case.
+[22:04.000 --> 22:06.000]  Thank you.
+[22:06.000 --> 22:08.000]  All right, so let me just show you what we're going to do.
+[22:08.000 --> 22:11.000]  I have a couple of different tables, two different demos.
+[22:11.000 --> 22:15.000]  So I'm going to first show you all of this in SQL.
+[22:15.000 --> 22:18.000]  This is not necessarily how you would do it day to day.
+[22:18.000 --> 22:22.000]  You're probably not in most of your SQL jobs concatenating strings
+[22:22.000 --> 22:25.000]  and then using that to insert into another table.
+[22:25.000 --> 22:27.000]  This is all being contained within one database.
+[22:27.000 --> 22:31.000]  It's truly just for demo purposes to try and show you one or two examples
+[22:31.000 --> 22:33.000]  of how some of this can help and work.
+[22:33.000 --> 22:36.000]  I'm not going to show you the row by row insert
+[22:36.000 --> 22:38.000]  because honestly it takes about two minutes,
+[22:38.000 --> 22:40.000]  and this is not worth it for me to be really frank.
+[22:40.000 --> 22:42.000]  I didn't feel like sitting here.
+[22:42.000 --> 22:44.000]  Here's what the sample data looks like.
+[22:44.000 --> 22:45.000]  I have a script.
+[22:45.000 --> 22:48.000]  It is in the demo repo that creates some tables,
+[22:48.000 --> 22:52.000]  a table with a bunch of data columns, different data types.
+[22:52.000 --> 22:55.000]  I just have a couple of functions I wrote to create random data,
+[22:55.000 --> 22:59.000]  both numbers and text, so that I just get different sizes,
+[22:59.000 --> 23:02.000]  and then I just inserted just over a million rows.
+[23:02.000 --> 23:05.000]  I could have done 10 million, but I didn't want to make everyone sit here.
+[23:05.000 --> 23:08.000]  Are these exponential?
+[23:08.000 --> 23:09.000]  Yes and no.
+[23:09.000 --> 23:11.000]  It depends on data types and a bunch of other factors,
+[23:11.000 --> 23:13.000]  which we're going to see in just a minute.
+[23:13.000 --> 23:14.000]  I created that data.
+[23:14.000 --> 23:16.000]  It is sitting in one table,
+[23:16.000 --> 23:18.000]  and I'm simply going to do a couple of these things
+[23:18.000 --> 23:21.000]  by taking it and copying it into another table beside it.
+[23:21.000 --> 23:23.000]  Every time I'll truncate it,
+[23:23.000 --> 23:26.000]  and then we'll see what happens from there.
+[23:26.000 --> 23:33.000]  Like I said, I think there are just over a million rows of data here.
+[23:33.000 --> 23:36.000]  The first one, as I said, is basically taking,
+[23:36.000 --> 23:40.000]  and I'm going to pull this down here.
+[23:40.000 --> 23:42.000]  Is that readable by everyone?
+[23:42.000 --> 23:44.000]  Make it a little bit bigger?
+[23:44.000 --> 23:45.000]  Do that.
+[23:45.000 --> 23:46.000]  Same process.
+[23:46.000 --> 23:48.000]  Start with an insert statement.
+[23:48.000 --> 23:51.000]  I'm simply concatenating that string to some point.
+[23:51.000 --> 23:57.000]  In this case, I believe it is 500,
+[23:57.000 --> 23:59.000]  and I was playing this last night,
+[23:59.000 --> 24:02.000]  so now I actually don't know if it really is 500 or not.
+[24:02.000 --> 24:05.000]  Basically, every 500 or every thousand,
+[24:05.000 --> 24:07.000]  I'm simply going to then execute that statement,
+[24:07.000 --> 24:11.000]  so we have a string with lots of data.
+[24:11.000 --> 24:17.000]  This takes a few seconds.
+[24:17.000 --> 24:19.000]  It is running.
+[24:19.000 --> 24:21.000]  Then you'll see I have two things here.
+[24:21.000 --> 24:23.000]  I basically timed the creation of the string,
+[24:23.000 --> 24:28.000]  and I timed the actual execution.
+[24:28.000 --> 24:31.000]  The string itself took about three seconds.
+[24:31.000 --> 24:34.000]  This is the one thing I could not get the beaver today to make that bigger,
+[24:34.000 --> 24:35.000]  so I apologize.
+[24:35.000 --> 24:36.000]  I will read it for you.
+[24:36.000 --> 24:39.000]  The string generation took about three seconds,
+[24:39.000 --> 24:41.000]  and the actual execution into the database
+[24:41.000 --> 24:43.000]  was just shy of eight seconds.
+[24:43.000 --> 24:46.000]  That was a million rows, one database table,
+[24:46.000 --> 24:51.000]  to another database table using multi-valued insert statements.
+[24:51.000 --> 24:54.000]  Now I'm going to take the same,
+[24:54.000 --> 24:57.000]  and we're going to do that array trick.
+[24:57.000 --> 24:59.000]  I'm basically taking data from table one.
+[24:59.000 --> 25:02.000]  I'm aggregating each of those columns
+[25:03.000 --> 25:06.000]  into just aggregating the whole table
+[25:06.000 --> 25:09.000]  with an offset.
+[25:09.000 --> 25:11.000]  I'm basically doing 10,000 at a time.
+[25:11.000 --> 25:13.000]  You can play with different numbers.
+[25:13.000 --> 25:14.000]  You can take results.
+[25:14.000 --> 25:16.000]  I'm basically taking 10,000 numbers of column one,
+[25:16.000 --> 25:18.000]  10,000 numbers of column two, and so forth,
+[25:18.000 --> 25:20.000]  into an aggregated value.
+[25:20.000 --> 25:22.000]  Now, because it's being done in Postgres,
+[25:22.000 --> 25:24.000]  you'll see that this is actually kind of interesting
+[25:24.000 --> 25:26.000]  in how this works.
+[25:26.000 --> 25:30.000]  You don't necessarily get the exact same thing.
+[25:30.000 --> 25:31.000]  It is running.
+[25:31.000 --> 25:34.000]  Again, I tend to use dbeaver in demos
+[25:34.000 --> 25:37.000]  because it's just easier for me to color code some things
+[25:37.000 --> 25:39.000]  and walk through comments and so forth.
+[25:39.000 --> 25:41.000]  That's just why I do it this way.
+[25:41.000 --> 25:44.000]  This takes just shy of 30 seconds,
+[25:44.000 --> 25:45.000]  maybe actually a little bit less than that,
+[25:45.000 --> 25:48.000]  depending on how the image wants to perform today.
+[25:48.000 --> 25:50.000]  The really interesting thing you'll see here
+[25:50.000 --> 25:55.000]  is that the, and again, I'll read the values out for you,
+[25:55.000 --> 25:59.000]  but the string took about 24 and a half seconds to generate,
+[25:59.000 --> 26:02.000]  so it went a million rows, 10,000 in time,
+[26:02.000 --> 26:07.000]  I don't know, maybe 400 iterations it went through.
+[26:07.000 --> 26:10.000]  I'm not sure my math is close to 500, but anyway.
+[26:10.000 --> 26:16.000]  And so the string generation took almost 25 seconds,
+[26:16.000 --> 26:19.000]  but the actual execution of all of those individual statements
+[26:19.000 --> 26:21.000]  took 1.5 seconds.
+[26:21.000 --> 26:24.000]  Now again, it's inside of Postgres.
+[26:24.000 --> 26:27.000]  It has access to where each of those things are.
+[26:27.000 --> 26:30.000]  It is a lot more performant in Postgres,
+[26:30.000 --> 26:34.000]  but it's interesting because there might be some things
+[26:34.000 --> 26:37.000]  you're doing even internally in some of your processes,
+[26:37.000 --> 26:39.000]  functions, store procedures.
+[26:39.000 --> 26:41.000]  Might be worth something to try.
+[26:41.000 --> 26:42.000]  Now it's complex.
+[26:42.000 --> 26:47.000]  This is not the most really exciting way to write a procedure
+[26:47.000 --> 26:49.000]  and create all of these values
+[26:49.000 --> 26:51.000]  and make sure they get populated and so forth,
+[26:51.000 --> 26:53.000]  but it's interesting nonetheless.
+[26:53.000 --> 26:58.000]  We thought it helped us mostly because of the parameter limit
+[26:58.000 --> 27:00.000]  thing we were finding with the Go package.
+[27:00.000 --> 27:05.000]  Again, that is older, but we also found some neat things like this
+[27:05.000 --> 27:08.000]  that in some cases it could actually work more effectively.
+[27:08.000 --> 27:10.000]  So then I took that same data.
+[27:10.000 --> 27:12.000]  Now again, I'm currently using a Docker image.
+[27:12.000 --> 27:14.000]  It's just a generic Postgres Docker image.
+[27:14.000 --> 27:16.000]  Just kind of spun it up.
+[27:16.000 --> 27:17.000]  There's nothing special configuration.
+[27:17.000 --> 27:19.000]  I didn't try to give it more RAM.
+[27:19.000 --> 27:21.000]  I could have made this a lot more performant, but I chose not to.
+[27:21.000 --> 27:26.000]  I simply then copied it out so that this file is on the Docker image
+[27:26.000 --> 27:30.000]  server because remember copy is local to the Postgres server.
+[27:30.000 --> 27:34.000]  So I took those 10 million rows and it's a lot more,
+[27:34.000 --> 27:36.000]  a lot easier to do this, right?
+[27:36.000 --> 27:37.000]  We have the copy command.
+[27:37.000 --> 27:39.000]  It generated the CSV file.
+[27:39.000 --> 27:43.000]  You could provide the other parameters here if you needed to,
+[27:43.000 --> 27:50.000]  but you'll see that it ends up being overall significantly
+[27:50.000 --> 27:51.000]  faster.
+[27:51.000 --> 27:55.000]  So by far the fastest in total time here just to generate and work,
+[27:55.000 --> 27:56.000]  right?
+[27:56.000 --> 28:00.000]  So we took a million line file, imported it in under two seconds
+[28:00.000 --> 28:01.000]  with copy.
+[28:01.000 --> 28:04.000]  So it's a great option if you don't know about it.
+[28:04.000 --> 28:06.000]  Now, the other thing that shows unlogged.
+[28:06.000 --> 28:09.000]  So the question was, I'm going to use copy just because it's quick
+[28:09.000 --> 28:11.000]  and we have a time limit in the demo.
+[28:11.000 --> 28:15.000]  And so I'm going to set this table bulk test to unlogged,
+[28:15.000 --> 28:16.000]  all right?
+[28:16.000 --> 28:18.000]  And I'm going to go ahead and do that copy again.
+[28:18.000 --> 28:22.000]  So it was 1.7 seconds or so to ingest that.
+[28:22.000 --> 28:26.000]  Again, I truncate it at the beginning.
+[28:26.000 --> 28:33.000]  And you'll see that it ends up taking 1.3.
+[28:33.000 --> 28:36.000]  So, you know, it can be depending, right?
+[28:36.000 --> 28:38.000]  That was, someone do the math for me really quickly.
+[28:38.000 --> 28:40.000]  What is about 10 or 15 percent?
+[28:40.000 --> 28:44.000]  Sometimes it can be larger depending on the kind of table it is,
+[28:44.000 --> 28:47.000]  the data you're ingesting, and then some other things we'll talk
+[28:47.000 --> 28:49.000]  about in just a minute, all right?
+[28:49.000 --> 28:53.000]  So it's easiest to show that in SQL because it's quick
+[28:53.000 --> 28:55.000]  and easy to iterate on.
+[28:55.000 --> 28:57.000]  Again, the scripts themselves are in the repo,
+[28:57.000 --> 28:58.000]  which I'll show at the end.
+[28:58.000 --> 29:00.000]  What about in Python?
+[29:00.000 --> 29:04.000]  And so, yes, there's a new version of Psycho PG.
+[29:04.000 --> 29:07.000]  So this demo was originally created about two years ago.
+[29:07.000 --> 29:09.000]  I've iterated on it over time.
+[29:09.000 --> 29:12.000]  And so what I did, I actually have,
+[29:12.000 --> 29:14.000]  and I think I actually have it up here.
+[29:14.000 --> 29:16.000]  So I did actually convert many of these,
+[29:16.000 --> 29:20.000]  or all of this, to Psycho PG 3.
+[29:20.000 --> 29:22.000]  It doesn't matter what the language is, right?
+[29:22.000 --> 29:25.000]  A lot of these principles are going to pertain,
+[29:25.000 --> 29:26.000]  regardless what the language is.
+[29:26.000 --> 29:30.000]  I happen to be using Python and Psycho PG.
+[29:30.000 --> 29:32.000]  Earlier, Pavle was talking about ORMs.
+[29:32.000 --> 29:34.000]  Now, again, at the very end,
+[29:34.000 --> 29:37.000]  I'm going to mention one or two things to look at for ORMs.
+[29:37.000 --> 29:38.000]  Psycho PG is not an ORM.
+[29:38.000 --> 29:41.000]  It's just, it's a driver, right, to help us do this work.
+[29:41.000 --> 29:43.000]  But there are components of what your driver
+[29:43.000 --> 29:45.000]  or your ORM might do for you,
+[29:45.000 --> 29:47.000]  which is also valuable to think about.
+[29:47.000 --> 29:50.000]  That's the reason I'm using Psycho PG 2, honestly.
+[29:50.000 --> 29:53.000]  It turns out that, yes, Psycho PG 3 got much faster,
+[29:53.000 --> 29:56.000]  even with the individual inserts.
+[29:56.000 --> 29:58.000]  Just by the way it's doing,
+[29:58.000 --> 30:00.000]  it's specifically because of a new feature
+[30:00.000 --> 30:05.000]  in Postgres 14 and above in Lib PG.
+[30:05.000 --> 30:10.000]  So it allows us to do...
+[30:10.000 --> 30:14.000]  The word is all of a sudden escaping me.
+[30:14.000 --> 30:16.000]  I think I have a pipeline. Thank you.
+[30:16.000 --> 30:18.000]  The pipeline feature in Postgres 14 and above.
+[30:18.000 --> 30:20.000]  And so with that, particularly,
+[30:20.000 --> 30:23.000]  we do get better performance in some of these things.
+[30:23.000 --> 30:25.000]  I think the question becomes, again,
+[30:25.000 --> 30:29.000]  if you have control, if you can get a better payload,
+[30:29.000 --> 30:32.000]  a bigger payload over to Postgres and let it do its work,
+[30:32.000 --> 30:34.000]  depending on the architecture of your system,
+[30:34.000 --> 30:36.000]  you still benefit from some of these principles.
+[30:36.000 --> 30:39.000]  So I did the single insert before we started.
+[30:39.000 --> 30:42.000]  So I simply took, again, this is using Psycho PG 2,
+[30:42.000 --> 30:44.000]  and I can't speak for the language
+[30:44.000 --> 30:46.000]  because I haven't specifically done it,
+[30:46.000 --> 30:48.000]  and this is not even about Psycho PG.
+[30:48.000 --> 30:51.000]  This is just about simply getting something into the server.
+[30:51.000 --> 30:53.000]  If I iterate that file,
+[30:53.000 --> 30:55.000]  this is... I meant to show you that too.
+[30:55.000 --> 30:57.000]  This is a slightly different file,
+[30:57.000 --> 31:01.000]  and the reason is I didn't feel like doing 10 or 12 columns.
+[31:01.000 --> 31:03.000]  I just wanted to demo the options.
+[31:03.000 --> 31:05.000]  It's a much simpler file,
+[31:05.000 --> 31:07.000]  a little bit less than a million rows.
+[31:07.000 --> 31:09.000]  And so I did the single insert previously,
+[31:09.000 --> 31:16.000]  and you'll see that it took 180 seconds to do 750,000 lines,
+[31:16.000 --> 31:19.000]  and it's only three columns, and there's no indexes.
+[31:19.000 --> 31:20.000]  So there's a lot of work, right?
+[31:20.000 --> 31:22.000]  Just going and iterating back and forth and back and forth.
+[31:22.000 --> 31:24.000]  We see that often.
+[31:24.000 --> 31:27.000]  So if you were doing that kind of work in your application,
+[31:27.000 --> 31:30.000]  seriously considered doing something different, like...
+[31:30.000 --> 31:32.000]  So the way this file is set up at the very bottom,
+[31:32.000 --> 31:34.000]  I have each of these functions,
+[31:34.000 --> 31:37.000]  and so I'm simply going to comment out the single insert.
+[31:37.000 --> 31:39.000]  Now I'm simply going to do the multi-valued.
+[31:39.000 --> 31:41.000]  I did exactly as shown in the slide.
+[31:41.000 --> 31:44.000]  I took that single insert, simply wrapped it in a batch.
+[31:44.000 --> 31:49.000]  After so many iterations of pending that string, send that.
+[31:49.000 --> 31:52.000]  And when you do that,
+[31:52.000 --> 31:55.000]  you'll see that it ends up being significantly faster,
+[31:55.000 --> 31:58.000]  and it's really simply to show the value
+[31:58.000 --> 32:01.000]  of doing a very minimal amount of work, all right?
+[32:01.000 --> 32:04.000]  In six seconds, right?
+[32:04.000 --> 32:09.000]  So one line at a time, many lines at a time.
+[32:09.000 --> 32:13.000]  I think there's maybe 5,000 parentheses after that, right?
+[32:13.000 --> 32:18.000]  So it really can make a big, big difference.
+[32:18.000 --> 32:20.000]  I did then want to try the...
+[32:20.000 --> 32:23.000]  So this is what I wanted to show,
+[32:23.000 --> 32:26.000]  and we can talk about later because I don't know the reasoning,
+[32:26.000 --> 32:27.000]  and it's fine.
+[32:27.000 --> 32:29.000]  I just... I did not realize that in previous versions
+[32:29.000 --> 32:31.000]  of this specific tool, and again,
+[32:31.000 --> 32:33.000]  I know other tools have something similar.
+[32:33.000 --> 32:35.000]  There are some functions called exact values,
+[32:35.000 --> 32:37.000]  is the one I'm using here.
+[32:37.000 --> 32:39.000]  What that essentially did for you is did the batching for you.
+[32:39.000 --> 32:41.000]  And so I just had to do a little bit less work,
+[32:41.000 --> 32:43.000]  and that's the only reason I had...
+[32:43.000 --> 32:46.000]  I stuck with this to show you that your tool may have something similar
+[32:46.000 --> 32:49.000]  if it can't take advantage of some of the other features
+[32:49.000 --> 32:51.000]  that Postgres and others are now providing
+[32:51.000 --> 32:54.000]  to do some of the pipelining and things like that.
+[32:54.000 --> 32:57.000]  So just to recognize it, this simply does the same thing.
+[32:57.000 --> 32:59.000]  It's a multi-valued insert.
+[32:59.000 --> 33:02.000]  It's simply helping you do that batch rather than you having to write it.
+[33:02.000 --> 33:05.000]  So it's a really convenient method for doing so.
+[33:05.000 --> 33:09.000]  Now the arrays turn out to be pretty easy in something like Python.
+[33:09.000 --> 33:12.000]  And again, most other languages now, I have that batch.
+[33:12.000 --> 33:15.000]  I have a file, I'm reading it in, I'm creating a list out of it,
+[33:15.000 --> 33:19.000]  and then I'm sending slices of that list over and over again.
+[33:19.000 --> 33:22.000]  And when I do that, you'll see that it has really similar performance.
+[33:22.000 --> 33:29.000]  And this is where, specifically because of improvements in PsychoPG,
+[33:29.000 --> 33:36.000]  in this case, this actually ends up not being any faster in PsychoPG 3 and above.
+[33:36.000 --> 33:39.000]  So I wouldn't necessarily benefit from this application,
+[33:39.000 --> 33:44.000]  especially if I didn't need to worry about the number of parameters, right?
+[33:44.000 --> 33:47.000]  So again, one of the reasons for this could be a parameter issue
+[33:47.000 --> 33:50.000]  if you wanted to have many, many things you're sending in.
+[33:50.000 --> 33:54.000]  And the last but not least, and that's why I bring it, is to talk about copy.
+[33:54.000 --> 33:56.000]  So if you're a tool, so I appreciate it Pablo.
+[33:56.000 --> 33:58.000]  You shared earlier that in Go, right?
+[33:58.000 --> 34:03.000]  The ability to use copy, it is a framework that, you know,
+[34:03.000 --> 34:06.000]  any language could take on binary copy if they support it.
+[34:06.000 --> 34:08.000]  One of the things you really want to look for,
+[34:08.000 --> 34:14.000]  because you'll see that it is tremendously valuable if you can use it, right?
+[34:14.000 --> 34:16.000]  Less than a second, about half a second,
+[34:16.000 --> 34:20.000]  to take the exact same file and simply use copy, right?
+[34:20.000 --> 34:23.000]  And again, PsychoPG 3 does a little bit better on some of this
+[34:23.000 --> 34:26.000]  because they're taking the ability now,
+[34:26.000 --> 34:28.000]  one of the things you could not do, I believe is true,
+[34:28.000 --> 34:32.000]  and maybe I'm wrong in this, you couldn't do stream into copy with PsychoPG 2,
+[34:32.000 --> 34:34.000]  but you can do that now with PsychoPG 3.
+[34:34.000 --> 34:39.000]  That's really nice if you're forming your own string and you want to use copy, right?
+[34:39.000 --> 34:41.000]  That's a really valuable tool.
+[34:41.000 --> 34:45.000]  So make sure that your application, your tooling has something like that.
+[34:45.000 --> 34:50.000]  So there are two examples of how to do this kind of work in either of them.
+[34:50.000 --> 34:53.000]  A couple of parting thoughts to take with you.
+[34:53.000 --> 34:55.000]  Number one, indexes and constraints.
+[34:55.000 --> 34:57.000]  We never talked about this.
+[34:57.000 --> 35:00.000]  Now, in case those among you who have been thinking what's going on here,
+[35:00.000 --> 35:04.000]  I have no indexes or constraints on any of these tables yet.
+[35:04.000 --> 35:07.000]  So someone asked earlier, like, what does that do?
+[35:07.000 --> 35:08.000]  I was like, that's a really good question.
+[35:08.000 --> 35:09.000]  Let's quickly check that out.
+[35:09.000 --> 35:12.000]  And so it's just something to think about.
+[35:12.000 --> 35:17.000]  Now, in a very large active system, it is really hard to just get rid of your indexes and constraints
+[35:17.000 --> 35:20.000]  because you want to make your data go faster coming in.
+[35:20.000 --> 35:27.000]  But currently, Postgres does not have a way to disable indexes and constraints at this time.
+[35:27.000 --> 35:29.000]  So you'd have to drop them and then recreate them.
+[35:29.000 --> 35:32.000]  But it can have a significant impact.
+[35:32.000 --> 35:37.000]  How, again, dropping before insert can significantly improve performance,
+[35:37.000 --> 35:39.000]  but use at your own risk.
+[35:39.000 --> 35:41.000]  How big of a difference can it make?
+[35:41.000 --> 35:43.000]  Well, let's see really quickly.
+[35:43.000 --> 35:48.000]  So I'm going to take that same table and I'm going to create a couple indexes.
+[35:48.000 --> 35:50.000]  I don't think I have any on there now.
+[35:50.000 --> 35:52.000]  I have no indexes.
+[35:52.000 --> 35:59.000]  So I'm going to create three just on various columns, B trees, all of them.
+[35:59.000 --> 36:07.000]  And I'm going to run, let me set that back to logged.
+[36:07.000 --> 36:08.000]  There we go.
+[36:08.000 --> 36:09.000]  I'm going to run that copy again.
+[36:09.000 --> 36:12.000]  So remember the copy was a little bit over a second.
+[36:12.000 --> 36:14.000]  Unlogged, it was just over a second.
+[36:14.000 --> 36:20.000]  So just adding three indexes to this table, doing the exact same thing,
+[36:20.000 --> 36:23.000]  makes that go at least twice as slow.
+[36:23.000 --> 36:25.000]  It is now eight seconds.
+[36:25.000 --> 36:31.000]  So that is multiple percentages, multiple times slower.
+[36:31.000 --> 36:34.000]  What about the type of index?
+[36:34.000 --> 36:36.000]  It's a great question.
+[36:36.000 --> 36:39.000]  I want to see like, does it matter?
+[36:39.000 --> 36:41.000]  So what if I create a trigram?
+[36:41.000 --> 36:42.000]  Now again, this is random text.
+[36:42.000 --> 36:44.000]  I would never do this normally.
+[36:44.000 --> 36:46.000]  But what if I create a trigram on this text?
+[36:46.000 --> 36:50.000]  The text itself is no more than 50 characters long.
+[36:50.000 --> 36:54.000]  I should have truncated the table before I did that.
+[36:54.000 --> 36:58.000]  It would take just a minute.
+[36:58.000 --> 37:05.000]  You will see that I get to show you the other trick now that I did that.
+[37:05.000 --> 37:08.000]  Within a few seconds, you start to realize that just changing that index type
+[37:08.000 --> 37:12.000]  has a major impact on how this is working.
+[37:12.000 --> 37:15.000]  But now I get to show you the view.
+[37:15.000 --> 37:18.000]  So now I can actually see how quickly it's going through,
+[37:18.000 --> 37:20.000]  even though I have that index on there.
+[37:20.000 --> 37:24.000]  It's just a recognition that knowing your data will really impact
+[37:24.000 --> 37:29.000]  what you're able to do and what is safe in your specific environment.
+[37:29.000 --> 37:31.000]  All right, last but not least.
+[37:31.000 --> 37:34.000]  Oh, that was the bonus demo.
+[37:34.000 --> 37:36.000]  Partitioning.
+[37:36.000 --> 37:37.000]  Consider it.
+[37:37.000 --> 37:41.000]  I'm surprised how few people consider partitioning for their data.
+[37:41.000 --> 37:46.000]  It can really improve the ability, particularly when you have disparate data,
+[37:46.000 --> 37:48.000]  like time series data that might come in late.
+[37:48.000 --> 37:52.000]  It means that you have smaller chunks of your table.
+[37:52.000 --> 37:54.000]  And because Postgres works in memory,
+[37:54.000 --> 37:57.000]  if you're only pulling in smaller portions of that table,
+[37:57.000 --> 37:59.000]  you can often get better throughput.
+[37:59.000 --> 38:00.000]  Consider it.
+[38:00.000 --> 38:01.000]  Give it a look.
+[38:01.000 --> 38:05.000]  And the really cool thing here is indexes are kept on each individual table.
+[38:05.000 --> 38:09.000]  So even that trigram index lets extrapolate to a billion rows.
+[38:09.000 --> 38:13.000]  If that's over many, many tables, the indexes themselves are smaller,
+[38:13.000 --> 38:16.000]  you'll probably get better ingest performance.
+[38:16.000 --> 38:19.000]  And that just means you are able to take a whole bunch of data
+[38:19.000 --> 38:22.000]  and put it into each of these individual tables.
+[38:22.000 --> 38:25.000]  If you had multiple threads going and the data was hitting different partitions,
+[38:25.000 --> 38:27.000]  you really can see a speed up.
+[38:27.000 --> 38:29.000]  Last but not least, last slide.
+[38:29.000 --> 38:33.000]  What to look for in your SDKs?
+[38:33.000 --> 38:36.000]  So things like, does it support copy?
+[38:36.000 --> 38:38.000]  Does it support binary copy?
+[38:38.000 --> 38:41.000]  What about multi-valued or batching kind of functions?
+[38:41.000 --> 38:46.000]  Do you have to do that work or will your tooling do the work for you
+[38:46.000 --> 38:48.000]  or help you do that work?
+[38:48.000 --> 38:50.000]  How is AutoCommit handled?
+[38:50.000 --> 38:51.000]  Parameter tries.
+[38:51.000 --> 38:54.000]  Does it allow you to do anything with those parameter tries queries?
+[38:54.000 --> 38:55.000]  How does it handle it?
+[38:55.000 --> 38:58.000]  Does it warn you if you're going to exceed a limit?
+[38:58.000 --> 39:01.000]  And the one thing I meant to put in here and I didn't and I apologize is,
+[39:01.000 --> 39:03.000]  very much like PsychoPG3,
+[39:03.000 --> 39:08.000]  has now taken advantage of a feature in Postgres 14 called Pipelining,
+[39:08.000 --> 39:11.000]  which essentially says, for every query I send,
+[39:11.000 --> 39:13.000]  I don't have to wait for the response,
+[39:13.000 --> 39:15.000]  I can just start sending the next query right away.
+[39:15.000 --> 39:18.000]  That's really beneficial in inserts.
+[39:18.000 --> 39:23.000]  And so it's a really easy and effective way to get more performance out of what you're doing.
+[39:23.000 --> 39:27.000]  Turns out, so I have five minutes until questions.
+[39:28.000 --> 39:29.000]  Yes.
+[39:29.000 --> 39:30.000]  All right.
+[39:30.000 --> 39:33.000]  Let me show you really quickly, because I think I can.
+[39:33.000 --> 39:34.000]  Oh, there it's done.
+[39:34.000 --> 39:36.000]  So then when it stops, you'll get no values back.
+[39:36.000 --> 39:37.000]  But it did finally finish.
+[39:37.000 --> 39:39.000]  How long did that take?
+[39:39.000 --> 39:40.000]  Let's see.
+[39:40.000 --> 39:45.000]  Doing that with that trigram index took 65 seconds, right?
+[39:45.000 --> 39:49.000]  So your indexes matter, the kinds of indexes and what you're doing.
+[39:49.000 --> 39:53.000]  Trigram index is an inefficient index, but it's a very powerful one too.
+[39:53.000 --> 39:56.000]  If you're going to use it, you understand that and that's okay.
+[39:56.000 --> 40:04.000]  So I have, I think, so remember I told you earlier when I did the single insert,
+[40:04.000 --> 40:11.000]  and I'm going to give this a go, and it might not be set up,
+[40:11.000 --> 40:14.000]  and this is no comment whatsoever on PsychoPG3,
+[40:14.000 --> 40:18.000]  because I was like, oh, that's actually a lot faster than I thought now.
+[40:18.000 --> 40:26.000]  No, I think, yeah, I think this is it.
+[40:26.000 --> 40:28.000]  So let's just see.
+[40:28.000 --> 40:29.000]  This may or may not work.
+[40:29.000 --> 40:34.000]  Basically because of the pipelining, this, even though it does 750,000 insert statements,
+[40:34.000 --> 40:39.000]  because it's doing one at a time, the time came down very near to what the multi-valued
+[40:39.000 --> 40:42.000]  was in this case because of the pipelining effect.
+[40:42.000 --> 40:43.000]  So if it works, great.
+[40:43.000 --> 40:47.000]  If it's not, it just means that I changed something from the last time I did this.
+[40:47.000 --> 40:51.000]  There's no comment whatsoever.
+[40:51.000 --> 40:56.000]  Let's see what happens.
+[40:56.000 --> 40:58.000]  And I might not have turned on pipelining.
+[40:58.000 --> 41:00.000]  Now I do know, oh, you know what?
+[41:00.000 --> 41:04.000]  This is not execute many, my apologies.
+[41:04.000 --> 41:05.000]  Yeah, I don't have it set up.
+[41:05.000 --> 41:06.000]  I thought I did.
+[41:06.000 --> 41:08.000]  So there's a function called execute many,
+[41:08.000 --> 41:12.000]  and what that does is it automatically sets up pipelining for you.
+[41:12.000 --> 41:16.000]  You don't have to enable it in the code itself.
+[41:16.000 --> 41:19.000]  Otherwise, at least as far as documentation shows,
+[41:19.000 --> 41:23.000]  you have to at least initialize the pipelining to get that impact with it.
+[41:23.000 --> 41:25.000]  So it was a great surprise.
+[41:25.000 --> 41:26.000]  Thanks for doing all that work.
+[41:26.000 --> 41:27.000]  I know there's been a lot there.
+[41:27.000 --> 41:31.000]  So that is what I have to offer for today.
+[41:31.000 --> 41:33.000]  It's been really a joy to speak with you,
+[41:33.000 --> 41:37.000]  and I'd love to take any questions you have in a few minutes that we do have.
+[41:37.000 --> 41:39.000]  I'm going to start by talking about bees and coffee.
+[41:56.000 --> 41:58.000]  Hi, I've got a few questions,
+[41:58.000 --> 42:01.000]  but I'll restrict myself to a couple.
+[42:01.000 --> 42:08.000]  The first one is if you take that example where you've got a bunch of indexes
+[42:08.000 --> 42:12.000]  and pay maybe even some constraints or even a trigger or two,
+[42:12.000 --> 42:15.000]  all of which are contributing to making it slow,
+[42:15.000 --> 42:20.000]  how do you tell what's making it slow,
+[42:20.000 --> 42:23.000]  either through tooling logs, et cetera,
+[42:23.000 --> 42:25.000]  without having to basically play,
+[42:25.000 --> 42:29.000]  turn it on and turn it back off again on every one?
+[42:29.000 --> 42:31.000]  Really good question.
+[42:31.000 --> 42:35.000]  A lot of it would be and probably something I actually was going to try and talk about,
+[42:35.000 --> 42:36.000]  but I just didn't have time,
+[42:36.000 --> 42:39.000]  which is using the views in Postgres to figure out,
+[42:39.000 --> 42:43.000]  number one, first off, what statements are actually happening.
+[42:43.000 --> 42:46.000]  You can tell which indexes are being touched,
+[42:46.000 --> 42:49.000]  what the kind of transaction are happening,
+[42:49.000 --> 42:51.000]  the updates themselves within the index,
+[42:51.000 --> 42:54.000]  and that might help you get a sense for at least
+[42:54.000 --> 42:58.000]  which ones you have to worry about to start to think through.
+[42:58.000 --> 43:02.000]  That'd be my first go,
+[43:02.000 --> 43:06.000]  and I will maybe try and update some of those examples with a couple of those views
+[43:06.000 --> 43:08.000]  so that you can start to do that.
+[43:08.000 --> 43:09.000]  Thank you.
+[43:09.000 --> 43:10.000]  Yeah.
+[43:10.000 --> 43:12.000]  Question over here.
+[43:12.000 --> 43:14.000]  Behind you.
+[43:14.000 --> 43:16.000]  Hello.
+[43:16.000 --> 43:18.000]  Yeah.
+[43:18.000 --> 43:24.000]  So what if you want to normalize your data into multiple tables?
+[43:24.000 --> 43:27.000]  Why did I not normalize the data into?
+[43:27.000 --> 43:29.000]  Into several tables.
+[43:29.000 --> 43:31.000]  Okay. Partitioning?
+[43:31.000 --> 43:32.000]  No.
+[43:32.000 --> 43:33.000]  No.
+[43:33.000 --> 43:37.000]  Like tables with unique constraints and foreign key relations.
+[43:37.000 --> 43:38.000]  Oh, why didn't I?
+[43:38.000 --> 43:39.000]  That's a great question.
+[43:39.000 --> 43:40.000]  Demo and time.
+[43:40.000 --> 43:43.000]  What is the strategy to insert data
+[43:43.000 --> 43:46.000]  if you want to normalize it into several tables
+[43:46.000 --> 43:49.000]  with unique constraints and foreign key relations?
+[43:49.000 --> 43:51.000]  Then you cannot copy,
+[43:51.000 --> 43:54.000]  and you cannot just do a multivariate insert.
+[43:54.000 --> 43:57.000]  You have to process the data while you insert it.
+[43:57.000 --> 43:58.000]  Absolutely right.
+[43:58.000 --> 44:02.000]  And so that's where I think Postgres doesn't get enough attention on this specific thing.
+[44:02.000 --> 44:03.000]  So the question is,
+[44:03.000 --> 44:05.000]  when you have a very normalized database,
+[44:05.000 --> 44:09.000]  this data actually gets split up into three or four tables
+[44:09.000 --> 44:11.000]  because it's not just one file.
+[44:11.000 --> 44:13.000]  How do you do that most effectively?
+[44:13.000 --> 44:16.000]  Now, a lot of people would have some kind of ETL tool external.
+[44:16.000 --> 44:19.000]  I think that Postgres does a really good job internally.
+[44:19.000 --> 44:21.000]  I would specifically, what I tend to do
+[44:21.000 --> 44:24.000]  is I create an unlogged temp table of sorts.
+[44:24.000 --> 44:26.000]  I get the data in as quickly as I can with the copy.
+[44:26.000 --> 44:30.000]  I use the power of Postgres to move that data around.
+[44:30.000 --> 44:35.000]  Things, tricks like the array trick, honestly, in some instances,
+[44:35.000 --> 44:37.000]  ends up being really fast then in processing.
+[44:37.000 --> 44:39.000]  That's the best I can offer you when it comes to copy
+[44:39.000 --> 44:40.000]  because you're right.
+[44:40.000 --> 44:41.000]  That's the limitation of copy.
+[44:41.000 --> 44:44.000]  It doesn't follow the parameters down.
+[44:44.000 --> 44:46.000]  So hi, thank you.
+[44:46.000 --> 44:50.000]  So I would have expected you to also touch on prepared statements,
+[44:50.000 --> 44:52.000]  which many drivers have.
+[44:52.000 --> 44:56.000]  So did you purposely not do that?
+[44:56.000 --> 44:59.000]  Yes, I purposely didn't most, again,
+[44:59.000 --> 45:00.000]  partially because of time.
+[45:00.000 --> 45:03.000]  So prepared statements, one of the big issues
+[45:03.000 --> 45:05.000]  prepared statements that a lot of people run into at least,
+[45:05.000 --> 45:07.000]  we were just talking about this on the walk the other night,
+[45:07.000 --> 45:12.000]  is prepared statements if you don't need to be released effectively.
+[45:12.000 --> 45:17.000]  And so I just didn't have a good demo to be honest with you.
+[45:17.000 --> 45:19.000]  And so I apologize when it comes to insert.
+[45:19.000 --> 45:24.000]  Now some of that, again, PsychoPG3 does now help with prepared statements.
+[45:24.000 --> 45:28.000]  I tested it briefly to see if it would have any impact.
+[45:28.000 --> 45:30.000]  On these simple insert statements,
+[45:30.000 --> 45:32.000]  that was part of my problem to demo that.
+[45:32.000 --> 45:33.000]  It's just a little bit more difficult.
+[45:33.000 --> 45:35.000]  So definitely something worth checking.
+[45:35.000 --> 45:37.000]  So basically, do the work ahead of time
+[45:37.000 --> 45:41.000]  so that statement self doesn't have to be prepared every single time.
+[45:41.000 --> 45:44.000]  And I think PsychoPG says there's a threshold.
+[45:44.000 --> 45:46.000]  Once the statement has been run so many times,
+[45:46.000 --> 45:49.000]  then it will basically turn into prepared statement
+[45:49.000 --> 45:52.000]  to save that effort on each insert.
+[45:52.000 --> 45:55.000]  Okay, and I just want to remark that it's actually possible,
+[45:55.000 --> 45:59.000]  I believe, to disable constraints while importing.
+[45:59.000 --> 46:02.000]  So, okay, yeah, good comment.
+[46:02.000 --> 46:04.000]  So while importing, absolutely.
+[46:04.000 --> 46:09.000]  If you can tolerate it, if your application can tolerate it,
+[46:09.000 --> 46:11.000]  you can drop them ahead of time.
+[46:11.000 --> 46:12.000]  Yeah, I do.
+[46:12.000 --> 46:13.000]  Don't mean drop.
+[46:13.000 --> 46:15.000]  You can disable triggers temporarily.
+[46:15.000 --> 46:18.000]  An important turn them on again.
+[46:18.000 --> 46:19.000]  I'm sorry.
+[46:19.000 --> 46:21.000]  So I've read.
+[46:21.000 --> 46:24.000]  So apparently constraints are implemented by triggers in Postgres,
+[46:24.000 --> 46:26.000]  and if you temporarily disable triggers,
+[46:26.000 --> 46:30.000]  then you also disable checking the constraints.
+[46:30.000 --> 46:32.000]  Yeah, that's another option.
+[46:32.000 --> 46:35.000]  You can defer it to at the end of the import process,
+[46:35.000 --> 46:37.000]  which might help for performance if you haven't checked,
+[46:37.000 --> 46:39.000]  which you can also disable them,
+[46:39.000 --> 46:42.000]  but then you actually disable them so they're not checked.
+[46:42.000 --> 46:44.000]  So that's something to be wary about.
+[46:44.000 --> 46:46.000]  Having thought about the trigger option, I haven't tested it.
+[46:46.000 --> 46:48.000]  So, yeah, good feedback.
+[46:48.000 --> 46:50.000]  Disable, please.
+[46:50.000 --> 46:51.000]  Yeah, exactly.
+[46:51.000 --> 46:53.000]  There's so many ramifications of it.
+[46:53.000 --> 46:56.000]  The reality is simply saying there's a lot that you have to think about.
+[46:56.000 --> 46:58.000]  If you want to do it, it is an option,
+[46:58.000 --> 47:03.000]  and you'll see that guidance out there in a lot of places, right?
+[47:03.000 --> 47:06.000]  Then you have to worry about what happens when you re-enable all this stuff.
+[47:06.000 --> 47:07.000]  Like, there's a whole different discussion
+[47:07.000 --> 47:08.000]  just simply putting it out there.
+[47:08.000 --> 47:10.000]  One more, maybe?
+[47:10.000 --> 47:15.000]  Have you considered using foreign data wrappers to load data,
+[47:15.000 --> 47:17.000]  and do you know about the performance there?
+[47:17.000 --> 47:20.000]  Yeah, so the question is about foreign data wrappers.
+[47:20.000 --> 47:23.000]  Postgres has a really great ecosystem of foreign data wrappers
+[47:23.000 --> 47:25.000]  that allows you to basically say,
+[47:25.000 --> 47:27.000]  that thing over there, I'm going to treat it like a table.
+[47:27.000 --> 47:28.000]  It can be a file.
+[47:28.000 --> 47:29.000]  It can be another system.
+[47:29.000 --> 47:31.000]  It can be another database system,
+[47:31.000 --> 47:33.000]  Mongo, Redshift, whatever.
+[47:33.000 --> 47:35.000]  It really all depends on...
+[47:35.000 --> 47:37.000]  A lot of these principles are going to follow.
+[47:37.000 --> 47:39.000]  Number one, try to get pushed down.
+[47:39.000 --> 47:41.000]  Like, what can be actually pushed down to the queries
+[47:41.000 --> 47:43.000]  for the data you're bringing back?
+[47:43.000 --> 47:46.000]  The data itself is almost never going to be as quick,
+[47:46.000 --> 47:48.000]  just because of the overhead.
+[47:48.000 --> 47:52.000]  Even local files, it's not going to be the same thing.
+[47:52.000 --> 47:53.000]  But it's a really useful tool.
+[47:53.000 --> 47:55.000]  As a source, it could be a great way to take that
+[47:55.000 --> 47:59.000]  and get it into something, and then move on from there.
+[47:59.000 --> 48:01.000]  One last question.
+[48:01.000 --> 48:04.000]  This is a follow-up comment on the question
+[48:04.000 --> 48:08.000]  that this gentleman had about constraints.
+[48:08.000 --> 48:11.000]  If you use the multi-value insert,
+[48:11.000 --> 48:13.000]  sorry, the array insert trick,
+[48:13.000 --> 48:16.000]  you can actually just drag the arrays into a CTE
+[48:16.000 --> 48:18.000]  and then run an update.
+[48:18.000 --> 48:20.000]  So you can still do it in one statement.
+[48:20.000 --> 48:23.000]  You don't need to necessarily put it in a temporary table.
+[48:23.000 --> 48:26.000]  Absolutely, yeah, again, just example-wise.
+[48:26.000 --> 48:28.000]  One question.
+[48:35.000 --> 48:36.000]  Hello.
+[48:36.000 --> 48:38.000]  Binary copy versus text copy.
+[48:38.000 --> 48:40.000]  What is faster, and how much is the difference?
+[48:40.000 --> 48:42.000]  Binary or text?
+[48:42.000 --> 48:44.000]  Binary is generally faster.
+[48:44.000 --> 48:47.000]  It's a great question, and I mostly just mentioned it
+[48:47.000 --> 48:49.000]  to mention it.
+[48:49.000 --> 48:51.000]  In every experience I've had with tooling that supports it,
+[48:51.000 --> 48:53.000]  it ends up being a lot faster.
+[48:53.000 --> 48:55.000]  I don't have numbers for you at the moment,
+[48:55.000 --> 48:57.000]  and it is part of the demo I want to get in there
+[48:57.000 --> 48:59.000]  so that we can show that.
+[48:59.000 --> 49:01.000]  If anyone else has a specific input,
+[49:01.000 --> 49:04.000]  welcome to shout it out, but it's faster.
+[49:04.000 --> 49:06.000]  Look for tooling that supports it.
+[49:06.000 --> 49:08.000]  Again, Psycho-P3 and others
+[49:08.000 --> 49:10.000]  support it now by default.
+[49:10.000 --> 49:12.000]  You'll see some great boosts.
+[49:12.000 --> 49:14.000]  Thank you so much. It's been a pleasure.

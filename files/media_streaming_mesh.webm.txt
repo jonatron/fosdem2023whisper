@@ -1,0 +1,288 @@
+[00:00.000 --> 00:10.000]  My name is Giles Herron, I work for Cisco, but let's try and forget about that for a
+[00:10.000 --> 00:11.000]  moment.
+[00:11.000 --> 00:15.760]  Because this is open source, this is not your regular sort of traditional Cisco stuff,
+[00:15.760 --> 00:18.440]  hence pitching it here.
+[00:18.440 --> 00:21.800]  So the project's called Media Streaming Mesh, I'll give links to it at the end.
+[00:21.800 --> 00:25.920]  I've been running it for a while, but it's quite kind of a skunk work, so it's really
+[00:25.920 --> 00:26.920]  not loud enough.
+[00:26.920 --> 00:29.920]  Oh yeah, yeah, it slipped right down, hasn't it?
+[00:30.840 --> 00:37.120]  I'll put it here and then, or if I'm a bit super loud on the recording.
+[00:37.120 --> 00:43.760]  Yeah, so kind of skunk works, it's really me and a couple of developers now.
+[00:43.760 --> 00:47.680]  And really where it comes from was, we were looking at Kubernetes so that the group are
+[00:47.680 --> 00:52.640]  working, everything we do really is cloud native, and so when I took a look at Kubernetes,
+[00:52.640 --> 00:56.320]  my main impression was that here was something that was very much based on supporting web
+[00:56.320 --> 00:57.320]  applications.
+[00:57.720 --> 01:03.360]  Even if you look at like liveness checks in Kubernetes, they're like TCP or HTTP.
+[01:03.360 --> 01:07.240]  And so I was like, well, okay, so how would we do real-time media in that?
+[01:07.240 --> 01:10.200]  And one way I look at it is to say, well, you can divide the world into two by two matrices,
+[01:10.200 --> 01:11.200]  whatever you're looking at.
+[01:11.200 --> 01:15.680]  And if you look at apps and say, well, you've got real-time, you've got non-real-time, you've
+[01:15.680 --> 01:19.560]  got interactive apps and streaming apps, they're just sort of pub-sub stuff.
+[01:19.560 --> 01:23.480]  And really, back to Kubernetes, it's very much in that top-left corner, it's all about
+[01:23.480 --> 01:24.480]  web apps.
+[01:24.480 --> 01:26.680]  So how do we do real-time apps?
+[01:26.680 --> 01:31.640]  And so that was where the project started, initially looking at anything real-time, so
+[01:31.640 --> 01:34.960]  including online games, it could have been stock trading or whatever.
+[01:34.960 --> 01:40.160]  But then in terms of focus, we decided then, let's focus on real-time media, and by that
+[01:40.160 --> 01:43.960]  really anything RTP-based, so hence being here.
+[01:43.960 --> 01:49.400]  So that could be WebRTC, it could be SIP, but equally it can be RTSP, it can be live
+[01:49.400 --> 01:52.560]  video, that sort of thing.
+[01:52.560 --> 01:55.800]  And so then we'll say, well, how would we support this in Kubernetes today?
+[01:55.800 --> 02:00.720]  So everyone's really big, one of the big things at the moment in Kubernetes is service
+[02:00.720 --> 02:01.720]  meshes.
+[02:01.720 --> 02:05.680]  So I'm guessing who here's played with service meshes at all?
+[02:05.680 --> 02:06.680]  Anyone?
+[02:06.680 --> 02:07.680]  One or two?
+[02:07.680 --> 02:08.680]  Yes.
+[02:08.680 --> 02:12.520]  So what the service mesh does is it terminates your TCP or HTTP connections at each pod,
+[02:12.520 --> 02:16.440]  and so rather than sort of routing across your Kubernetes cluster, you kind of go hot
+[02:16.440 --> 02:18.760]  by hot through web proxies.
+[02:18.760 --> 02:23.320]  So you get security, you get good stats, that sort of thing at the price of complexity.
+[02:23.320 --> 02:28.280]  The challenge is these service meshes, they'll work for TCP apps, they're great for HTTP
+[02:28.280 --> 02:33.480]  apps because you can go in and do URL routing, that kind of stuff, don't support UDP and
+[02:33.480 --> 02:36.280]  they certainly don't support real-time media apps.
+[02:36.280 --> 02:39.560]  So the next thing to say is, well, what if we don't bother with a service mesh and we'll
+[02:39.560 --> 02:41.760]  just use regular Kube proxy and node port?
+[02:41.760 --> 02:44.120]  So this is the standard NAT that Kubernetes uses.
+[02:44.120 --> 02:49.480]  So what Kubernetes typically does is it gives a service like a persistent IP address.
+[02:49.480 --> 02:53.560]  So rather than relying on DNS, which obviously you can cache things, you put a persistent
+[02:53.560 --> 02:57.480]  IP address on a service and then you have ephemeral IP addresses for your individual
+[02:57.480 --> 03:01.160]  pods that support that service, and the way you get from one to the other is NATting,
+[03:01.160 --> 03:04.680]  which for those of us who are network people, makes us throw up a little in our mouths.
+[03:04.680 --> 03:10.120]  But the challenge there is these do work, again, for the basic services.
+[03:10.120 --> 03:14.120]  I put that in yellow, there's a challenge which is that typically when you expose things
+[03:14.120 --> 03:18.280]  externally from your cluster, you use these high port numbers in node port, which is pretty
+[03:18.360 --> 03:19.560]  messy.
+[03:19.560 --> 03:23.520]  You want to use well-known ones, of course, or you prefer to, but they don't support
+[03:23.520 --> 03:24.520]  real-time media.
+[03:24.520 --> 03:27.880]  And I guess this is no surprise to anyone in this room, but if you're doing things like
+[03:27.880 --> 03:32.120]  SIP and RTSP, what you'll typically see is that there'll be a TCP channel that'll be
+[03:32.120 --> 03:33.120]  negotiated.
+[03:33.120 --> 03:37.400]  Well, it can be TCP, it can be UDP, but it will negotiate the media ports.
+[03:37.400 --> 03:40.840]  So the challenge there is those media port negotiations are completely invisible to the
+[03:40.840 --> 03:45.200]  NAT, and so that will break if you try and deploy it this way.
+[03:45.240 --> 03:50.520]  So what I've seen some people in the industry do, so people deploying onto Kubernetes with
+[03:50.520 --> 03:54.120]  conferencing solutions, is they'll use host networking.
+[03:54.120 --> 03:55.120]  And that just works, right?
+[03:55.120 --> 03:58.920]  You put everything in the host name space, everything's good, there's no NAT, we're all
+[03:58.920 --> 03:59.920]  happy.
+[03:59.920 --> 04:01.920]  Okay, so why not do that?
+[04:01.920 --> 04:07.240]  Big issue is, oops, you can only put one media part on each node, because if you want to
+[04:07.240 --> 04:10.480]  have multiple media parts all exposing the same port, well, you've only got one instance
+[04:10.480 --> 04:12.200]  of that port on the host.
+[04:12.200 --> 04:16.680]  So that's okay if you're going to run on VMs, you're going to size your VMs down to
+[04:16.680 --> 04:21.080]  the right size for one media pod, and there's the cost of having many more nodes in your
+[04:21.080 --> 04:24.640]  clusters, but if you're deploying onto bare metal, that's going to suck.
+[04:24.640 --> 04:30.120]  So what we came up with MediaStreamMesh said, let's focus on this real-time media, let's
+[04:30.120 --> 04:33.160]  support multiple media pods per node.
+[04:33.160 --> 04:37.200]  Let's also maybe support the other services, either directly or in combination with a service
+[04:37.200 --> 04:38.200]  mesh.
+[04:38.880 --> 04:42.960]  But yeah, let's really make this our focus.
+[04:42.960 --> 04:45.160]  And what was I trying to do?
+[04:45.160 --> 04:48.760]  Really take everything that we get in service meshes in Kubernetes, so that's really good
+[04:48.760 --> 04:53.680]  observability and security so you can crit stuff when it goes out of the node, you can
+[04:53.680 --> 04:57.960]  check all your performance metrics and that kind of stuff.
+[04:57.960 --> 05:01.560]  That's great for debugging, troubleshooting, securing your network, but what we wanted
+[05:01.560 --> 05:06.760]  to do was provide the lower latency of factory proxy at the UDP or RTP layer, not TCP, so
+[05:06.760 --> 05:10.680]  I don't know, terminating TCP, and we wanted it to be really light.
+[05:10.680 --> 05:13.760]  So we looked at how do we decompose it so that we can put this right out at the edge
+[05:13.760 --> 05:17.000]  of the network, because some of our use cases are people saying, well, we've got a camera
+[05:17.000 --> 05:20.880]  in a coffee shop, and we want to stream that somewhere, and we want to run it on a little
+[05:20.880 --> 05:24.200]  node running K3S like a little Raspberry Pi or something.
+[05:24.200 --> 05:28.560]  So can we get this down to a small enough footprint?
+[05:28.560 --> 05:33.840]  So in terms of use cases, obviously real-time collaboration, so we haven't yet done WebRTC,
+[05:33.840 --> 05:35.680]  that would be my disclaimer.
+[05:35.680 --> 05:38.560]  If anyone wants to help us port it into this, that would be great, you can take some like
+[05:38.560 --> 05:42.280]  PON and port it into this framework.
+[05:42.280 --> 05:48.840]  We're working on contribution video, so that is very high bandwidth video, typically in
+[05:48.840 --> 05:53.240]  TV production studios, that kind of stuff, and what those people want to do is fairly
+[05:53.240 --> 05:57.640]  nuts in terms of you can have something like 4K uncompressed video, which I think is about
+[05:57.640 --> 06:01.400]  12 gigabits per second, and you can't drop a packet and you can't jitter.
+[06:01.400 --> 06:05.800]  So probably we have to do something special on the network there, so we're working on
+[06:05.800 --> 06:13.200]  things like zero copy from one pod to another, and then using Intel's DPDK out to the network.
+[06:13.200 --> 06:16.760]  Some challenges there, I guess, in terms of normally in Kubernetes is what you hand between
+[06:16.760 --> 06:18.680]  pods as IP packets.
+[06:18.680 --> 06:23.600]  In this case, we'd be handing around raw video frames, so it's a bit different.
+[06:23.600 --> 06:26.440]  And then as well as that contribution side, then the distribution.
+[06:26.440 --> 06:29.800]  So how do you, if I'm watching a football, I don't want it to lag.
+[06:29.800 --> 06:35.120]  How do I get the live video feed, at least out to the CDN caches, to minimize the lag,
+[06:35.120 --> 06:39.480]  but possibly even then going RTP right out to the user?
+[06:39.480 --> 06:42.560]  I guess some of the challenges there are what protocols we use.
+[06:42.560 --> 06:48.440]  Do we do RTP over quick, or do we look at the stuff that's going on?
+[06:48.440 --> 06:53.080]  I don't know, anyone here has seen ITF at the moment are working on media over quick.
+[06:53.080 --> 06:55.920]  We had an interim a few days ago.
+[06:55.920 --> 06:59.600]  So that won't necessarily use RTP, because quick gives you a lot of what RTP gives you
+[06:59.600 --> 07:00.600]  anyway.
+[07:00.600 --> 07:02.360]  So that might be the solution there.
+[07:02.360 --> 07:05.840]  But as I mentioned earlier, this sort of retailer industrial edge, where you've got large numbers
+[07:05.840 --> 07:11.680]  of cameras in one site, like I was in Las Vegas for Cisco Live earlier this year, and
+[07:11.680 --> 07:12.680]  you walk into a casino.
+[07:12.680 --> 07:16.080]  If you've ever seen how many cameras there are in a casino, it's just like nuts, they're
+[07:16.080 --> 07:18.200]  watching you from every possible angle.
+[07:18.200 --> 07:22.080]  Or it could be a coffee shop with one camera, but you've got a thousand coffee shops, whatever.
+[07:22.320 --> 07:28.520]  As I say, we've kind of dropped out of this kind of non-RTP stuff, but there is obviously
+[07:28.520 --> 07:30.680]  scope to address that in the future.
+[07:30.680 --> 07:35.360]  So in live videos, I say the contribution stuff, one of the challenges there is a lot
+[07:35.360 --> 07:37.200]  of this stuff is actually hardware, not software.
+[07:37.200 --> 07:40.920]  So a video camera is a real hardware thing, and a mixing desk might be a real hardware
+[07:40.920 --> 07:41.920]  thing.
+[07:41.920 --> 07:44.680]  So how do we integrate that?
+[07:44.680 --> 07:48.360]  Interconnecting coders in the cloud, that seems like a really obvious use case.
+[07:48.360 --> 07:53.760]  That distribution of live streams, but also potentially distributing rights to the client.
+[07:53.760 --> 07:58.760]  But as I say, video surveillance, that seems pretty easy and tractable, and that's what
+[07:58.760 --> 08:00.760]  we're demoing now.
+[08:00.760 --> 08:05.400]  So our initial implementation, we have RTSP, and we can stream stuff from cameras and replicate
+[08:05.400 --> 08:06.400]  it to multiple places.
+[08:06.400 --> 08:12.720]  So the classic use case, you might be saying, well okay, cameras are cheap, humans are expensive.
+[08:12.720 --> 08:16.440]  So if I'm in a casino and I've got 100,000 cameras, pick a crazy number.
+[08:16.440 --> 08:20.680]  I don't have 10,000 people who watch 10 screens, because that's going to be too expensive.
+[08:20.680 --> 08:25.280]  So maybe I only have 10 people, but then we need to have a way that if some kind of machine
+[08:25.280 --> 08:29.280]  learning algorithm spots there's something that shouldn't be happening, or thinks it
+[08:29.280 --> 08:34.560]  might be, then at that point, like a human can start looking at it.
+[08:34.560 --> 08:40.160]  And the other great thing, of course, with going through proxies, is the proxies have
+[08:40.160 --> 08:41.400]  a lot of replication for you.
+[08:41.400 --> 08:45.360]  So if you have one proxy per node, that can be our replication point, and one of the other
+[08:45.400 --> 08:49.840]  challenges with Kubernetes is that it really doesn't do multicast.
+[08:49.840 --> 08:53.120]  And so the multicast solution isn't really tractable.
+[08:53.120 --> 08:56.960]  And in fact, in this environment, you probably don't want to do multicast.
+[08:56.960 --> 09:02.840]  So I know today that's what people mostly deploy, but it's a very odd multicast set up.
+[09:02.840 --> 09:06.680]  Because you imagine you're an airport and you've got 10,000 cameras, but each camera
+[09:06.680 --> 09:10.720]  has only been watched by like one app at all times, and maybe one or two humans, whatever
+[09:10.720 --> 09:11.720]  it might be.
+[09:11.720 --> 09:15.840]  That's a very odd multicast deployment to have 10,000 multicast groups, and each one's
+[09:15.840 --> 09:17.680]  only got a couple of subscribers.
+[09:17.680 --> 09:22.680]  So maybe proxies are an easier way to do it.
+[09:22.680 --> 09:23.680]  So how have we built it?
+[09:23.680 --> 09:24.680]  Yeah.
+[09:24.680 --> 09:29.480]  So the software architecture, so we have a whole bunch of components, and what we try
+[09:29.480 --> 09:32.840]  to say is decompose it into what do we put where in Kubernetes.
+[09:32.840 --> 09:38.280]  So services run sort of one per cluster, demon sets run one per node, and then potentially
+[09:38.280 --> 09:41.400]  you can have stuff running in the application pod, but we try and keep the footprint there
+[09:41.440 --> 09:43.440]  very low.
+[09:43.440 --> 09:47.160]  So the initial thing is how do we put anything in the pod?
+[09:47.160 --> 09:49.440]  How do we make sure we intercept traffic?
+[09:49.440 --> 09:54.320]  So what we have there is an admission webhook and a CNI plug-in, so when a pod gets created,
+[09:54.320 --> 09:57.840]  we have an annotation that we put on the YAML file for the pod that says, OK, this is one
+[09:57.840 --> 09:58.840]  of our pods.
+[09:58.840 --> 10:03.000]  So the admission webhook will intercept that, and when the pod gets instantiated, it will
+[10:03.000 --> 10:05.400]  have our stub in the pod as well as the app.
+[10:05.400 --> 10:09.200]  But we also then have a chain CNI plug-in, and actually in the network dev room, I was
+[10:09.240 --> 10:13.440]  there just now, somebody was literally talking about the chain CNI plug-in, so the idea is
+[10:13.440 --> 10:18.200]  that you run whatever normal network you want for Kubernetes, and this little plug-in,
+[10:18.200 --> 10:22.560]  all it does is add in the IP tables or EBPF rules that we're going to use to redirect
+[10:22.560 --> 10:28.560]  that control plane traffic into our stub, and in some cases redirect the actual data
+[10:28.560 --> 10:29.560]  plane traffic.
+[10:29.560 --> 10:34.880]  And of course, once it starts, it gets redirected and everything's good.
+[10:34.880 --> 10:39.400]  So in our control plane, we wanted to build one per cluster to minimize footprint.
+[10:39.400 --> 10:43.480]  Today it basically calls out to the Kubernetes API and Core DNS, so if you're connecting
+[10:43.480 --> 10:47.800]  in and you're saying, OK, I'm going to this URL, we want to figure out which active running
+[10:47.800 --> 10:51.120]  pod support that URL, so that's what that piece does.
+[10:51.120 --> 10:55.800]  So you're effectively, your RTSP sessions say from your app, the stub intercepts that
+[10:55.800 --> 10:56.800]  TCP connection.
+[10:56.800 --> 11:03.760]  It uses GRPC to pump the data messages or the actual payloads of the RTSP control plane
+[11:03.760 --> 11:10.520]  into our control plane, and then we use GRPC again to program the proxies.
+[11:10.520 --> 11:12.920]  We've written it in Golang.
+[11:12.920 --> 11:18.720]  Say initially we've got RTSP, we used GoRTSPlib, because again, why build it from scratch?
+[11:18.720 --> 11:22.840]  We took the GoRTSP library, and I'm guessing for any other plug-in, we'll do the same,
+[11:22.840 --> 11:28.800]  we'll just look for existing libraries in Golang that we can plug in.
+[11:29.560 --> 11:35.360]  What we'd like to do though, and this is up for discussion, it'd be great if people
+[11:35.360 --> 11:39.520]  had feedback at the end or hit me offline.
+[11:39.520 --> 11:41.880]  What I feel is there's actually two different things we're doing here.
+[11:41.880 --> 11:46.720]  One is we've got this dynamic protocol, whatever it is, RTSP or SIP, but on the other side
+[11:46.720 --> 11:49.480]  we've got how do we map this stuff into Kubernetes?
+[11:49.480 --> 11:54.800]  So if you think about it, the handoff from one to the other is if you have a logical
+[11:54.800 --> 11:59.080]  graph saying we've got this sender for a stream, and here are our receivers.
+[11:59.080 --> 12:02.480]  What we want to do is decompose that and say how does that map onto Kubernetes?
+[12:02.480 --> 12:04.360]  So which receivers are on which nodes?
+[12:04.360 --> 12:08.480]  So how do we build that tree where we're doing the kind of application layer multicast?
+[12:08.480 --> 12:12.000]  And so I think ideally we'd want to separate those two.
+[12:12.000 --> 12:16.040]  So the control plane will have the plug-in that we put in for RTSP or SIP or whatever,
+[12:16.040 --> 12:19.640]  but then the controller will take care of mapping that onto Kubernetes.
+[12:19.640 --> 12:24.280]  And the nice thing then is we could use that control plane to support multiple controllers,
+[12:24.280 --> 12:28.480]  multiple control planes, but we could also use it in non-Kubernetes environment.
+[12:28.480 --> 12:33.200]  So firstly we've externalized any Kubernetes dependencies using XDS, which is the Envoy
+[12:33.200 --> 12:36.040]  protocol for configuring Envoy.
+[12:36.040 --> 12:40.040]  But also if you think about it, why does it have to be Kubernetes?
+[12:40.040 --> 12:45.400]  If you have remote edge proxies, so you've got a global network with edge proxies doing
+[12:45.400 --> 12:50.320]  your media proxies, why couldn't you control those for a more centralized place?
+[12:51.320 --> 12:54.600]  The stub is to say it's a stub.
+[12:54.600 --> 12:56.160]  So why do we call it a stub?
+[12:56.160 --> 12:57.360]  Because it's small.
+[12:57.360 --> 13:04.280]  So we wrote this in Rust using Tojo and Tonic and all that stuff, keeps the memory footprint
+[13:04.280 --> 13:08.520]  low and it avoids any latency spikes because we figured if garbage collection kicks in
+[13:08.520 --> 13:14.960]  that's going to be a problem, but I didn't want to be writing in C in 2023.
+[13:14.960 --> 13:19.680]  There are some cases, it does intercept the control plane, but there are some cases where
+[13:19.720 --> 13:21.320]  it intercepts the data plane as well.
+[13:21.320 --> 13:26.720]  So RTSP as an example, there's an option to stream everything over one TCP socket.
+[13:26.720 --> 13:30.400]  So what we can do is we can capture all that traffic and then send it over UDP through
+[13:30.400 --> 13:33.800]  our network so we can do all the replication and everything.
+[13:33.800 --> 13:37.880]  But there might be other cases where for example you want to monitor right at the pod or you
+[13:37.880 --> 13:42.960]  want to do again for like TV type stuff, you want to do your live, live video replication
+[13:42.960 --> 13:47.760]  right from the edge because you don't want any shared paths so that you don't risk having
+[13:47.760 --> 13:54.640]  dropouts and I think that's about it on that one.
+[13:54.640 --> 13:59.840]  So the RTP proxy now, I guess this is pretty straightforward, I mean the one we have at
+[13:59.840 --> 14:02.440]  the moment is written in Golang, it's just a prototype.
+[14:02.440 --> 14:07.240]  I intend to throw that one away and again, go to asynchronous Rust.
+[14:07.240 --> 14:10.120]  The big thing here is, you know, back to the control plane, I was talking about having
+[14:10.120 --> 14:12.120]  plugins for the protocols.
+[14:12.160 --> 14:18.640]  So my thesis is that for success in this project, what we'd need is that we make it easy for
+[14:18.640 --> 14:19.640]  people to contribute.
+[14:19.640 --> 14:22.880]  So you shouldn't have to read all of my code-based contribute.
+[14:22.880 --> 14:25.400]  What you should be able to do is say, okay, I've just got this one plugin I want to put
+[14:25.400 --> 14:29.720]  in for my control plane protocol and here's a well-defined API that I can plug it in.
+[14:29.720 --> 14:34.360]  But when it comes to data plane, what we're thinking is use wasm as our plugin so that
+[14:34.360 --> 14:38.760]  then if you've got a plugin that does, whether it's encryption or whether it's validating
+[14:38.760 --> 14:42.240]  the RTP header fields, whatever it is, you should be able to just plug that in again
+[14:42.240 --> 14:49.120]  with a very simple API into a filter chain that's built dynamically in the proxy.
+[14:49.120 --> 14:54.280]  Now obviously, modulo, the issue of course of performance, again, back to zero copying
+[14:54.280 --> 14:57.840]  and all that stuff, do you really want to be copying each packet as you pass it down
+[14:57.840 --> 14:58.840]  a filter chain?
+[14:58.840 --> 15:01.000]  So that's something we'll probably have to think about.
+[15:01.000 --> 15:04.520]  But as I say, I think really the key success would be to drive a filter ecosystem where
+[15:04.520 --> 15:07.160]  people can contribute their own filters.
+[15:07.160 --> 15:11.680]  I did a bit of work at the moment, here's come across Quilkin, which is a Google for
+[15:11.680 --> 15:13.240]  Games project.
+[15:13.240 --> 15:16.840]  And it does basically proxying for games.
+[15:16.840 --> 15:21.440]  And most of that, the only way to sort of modify it was to really get into the code.
+[15:21.440 --> 15:23.160]  And I don't want people to have to get into the code here.
+[15:23.160 --> 15:26.000]  I want to have a really simple API.
+[15:26.000 --> 15:32.040]  So how it works ultimately in this case would be we'd have this framework of the proxy,
+[15:32.040 --> 15:33.040]  we'd have the filter chain.
+[15:33.040 --> 15:36.240]  So we strip off whatever the headers are, it could be typical RTP of a UDP or it could
+[15:36.240 --> 15:41.080]  be some quick, it could be raw RTP within the node, so we strip off any headers and
+[15:41.080 --> 15:44.720]  then we just pass it through a filter chain where each part of the filter chain does its
+[15:44.720 --> 15:45.720]  role.
+[15:45.720 --> 15:49.400]  As I say, the key challenge there is going to be how do we make that perform at scale.
+[15:49.400 --> 15:53.320]  So I think that's about it.
+[15:53.320 --> 15:58.400]  And yeah, the goal here is that we can really deploy real-time media apps in Kubernetes and
+[15:58.400 --> 16:03.000]  make it work, which doesn't seem to work so well today.
+[16:03.000 --> 16:05.840]  It's very much a work in progress, it's an open source, it's all there.
+[16:05.840 --> 16:10.600]  You can, I don't think I need to stick a new video on the website, but the GitHub's
+[16:10.600 --> 16:11.600]  there.
+[16:11.600 --> 16:16.880]  And really, anyone who wants to contribute, I know what it is, because as I said, I think
+[16:16.880 --> 16:18.640]  more people is going to help us get there faster.
+[16:18.640 --> 16:22.160]  I think if we firstly get the architecture right, then hopefully make it easy for people
+[16:22.160 --> 16:24.520]  to contribute, then hopefully we can scale this.
+[16:24.520 --> 16:27.400]  So do please join in.
+[16:27.400 --> 16:28.400]  So that's that.
+[16:28.400 --> 16:29.400]  Thank you.
+[16:29.400 --> 16:42.600]  And to, yeah, do ask any questions while the next person's coming up.
+[16:42.600 --> 16:46.440]  Can you repeat the question?
+[16:46.440 --> 16:52.080]  Can you say about the quality of the project?
+[16:52.080 --> 16:54.800]  Yeah, so at this point, very much better.
+[16:54.800 --> 16:57.840]  I'm doing some integration work at the moment with another team within Cisco that wants
+[16:57.840 --> 16:58.840]  to use this for something.
+[16:58.840 --> 17:02.160]  So I guess that's where we'll start to really shake the bugs out.
+[17:02.160 --> 17:07.440]  And that, but that again is RTSP, so, you know, really be interested in other people
+[17:07.440 --> 17:10.920]  contributing other protocols.
+[17:10.920 --> 17:16.480]  The integration with the other open source, like the Melio.cs, do you think it will change
+[17:16.480 --> 17:17.480]  for these?
+[17:17.480 --> 17:20.000]  Yeah, with other open source projects.
+[17:20.000 --> 17:24.200]  I think in terms of how it would integrate, I guess it's down to that project and how
+[17:24.200 --> 17:28.360]  it fits, because we've very much separated the control plane and data plane.
+[17:28.360 --> 17:32.480]  So if the other projects have also done that, then I guess we could, that control plane
+[17:32.480 --> 17:34.440]  could plug into what we're doing.
+[17:34.440 --> 17:37.720]  Again today, it would have to be Golang, because that's what a control plane is written in.
+[17:37.720 --> 17:41.240]  But even for that, again, we could look at other models to plug it in, or at least if
+[17:41.240 --> 17:45.200]  the APIs to our data plane are clean enough, then equally just contribute the whole thing
+[17:45.200 --> 17:46.400]  as a blob if it wasn't Golang.

@@ -1,0 +1,89 @@
+[00:00.000 --> 00:25.560]  Thank you, thank you for joining the talk, welcome to my lightning talk.
+[00:25.560 --> 00:32.200]  I want to talk today about performance optimization for voice of IP services.
+[00:35.200 --> 00:37.600]  If you want to go out, please do it quietly, thank you very much.
+[00:39.840 --> 00:44.440]  Quick to the agenda, just one example how to not achieve great performance.
+[00:44.440 --> 00:47.520]  This is a real-life customer example, you probably will spot it immediately,
+[00:47.520 --> 00:53.160]  what is the problem, just some guidelines on to approach performance problems.
+[00:54.120 --> 01:01.480]  A few areas where you might want to look, some general examples for tools that you could use,
+[01:01.480 --> 01:05.600]  that are interesting to use, of course for ten minutes it's not possible to go to a
+[01:05.600 --> 01:10.960]  in-deep analysis of both performance topics, but nevertheless I hope it will be useful for you.
+[01:10.960 --> 01:18.680]  My name is Henning, I started some time ago a company, we provide services for real-time
+[01:18.680 --> 01:23.280]  communication services, work mostly with Camalio, do also a lot of other stuff,
+[01:23.280 --> 01:28.640]  but I said mostly Camalio, if you're interested in the new stuff that's going on for the upcoming
+[01:28.640 --> 01:35.720]  release in Camalio, please have a look to our website camalio.org, I didn't include it in this
+[01:35.720 --> 01:44.120]  talk because it's not too much time. To the example, how to not achieve great performance,
+[01:44.120 --> 01:48.000]  this is a real-life customer example, we were called to debug it during Covid,
+[01:48.000 --> 01:52.440]  of course a lot of communications platform broke down during that time because of the
+[01:52.440 --> 01:57.840]  increased demand, so the customer needed to make a routing decision in a SIP proxy in
+[01:57.840 --> 02:02.600]  Camalio and what he did was basically use the exec module, exec module is generally a bad idea,
+[02:02.600 --> 02:09.320]  you can use this to execute code or scripts on the system, use this to start a Perl script,
+[02:09.320 --> 02:14.840]  the Perl script was then using a database layer in the Perl to access remote database,
+[02:14.840 --> 02:20.360]  this database result would be reported back to Camalio, Camalio would pass it somehow into
+[02:20.360 --> 02:25.440]  some JSON operations, process the message and this of course it works if you don't have a
+[02:25.440 --> 02:31.640]  large load, but as soon as you get a higher concurrent call ratio on the system, of course
+[02:31.640 --> 02:36.840]  this breaks down for obvious reasons because for every call you start a Perl script and this
+[02:37.240 --> 02:43.160]  this will not going to work, this will not going to scale and if you have latency on the database
+[02:43.160 --> 02:47.960]  all these Perl script invocations will take a long time, of course it will completely break down.
+[02:51.560 --> 02:56.680]  Generally how to address performance problems, if you are an experienced operator experiences
+[02:56.680 --> 03:01.720]  admin, this are probably no news for you, nevertheless of course most performance issues
+[03:01.720 --> 03:06.920]  are not that obvious as in this example you should formulate a goal, okay I want to achieve
+[03:06.920 --> 03:11.880]  that many concurrent calls, I need to support that many register messages on the platform,
+[03:11.880 --> 03:17.720]  that many devices, I want to have I don't know 50,000, 100,000 concurrent connected
+[03:17.720 --> 03:24.200]  user agent over TLS, whatever protocol you are using, WebRTC and in the best case of course you
+[03:24.200 --> 03:31.480]  have some statistics, later we see some presentations about statistic projects
+[03:31.480 --> 03:37.480]  from production load, maybe you have incidents where the system broke down or in the best case
+[03:37.480 --> 03:43.000]  of course you have some performance test result. Generally speaking if you have performance issues
+[03:43.640 --> 03:49.640]  we can cluster them in several performance related areas mostly related to machines, virtual machines,
+[03:49.880 --> 03:56.280]  first side on the first hand you have CPU, Camelio in particular is really
+[03:57.000 --> 04:01.240]  performant, normally you don't have performance issues there, Asterix is done in another story
+[04:01.240 --> 04:08.280]  free switch as well, normally one frequent issue you might encounter is that if you have
+[04:08.280 --> 04:13.000]  like a two large other commitment on your virtual system, virtual infrastructure,
+[04:13.000 --> 04:18.680]  just keep in mind the physical core is not a virtual core of course, sometimes you have
+[04:18.680 --> 04:22.520]  issues with other services running on the system, configuration management,
+[04:22.520 --> 04:27.240]  maybe some void monitoring whatever you're using also in the system which causes a lot of CPU
+[04:28.200 --> 04:35.800]  congestion, maybe you should adapt the Camelio worker configuration, the defaults are usually fine
+[04:35.800 --> 04:44.280]  but nevertheless sometimes you need to adapt it. Related to the memory, Camelio if you install it
+[04:44.280 --> 04:49.960]  from the default installation you definitely should increase the memory pool, the defaults are
+[04:49.960 --> 04:56.120]  not really meant for production use, if you have a database of course normal tuning guidelines
+[04:56.120 --> 05:01.400]  apply here, you should give the database plenty of memory, memory is cheap nowadays, if you have an
+[05:01.400 --> 05:08.120]  HTTP API service maybe written in some Java service whatever Java language you should give them as
+[05:08.120 --> 05:15.080]  well of course a lot of memory to perform correctly. In really special cases it's also
+[05:15.880 --> 05:21.320]  might be a good idea to look to the Camelio memory manager default, it uses a bit the memory manager
+[05:21.320 --> 05:28.840]  which is more suited for which has some debugging support built in, there's another memory manager
+[05:28.840 --> 05:33.800]  without this debugging support but like a 99% of all infrastructure and scenarios you'd never use it,
+[05:33.800 --> 05:38.040]  no never never need to change it but in some cases it might be beneficial to look into that.
+[05:40.360 --> 05:46.040]  Most problems are usually related to IO, IO performance, yeah of course voice over PESIP is
+[05:46.040 --> 05:51.160]  the protocol, it's relayed on DNS as most of the protocols out there, if the DNS is slow then also
+[05:51.160 --> 05:57.560]  your server will be slow, Camelio uses an internal DNS cache, if you use Astrix there is no cache
+[05:57.560 --> 06:03.080]  unfortunately so you should use DNS mask or something similar or keep some local DNS server in your
+[06:03.160 --> 06:10.200]  data center in your infrastructure. For zip for real-time communication you need to write
+[06:10.200 --> 06:15.000]  usually user registration this is something you can of course optimize, you can cache it,
+[06:15.000 --> 06:18.600]  for Astrix there's something called Qualify which you use real-time infrastructure,
+[06:19.720 --> 06:23.880]  this makes sense to tune maybe to deactivate it because it will basically scale with the number
+[06:23.880 --> 06:31.240]  of your user and the write load will be also scale as well. Logging of course you need to look to it
+[06:31.240 --> 06:37.080]  if you really need to log everything or maybe you can tune it to adapt to your scenario it makes
+[06:37.080 --> 06:41.160]  sense to restrict it also with not only with Camelio of course with Astrix or other servers as
+[06:41.160 --> 06:46.920]  well, if you have a lot of read operations they can usually cache quite well on Camelio,
+[06:46.920 --> 06:53.880]  there's a htable module for Camelio you can use caching the data, you can also use something like
+[06:53.960 --> 07:00.600]  read only replication, read is memcache whatever to scale that. The same for remote
+[07:00.600 --> 07:07.800]  HTTP API requests this is also something you can cache of course. CDR writing we just saw
+[07:07.800 --> 07:14.760]  call talk about CG rates, great project that offer these CDR capabilities, Camelio can also
+[07:14.760 --> 07:21.880]  write CDRs internally but of course for highly loaded platforms it might sense to move it to another
+[07:21.880 --> 07:28.120]  process to another system to have some asynchronous process doing the CDRs and not to affect the
+[07:28.120 --> 07:33.080]  server operation and of course as we just saw in the beginning you should not fork processes
+[07:34.120 --> 07:40.840]  if you rely on performance. What you could use for performance test one thing which is still
+[07:42.120 --> 07:48.840]  used a lot is the old classical zp, there's pjwa you can script it a lot with Python or
+[07:48.840 --> 07:53.560]  other bindings, they are dedicated to performance test frameworks usually they are homegrown
+[07:53.560 --> 07:58.760]  or closed source unfortunately but they are the stuff you can pay or you can of course build by
+[07:58.760 --> 08:04.120]  yourself. If you have a database hdp which is actually the bottleneck you can of course
+[08:04.120 --> 08:11.240]  use custom tools to test the database to test the hdp API. Then for a start of course you see
+[08:11.240 --> 08:19.160]  common tools to get inside about the cpu, the IO, the network situation, that can give you a
+[08:19.160 --> 08:24.040]  lot of information if there's some pressure on the sockets for udp especially in particular.
+[08:26.360 --> 08:31.880]  If you have tools like Humair we see a talk later about that as well, wipe monitor another tool
+[08:31.880 --> 08:37.400]  of course the classical Isengar, Grafana, whatever statistics you have in house. Camelio
+[08:37.400 --> 08:43.880]  offers also some benchmarks module and you can also adapt the logging a lot to your requirements.
+[08:46.440 --> 08:53.320]  Okay that's all from my side thank you very much, just a quick pointer, we're doing Camelio world
+[08:53.320 --> 08:57.320]  this year in presence again I'm really happy about that, it will happen at the beginning of
+[08:57.320 --> 09:02.520]  June in Berlin called for papers was open so if you're interested in presenting something
+[09:02.520 --> 09:06.760]  interesting there go ahead we are looking forward to your contributions there as well.
+[09:06.760 --> 09:14.120]  Thank you very much.

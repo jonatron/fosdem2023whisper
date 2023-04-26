@@ -1,0 +1,62 @@
+[00:00.000 --> 00:08.920]  Hello, so my name is Cisco Foley.
+[00:08.920 --> 00:15.000]  I work for the Document Foundation as a keyway engineer and today I'm going to explain how
+[00:15.000 --> 00:22.320]  in the last month I cleaned up the unit test code that we used.
+[00:22.320 --> 00:24.680]  So it all started.
+[00:24.680 --> 00:33.400]  So basically this is a report from Jenkins and there was one test, this one CPP unit
+[00:33.400 --> 00:40.480]  test, SCVBA macro test failing on Windows.
+[00:40.480 --> 00:45.640]  We didn't know it was failing for quite some time and we didn't really know what was the
+[00:45.640 --> 00:46.640]  problem.
+[00:46.640 --> 00:50.600]  It was failing every now and then.
+[00:50.600 --> 00:58.400]  And in the end it turned out that it was a problem that the teardown method disposing
+[00:58.400 --> 01:07.160]  this MX component was missing and well eventually it was fixed thanks to Noel.
+[01:07.160 --> 01:14.720]  So I started to look at other places where this kind of problems might happen in the
+[01:14.720 --> 01:16.920]  unit test.
+[01:16.920 --> 01:24.520]  So basically when we want to create a unit test class these are the three, sorry the
+[01:24.520 --> 01:28.040]  four main classes that we can use.
+[01:28.040 --> 01:34.760]  So this one is the one inheriting directly from the library CPP unit test.
+[01:34.760 --> 01:41.720]  So this is the basic one you use to create a basic test and basically it handles the
+[01:41.720 --> 01:44.640]  setup and teardown of the test.
+[01:44.680 --> 01:52.840]  Then if you want to let's say work with documents to load them and so on you can use also this
+[01:52.840 --> 02:02.200]  library, this class or macro test and then when you want to work with XML let's say
+[02:02.200 --> 02:10.120]  you want to parse those XMLs you can use that class XML test tools and finally we have
+[02:10.120 --> 02:18.960]  a special class that we use to load and save documents but we only care if they fail or
+[02:18.960 --> 02:20.480]  if they pass.
+[02:20.480 --> 02:27.720]  So the idea because most of the classes that we have in unit test they normally inherit
+[02:27.720 --> 02:35.320]  from these two here or in some special cases they inherit from the three of these three.
+[02:35.320 --> 02:42.360]  So basically the idea was to create kind of a wrapper for these two and then another
+[02:42.360 --> 02:44.520]  one for the other three.
+[02:44.520 --> 02:54.640]  So when I started to do it well a lot of duplicates were found especially with the setup and teardown
+[02:54.640 --> 03:00.560]  methods so this could be removed in all the classes.
+[03:00.560 --> 03:09.000]  Then same for the X component each class define their own X component so now we only define
+[03:09.000 --> 03:20.640]  it in the you know AP test class so this remove a lot of duplicate definitions and I also
+[03:20.640 --> 03:29.280]  found that we had a special you know AP test class for Cog for no real reason so this was
+[03:29.280 --> 03:38.760]  merged into the you know AP test class and actually we also well I also factor out other
+[03:38.760 --> 03:47.800]  methods like for parsing PDF export or execute a macro or create a template.
+[03:47.800 --> 03:56.320]  So in we have the impress and calc modules we had their own methods to load and save
+[03:56.320 --> 04:08.960]  files they were actually copy paste from from this from the filter test class and they were
+[04:08.960 --> 04:18.560]  actually very complicated to set up basically you have to define all the formats that you
+[04:18.560 --> 04:30.320]  wanted to use then create this array with all the formats and then finally the load
+[04:30.320 --> 04:34.600]  of the document looks something like this where you have to define the clipboard the
+[04:34.600 --> 04:43.600]  version and yeah it was in the end really complicated and we already had a method for
+[04:43.600 --> 04:57.000]  that and yeah so basically now instead of returning a reference a doc shell reference
+[04:57.000 --> 05:03.680]  we just basically load the local document and save and reload and makes it easy and
+[05:03.680 --> 05:11.080]  the problem before it was that after we were done with the test we need to close the reference
+[05:11.120 --> 05:18.320]  and in some case some test it was missing so that's not a problem anymore and also there
+[05:18.320 --> 05:27.280]  were many places where this kind of chunk of code was used to save and save and reload
+[05:27.280 --> 05:34.800]  the document so this they are gone there were many of them so now it's just one line to
+[05:34.960 --> 05:41.680]  that and the good thing is that now we always validate the files on a sport and in case there
+[05:41.680 --> 05:47.120]  is a problem with the validator we can also use the skip validation and there is also support
+[05:47.120 --> 05:53.280]  for password sporting and importing that's something that in the past only that was only
+[05:53.360 --> 06:04.360]  available in writer module okay and yeah the same for parts export sd sw and sc they use
+[06:04.360 --> 06:13.360]  their own ways of handling this while we already have it in macro test so there was also duplicate
+[06:13.360 --> 06:22.560]  for that and right now we just do it like that and yeah there there were also operators that
+[06:22.640 --> 06:28.680]  were duplicates like for instance this one for comparing colors there was also for comparing
+[06:28.680 --> 06:36.720]  every tangles so they were already duplicates in in pairs and calc and writer so all of them are
+[06:36.720 --> 06:44.600]  gone now and there was also a problem with this unit test the problem is that the way it works it
+[06:44.920 --> 06:52.880]  compares the calculations using open cl enable and disable and the problem is that before I
+[06:52.880 --> 07:00.480]  found out they were always the comparison was always when it's enabled so it the test didn't
+[07:00.480 --> 07:08.600]  actually test anything and now that's fixed and also we also had some custom asserts like this
+[07:08.600 --> 07:17.560]  one as a formula equal which can be done as a string comparison and just using the get formula so
+[07:17.560 --> 07:26.720]  yeah in the end a lot of duplicated code was dropped and yeah that's that's it thank you
+[07:26.720 --> 07:37.280]  I think we still have time for maybe a quick question if anyone
+[07:56.720 --> 08:03.880]  yeah okay thank you

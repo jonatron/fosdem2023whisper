@@ -1,0 +1,179 @@
+[00:00.000 --> 00:10.680]  Thanks guys for holding until the last presentation, we've been through three days for those who
+[00:10.680 --> 00:18.360]  were in pre-fossil days, I know it's hard, a lot of information, my brain is half melted,
+[00:18.360 --> 00:24.560]  but yes, I hope this won't be the 20 longest minutes of your life.
+[00:24.560 --> 00:30.760]  LeFredi he was talking about components, I didn't know, these I will talk about plugins,
+[00:30.760 --> 00:34.880]  but I think the good thing of Fossil is that you get out with some insights on what to
+[00:34.880 --> 00:38.160]  do next, so let's see.
+[00:38.160 --> 00:45.000]  And the objective here of this talk is to talk about the PROCFS plugin that Percona
+[00:45.000 --> 00:53.320]  developed in order so you can monitor Linux metrics without an agent on the server.
+[00:53.320 --> 00:59.680]  I know I saw some of you already in pre-fossil, but I'm Vinicius, I've worked for Percona
+[00:59.680 --> 01:08.440]  for six years almost, working with Database for a plent of time, and also the co-author
+[01:08.440 --> 01:14.960]  of the book Learning MySQL, my colleague is here, the other author, Sergei.
+[01:14.960 --> 01:23.120]  And this is our agenda for the day, so what to monitor in Database, let's get some insights
+[01:24.040 --> 01:31.480]  and why monitoring, what is the difference between agent versus agentless monitoring,
+[01:31.480 --> 01:38.560]  what are the pros and cons of each option, we will go in details of them, then we will
+[01:38.560 --> 01:47.600]  go through the PROCFS plugin, you see it's very easy to install, how to use it, we can
+[01:47.600 --> 01:59.880]  use it natively or with any Prometheus, and an example how to integrate with PMM from
+[01:59.880 --> 02:07.160]  Percona, for those who doesn't know, PMM it's monitoring tool, a bundle of like several
+[02:07.160 --> 02:16.240]  open source projects, components, glue it together to provide monitoring and observability.
+[02:16.480 --> 02:20.440]  But if you want, you can ask me anytime.
+[02:20.440 --> 02:25.160]  So what to monitor in a database, usually we like to monitor, for example, customer
+[02:25.160 --> 02:34.360]  response time, so if we are booking, I'm trying to make a search for hotels, I want my search
+[02:34.360 --> 02:44.080]  to return, let's say in less than 10 milliseconds, also KPS, so I want my search to return in
+[02:44.160 --> 02:51.280]  less than 10 milliseconds, but I also want the search for 10,000 people at the same time
+[02:51.280 --> 02:59.120]  return under 10 milliseconds. Understand workload behavior, what is the busiest
+[02:59.120 --> 03:06.400]  day, what is the busiest hour of my workload, is there something different, some anomaly,
+[03:07.360 --> 03:14.160]  this can indicate some security breach, also the most basic infrastructure components,
+[03:16.160 --> 03:22.720]  we need to verify if our equipment is working correct, so if network that have a lot of
+[03:22.720 --> 03:30.720]  retransmissions, files, storage, if my power supply is failing, all this kind of stuff
+[03:31.440 --> 03:34.960]  that needs to work, otherwise we won't have the service.
+[03:36.480 --> 03:42.480]  And as I said, like resource utilization, not only to predict what is going on now,
+[03:42.480 --> 03:51.200]  but also for the future, security breach and so on. Maybe each company has more relevant
+[03:51.200 --> 03:58.880]  metrics than the ones that I'm showing here, but this is just an overall example of what is most
+[03:58.960 --> 04:09.280]  monitored around database. So why monitoring? It helps diagnose issues that happen, for example,
+[04:09.280 --> 04:13.600]  in the weekend, something happened and I don't know what, you need a monitoring tool,
+[04:14.400 --> 04:19.360]  because if you open the database now, you won't see the metrics from the time that
+[04:19.360 --> 04:24.880]  problem was going on. We can understand issues that are actually happening,
+[04:25.840 --> 04:31.120]  and also proactively, we can see, look, my load is raising, is raising, raising,
+[04:31.120 --> 04:35.600]  I think I'm going to have an issue, maybe I need to increase the number of servers,
+[04:35.600 --> 04:46.400]  I need to optimize some queries and so on. For those who use cloud, it is very important,
+[04:46.480 --> 04:55.040]  because each CPU cycle, each byte costs money, so if you optimize a query, you optimize a table,
+[04:55.040 --> 05:03.200]  you're saving CPU performance, disk storage, backup and so on. And my favorite one, it helps
+[05:03.200 --> 05:09.680]  you sleep at night, because you don't need to keep working with disasters, you can predict them
+[05:09.680 --> 05:19.760]  or work in a better way. Continue, so this is some metrics from Grafana, so we can get memory
+[05:19.760 --> 05:32.000]  utilization, disk space, also we can see an estimation of, it will take me 1.86 years to run
+[05:32.080 --> 05:40.320]  out of space, so I can plan ahead my budget, buy disk and everything, because when the database
+[05:40.320 --> 05:46.800]  gets out of disk, it crashes, and then we need to decide who we are going to sacrifice.
+[05:49.840 --> 05:56.240]  And as I said, we can understand what is going on inside the database, what kind of queries
+[05:56.240 --> 06:04.240]  here you can see, but it's insert, select, predates, commands, so it's the call handlers
+[06:04.240 --> 06:12.000]  from a SQL, and you can understand the fluctuation of them. In this case, it's a database that is
+[06:12.000 --> 06:17.760]  doing this green line, the bigger one are inserts, so it's a heavy right database.
+[06:17.760 --> 06:30.160]  And as I said, to understand behavior, so during normal days, business days, I have peaks of almost
+[06:30.160 --> 06:38.080]  40k EPS, but on weekends, I don't get more than 10, so if I'm on a weekend and then I have 30k,
+[06:38.720 --> 06:44.160]  probably I'm under attack, or someone is doing a promotion, something that I don't know,
+[06:44.880 --> 06:55.840]  some important person died, whatever. And there are two ways to monitor, one is using agent,
+[06:55.840 --> 07:00.640]  the other one is letting the monitoring system monitor the database.
+[07:03.040 --> 07:09.040]  And when you have the agent, you have it installed locally, so it's gathering information, sending
+[07:09.040 --> 07:17.360]  to the server, you can get a lot of details, like Linux metrics, you can get all of them
+[07:17.360 --> 07:25.840]  with node exporters from Prometheus. Sometimes you can run custom scripts, so maybe you can embed,
+[07:25.840 --> 07:33.440]  for example, backups or restores, routines, something like that on the agent, but the cons
+[07:33.440 --> 07:39.840]  are more related, for example, enterprise companies may suffer more, because you need
+[07:39.840 --> 07:45.520]  authorization to run the, to install the agent from the machine, so maybe you have multiple teams,
+[07:45.520 --> 07:50.080]  so you need to ask authorization for security, then the CISA demeaning needs to install,
+[07:51.440 --> 07:58.160]  some other team needs to configure, and so this is one of the bad things, and it happens a lot
+[07:58.160 --> 08:05.520]  with enterprise companies. There's an example from PMM, so we have the agents running in the
+[08:05.520 --> 08:11.920]  database server, sending information to the central server, where data is analyzed.
+[08:14.160 --> 08:23.120]  This is an example from Datadog, same way, agent running the same server, sending to the back end.
+[08:23.920 --> 08:33.440]  And now agentless, the pros, it is basically the opposite of what we saw, we can reduce overhead
+[08:33.440 --> 08:41.120]  of administrative tasks, because we only need the monitoring server to reach the database,
+[08:41.120 --> 08:46.240]  and data will be fetched from there, like, for example, from performance schema,
+[08:47.200 --> 08:58.000]  or the global status variables. Again, easier to approve, we are talking more about bureaucracy here.
+[08:59.360 --> 09:05.520]  The cons, you still have some job to do, for example, I can't say I'm going to monitor
+[09:05.520 --> 09:10.560]  LeFred's database, if he doesn't give me a user and password, of course I won't have access,
+[09:11.120 --> 09:21.520]  so you still have some job to do. And the problem that we will try to solve with Prof KFS is you
+[09:21.520 --> 09:28.960]  have limited scope to analyze, because you are not on the server, for example, you may need some
+[09:28.960 --> 09:32.800]  special Linux permission to gather certain metrics, and you won't have it.
+[09:33.120 --> 09:39.040]  And one last, if you are monitoring, let's say, 1,000 hosts remote, so you are putting a lot of stress
+[09:39.040 --> 09:43.760]  on the central server, like it's natural, someone needs to do the job, if it's not the database
+[09:43.760 --> 09:52.720]  server, it will be the monitoring server. This is an example of another company, the EGI, so they
+[09:53.120 --> 10:06.000]  work by sending the information, the monitoring appliances collecting data from these hosts.
+[10:08.080 --> 10:13.760]  And another example from PMM, in this case without agent, we can connect to anything,
+[10:13.760 --> 10:18.880]  the advantage is, for example, RDS or OCI, that you don't have access to
+[10:19.840 --> 10:26.400]  system metrics, unless you are using, for example, the CloudWatch metrics or the metrics from Oracle,
+[10:26.400 --> 10:30.480]  but you can get MySQL information by simply connecting to them.
+[10:32.960 --> 10:40.240]  So the Prof KFS plugin, it provides access to the Linux performance data, basically,
+[10:41.200 --> 10:48.400]  it's information from slash proc and slash sys, so when you are running VMSTAT,
+[10:49.200 --> 10:55.520]  it is basically collecting information from slash proc, and this information is gathered and
+[10:55.520 --> 11:00.720]  populated in a view that is created with the plugin, the Prof KFS view.
+[11:00.880 --> 11:10.880]  For those who also, security is a concern, there is a parameter, Prof KFS files spec,
+[11:11.520 --> 11:18.640]  where you can say exactly what you want to gather. Now, for the problems,
+[11:19.680 --> 11:26.000]  the sad face is, currently, it works only for Percona server, maybe if we go to components,
+[11:26.000 --> 11:32.720]  we can make it work for MySQL. If you try to copy the Libby, I did it, of course, in Keras,
+[11:32.720 --> 11:36.800]  you will crash the database with signal 11, so don't try this.
+[11:40.720 --> 11:47.520]  The other caveat, the other cons, it only works with the same version, so even if we are talking
+[11:47.520 --> 11:54.800]  about MySQL, Percona server, if you copy the Libby from 8010 and put on 8030, it will fail.
+[11:55.680 --> 11:57.840]  So it always needs to be on the same version.
+[12:03.920 --> 12:09.120]  To install the plugin, it has to install any plugin in MySQL, just a command line.
+[12:10.240 --> 12:16.240]  When you are installing Percona server, the Libby is already in the plugin folder directory,
+[12:16.240 --> 12:21.840]  as the thread showed in the, not only the components, but also the plugins will be there.
+[12:21.840 --> 12:28.640]  You just install, and it works. You need to use this particular privilege that is created for
+[12:28.640 --> 12:35.920]  this specific plugin, which is AccessProcFS. If you have a super, which I thought was a bit weird,
+[12:35.920 --> 12:43.040]  it doesn't work. I thought that, okay, super should override, but it's just a matter of providing
+[12:43.760 --> 12:51.520]  the privilege. And as I said, this is the variable that controls what you can collect,
+[12:52.800 --> 12:59.920]  I highlighted three, which is our S version, I will load the average, but this is a string,
+[12:59.920 --> 13:06.560]  so you just remove the ones that you don't want, and it is required that we start. This is a static
+[13:06.560 --> 13:16.960]  variable, so you can change it at runtime. And using the plugin, so this is raw data,
+[13:16.960 --> 13:23.200]  you can get from MySQL, you run the command, and exactly what you want to collect. In this case,
+[13:23.200 --> 13:32.320]  I was running on Ubuntu 22, which is, I don't remember, oh, it's on AWS. It's a bit weird,
+[13:32.320 --> 13:37.920]  because there is no binary, I was using generic packages, because there is no official
+[13:38.640 --> 13:49.120]  package for MySQL. And now here we have the raw data, so we need to keep running selects all the
+[13:49.120 --> 13:55.680]  time. And for example, when you get the CPU counts, you see a bunch of numbers, which is hard to
+[13:55.680 --> 14:02.720]  figure it out what's going on by that way. So we can use Prometheus. Prometheus can work with
+[14:02.800 --> 14:10.320]  its open source, it works with exporters. You have an old exporter, I think they have here,
+[14:10.320 --> 14:17.200]  that showed about ProcSQL, there is a ProcSQL exporter, so you have plenty of options. In this
+[14:17.200 --> 14:26.640]  case, we have the MySQL ProcFS collector running using the Prometheus exporter. So you can integrate
+[14:26.640 --> 14:33.040]  with any tool. It doesn't need to be anything like, I know that AWS Oracle Google, they have
+[14:34.880 --> 14:42.720]  features that you can use with Prometheus. This is an example that I took from Pierre Grafana,
+[14:42.720 --> 14:50.000]  so if you want, you just populate here and start using it. In this case, I will show my example,
+[14:50.000 --> 14:58.400]  we'll be with PMM, because I think it's easier. This, I'm going to leave more for the records,
+[14:58.400 --> 15:05.120]  for those who want to try this at home, because these are basically codes. In this case, I have a
+[15:05.120 --> 15:13.280]  container running the node exporter. As you can see, my username, password, and by the way,
+[15:13.280 --> 15:17.760]  this host is still running, if you want to connect, please don't drop the database.
+[15:20.400 --> 15:24.880]  And if you want to test if the exporter is running, you can do a simple curve,
+[15:24.880 --> 15:31.120]  it will work and you'll see the metrics. These slides about integrating with
+[15:31.840 --> 15:39.600]  PMM, basically what you have to do. First, you need to add the database to the monitoring server.
+[15:39.600 --> 15:46.880]  So we add as a MySQL, here we will ask for you for user and password. And later on,
+[15:46.880 --> 15:53.440]  we have this Docker exporter running, this container running, we will add as an external service.
+[15:55.120 --> 16:02.080]  This is how you can visualize the services that are running there. So you can see,
+[16:02.080 --> 16:08.640]  I have the database first, and this one is my container that is gathering the metrics from the
+[16:08.640 --> 16:18.320]  OS. Those are the commands, how you list the servers, how you add the external service.
+[16:19.120 --> 16:23.680]  Don't worry, as I said, it's here more for later on if you want to try at home
+[16:24.480 --> 16:30.560]  from where the ideas are coming from, so you can understand what's going on.
+[16:30.880 --> 16:42.480]  So adding the agent, and the last slide here is on Grafana, as here I was using
+[16:44.640 --> 16:52.960]  a container, and then I can see that I'm having some issues, because I have my user 30, 30,
+[16:52.960 --> 17:01.360]  and my IOH is at 30%. So for Docker instance, for those who are using, for example, Kubernetes,
+[17:01.360 --> 17:07.200]  that it's hard to collect OS metrics, if you have the plugin installed, it can give you
+[17:08.240 --> 17:13.760]  a very nice idea of what's going on. On my experience, lots of time people come in,
+[17:13.760 --> 17:18.960]  like, my SQL is not working, and then you are going to see on a Kubernetes node,
+[17:18.960 --> 17:25.520]  the worker node where the services host that are like 3,000 containers running, the worker is
+[17:25.520 --> 17:31.520]  completely saturated and dying, and we are blaming my SQL, which is a small piece using the whole
+[17:31.520 --> 17:43.120]  thing. I think I went too fast, but I had to skip some of the codes. Do you guys have any questions
+[17:43.760 --> 17:48.080]  or any curiosity about this? Yes, Muka?
+[18:05.200 --> 18:11.120]  That is a good question. I'm not sure what is the frequency of the collection, because like,
+[18:11.120 --> 18:17.120]  this is more experimental too, probably don't have the frequency. It should be hard coded,
+[18:17.120 --> 18:24.000]  for example, five seconds or something. It was Nicolai who developed it from Percona, and
+[18:27.360 --> 18:33.840]  I tested when we restart, the database information is lost, so it's only a view that it's populated
+[18:33.840 --> 18:39.840]  along the time. It's not started, like, you don't have 30 days of monitoring or anything like that.
+[18:42.080 --> 18:47.840]  So, you don't know how it went, where is it? No, no, I don't. It's when you ask for it.
+[18:47.840 --> 18:57.840]  No, it says it's lost after restart. It's when you query the table that it checks the value.
+[18:57.840 --> 19:07.840]  This is the case, it should be data. No, it's lost today. He said it's lost after restart.
+[19:08.160 --> 19:16.160]  So, when you query that table, that view, it goes to the clock to get the information and return it.
+[19:16.160 --> 19:24.160]  Yes, my name is in the search box, because you know it is lost because you have to query the physicality
+[19:24.160 --> 19:31.840]  in some signals or something like that. No, that's fine, because I think it's not
+[19:32.080 --> 19:35.600]  there when I change the code. Do you think when you restart, there is nothing?
+[19:35.600 --> 19:39.200]  I didn't see, you know. Don't say something, Sergei.
+[19:39.200 --> 19:43.040]  Yeah, I want to ask you that the implication of no cache and implication of this plugin is
+[19:43.040 --> 19:47.840]  let it go, actually, go ahead, take data from proper pass load it into memory, parse it up,
+[19:47.840 --> 19:52.720]  use CPUs, there are any controls from the amount of memory being used, the hard limit of the number
+[19:52.720 --> 19:58.080]  of nodes in the proper pass, like, it can be, there are situations where it has furious
+[19:58.080 --> 20:05.920]  proper pass expansion. It is documented, there is a limitation. I think there is a number of lines
+[20:07.680 --> 20:12.720]  that the proper pass will try to collect, and if it's kind of similar to PT's talk when there
+[20:12.720 --> 20:17.360]  are more than 1,000, 10,000 tables, he will ignore because of the overhead.
+[20:18.000 --> 20:28.240]  Yeah, is it the same work which was done in 2018 by Nikolai, or is it another?
+[20:28.240 --> 20:32.800]  Probably it's a continuation, because I saw that the project in GitHub is old.
+[20:37.120 --> 20:41.360]  What it is? It is a new plugin written by somebody else.
+[20:41.360 --> 20:44.000]  No, no, it's by Nikolai, by Nikolai, yes.
+[20:45.200 --> 20:49.840]  Okay, can that plugin be compiled for Oracle?
+[20:50.480 --> 20:58.480]  So, you can, but we saw that on the source code because there is a particular privilege,
+[20:58.480 --> 21:03.520]  Marcelo helped me, helped me, you need to change parts of my SQL code.
+[21:05.680 --> 21:09.600]  Yes, yes, and talking to our engineering team, they have
+[21:09.920 --> 21:11.200]  component to this.
+[21:11.200 --> 21:19.040]  Yeah, they were talking and probably they will make something, because this is more like
+[21:20.800 --> 21:26.720]  an adventure, a college project. It's written in the documentation, it's a
+[21:26.720 --> 21:33.440]  experimental feature, but the engineering team, because it was crashing during my presentation,
+[21:33.440 --> 21:39.120]  then I said, guys, I'm opening a Gira ticket, I want this next week. They didn't agree, but yeah,
+[21:39.120 --> 21:46.320]  I think hopefully this can become a real part of my SQL. As Lefred said,
+[21:46.320 --> 21:48.800]  if it helps the community, why not?
+[21:53.600 --> 21:57.600]  I want to say thanks to Lefred and the whole organization of Fosden for you guys that
+[21:57.600 --> 22:03.760]  survived until the end. It was a pleasure to be here again, and I hope to see you next year.
+[22:03.760 --> 22:06.400]  Thanks.

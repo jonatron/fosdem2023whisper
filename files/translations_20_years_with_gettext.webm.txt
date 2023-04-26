@@ -1,0 +1,326 @@
+[00:00.000 --> 00:13.680]  Hello, hello, good day, good day.
+[00:13.680 --> 00:18.560]  I think that's sort of the Brussels welcome.
+[00:18.560 --> 00:24.360]  So I want to talk about what we're doing in the Postgres project with respect to translation.
+[00:24.360 --> 00:29.760]  Seems like the last two talks already solved 50% of my problems, so there was already
+[00:29.760 --> 00:32.160]  a good outcome of coming here.
+[00:32.160 --> 00:37.520]  I want to talk a little bit more sort of the lower levels of what Getax specifically does,
+[00:37.520 --> 00:42.400]  but also goes kind of through what other things we're doing.
+[00:42.400 --> 00:49.360]  So I, in the Postgres project, I'm just a C programmer, it's my job really to do the
+[00:49.360 --> 00:53.440]  translation sort of as a hobby on the side.
+[00:53.440 --> 01:01.840]  I have done initially sort of most of the setup of, you know, sort of the source code
+[01:01.840 --> 01:06.760]  level, what do you call it, internationalization in that case, right, and then I'm also doing
+[01:06.760 --> 01:09.560]  some of the translation.
+[01:09.560 --> 01:17.680]  And yeah, I've been, it turns out also the first false I went to was 20 years ago, so
+[01:17.680 --> 01:21.320]  I like coming here because, you know, there's a Postgres dev room happening at the same
+[01:21.320 --> 01:25.880]  time in a different building, but I like to come to all the other places and sort of intersect
+[01:25.880 --> 01:29.040]  with other communities and learn about other kind of stuff that's happening.
+[01:29.040 --> 01:33.640]  So it's kind of a good benefit of FOSDEM.
+[01:33.640 --> 01:34.640]  So what's Postgres?
+[01:34.640 --> 01:40.400]  It's a, you know, don't need to go into details, but just, it's a little bit, it's a little
+[01:40.400 --> 01:41.400]  bit different.
+[01:41.400 --> 01:42.520]  It has different sort of requirements, right?
+[01:42.520 --> 01:43.520]  It's a database system.
+[01:43.520 --> 01:50.160]  It's, you know, fairly big and fairly old and, but it's, you know, it's different from
+[01:50.160 --> 01:52.600]  like a GUI program, let's say, right?
+[01:52.600 --> 01:56.400]  Something we've, you know, leap off is, or we'll hear from KDE later and things like
+[01:56.400 --> 01:57.400]  that.
+[01:57.400 --> 02:05.040]  I think it just, you know, it lives, it lives much longer and has sort of longer like sort
+[02:05.040 --> 02:06.800]  of stability requirements and things like that.
+[02:06.800 --> 02:11.920]  And that also kind of makes the maintenance of everything a little bit more complicated.
+[02:11.920 --> 02:19.720]  We also maintain back branches, so we have a yearly release and, but we still maintain
+[02:19.720 --> 02:21.440]  the old releases for at least five years.
+[02:21.440 --> 02:28.200]  So at any given moment, we have four or five or six releases live and then that gives it
+[02:28.200 --> 02:30.840]  sort of interesting challenges with like backpatching stuff.
+[02:30.840 --> 02:34.920]  Just I was quite interested in the last question we had in the previous talk about this translation
+[02:34.920 --> 02:37.400]  memory and sort of that wrong truth.
+[02:37.400 --> 02:43.520]  Can we like automatically apply the memory to the previous branches and stuff like that?
+[02:43.520 --> 02:49.280]  So this sort of stuff is sort of a practical challenge because you have to keep copying
+[02:49.280 --> 02:54.200]  the same thing to all the different branches and so on.
+[02:54.200 --> 03:00.160]  In any case, so how, what are we doing in Postgres?
+[03:00.160 --> 03:04.800]  You know, we use GetX as in the title.
+[03:04.800 --> 03:10.160]  Now put this sort of standard new question mark, it's kind of weird because, again, Postgres
+[03:10.160 --> 03:15.560]  is old and, you know, runs on servers is a little bit different from sort of what runs
+[03:15.560 --> 03:17.560]  on a laptop or an app, right?
+[03:17.560 --> 03:23.360]  Because for example, we also support operating systems that might still be already be forgotten
+[03:23.360 --> 03:32.320]  like AIX and Solaris and they have GetX originally came from the sort of Solaris here somehow
+[03:32.320 --> 03:39.920]  and there's still a, well, I don't know what it is now, but like a Solaris native Solaris
+[03:39.920 --> 03:41.920]  GetX exists.
+[03:41.920 --> 03:44.800]  It's, you know, that's distinct from new.
+[03:44.800 --> 03:49.400]  But it's sort of old, has bugs and doesn't parse stuff correctly sometimes.
+[03:49.400 --> 03:56.040]  So when you just sort of use the new version, then sometimes the files you distribute don't
+[03:56.040 --> 03:58.440]  work on old Solaris for some reason, right?
+[03:58.440 --> 04:00.920]  And then this is sort of just a weird situation.
+[04:00.920 --> 04:07.760]  You have to like then fix these things and then, or hope that Solaris dies at some point,
+[04:07.760 --> 04:08.760]  right?
+[04:08.760 --> 04:09.760]  Stuff like that.
+[04:09.760 --> 04:10.800]  So it's like that.
+[04:10.800 --> 04:17.400]  So we have, I mean, you know, we hear from KDE next, I already looked at their abstract.
+[04:17.400 --> 04:21.560]  This is obviously not a lot in terms of how many languages and message catalogs and strings
+[04:21.560 --> 04:27.760]  we have, but it's more than something you can just deal with in an afternoon, right?
+[04:27.760 --> 04:29.640]  It's just a lot of stuff to move around.
+[04:29.640 --> 04:33.760]  I mentioned with the different branches, we also have it, we have it in a separate Git
+[04:33.760 --> 04:34.760]  repository.
+[04:34.760 --> 04:38.840]  I think that's kind of common, I think, so that you can manage access to translator
+[04:38.840 --> 04:42.880]  separate from the source repository and then you just move it back and forth.
+[04:42.880 --> 04:47.040]  Again, maybe the web late will help with that.
+[04:47.040 --> 04:52.760]  And we have also sort of other projects in the vicinity of the core server projects such
+[04:52.760 --> 04:58.000]  as the JDBC driver, which is obviously in Java, which is slightly different sort of tooling
+[04:58.000 --> 04:59.000]  and stuff like that.
+[04:59.000 --> 05:02.760]  And PG Edmund is a GUI, they have their own workflows.
+[05:02.760 --> 05:07.840]  So it's all a little bit all over the place and it's hard to kind of keep that all moving
+[05:07.840 --> 05:12.400]  in the sort of, in the same way.
+[05:12.400 --> 05:16.800]  And there's also some documentations are being translated, but that's also handled completely
+[05:16.800 --> 05:17.800]  separately.
+[05:17.800 --> 05:20.480]  We were actually just talking the break, we could use Slipper Translate for that maybe
+[05:20.480 --> 05:21.480]  at some point.
+[05:21.480 --> 05:25.200]  So all kinds of interesting ideas are already coming up here.
+[05:25.200 --> 05:35.320]  All right, so this is sort of my like web late but terrible job here, this is kind of
+[05:35.320 --> 05:42.600]  how we handle it, the web interface is under bobble.postgresco.org.
+[05:42.600 --> 05:47.360]  And that just gives you sort of the status of what language is and what the message catalogs
+[05:47.360 --> 05:56.120]  are and it does sort of the string extraction and the merging in the background as you would
+[05:56.120 --> 05:59.840]  do in the make file, but it just kind of runs it for you from a cron job.
+[05:59.840 --> 06:02.280]  Again, it's just sort of really old, but it does the job.
+[06:02.280 --> 06:08.080]  And then the workflow is, yeah, you go like, you know, you pick your language, pick what
+[06:08.080 --> 06:13.160]  you want to work on, you click on it, you download it, you do the translation with the, you know,
+[06:13.160 --> 06:18.520]  the get text tools, whatever editor you want to use, different people use different things
+[06:18.520 --> 06:20.480]  and then you commit it back.
+[06:20.480 --> 06:26.200]  And there's different, all the branches are available here, so you can scroll down and
+[06:26.200 --> 06:28.880]  you're just going to fill these up.
+[06:29.040 --> 06:32.760]  So, yeah, these are the languages across here.
+[06:32.760 --> 06:40.000]  What the colors mean is that green is 100% translated and then one thing we did, which
+[06:40.000 --> 06:47.160]  I don't, we just kind of made up, but we decided if a message catalog is not translated to
+[06:47.160 --> 06:50.280]  at least 80%, we're not going to ship it, right?
+[06:50.280 --> 06:54.600]  You don't want to just ship like one string, you could, but it would be weird for a user
+[06:54.600 --> 06:58.840]  that all of a sudden a translated string pops up and nothing else is translated, right?
+[06:58.840 --> 07:03.440]  That's maybe a little bit weird, so that's something we sort of decided on until randomly
+[07:03.440 --> 07:06.040]  and it seems to actually kind of work pretty well.
+[07:06.040 --> 07:11.320]  So, the yellow ones are the ones that we would ship and then the white ones are just the ones
+[07:11.320 --> 07:14.120]  that are not complete at all.
+[07:16.520 --> 07:23.160]  All right, so workflow is the usual get text workflow for at least C programs, you know,
+[07:23.160 --> 07:27.040]  there's other stuff happening now there, so if the developer marks up the messages with
+[07:27.080 --> 07:33.160]  this kind of underscore thing that they recommend and our developers are, you know, totally good
+[07:33.160 --> 07:38.280]  about that, right, they're all aware of that you need to do that and for the most part
+[07:38.280 --> 07:44.280]  it's wrapped into things like this, so you don't actually have to manually mark up everything.
+[07:44.280 --> 07:48.640]  If you use like this sort of standard internal API, say print an error, log an error, whatever
+[07:48.640 --> 07:51.400]  the case may be, you know, then it's already done for you.
+[07:51.840 --> 07:56.640]  That works pretty well, it's, you know, every once in a while something gets missed but
+[07:56.640 --> 07:57.640]  it's not a big problem.
+[07:57.640 --> 08:00.960]  All the developer group is aware of that.
+[08:00.960 --> 08:11.160]  Then I mentioned the website uses those standard tools to give you something you just have
+[08:11.160 --> 08:17.360]  to download and then you just translate it and upload it back.
+[08:17.360 --> 08:24.160]  And then at release time someone, often me, just then runs a script to copy that over,
+[08:24.160 --> 08:30.080]  which could be automated but, you know, it's one of those things we have releases four
+[08:30.080 --> 08:35.200]  times a year and you just do it manually four times a year or you could spend X hours
+[08:35.200 --> 08:39.680]  automating it, right, so usually it's just done manually.
+[08:40.680 --> 08:48.720]  All right, so this is our tool chain at the moment, again GNU, question mark get text,
+[08:48.720 --> 08:55.320]  we have a pretty standard sort of configure make make install build system.
+[08:55.320 --> 08:59.000]  We don't use any of these make file templates and things like that that ship it get text
+[08:59.000 --> 09:06.240]  because we have our own sort of very convoluted build system based on GNU make, we're also
+[09:06.240 --> 09:14.120]  in the process of getting rid of that so we're moving to Mason now, which has some support
+[09:14.120 --> 09:20.640]  for that built in but it's kind of incomplete so we're sort of stuck sort of half way here,
+[09:20.640 --> 09:28.120]  half way there, that's kind of work we're doing right now, I have to figure that out.
+[09:28.120 --> 09:33.840]  So people use whatever editor they want to use, you know, PoEdit it seems to be somewhat
+[09:33.840 --> 09:40.160]  popular, I use just Emacs, some teams have used, by teams I mean sort of language teams
+[09:40.160 --> 09:49.120]  they have used CrowdIn which I suppose is sort of similar to Weblate maybe, but again
+[09:49.120 --> 09:55.180]  we were just talking to break maybe we'll look at Weblate and then a horrible bag of
+[09:55.180 --> 10:01.680]  shell scripts and purl scripts and make files that sort of hold it all together, which again
+[10:01.720 --> 10:06.080]  could be replaced by something better, it's just never really figured out what that could
+[10:06.080 --> 10:09.160]  be.
+[10:09.160 --> 10:15.560]  So pros and cons of doing any of this, one thing I've obviously we want to translate
+[10:15.560 --> 10:20.920]  because we want to translate right, so that's sort of the ultimate requirement, but what
+[10:20.920 --> 10:29.840]  I found interesting as a sort of secondary benefits is actually that by putting all your
+[10:29.840 --> 10:35.520]  messages of your programs through a translation process you get an automatic review of every
+[10:35.520 --> 10:41.320]  message string, right, because every thing you put in the source code is looked again
+[10:41.320 --> 10:48.320]  later by at least one more person or several other translators and you catch typos and
+[10:48.320 --> 10:52.480]  stuff like that, but also if something doesn't make any sense, right, maybe some developer
+[10:52.480 --> 10:57.720]  wrote it and it makes sense to them, but then you know someone else who is not that very
+[10:57.760 --> 11:01.760]  developer looks at it again, I don't really understand this, I can't translate it because
+[11:01.760 --> 11:05.360]  I don't understand it or it looks weird, could we look at it again, so you get this review
+[11:05.360 --> 11:12.360]  process and you've gotten really good in in in postgres about really tuning error messages
+[11:13.520 --> 11:18.600]  because it's a complicated piece of software and you get all these weird scenarios with
+[11:18.600 --> 11:25.040]  sort of transaction processing and weird right ahead log and replication and all these kinds
+[11:25.040 --> 11:28.640]  of things and so you want to be really good and precise to explain that you was okay this
+[11:28.640 --> 11:35.160]  failed because of this and you could try this but don't try that and you know so this is
+[11:35.160 --> 11:38.680]  really I think people appreciate that independent of translation and everything else I think
+[11:38.680 --> 11:45.680]  people appreciate that and this process actually helps that because you sort of refine your
+[11:45.680 --> 11:51.120]  program's messages through this process as well, right, and secondly actually it also
+[11:51.160 --> 11:58.160]  turned out that sometimes people come in, do some translation, maybe find a bug or want
+[11:58.160 --> 12:01.800]  to look something up in a source code, go into the source code and then become a programmer
+[12:01.800 --> 12:08.800]  so you can also kind of recruit people that way, it's kind of interesting, so but then
+[12:09.560 --> 12:16.560]  there are many challenges, right, so first of all you want to get people in there to
+[12:16.760 --> 12:21.440]  use the translation, right, and it's just this you know because postgres is not sort
+[12:21.440 --> 12:27.600]  of or similar systems as well, right, it's not end user facing, it's not used by sort
+[12:27.600 --> 12:34.600]  of random average people, right, it's used by technically minded people, experts, database
+[12:34.680 --> 12:40.600]  administrators and so on, so a lot of those people there's not too much pressure to actually
+[12:40.600 --> 12:44.920]  have things translated, people be okay it's not translated, it's fine, right, which is
+[12:44.960 --> 12:49.440]  different from you know if LibreOffice or Firefox is not translated and you install
+[12:49.440 --> 12:53.280]  in a school, it wouldn't work, it's just you can't do that, right, but here it's like
+[12:53.280 --> 12:58.200]  okay if it's not, if it's not, if it doesn't get done it's not a problem in a way, but
+[12:58.200 --> 13:01.960]  we just want to do it because we like it, but if it doesn't get done it's like okay
+[13:01.960 --> 13:07.600]  then we'll just move on, right, so you got to kind of, it relies on a lot of enthusiasm,
+[13:07.920 --> 13:14.920]  individual enthusiasm, right, a lot of the, yeah I found also at least personally as
+[13:15.600 --> 13:20.720]  doing some of the translation work myself the terminology is hard sometimes, right, because
+[13:20.720 --> 13:25.880]  again I just mentioned something like that, it's not just press this button to download
+[13:25.880 --> 13:30.280]  a thing, okay you can translate that in any language probably by now, but what if you
+[13:30.280 --> 13:36.120]  get into terms like you know sub transaction rollback or incremental materialized view
+[13:36.120 --> 13:41.400]  maintenance, you know some languages might not even have terms for that maybe, you know
+[13:41.400 --> 13:48.400]  sometimes when I do the work I pick you know I have some textbooks like academic textbooks
+[13:48.560 --> 13:54.120]  in German in my case and I just go through them like anybody in here talk about materialized
+[13:54.120 --> 13:59.320]  views, what kind of terminology are they using and then I have like six books and three do
+[13:59.320 --> 14:03.120]  this way and three do it that way and then I just pick something at some point, right,
+[14:03.160 --> 14:09.840]  and so in some way we have to kind of define, make up the terminology in some cases even,
+[14:09.840 --> 14:16.840]  right, so and as I alluded to the work flow is not as cool as what we saw in the previous
+[14:19.840 --> 14:26.840]  talk so maybe we can improve that. So here's some sort of source code level challenges,
+[14:26.840 --> 14:33.400]  some of those are solvable, some of those are not, people who work in translation know
+[14:33.400 --> 14:38.920]  about like plural issues, right, we do handle that, works fine, but then if you, I've never
+[14:38.920 --> 14:45.920]  figured out how to handle the first one, like if you have two or more numbers in a sentence
+[14:47.880 --> 14:54.480]  like then you would have to have some combinatorial sort of list of translations, what if the first
+[14:54.520 --> 14:58.920]  one is singular and the last one is five and what if the first one is two and the last
+[14:58.920 --> 15:04.480]  one is 18, you know, I don't think you can really solve that and you just start rephrasing
+[15:04.480 --> 15:09.280]  things in weird ways. We have the second one which obviously everybody knows you shouldn't
+[15:09.280 --> 15:14.920]  do if you sort of paste terms together that doesn't work, right, let's say you're just
+[15:14.920 --> 15:18.720]  going to make something up like you can't, cannot apply a generation expression to a
+[15:18.720 --> 15:22.240]  materialized view, let's say something like that, that's a thing that could happen in
+[15:22.280 --> 15:27.680]  postgres, more or less, right, like okay you shouldn't, you shouldn't do that, you shouldn't
+[15:27.680 --> 15:30.640]  sort of stick that into the middle of the sentence because then the grammar doesn't
+[15:30.640 --> 15:37.640]  match in some sentences, so you write those out, but what if you have like five options
+[15:38.960 --> 15:45.200]  here and six options there, are you going to make 30 strings in your source code, at
+[15:45.240 --> 15:52.240]  some point probably not, right, so at some point then developers, the actual developers
+[15:53.800 --> 15:57.040]  do get annoyed if you tell them like no, you can't do that, you have to write actually
+[15:57.040 --> 16:00.040]  35 error messages by hand, so I'm not going to do that.
+[16:00.040 --> 16:07.040]  Yeah, you start then tweaking it, can you say something, something semi-colon, something
+[16:15.360 --> 16:19.680]  something, and then maybe at that point it's okay, I don't know, but yeah, exactly, so
+[16:19.680 --> 16:26.680]  you have to make judgment, use some judgment calls in these cases, and one thing that sometimes
+[16:26.800 --> 16:30.520]  happened if developers add a new file to source code then it has to be added somewhere else
+[16:30.520 --> 16:35.800]  also to make sure the translation system catches it and that sometimes gets forgotten, it's
+[16:35.800 --> 16:39.040]  just one of those things, I don't know if there's a solution for that, you just gotta
+[16:39.040 --> 16:44.040]  do it, there's also some weird thing, we have like files that get compiled into multiple
+[16:44.040 --> 16:51.040]  components and then you kind of have to add them to all of those components and re-translate
+[16:51.160 --> 16:55.800]  everything in each component which could be handled with some of those translation memory
+[16:55.800 --> 16:59.880]  things and stuff like that, but it's just kind of weird the way we have it laid out
+[16:59.880 --> 17:06.880]  and it kind of makes it annoying, yeah, so this is maybe specific to something like Postgres
+[17:07.000 --> 17:14.000]  being A, a client server system, B, a database, and C having its own sort of ideas about what
+[17:14.000 --> 17:21.000]  encoding on locale and stuff like that means, right, so in, you know, a database stores
+[17:27.800 --> 17:34.800]  data which is often text which has an encoding and because of, you know, it doesn't have
+[17:37.000 --> 17:41.600]  nowadays you think everything's UTF-8 but in a database you can also store things in
+[17:41.600 --> 17:46.960]  other encodings for historical reasons or in some cases because UTF-8 doesn't actually
+[17:46.960 --> 17:52.160]  match what doesn't support what you want to store which sounds maybe bizarre but happens
+[17:52.160 --> 17:58.280]  especially in sort of Japanese and things like that, so we do support automatic encoding
+[17:58.280 --> 18:04.240]  conversion between client and server so that all works and happens, but then this all sort
+[18:04.280 --> 18:09.200]  of, what if you have, you know, your strings, your translated strings are in a file, they
+[18:09.200 --> 18:14.680]  also have an encoding, they then get loaded into the server process, the server process
+[18:14.680 --> 18:19.400]  prints stuff to its own log but also sends error messages to the client, all of those
+[18:19.400 --> 18:24.920]  things could have different ideas of what they want, right, you might want to log stuff
+[18:24.920 --> 18:30.920]  in English to your server log but the client wants the error message in French or for
+[18:30.960 --> 18:37.960]  some, maybe it's like legacy client that wants it, you know, transcoded to Latin 9 and then
+[18:39.840 --> 18:45.040]  at the same time there's a different client connected that also is doing things to a
+[18:45.040 --> 18:48.320]  different language, you want to log it to the same server log in the same language,
+[18:48.320 --> 18:54.820]  in the same encoding, hopefully as the other guy, all of this works quite poorly the way
+[18:55.820 --> 19:02.820]  the get-txt, intl, api's work, you can sort of have some subsets of this working but if
+[19:02.820 --> 19:09.420]  you really try hard, it's a total mess and it just basically doesn't work and so that's
+[19:09.420 --> 19:16.420]  a real problem really and we'd have to really redesign some of this to support all of these
+[19:17.180 --> 19:22.420]  combinations, yeah.
+[19:22.420 --> 19:29.420]  So the tools, well the tools are fine, they're actually quite cool and get-txt has some
+[19:30.820 --> 19:36.100]  internal sort of optimizations that are quite interesting, has like sort of internal parallelization
+[19:36.100 --> 19:41.660]  and stuff like that so work has been done but I still find it quite slow, you know, even
+[19:41.660 --> 19:48.180]  on our scale, I'm interested to see what the KDE report is going to be later, how they
+[19:48.260 --> 19:52.820]  handle that but it is still quite slow, right, this sort of website thing I showed, if you
+[19:52.820 --> 19:57.380]  just do a full rebuild of that, it takes like 20 minutes or something, right, just to re-merge
+[19:57.380 --> 20:04.380]  and re-extract and recombine everything so also the format, the PO format is sort of pre-source
+[20:11.060 --> 20:16.860]  control I find because it has all these dates and timestamps in it which you don't need
+[20:16.940 --> 20:20.940]  because you have it in your source control management but these, hello.
+[20:20.940 --> 20:25.940]  Can you be more explicit under 10 minutes, what do you do in these 20 minutes because
+[20:25.940 --> 20:32.940]  it sounds very slow? Well it runs a loop, it extracts, runs x get-txt over the source
+[20:35.020 --> 20:42.020]  code and then it runs message merge against all these catalogs which are, you know, sort
+[20:43.020 --> 20:50.020]  of this many by that many times that many branches and you run that on just a machine,
+[20:54.260 --> 21:00.020]  right, so, I mean you could optimize this by maybe a beefier machine and you can probably
+[21:00.020 --> 21:04.740]  parallelize this a little bit but it's still, you know, the main message catalog for the
+[21:04.740 --> 21:11.740]  actual server has like, you know, 5000 strings and that is still going to run like, I don't
+[21:11.820 --> 21:17.940]  really know why but it runs like a couple of minutes, right, so it just, it's not, we're
+[21:17.940 --> 21:24.940]  doing this build system work now, right, when we go from make to mace on a ninja because
+[21:26.100 --> 21:30.980]  make is too slow even if you don't have to do anything, right, so we're trying to sort
+[21:30.980 --> 21:35.380]  of go from, I can rebuild everything in five seconds to two seconds and this thing takes
+[21:35.380 --> 21:41.420]  like 10 minutes so that's just kind of annoying, right, yeah and I mentioned sort of the back
+[21:41.460 --> 21:48.460]  patching, sort of, you, often times what happens is that there's like a bug fix, right, and
+[21:49.620 --> 21:54.460]  because of the bug fix there's a new, a message changes when one new one is added and then,
+[21:54.460 --> 22:01.460]  so that then pops up in your website but then it gets backpatched, the same bug fix gets
+[22:02.060 --> 22:06.020]  backpatched so the same message has to then also be updated in the back branches so you
+[22:06.020 --> 22:10.940]  just kind of have to like download this, upload this, then it gets added to the translation
+[22:10.980 --> 22:14.220]  memory, then you can do this, I have a bunch of shell scripts to kind of make this work,
+[22:14.220 --> 22:21.220]  it's just all, could be better, right, so a lot of people know this chart here, you
+[22:27.180 --> 22:34.180]  know, so, you know, some of the projects that we know, you know, maybe Postgres is somewhere
+[22:34.180 --> 22:38.740]  in here, KDE, LibreOffice, they're all pretty good but then there's, you know, maybe things
+[22:38.780 --> 22:45.780]  like that down here that everybody builds on but they're sort of maintained by a few
+[22:46.500 --> 22:52.980]  people in there, sort of, on the side, right, and this way, I mean, this is sort of a general
+[22:52.980 --> 22:59.980]  problem, I gave the same, I gave a talk, it was the online one two years ago about the
+[23:00.220 --> 23:07.220]  documentation, Choolchain, Postgres, it's the same problem, right, we have, you know,
+[23:07.300 --> 23:10.380]  open source, everything's very successful but then there's like these little tools you
+[23:10.380 --> 23:17.380]  need just to make your build run, right, and then there's, they don't have the same necessarily
+[23:17.580 --> 23:21.340]  amount of staffing and funding and things like that but you still kind of rely on them and
+[23:21.340 --> 23:28.340]  they just barely sort of chug along, so that's a sort of general concern, right, but it applies
+[23:28.340 --> 23:35.340]  here, right, so what are we doing, what are we planning to do, I mentioned in the middle,
+[23:36.060 --> 23:43.060]  right now we're sort of redoing our build system, that is kind of a good reason to
+[23:44.260 --> 23:48.300]  clean up some of that old stuff that we don't need anymore. We're also moving more to using
+[23:48.300 --> 23:55.300]  ICU which is, you know, an internationalization library that does lots of good things but
+[23:56.300 --> 24:01.820]  then adds another dimension to this issue of, you know, locale encoding and then there's
+[24:01.860 --> 24:06.580]  sort of another dimension of what ICU thinks the current locale encoding is, it just gets
+[24:06.580 --> 24:13.180]  ever more messy and complicated and then one sort of important issue in databases is the
+[24:13.180 --> 24:17.100]  sort order, right, a lot of people care about that, what the sort order of your data is
+[24:17.100 --> 24:24.100]  and different collisions have to be supported and that's another kind of sort of localization
+[24:24.300 --> 24:29.740]  kind of work we do but all of this is sort of weirdly connected, right, if you configure
+[24:29.740 --> 24:33.500]  one part of the system to be in this language then all of a sudden get text also thinks
+[24:33.500 --> 24:37.700]  it's the same but maybe you don't even want that, right, you might want your error messages
+[24:37.700 --> 24:43.860]  in French but you want to sort something in Swedish, right, why not, right, but because
+[24:43.860 --> 24:50.860]  of these APIs the way they're historically built it just doesn't quite work smoothly.
+[24:52.860 --> 24:59.060]  But again we want to modernize the workflows, again maybe Weblate, I heard Omega T here
+[24:59.060 --> 25:06.060]  also this weekend and there's crowd in but the issue I had, I mean I heard of Weblate
+[25:08.340 --> 25:13.660]  some years ago too but again the issue is sort of we can't just adopt like the hottest
+[25:13.660 --> 25:17.740]  new thing, right, because again whatever, the way I always think about it is whatever
+[25:17.740 --> 25:23.980]  I sort of do today in Postgres, write some piece of code or make some infrastructure
+[25:23.980 --> 25:29.380]  change still has to work in 10 years, right, and it doesn't meaning it also has to like
+[25:29.380 --> 25:32.660]  build from source, right, because that's the way open source works, right, so I can't
+[25:32.660 --> 25:37.700]  just use a tool that was just invented yesterday and I don't know if it's still going to be
+[25:37.700 --> 25:42.500]  here in two years, now they mentioned Weblate is 11 years old so that's pretty good, so
+[25:42.500 --> 25:49.660]  I think we can maybe look into that, right, so this is something maybe a question anybody
+[25:49.740 --> 25:54.140]  knows, is Getex still the thing or is there something totally different that everybody
+[25:54.140 --> 25:59.380]  should be using now, it's part of sort of the low level API of how this works, I don't
+[25:59.380 --> 26:06.380]  know, I was sort of half hoping that from the ICU ecosystem something would be evolving
+[26:06.620 --> 26:09.420]  or it's sort of emerging but I haven't seen anything like that so I don't know if there's
+[26:09.420 --> 26:16.540]  anything or is this still the thing to use, I don't know, so maybe somebody has a, yes
+[26:16.620 --> 26:17.620]  please.
+[26:17.620 --> 26:24.620]  The ICU upcoming solution is message format 2, it's currently in the ICU for J72 that
+[26:26.180 --> 26:31.380]  came out in October, it's an attack preview there but it's going to progress from there,
+[26:31.380 --> 26:38.380]  it's not yet in ICU for C, it's effectively, message format 2 is a new message format in
+[26:39.020 --> 26:46.020]  syntax, the resource level syntax for that is a little bit more still in progress but
+[26:46.180 --> 26:53.180]  if you move into more of an ICU world that's likely going to provide a decent future thing
+[26:53.940 --> 26:59.940]  for you to migrate to from Getex, it's not that yet but it's becoming that.
+[26:59.940 --> 27:06.940]  That is excellent news, thank you, I'll definitely look into that.
+[27:06.940 --> 27:13.940]  WebLate is adopting that as well or supporting that, it's more compatible, it seems like
+[27:18.020 --> 27:25.020]  it supported a bunch of things, so yeah this is wonderful, useful information we can like.
+[27:29.460 --> 27:36.460]  So yeah, this is good, thank you, so this is also the end of my presentation so I just
+[27:36.660 --> 27:41.300]  wanted to say what we're doing and what some of the unique challenges are, got some good
+[27:41.300 --> 27:48.300]  feedback here, we're going to look into WebLate, we're going to look into emerging ICU things,
+[27:49.580 --> 27:55.660]  update some of our infrastructure and we have a few minutes for questions, otherwise thank
+[27:55.660 --> 27:58.660]  you very much for listening.
+[27:58.660 --> 28:05.660]  So if you're worried about WebLate, it doesn't really matter what you're doing.
+[28:06.460 --> 28:13.460]  It doesn't really interact with, it doesn't go too deep in your automation system because
+[28:13.460 --> 28:19.460]  the way you communicate with WebLate, with the world of the translators, is FICE, FICE,
+[28:19.460 --> 28:21.460]  an agreed repository.
+[28:21.460 --> 28:28.460]  So whatever happens in WebLate, matching the translations and the search and the check
+[28:29.460 --> 28:34.460]  and stuff, but still you as a developer interact with the FICE, so you still have control on
+[28:34.460 --> 28:39.460]  how to build, you don't create a national dependency on your resource.
+[28:39.460 --> 28:41.460]  Yeah, it sounds like it, yeah.
+[28:41.460 --> 28:48.460]  And get text looks like to be alive again, I think they did a release not so far away.
+[28:48.460 --> 28:55.460]  Yeah, it was kind of funny because I had submitted various bugs to savannah.new.org over the years,
+[28:56.460 --> 29:03.460]  also feature requests and stuff like that and just like two or three weeks ago all of these
+[29:03.460 --> 29:09.460]  bugs were updated and some of them closed and I was like, whoa, does somebody know that I'm going to complain about them?
+[29:09.460 --> 29:10.460]  I trust them?
+[29:10.460 --> 29:11.460]  I don't know.
+[29:11.460 --> 29:16.460]  Is the person here in any case, I don't know who is, no.
+[29:16.460 --> 29:23.460]  Well, I guess it's just sort of, I mean, this is a problem, I guess it is a problem in some of these people
+[29:23.460 --> 29:27.460]  maintain some of these specialty new tools and some of these older tools that are sort of on maintenance.
+[29:27.460 --> 29:32.460]  I mean, we don't need tons of new features but you don't really know, right?
+[29:32.460 --> 29:36.460]  It could just be that that person changes job and then nothing happens again for five years, right?
+[29:36.460 --> 29:41.460]  So, but, well, got some good new information here, thank you.
+[29:41.460 --> 29:43.460]  All right.
+[29:43.460 --> 29:45.460]  All right, then we'll move on to the next one.

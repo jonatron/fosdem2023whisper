@@ -1,0 +1,172 @@
+[00:00.000 --> 00:11.440]  Hi everybody. Let's begin. Thank you all for coming. My name is Roman Nostrin. I'm from
+[00:11.440 --> 00:19.080]  MariaDB Corporation from a column store team and today I will be sitting just because the
+[00:19.080 --> 00:28.200]  manipulator doesn't work. So today I will tell you about new features that comes in
+[00:28.200 --> 00:37.760]  analytics and maybe not so new, but something I find important. For those who don't know
+[00:37.760 --> 00:46.880]  what MariaDB column store is, it's an all-lib storage engine for MariaDB server. It's columnar
+[00:46.880 --> 00:53.000]  oriented. It's MPP and it has fancy two-tier distributed storage. When the data is distributed
+[00:53.000 --> 00:58.360]  across nodes and all the nodes have the possibility to distribute it even more using
+[00:58.360 --> 01:08.960]  DB routes. Where DB routes are basically the Linux mounts. And I will start with the most
+[01:08.960 --> 01:16.120]  obscure in my opinion, most obscure topic and that is the MariaDB column store version numbering.
+[01:16.120 --> 01:27.320]  Why it is obscure? Because I still don't understand the reasons that server team takes to put this
+[01:27.320 --> 01:33.560]  or another version of column store into the community server. But anyway, first of all,
+[01:33.560 --> 01:39.400]  column store migrated to yet another version in numbering to simplify the understanding what
+[01:39.400 --> 01:48.080]  is the actual column store version in the community server. And that is there are three digits,
+[01:48.080 --> 01:54.680]  first goes here, then month and then the page number. And at the bottom side of the slide,
+[01:54.680 --> 02:04.320]  you can see the actual mapping that shows us which column store versions are published
+[02:04.320 --> 02:12.720]  with the community server. The most notable thing here is the last row that tells when
+[02:12.720 --> 02:21.040]  the next table, the most featureful release will be published with the community server.
+[02:21.040 --> 02:29.280]  Let's first glance at the features available at the current stable that is shipped with
+[02:30.040 --> 02:39.480]  the community 10.5 and 10.6. Most notable is the filtering vectorization for x86. And guess what?
+[02:39.480 --> 02:46.800]  Seemed processing is not the ultimate answer to life universe and everything. I mean, the benchmarks,
+[02:46.800 --> 02:54.600]  when I first did them, when I first run them, they showed me a 10x speedup comparing with
+[02:54.600 --> 03:02.640]  the non vectorized code. But when I run the full blown query processing pipeline,
+[03:02.640 --> 03:14.560]  I just got 30 to 40% of the speedup. So this is a great speedup, but not the ultimate answer.
+[03:14.720 --> 03:24.320]  Anyway, the next feature is an external group buy. And that is what it is. It allows a group buy
+[03:24.320 --> 03:31.360]  operation to crunch the data sets, data sets that doesn't fit into memory. And as usually,
+[03:31.360 --> 03:38.120]  it consists of two phases. The first phase calculates the partial aggregates. And when they don't fit
+[03:38.200 --> 03:45.920]  into memory, it all flots them and stores on disk. And the second phase sequentially goes over the
+[03:45.920 --> 03:53.760]  stored pre-aggregates and merge them together to produce the resulting data set. As I have seen
+[03:53.760 --> 04:02.840]  in another open source OLAP engines, the second phase takes 2x memory comparing to the first
+[04:03.800 --> 04:12.160]  phase in the worst case. This feature is disabled by default. And one needs to explicitly enable
+[04:12.160 --> 04:18.480]  it with the settings in a column store.xml. These settings are shown at the bottom of the slide.
+[04:18.480 --> 04:30.320]  The next feature is LZ4 compression for data files. We had heard a lot that LZ4 beats snappy in
+[04:30.360 --> 04:38.120]  terms of the compression speed, so we decided to give it a try. And guess what? Snappy still
+[04:38.120 --> 04:47.200]  delivers better compression ratio. It is about 5% better comparing to LZ4 compressed data files.
+[04:47.200 --> 04:54.360]  So there is always a trade-off between space and the compression speed that does the query
+[04:54.400 --> 05:03.040]  processing speed. This is also disabled by default in the current stable. And to enable it,
+[05:03.040 --> 05:09.680]  you need to set this MariaDB client session variable. So we basically connect to MariaDB
+[05:09.680 --> 05:16.680]  and set this variable just before you create a table. Or you can set it in the configuration
+[05:16.680 --> 05:26.800]  file of MariaDB server. And we decided to make this a new default since the new stable that is
+[05:26.800 --> 05:38.200]  coming this April or May. What's the benefit? It means that the compression and decompression
+[05:39.200 --> 05:47.360]  ratio are very fine. Good point. It might be obscure. The compression ratio for snappy is still
+[05:47.360 --> 05:56.880]  better, but the decompression speed is faster for LZ4. Not really, because ingestion speed
+[05:56.880 --> 06:02.480]  is not the big question. I mean, everybody wants to ingest their data as fast as possible,
+[06:02.480 --> 06:09.400]  but let's be honest, we are interested in the select, not in certs in the first place.
+[06:09.400 --> 06:24.880]  Yeah, that is true for LTP. Okay, and now we come to the new upcoming stable over column store.
+[06:25.800 --> 06:33.240]  And there are some features that I will not discuss in details, but there are some interesting ones
+[06:33.240 --> 06:43.080]  that I will look into later. So let's get quick answer these ones. We are officially
+[06:43.080 --> 06:54.360]  support ARM64 platform with vectorization as well using Neon. So this platform builds produces
+[06:54.360 --> 07:05.000]  slightly faster runtime comparing to our normal nightly CI routines. But I have seen that it
+[07:05.000 --> 07:13.000]  consumes 5% more over RAM, running the DML heavy workload like updates or deletes.
+[07:13.000 --> 07:25.000]  The next tool is called MCS Rebuild AM. And to explain why we decide to write this
+[07:25.000 --> 07:34.200]  tool, I need to make a small D tool. So how does column store the data? There are two parts,
+[07:34.200 --> 07:39.520]  the data itself and the metadata that describes where the data is. Like when you have multiple
+[07:39.520 --> 07:46.560]  nodes, you need to tell the query coordinator where to go for the data files. So the metadata
+[07:46.560 --> 07:56.920]  describes the location of data and column store tries its best to preserve this metadata in
+[07:56.920 --> 08:03.760]  tact and it has multiple copies of meta. So if one meta is corrupted for some reason, because
+[08:04.320 --> 08:14.560]  life is not ideal, there are multiple copies that you can use as a backup to restore. However,
+[08:14.560 --> 08:22.240]  if one loses its meta, there is no way to access the data itself properly, even if the data files
+[08:22.240 --> 08:30.360]  are intact. So this tool allows one to produce the metadata from the data files. The key
+[08:30.360 --> 08:40.440]  way is you have to create all the tables starting with column store older than 6.4.4 to allow this
+[08:40.440 --> 08:47.560]  feature to work. The next feature is distributed JSON function support. Technically speaking,
+[08:48.120 --> 08:52.760]  there were JSON functions in the column store from the very beginning, but unfortunately,
+[08:52.760 --> 08:58.440]  to use them, you need to fall back to a very slow mode, we call it table mode. That is basically
+[08:59.240 --> 09:10.520]  MariaDB crunching the data, but it asks for a full table scan from a column store. So it's not very
+[09:10.520 --> 09:20.040]  scalable, not fast. So we implemented this in terms of last year JSON. And now you can use
+[09:20.280 --> 09:29.800]  all but one functions. And these are JSON object egg and the JSON table. The last one is very,
+[09:30.520 --> 09:35.720]  how to say, MariaDB specific. It produces the relation.
+[09:39.720 --> 09:48.200]  That is also true. But I mean, by specific, I mean, we cannot produce the MariaDB relation,
+[09:48.200 --> 09:55.880]  to be honest. So we decided to postpone it because nobody is very interested in this one.
+[09:57.400 --> 10:06.120]  But we implemented. Good suggestion. Anybody is interested and maybe anybody knows what
+[10:06.120 --> 10:19.560]  JSON table does? Okay, that's a good statistic. So now, and here are features that I want to
+[10:19.560 --> 10:28.120]  discuss in some more details. First is auxiliary column. What it does, it basically speds up the
+[10:28.120 --> 10:35.880]  leads from 3x up to 50x, depending on a SQL schema. And what does it mean? The more columns you
+[10:35.880 --> 10:42.280]  have in the table, the faster the speed up will be. It is disabled. It has an additional
+[10:42.280 --> 10:47.560]  sped up configuration option. I will explain it a bit later. But let's take a look at the bottom
+[10:47.560 --> 10:57.320]  half of a slide. This is a very simplified data files layout to explain how delete operation
+[10:57.320 --> 11:02.120]  works previously before the patch on the left and after the patch on the right. So let's concentrate
+[11:02.120 --> 11:10.120]  on the left part. You can see the violet and blue empties. So when delete comes into the table,
+[11:10.120 --> 11:16.440]  it replaces the actual values in the columns, because we are columnar, with the special magic
+[11:16.440 --> 11:24.760]  values that are called empty, that are specific for a data type. And it does it in place. And
+[11:24.760 --> 11:32.360]  moreover, the delete operation has to store the actual block for a version before it changes
+[11:32.360 --> 11:41.960]  the data in place. So there are two block copies to do, and there are four in place changes that
+[11:41.960 --> 11:51.000]  has to be flushed. So what does the auxiliary column changes in this pattern? First, you can see
+[11:51.000 --> 11:57.400]  on the right side, there is an additional column. There is basically a flag. So delete operation
+[11:57.400 --> 12:04.040]  now goes over this auxiliary column and changes the flag over there. And this auxiliary column is
+[12:04.040 --> 12:10.920]  only one byte. So you need to store only one block of data, and you don't need to change to do in
+[12:10.920 --> 12:18.440]  place changes in all the columns. That's where the sped up comes from. As I said, there is an
+[12:18.440 --> 12:24.680]  additional, there is an additional opportunity to sped up it even more, and this is to enable
+[12:24.680 --> 12:32.040]  a fast delete. I will not discuss it in details, but internally, it doesn't update the metadata
+[12:32.040 --> 12:35.800]  file, so it makes it even faster to delete the operator.
+[12:36.360 --> 12:42.120]  Basically, you have a new column indicating if it's deleted or not, and you just update it.
+[12:42.120 --> 12:50.280]  Yes, that's true. We have plans to use this even more, this auxiliary column,
+[12:52.840 --> 12:56.200]  but I will discuss it later when we finally implement these features.
+[12:56.520 --> 13:07.720]  And to be honest, this fast delete gives an opportunity to implement the append-only
+[13:09.240 --> 13:16.120]  update. That should be also a very fast boost for update operation, but stay tuned, not today.
+[13:17.400 --> 13:23.720]  Next feature is extent map scalability improvement, and what extent map is. If you recall, couple
+[13:23.720 --> 13:29.560]  slides before, I already mentioned the metadata that describes where the data is, and extent map
+[13:29.560 --> 13:37.320]  is the core of this metadata. It's basically a structure and memory structure that allows to map
+[13:37.320 --> 13:45.640]  from a globally unique block number. Block is a minimally possible data unit in a cluster,
+[13:46.360 --> 13:54.040]  and the extent map allows to map from this block number to a tuple of OID, not partition segment,
+[13:54.040 --> 14:01.240]  and vice versa, from the tuple to a globally unique block number. And these operations are used
+[14:01.240 --> 14:07.720]  extensively in the cluster because you always want to know where the data is and what is the OID that
+[14:07.720 --> 14:15.640]  this block belongs to. Originally, the extent map was an array basically with the OIN lookup
+[14:16.200 --> 14:24.280]  complexity, and this array was replaced with, oh, I need to mention why it is a problem. Imagine the
+[14:24.280 --> 14:35.560]  extent map that is 200 max. So, going over 200 max, and one entry entry is only 100 bytes only,
+[14:35.560 --> 14:45.400]  so imagine how many entries are in these 200 max. It takes a lot to look up in such an enormous array.
+[14:46.200 --> 14:53.080]  An array, this array was replaced with a red-black tree. This makes the block-to-tuple mapping
+[14:54.280 --> 14:59.560]  to, this changes the complexity of block-to-tuple mapping to log n,
+[15:00.520 --> 15:11.480]  or log n. And to facilitate another conversion, another mapping from tuple to block,
+[15:11.480 --> 15:18.360]  we implemented the extent map index. There is basically a burger of couple hash maps on top
+[15:18.360 --> 15:30.920]  and a very tiny arrays at the bottom. So, this gives us the mapping operation complexity of OC.
+[15:32.600 --> 15:42.280]  And here is at the bottom, you will see the results. These are except of the CP import logs.
+[15:42.280 --> 15:49.000]  One is, one demonstrates that the preprocessed step takes roughly 30 seconds, and after the
+[15:49.000 --> 15:57.400]  patch, you see that it decreases to four seconds. It was originally. So, if you have a huge extent
+[15:57.400 --> 16:07.320]  map, it will give even faster operations. The next feature is a primproc and ex-manager
+[16:07.640 --> 16:13.240]  processes merger. If anybody here uses comestory, he knows there are a bunch of processes.
+[16:13.240 --> 16:18.200]  And the central ones are primproc and ex-manager, where ex-manager is a coordinator for the query
+[16:18.200 --> 16:29.000]  processing. And primproc is an actual worker. So, there were a lot of additional headache when
+[16:29.000 --> 16:36.840]  the local processes must communicate between each other over the same, in the same node.
+[16:36.840 --> 16:43.080]  So, same node communication goes over loopback. And this traffic is not compressed, comparing to
+[16:43.080 --> 16:50.840]  the different nodes communication that is compressed. So, combining these two run times,
+[16:50.840 --> 16:57.640]  we get the four to seven percent overall sped up. And this gives us another opportunities for
+[16:57.640 --> 17:09.320]  optimizations that I will mention later. Union push down. Previously, there was no way to
+[17:09.320 --> 17:17.400]  directly run the queries, like you can see at the bottom half of the bottom, the most bottom line
+[17:18.120 --> 17:24.680]  when the union closes at the top. Because MariaDB processing path for unions and simple
+[17:24.680 --> 17:33.880]  selects, it differs. And columnstore works using the notion of select handler that allows MariaDB
+[17:33.880 --> 17:40.200]  server to push the whole query down to columnstore. So, when there was a union, we cannot use this
+[17:40.200 --> 17:49.240]  path and we have to do, we call it a subquery wrap. So, we were wrapping these into a subquery and
+[17:49.240 --> 17:54.760]  this allows us to use the select handler, comparing to a table mode that is slower.
+[17:57.320 --> 18:05.720]  The next big feature is a full TPCH support. And why it is big? Because it is mostly concerned
+[18:05.720 --> 18:13.320]  with the optimizer, that let's face it columnstore lag previously. There are two queries,
+[18:14.280 --> 18:24.520]  with two features that columnstore lack and these two are correlated subquery with aggregates.
+[18:24.520 --> 18:31.880]  It's basically a scalar query, but with aggregate. It returns a single row that you can use in
+[18:31.880 --> 18:39.480]  comparison. And guess what? To enable this feature, we just disabled the error message
+[18:39.480 --> 18:47.800]  in the code. So, it was a very, very tiny change. And columnstore naturally supports such queries.
+[18:47.800 --> 18:56.360]  However, the last query type that was presented at the bottom half is way more elaborate to handle.
+[18:57.240 --> 19:07.640]  And that is the common conjunction detection and rewriting. As you can see, there are two
+[19:07.640 --> 19:13.400]  joint conditions at the bottom half of the slide. They are marked with the violet.
+[19:14.040 --> 19:19.160]  And these conditions are common. However, columnstore cannot handle the
+[19:20.040 --> 19:28.200]  joint conditions if they are combined with a junction or basically. So, to handle this query,
+[19:28.200 --> 19:36.200]  we need to go over all the conditions that are ordered and get the common one and put it at the top.
+[19:38.600 --> 19:46.440]  For a general case, it's very complex to find such patterns and applies them in a way that it
+[19:46.440 --> 19:53.960]  doesn't make the symmetrical meaning of the query itself. However, we manage this and this
+[19:53.960 --> 19:58.920]  feature will benefit not only TPCH query that didn't work previously, but all others.
+[19:59.640 --> 20:12.040]  External distinct. As you might know, columnstore was not great doing this thing. To be honest,
+[20:12.040 --> 20:19.240]  it was hash map based. So, it cannot do an external operation and it was tightly coupled
+[20:19.240 --> 20:26.040]  with order by. So, to allow this thing to be enacted, to become an external, we need to
+[20:26.040 --> 20:33.400]  untie them, to uncouple them, and we just applied the existing goodbye facility that already has
+[20:33.400 --> 20:42.600]  the external support, external operation support. So, this gives us a future optimization opportunities
+[20:42.600 --> 20:50.600]  and also it allows the distinct to scale now. So, it will be fast. The most notable changes maybe
+[20:50.600 --> 21:00.760]  because I was the order is the order by rewrite. The current implementation of order by facility
+[21:00.760 --> 21:09.240]  is based on a priority queue. That is great for top K queries like mentioned in the second bullet,
+[21:10.120 --> 21:17.240]  maybe the third. However, the priority queue timings are just terrifying when you run the
+[21:17.240 --> 21:24.680]  query on a huge data set without limit or the limit is big and relatively big. So, I replace the
+[21:25.560 --> 21:33.240]  priority queue I'll go with the different approach. It has 2.5 phases. It first calculated the sort
+[21:33.240 --> 21:40.600]  of runs in parallel, completely in parallel. And the new middle phase, it calculates non-overlap
+[21:40.600 --> 21:49.080]  intermutation ranges for the second phase. So, the second phase officially merges non-overlap
+[21:49.080 --> 21:55.960]  ranges in parallel. So, you have first phase and second phase and these two phases are completely
+[21:55.960 --> 22:05.320]  parallel. They don't overlap each other. So, in the end, the column star now has a choice between the
+[22:05.400 --> 22:11.240]  priority queue based sorting and this new algorithm that it will pick looking at the
+[22:12.840 --> 22:23.000]  order by usage pattern of the query. And these are the results. As you can see, the most interesting
+[22:23.000 --> 22:32.360]  is last two bullets. There is a comparison between the previous code, the previous version that is
+[22:32.360 --> 22:44.200]  based on a priority queue, the data taken from a TPCDS generator. And the first query uses the
+[22:44.200 --> 22:54.040]  integer sorting key columns. And the next, the second query uses the character key columns. So,
+[22:54.040 --> 23:02.760]  as you can see, for integers, it brings like four times faster. But I need to confess this is only
+[23:03.320 --> 23:11.640]  scalability factor, scale factor 10. So, it's not a big dataset, anyway. For a bigger dataset,
+[23:11.640 --> 23:21.400]  you can have like 20x or maybe even bigger. And to be honest, I don't compare with the
+[23:21.480 --> 23:28.760]  other open source engine just yet because I'm going to come up with a separate story about this
+[23:28.760 --> 23:35.960]  sorting. So, these are the links. If you're interested in column star, first is the code itself and
+[23:35.960 --> 23:42.600]  the second is JIRA. So, if you find bags, please post them. We will appreciate it. Thank you all for
+[23:42.600 --> 23:49.400]  coming again.
+[23:51.400 --> 23:52.780]  you

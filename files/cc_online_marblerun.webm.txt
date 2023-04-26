@@ -1,0 +1,236 @@
+[00:00.000 --> 00:12.360]  Hello everyone, my name is Moritz Eckert and in this talk I want to highlight a challenge
+[00:12.360 --> 00:15.720]  of confidential computing that goes more into this DevOps direction.
+[00:15.720 --> 00:22.840]  I want to talk about how we can deploy, orchestrate and manage confidential applications in a
+[00:22.840 --> 00:28.960]  scalable, more cloud native way using a tool called Maburon.
+[00:28.960 --> 00:33.720]  Before we go into the details, I want to first set the scene, give you an understanding of
+[00:33.720 --> 00:38.760]  a use case, of the problem set we're dealing with and then step by step explore the solution
+[00:38.760 --> 00:45.080]  that Maburon offers and in the end you might even have time for a short demo.
+[00:45.080 --> 00:55.000]  So we were doing a project together with Bosch where we were dealing with cars, vehicles,
+[00:55.000 --> 01:03.200]  creating video streams that contain personal identifiable information, PII.
+[01:03.200 --> 01:15.200]  That means license plates, faces, other things that we wanted to feed into a model training,
+[01:15.200 --> 01:22.080]  AI model training pipeline and we wanted to train that model on the raw real data.
+[01:22.080 --> 01:28.760]  That means no blurring, no cutouts and at the same time we wanted to make use of an
+[01:28.760 --> 01:34.720]  external labeling service that we would provide this material and they would label it for
+[01:34.720 --> 01:37.560]  us so we can train our model on it.
+[01:37.560 --> 01:45.200]  Of course this should all be done in a privacy preserving way, not sharing any of this PII.
+[01:45.200 --> 01:51.080]  And therefore we developed a pipeline that essentially splitted the image based on what
+[01:51.080 --> 01:58.880]  is PII and what is not and then would send the let's call it safe non-PII footage to
+[01:58.880 --> 02:05.760]  the labeling companies and get back the labels, put together the image with the PII information
+[02:05.760 --> 02:09.840]  again and then feed it to our model training.
+[02:09.840 --> 02:13.280]  And for that we wanted to use confidential computing.
+[02:13.280 --> 02:19.760]  That means from the car fleet to the actual trained model data would always be encrypted
+[02:19.760 --> 02:24.720]  also at runtime and we can have this whole pipeline verifiable.
+[02:24.720 --> 02:30.160]  And this pipeline should be scalable, should hold up against the challenges of a large
+[02:30.160 --> 02:36.680]  car fleet sending a lot of footage, a lot of video data.
+[02:36.680 --> 02:42.000]  You can find more about this use case of this project, we presented that with Bosch at Microsoft
+[02:42.000 --> 02:48.880]  Build, Intel Vision, you will find those talks online.
+[02:48.880 --> 02:55.920]  We from the actual site, we built open source projects to realize such types of confidential
+[02:55.920 --> 03:00.720]  computing applications, we have a bunch of tools targeting more of these new types of
+[03:00.720 --> 03:05.920]  applications and then we have a tool called Constellation that's more for the lift and
+[03:05.920 --> 03:07.320]  shift side.
+[03:07.320 --> 03:14.040]  So for this specific project we choose the Mavaron framework which we call the control
+[03:14.040 --> 03:19.200]  plane for scalable confidential apps.
+[03:19.200 --> 03:24.760]  But now that we know the problem statement, let's see in more detail what are the challenges
+[03:24.760 --> 03:30.600]  when you want to deploy such scalable AI pipeline or any other type of microservice architecture
+[03:30.600 --> 03:35.560]  in Kubernetes or any other cloud orchestrator.
+[03:35.560 --> 03:41.160]  So on the right hand side we have our cluster that's already confidential computing capable,
+[03:41.160 --> 03:48.080]  in that case it were SGX equipped machines, we already packaged our application into secure
+[03:48.080 --> 03:54.440]  enclaves, in this case we used the Grameen framework for Intel SGX which will be presented
+[03:54.440 --> 03:58.200]  in the next talk after that one.
+[03:58.200 --> 04:04.480]  So this is already done, now on the left hand side on the top left we have our DevOps team
+[04:04.480 --> 04:10.760]  and the DevOps team now wants to deploy all those different microservices that together
+[04:10.760 --> 04:16.920]  build up the pipeline and they want to ensure that all of them have integrity, they have
+[04:16.920 --> 04:20.120]  the right identity, they want to do remote attestation essentially.
+[04:20.120 --> 04:25.720]  But how can they do that without doing that for each and every service individually that
+[04:25.720 --> 04:30.680]  potentially can scale up and down dynamically, this is going to be a huge pain if you would
+[04:30.680 --> 04:31.680]  do that.
+[04:31.680 --> 04:37.960]  And then they want to provide configuration, they want to provide parameters similarly
+[04:38.040 --> 04:42.440]  how you would do in a regular Kubernetes deployment, but you can't trust the Kubernetes environment,
+[04:42.440 --> 04:45.360]  you can't trust the control plane or anything.
+[04:45.360 --> 04:50.720]  So how can they manage orchestrate such applications?
+[04:50.720 --> 04:56.520]  And then once deployed how can the individual services, how can they securely communicate
+[04:56.520 --> 05:02.760]  with each other knowing that the other end of the connection is indeed a valid secure
+[05:02.760 --> 05:07.760]  enclave, it has the right identity, it's also part of the pipeline and how can we do that
+[05:07.760 --> 05:09.680]  decoupled from the application layer?
+[05:09.680 --> 05:14.320]  So we don't have to do that over and over again when we build a new type of application
+[05:14.320 --> 05:17.160]  and need to do remote attestation on the application logic.
+[05:17.160 --> 05:21.960]  No, we want to do that in a service mesh fashion where we decouple this functionality and solve
+[05:21.960 --> 05:24.000]  it on a different layer.
+[05:24.000 --> 05:31.040]  And lastly, how can an external party like the Carfleet verify an entire deployment that's
+[05:31.040 --> 05:34.480]  just not one big monolith but consists of several services?
+[05:34.480 --> 05:40.400]  How can they verify it from the outside in one single simple step without knowing the
+[05:40.400 --> 05:44.320]  inner details of our architecture?
+[05:44.320 --> 05:49.200]  These are the challenges we are facing when we do real world deployments using confidential
+[05:49.200 --> 05:52.320]  computing.
+[05:52.320 --> 05:58.720]  So now that we know the challenge, let's see how Maveron approaches this problem.
+[05:58.720 --> 06:05.360]  So with Maveron, we deploy a control plane component, we call it the coordinator.
+[06:05.360 --> 06:10.800]  So we deploy the coordinator that itself runs inside a secure enclave.
+[06:10.800 --> 06:19.400]  That means our DevOps team can first verify that coordinator and then they can provide
+[06:19.400 --> 06:27.160]  or they provide the coordinator with a configuration, a deployment configuration we call the manifest
+[06:27.160 --> 06:33.120]  and that is similar to any other deployment configuration for Kubernetes.
+[06:33.120 --> 06:39.760]  But we deploy it to a trusted controller that we verified beforehand.
+[06:39.760 --> 06:46.120]  So I want to show a quick example of how such manifest could look like.
+[06:46.120 --> 06:48.360]  You can see here it's JSON format.
+[06:48.360 --> 06:51.240]  The first thing we define here are packages.
+[06:51.240 --> 06:54.160]  Packages are essentially the enclaves.
+[06:54.160 --> 06:57.520]  This right here is specific to into SGX.
+[06:57.520 --> 07:02.160]  We have the MR signer or here signer ID and so forth.
+[07:02.160 --> 07:09.000]  In the future, this will also support other types of CC hardware, for example, AMG, SCV
+[07:09.000 --> 07:11.080]  and so forth.
+[07:11.080 --> 07:17.120]  But in this case, we have two SGX enclaves back and front end and they are identified
+[07:17.120 --> 07:21.800]  with their unique signatures.
+[07:21.800 --> 07:25.760]  And once we have these packages defined, think of them like you defined a container,
+[07:25.760 --> 07:28.240]  a containerized enclave.
+[07:28.240 --> 07:31.160]  We define the next section, which is our models.
+[07:31.160 --> 07:37.880]  And models now consume such package or things like a Kubernetes pod consuming a container.
+[07:37.880 --> 07:44.600]  In this case, it consumes the back end package and then we can define several parameters
+[07:44.600 --> 07:51.200]  like files that should be available to that marble or the environment variables that you
+[07:51.200 --> 07:56.200]  want to have to find for that model and the arguments.
+[07:56.200 --> 08:01.680]  And this is similar to any other Kubernetes deployment, but now, because it's the manifest,
+[08:01.680 --> 08:07.760]  because you can verify it, the coordinator can enforce this configuration for your outplaves
+[08:07.760 --> 08:12.520]  and you can trust these configurations and that's the important point.
+[08:12.520 --> 08:15.400]  What we also have here is called roles.
+[08:15.400 --> 08:20.480]  So this model is associated with two roles, third reader and key reader.
+[08:20.480 --> 08:25.200]  And Maveron implements a type of role-based access control.
+[08:25.200 --> 08:31.800]  So if I scroll down in this manifest, I will find a section that is called roles.
+[08:31.800 --> 08:38.560]  And here, similar to any other role-based system, every role is associated with a resource
+[08:38.560 --> 08:45.680]  and the specific instances of these resource and it defines what action that role can perform
+[08:45.680 --> 08:48.080]  on the resource.
+[08:48.080 --> 08:52.040]  And these roles, we can then use to attach them to marbles.
+[08:52.040 --> 09:00.040]  So a model can do certain operations on resources and we also have users and users are authenticated
+[09:00.040 --> 09:06.520]  using PKI and then they can do whatever their role allows them to do.
+[09:06.520 --> 09:11.080]  One of the things, for example, would be to define a secret.
+[09:11.080 --> 09:19.080]  And the secret could be, for example, a user-defined secret, for example, an API key.
+[09:19.080 --> 09:23.440]  And then we have a user, we have a role that allows them to update the API key.
+[09:23.440 --> 09:28.280]  And this would, for example, allow you to have a multi-tenant scenario where you have
+[09:28.280 --> 09:36.120]  the DevOps team that deploys this application and you have another team that is managing
+[09:36.120 --> 09:43.920]  another service or access to something and that provides a key or an API key into that
+[09:43.920 --> 09:45.440]  application.
+[09:45.440 --> 09:51.480]  And using the role-based access control, they can deploy that or set that specific secret
+[09:51.480 --> 09:55.800]  after the manifest has been put in place.
+[09:55.800 --> 10:02.640]  So this key is then uploaded, is managed by the coordinator which is trusted and is from
+[10:02.640 --> 10:06.680]  there distributed to your services to your marbles.
+[10:06.680 --> 10:09.960]  And that means the DevOps team can never access a secret.
+[10:09.960 --> 10:11.680]  So you have a split of trust.
+[10:11.680 --> 10:18.320]  You have the owners of that secret that will always stay in control and you have the DevOps
+[10:18.320 --> 10:23.240]  team and they can engage in a multi-tenant scenario.
+[10:23.240 --> 10:28.800]  So we now have seen the manifest, we have seen the packages, the marbles, the role-based
+[10:28.800 --> 10:34.760]  access control and resources such as secrets.
+[10:34.760 --> 10:39.520]  So we go back to our example.
+[10:39.520 --> 10:46.240]  After setting the manifest, the coordinator will then take care of providing those credentials
+[10:46.240 --> 10:51.600]  or secrets or configurations to your marbles to your services.
+[10:51.600 --> 10:55.880]  So once you deploy them using regular Kubernetes means of deploying the application, they will
+[10:55.880 --> 11:01.600]  come up, they will be authenticated by the Marble Run coordinator and then receive their
+[11:01.600 --> 11:04.280]  parameters, their credentials.
+[11:04.280 --> 11:09.000]  Part of these credentials are TLS certificates.
+[11:09.000 --> 11:16.680]  So every service has a unique leave TLS certificate which goes up to a root certificate that is
+[11:16.680 --> 11:20.360]  established by Marble Run as a PKI infrastructure.
+[11:20.360 --> 11:24.960]  So there's for every deployment, you have one root certificate.
+[11:25.680 --> 11:30.520]  Those can then be used to establish secure connections between the services.
+[11:30.520 --> 11:35.560]  For certain runtime environments such as EGO, this can be done automatically in a neutral
+[11:35.560 --> 11:41.080]  TLS fashion if you're familiar with service mesh kind of things, you might be familiar
+[11:41.080 --> 11:45.320]  with that term, but essentially it means you will wrap every TCP connection between your
+[11:45.320 --> 11:51.560]  services automatically into TLS so they are secured.
+[11:51.560 --> 11:57.600]  For other types of runtime environments or if they're specific need, you can also consume
+[11:57.600 --> 12:00.280]  those credentials using the Marble Run manifest.
+[12:00.280 --> 12:04.640]  You can place them into files, you can place them into the environment and then your application
+[12:04.640 --> 12:08.560]  can take them from there and use them to establish secure connections.
+[12:08.560 --> 12:12.240]  That's very similar to how you would operate with like CertManager or other certificate
+[12:12.240 --> 12:14.760]  management systems for Kubernetes.
+[12:14.760 --> 12:20.680]  The difference being that those certificates are only available inside that secure confidential
+[12:20.680 --> 12:25.600]  environment, inside your secure confidential deployment, that means the coordinator and
+[12:25.600 --> 12:29.200]  then your services.
+[12:29.200 --> 12:35.520]  So now what we have is we have our running deployment, everything is connected, they
+[12:35.520 --> 12:37.320]  can communicate with each other.
+[12:37.320 --> 12:43.360]  So in the last step now an outside party can connect to the coordinator again, can obtain
+[12:43.360 --> 12:48.160]  its attestation statement that contains the Marble Run manifest so they can verify that
+[12:48.160 --> 12:53.720]  indeed a valid Marble Run coordinator, they can verify that indeed the deployment, the
+[12:53.720 --> 12:59.360]  manifest they expect it to be in place there and they will obtain the root certificate
+[12:59.360 --> 13:06.800]  from this deployment and after verifying that they can use the root certificate to authenticate
+[13:06.800 --> 13:13.560]  to their deployment, in this case the front end of the AI pipeline that consumes the
+[13:13.560 --> 13:18.040]  video stream from the cars and transitively because they verify the coordinator, they
+[13:18.040 --> 13:25.840]  verify the manifest, they verified the entire deployment in one concise simple step.
+[13:25.840 --> 13:26.840]  And that's it.
+[13:26.840 --> 13:32.840]  Now we have all of those problems I showed you earlier, we have them solved, we can manage
+[13:32.840 --> 13:37.400]  and orchestrate that deployment from the DevOps team side, we can communicate with
+[13:37.400 --> 13:43.280]  that deployment from the car fleet and potentially any other third party or legislator or regulator
+[13:43.280 --> 13:49.400]  can verify this deployment as well using the same type of mechanism.
+[13:49.400 --> 13:51.840]  So in summary, what does Marble Run do?
+[13:51.840 --> 13:59.240]  It adds a orchestratability, a configurability, a manageability to your confidential deployments,
+[13:59.240 --> 14:04.160]  make some scalable, make them updatable, make them manageable.
+[14:04.160 --> 14:11.560]  It can run standalone but it runs best on Kubernetes and the usual cloud environments.
+[14:12.560 --> 14:18.000]  It supports several runtimes so far it's SGX specific, so for example Ego, Graphene,
+[14:18.000 --> 14:25.440]  Ocklum and the future, we plan to also support other types of confidential computing runtimes
+[14:25.440 --> 14:31.840]  like AMD, SAP, Intel, TDAX, most likely based on the confidential containers project.
+[14:31.840 --> 14:37.280]  Okay, now we have a little bit of time left to look at a demo.
+[14:37.280 --> 14:40.680]  Let me switch to my console.
+[14:40.680 --> 14:46.720]  I have a Kubernetes cluster running here on Microsoft Azure with two nodes that are both
+[14:46.720 --> 14:57.560]  equipped with SGX capabilities and we will now install Marble Run, set the manifest and
+[14:57.560 --> 14:59.320]  deploy a simple demo application.
+[14:59.320 --> 15:07.480]  So we use the Marble Run CLI tool that you can use to interact with the Marble Run coordinator
+[15:07.480 --> 15:09.920]  and perform your usual DevOps tasks.
+[15:09.920 --> 15:19.800]  So Marble Run will make sure to install the Microsoft coordinator that just should take
+[15:19.800 --> 15:27.920]  a second for everything to be set up and then we can port forward the client API to local
+[15:27.920 --> 15:36.160]  hosts so we can interact with the coordinator and this should be, if you're in a production
+[15:36.160 --> 15:41.960]  environment, you can of course also use an external open server or any other way of exporting
+[15:41.960 --> 15:46.440]  that service to any kind of environment you want to.
+[15:46.440 --> 15:56.960]  You just need to wait a second for the coordinator to be up and running and then I can use this
+[15:56.960 --> 15:59.680]  client API from here.
+[15:59.680 --> 16:06.080]  And the second step would be then to verify the coordinators in DDA valid Marble Run coordinator
+[16:06.080 --> 16:12.880]  with the correct enclave, you can use any type of command that will automatically do
+[16:12.880 --> 16:19.840]  this verification and in this case we want to obtain the root certificate of this Marble
+[16:19.840 --> 16:21.200]  Run deployment here.
+[16:21.200 --> 16:26.840]  This would also be what an external party like a Carfleet can do to obtain a root certificate
+[16:26.840 --> 16:31.160]  and then connect to the application, of course you can always do that ahead of time and then
+[16:31.160 --> 16:35.040]  just distribute that certificate as the root of trust.
+[16:35.040 --> 16:44.280]  But once we trust the coordinator, which is just a plain constellation coordinator,
+[16:44.280 --> 16:55.920]  we can do Marble Run check providing the Marble Run, oh sorry it's not check, it's status.
+[16:55.920 --> 17:00.760]  We can use Marble Run status to see what status the Marble Run coordinator is in, in this
+[17:00.760 --> 17:04.160]  case it's waiting for a manifest to be set.
+[17:04.600 --> 17:10.240]  Now we can set the manifest, I have one prepared here.
+[17:10.240 --> 17:16.120]  It's a very simple application, just having three packages, microservice, demo application,
+[17:16.120 --> 17:22.360]  one front end, two back end services, so three packages, also three marbles for these packages
+[17:22.360 --> 17:28.640]  and they build up such demo, emoji, voting service.
+[17:28.640 --> 17:32.240]  We have already seen the manifest, I'm not going to go into the detail again but of course
+[17:32.240 --> 17:37.200]  also this is in GitHub so you can have a look at it if you want to.
+[17:37.200 --> 17:43.760]  And then we can just set this manifest using Marble Run manifest set and it will upload
+[17:43.760 --> 17:50.760]  the manifest and now the Marble Run coordinator should be in the state of being ready to accept
+[17:50.760 --> 17:53.560]  and authenticate marbles.
+[17:53.560 --> 17:58.280]  So now we can just go ahead and deploy our application and this is just regular Kubernetes
+[17:58.280 --> 17:59.880]  application deployments.
+[17:59.880 --> 18:07.160]  So in this case we're using Helm for this emoji voter demo application, it will install
+[18:07.160 --> 18:14.800]  those three services and make sure that they are continuously running.
+[18:14.800 --> 18:20.960]  And we can now check Marble Run and see those authentication requests where those marbles
+[18:20.960 --> 18:26.360]  for example the web front end or one of those two back end services will contact the coordinator,
+[18:26.400 --> 18:31.800]  will authenticate itself and be provided with the configurational parameters and their credentials.
+[18:31.800 --> 18:38.520]  So we see the web front end was first and it was successfully activated as a new model.
+[18:38.520 --> 18:42.920]  And this will continuously be running.
+[18:42.920 --> 18:50.840]  So now if I go ahead and get all the parts in the emoji voter namespace I will see that
+[18:50.840 --> 18:55.400]  all of these services are indeed running and if I would now scale up and down one of them
+[18:55.840 --> 19:02.440]  they will be automatically authenticated again by Marble Run and be added to this deployment
+[19:02.440 --> 19:08.040]  spanning a confidential overlay, a confidential deployment.
+[19:08.040 --> 19:10.520]  Yeah and that's it from the demo.
+[19:10.520 --> 19:14.480]  I think we've seen how you can interact with the Marble Run CLI, how you can install it,
+[19:14.480 --> 19:21.000]  how easy it is to deploy a confidential application and we can then now keep using Marble Run
+[19:21.000 --> 19:26.040]  to orchestrate and update secrets and update things based on what we defined in the manifest.
+[19:27.800 --> 19:29.320]  Yeah let's go back to the slides.
+[19:33.080 --> 19:39.480]  That's it. I think we've seen in summary Marble Run makes it quite easy to deploy,
+[19:40.200 --> 19:48.360]  orchestrate, just manage applications during the lifecycle, manage confidential applications
+[19:48.360 --> 19:54.360]  during the lifecycle and it augments the usual DevOps stack of cloud native deployments
+[19:55.320 --> 19:58.680]  using Kubernetes, using your regular service mesh and so forth.
+[19:58.680 --> 20:03.480]  So if you want to try it out or want more details please see our Github page, it also
+[20:03.480 --> 20:08.840]  links to a documentation, you can very quickly create your first confidential deployment.
+[20:09.640 --> 20:14.280]  We also have a simulation node so if you're not, don't have access to any type of confidential
+[20:14.520 --> 20:18.120]  computing hardware you can just use the simulation node to run it locally using MiniCube
+[20:19.960 --> 20:22.680]  or whatever the tooling you have in place.
+[20:23.560 --> 20:28.200]  And then if you have further questions please get in touch, you can find me on LinkedIn,
+[20:28.200 --> 20:35.080]  you can join our Discord. I will also be there tomorrow for the day two of the confidential
+[20:35.080 --> 20:41.560]  computing dev room. Please hit me up if you have any questions or just want to have a chat.
+[20:42.200 --> 20:49.960]  And yeah, before we go into the Q&A one last cheeky little self-advertisement,
+[20:49.960 --> 20:53.560]  we have the open confidential computing conference coming up in March.
+[20:54.120 --> 20:59.000]  I think this is you're the right audience for that. There are a lot of confidential computing open
+[20:59.000 --> 21:05.240]  source projects that are going to be presented, some interesting applications and other insights
+[21:05.240 --> 21:11.800]  into confidential computing in general. So yeah, it's free. It's online. Please register if you're
+[21:11.800 --> 21:18.200]  interested. It will be very, very cool to see you all there. That's it. Thank you very much.
+[21:18.200 --> 21:24.200]  And I think we have a bit of time left for questions.
+[21:35.240 --> 21:36.620]  you

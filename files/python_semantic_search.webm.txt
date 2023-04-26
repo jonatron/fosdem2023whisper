@@ -1,0 +1,323 @@
+[00:00.000 --> 00:13.320]  All right, everyone, can we get a big welcome to Tuana?
+[00:13.320 --> 00:15.760]  Can you hear me?
+[00:15.760 --> 00:16.760]  Great.
+[00:16.760 --> 00:27.240]  So if anyone was here for the talk before, just a disclaimer, I'm not as good a public
+[00:27.240 --> 00:28.240]  speaker.
+[00:28.240 --> 00:32.440]  I think I enjoy malware so much, but it's all downhill from there, so just FYI.
+[00:32.440 --> 00:36.360]  All right, so I'm going to be talking about building a semantic search application in
+[00:36.360 --> 00:41.240]  Python, and specifically we're going to be using an open source framework called Haystack,
+[00:41.240 --> 00:42.240]  and that's why I'm here.
+[00:42.240 --> 00:47.880]  So a bit about me, I'm a developer advocate at DeepSet, and we maintain Haystack.
+[00:47.880 --> 00:51.720]  And yeah, so this is some information about me, but let's just dive right into it.
+[00:51.720 --> 00:56.680]  So the agenda I'm going to follow, I'm going to try to keep the NLP stuff quite high level
+[00:56.680 --> 01:01.680]  and focus on the how to build bit, but I do have to give a bit of a high level explanation,
+[01:01.680 --> 01:06.400]  so I'm going to do a brief history on what we mean by semantic search.
+[01:06.400 --> 01:10.240]  Please do not judge me for this example, Kardashian sisters.
+[01:10.240 --> 01:14.520]  So let's assume we have a bunch of documents and let's see what would happen if we do some
+[01:14.520 --> 01:18.680]  keyword search on it, and let's say we've got the query Kardashian sisters.
+[01:18.680 --> 01:23.240]  You might get something a bit like this, which is great, and you can see that there's some
+[01:23.240 --> 01:28.320]  clever stuff going on here, sisters maybe associated with siblings and family as well.
+[01:28.320 --> 01:32.360]  Keyword search is still very widely used, but this is the type of result you might get
+[01:32.360 --> 01:35.560]  from a corpus of documents you might have.
+[01:35.560 --> 01:37.680]  But what if that's just not enough?
+[01:37.680 --> 01:42.920]  What if I want to be able to ask something like, who is the richest Kardashian sister?
+[01:42.920 --> 01:47.760]  How do I make this system understand what I'm trying to get to?
+[01:47.760 --> 01:49.400]  So for that, let's have a look at this.
+[01:49.400 --> 01:53.120]  There might be some names you've already seen here, especially the last one there.
+[01:53.120 --> 01:57.560]  I think everyone and their grandparents have heard of this by now, chat GPT.
+[01:57.560 --> 01:59.240]  So these are language models.
+[01:59.240 --> 02:07.400]  I'm going to briefly walk through where they get such impressive functionality from.
+[02:07.400 --> 02:11.760]  So most of them are based on what we call transformers.
+[02:11.760 --> 02:15.840]  What those are doing is what I try to depict at the top here.
+[02:15.840 --> 02:19.320]  So imagine that thing in the middle as the language model.
+[02:19.320 --> 02:24.640]  And very, very simply put, obviously every model does something a bit different or for
+[02:24.640 --> 02:27.800]  slightly different use cases, let's say.
+[02:27.800 --> 02:33.480]  Given a piece of text, they will produce some sort of vector representation of that text.
+[02:33.480 --> 02:37.080]  They're trained on very vast amounts of text data, and then this is what we get at the
+[02:37.080 --> 02:38.560]  end of the day.
+[02:38.560 --> 02:41.680]  And this is cool because it's enabled us to do many different things.
+[02:41.680 --> 02:46.360]  We can use those vectors to compare them to each other, like dog might be close to cat
+[02:46.360 --> 02:49.160]  but far away from teapot, for example.
+[02:49.160 --> 02:54.120]  And that's enabled us to do a lot of different things like question answering, summarization,
+[02:54.120 --> 02:57.400]  what we call retrieval, so document retrieval.
+[02:57.400 --> 02:59.240]  And it's all thanks to these transformers.
+[02:59.240 --> 03:04.720]  And a lot of these use cases are often grouped under the term search because actually what's
+[03:04.720 --> 03:08.600]  happening in the background is a very clever search algorithm.
+[03:08.600 --> 03:13.000]  So question answering and retrieval specifically can be grouped under search.
+[03:13.000 --> 03:15.680]  All right, how does this work?
+[03:15.800 --> 03:20.560]  And I'm very briefly going to go through what these different types of models do and how
+[03:20.560 --> 03:25.840]  they do what they do, and I'm going to talk about the evolution from extractive models
+[03:25.840 --> 03:29.640]  to now generative models like chat GPT, for example.
+[03:29.640 --> 03:33.960]  The very simple one, and we're going to build our first semantic search application with
+[03:33.960 --> 03:39.520]  this type of model, is often referred to as the reader model, simply a question answering
+[03:39.520 --> 03:43.560]  model, very specifically an extractive question answering model.
+[03:43.600 --> 03:50.280]  The way these work are given a piece of context and query, they're very good at looking through
+[03:50.280 --> 03:56.040]  that context and finding, extracting the answer from that context, but it does need that context.
+[03:56.040 --> 04:02.080]  Obviously, there are some limitations to these models because they're limited by input length.
+[04:02.080 --> 04:05.400]  I can't give it just infinite amounts of data.
+[04:05.400 --> 04:10.960]  But we have come up with ways to make that a bit more efficient, and we've introduced
+[04:10.960 --> 04:16.440]  models that we often refer to as retriever models, or embedding models.
+[04:16.440 --> 04:19.680]  These don't necessarily have to be language models, I'm going to be looking at language
+[04:19.680 --> 04:25.040]  models, it could also be based on keyword search that we saw before.
+[04:25.040 --> 04:30.480]  But what they do is they act as a sort of filter, so let's say you've got a bunch of
+[04:30.480 --> 04:34.320]  documents, let's say you've got thousands and thousands of documents, and the retriever
+[04:34.320 --> 04:39.360]  can basically say, hey, I've got this query, and this is the top five, ten most relevant
+[04:39.360 --> 04:42.600]  documents that you should look at, and then that means that the reader doesn't have to
+[04:42.600 --> 04:44.080]  look through anything.
+[04:44.080 --> 04:46.960]  So we actually gain a lot of speed out of this.
+[04:46.960 --> 04:52.840]  All right, finally, this is all the hype today, and you'll notice, well, one thing you should
+[04:52.840 --> 04:58.680]  notice is you see that the document context, anything like that, I've chopped it off, it's
+[04:58.680 --> 05:00.080]  just a query.
+[05:00.080 --> 05:03.840]  So these new language models, they don't actually need context.
+[05:03.840 --> 05:07.480]  You can give it context, but it doesn't require context.
+[05:07.480 --> 05:11.000]  And this is very cool, because they produce human-like answers.
+[05:11.000 --> 05:17.520]  What they're trained to do, the task to do, is not extracting answers, it's generating
+[05:17.520 --> 05:19.360]  answers.
+[05:19.360 --> 05:22.680]  And I just want to point out there are two things here.
+[05:22.680 --> 05:25.280]  It doesn't necessarily have to be answers.
+[05:25.280 --> 05:30.480]  So I'm going to be looking at an answer generator, but it can just be, you know, prompt it to
+[05:30.480 --> 05:35.880]  produce some context, it doesn't necessarily have to be an answer to a question.
+[05:35.880 --> 05:41.240]  So we've been seeing this, maybe you've seen some of these scenes lately, so this is chat
+[05:41.240 --> 05:46.560]  GPT again on the theme, who is the tallest Kardashian sister, it hasn't just extracted
+[05:46.560 --> 05:51.400]  Kendall for me, it said, the tallest Kardashian sister is Kendall Jenner, perfect.
+[05:51.400 --> 05:54.800]  But let's see what happens if it's not like a question.
+[05:54.800 --> 05:58.480]  This is not my creativity, by the way, but I think it's amazing.
+[05:58.480 --> 06:03.200]  Write a poem about Fostam in the style of Markdown, change log, that's what you get.
+[06:03.200 --> 06:04.200]  There you go.
+[06:04.200 --> 06:08.240]  All right, so these language models are readily available.
+[06:08.240 --> 06:11.480]  You might have already heard these names, OpenAI, Kahir.
+[06:11.480 --> 06:15.320]  They provide these increasingly large language models.
+[06:15.320 --> 06:19.280]  There is a difference when we say language model and large language model, but leave
+[06:19.280 --> 06:22.240]  that aside for now, let's not talk about that.
+[06:22.240 --> 06:26.560]  There are also many, many, many open source models on Huggingface, and if you don't know
+[06:26.560 --> 06:31.480]  what Huggingface is, I think very simply put, I like to refer it to sort of like the GitHub
+[06:31.480 --> 06:32.480]  of machine learning.
+[06:32.640 --> 06:36.960]  So you can host your open source models and other developers can use them, use them in
+[06:36.960 --> 06:40.360]  their projects or even contribute to them.
+[06:40.360 --> 06:45.400]  And what's really cool about them, like I said, your search results stop becoming just
+[06:45.400 --> 06:49.320]  simple search results, they are human-like answers.
+[06:49.320 --> 06:55.440]  So now let's look at how we use these language models for various use cases.
+[06:55.440 --> 06:59.120]  For that, I want to talk about Haystack, this is why I'm here.
+[06:59.120 --> 07:06.360]  So Haystack is an open source NLP framework built in Python, and what it achieves is basically
+[07:06.360 --> 07:09.160]  what this picture is trying to show you.
+[07:09.160 --> 07:14.800]  You're free to build your own end-to-end NLP application, and each of those green boxes
+[07:14.800 --> 07:17.560]  are a high-level component in Haystack.
+[07:17.560 --> 07:20.920]  There are retrievers that we looked at, there are readers that we looked at, we'll look
+[07:20.920 --> 07:25.400]  at some different ones as well, and each of these are basically the main class, and you
+[07:25.400 --> 07:29.320]  might have different types of readers, different types of retrievers.
+[07:29.320 --> 07:34.000]  For example, there could be a reader that is good at looking at paragraphs and extracting
+[07:34.000 --> 07:38.040]  answers, but there might be a reader type called table reader that's good at looking
+[07:38.040 --> 07:41.240]  at tables and retrieving answers from that.
+[07:41.240 --> 07:45.240]  There are integrations with HuggingFace, so that means you can just download a model off
+[07:45.240 --> 07:50.800]  of HuggingFace, but also open AI here, obviously you need to provide an API key, but you are
+[07:50.800 --> 07:54.120]  free to use those as well.
+[07:54.840 --> 08:00.640]  A building in an NLP application isn't just about the search component, you presumably
+[08:00.640 --> 08:06.240]  have lots of documents somewhere, maybe the PDFs, maybe the TXDs, so they're components
+[08:06.240 --> 08:12.680]  for you to build your indexing pipeline that we call so that you can write your data somewhere
+[08:12.680 --> 08:16.840]  in a way that can be used by these language models.
+[08:16.840 --> 08:21.080]  Some of those components, we already talked briefly about the reader and the retriever,
+[08:21.120 --> 08:22.480]  we're going to be using those.
+[08:22.480 --> 08:25.840]  There could be an answer generator, a question generator, we're not going to look at that
+[08:25.840 --> 08:29.480]  today, but that's really cool because then you can use those questions to train another
+[08:29.480 --> 08:31.520]  model, for example.
+[08:31.520 --> 08:35.680]  Summarizer, prompt node, we're going to very briefly look into that, but you get the idea.
+[08:35.680 --> 08:41.000]  There's a bunch of components and each of them might have types under them.
+[08:41.000 --> 08:46.120]  You can use data connectors, file converters as mentioned, pre-processing your documents
+[08:46.120 --> 08:50.480]  in a way that's going to be a bit more useful to the language model, for example, and of
+[08:50.520 --> 08:55.320]  course, you need to keep your data somewhere, so you might decide you want to use elastic
+[08:55.320 --> 08:59.800]  search or open search, or you might want to use something a bit more vector optimized,
+[08:59.800 --> 09:05.560]  and these are all available in the Haystack framework.
+[09:05.560 --> 09:10.640]  This is the idea of, I talked about the nodes, but the idea behind building with these nodes
+[09:10.640 --> 09:12.600]  is to build your own pipeline.
+[09:12.600 --> 09:13.760]  This is just an example.
+[09:13.760 --> 09:17.080]  You really don't have to pay attention to the actual names of these components, but to
+[09:17.080 --> 09:18.680]  give you an idea.
+[09:18.720 --> 09:24.640]  You are free to decide what path your application should take based on a decision.
+[09:24.640 --> 09:29.160]  For example, here we have what we call the query classifier, so let's say a user enters
+[09:29.160 --> 09:33.760]  a keyword, there's no point in doing fancy embedding search, maybe, so you might route
+[09:33.760 --> 09:35.880]  it to keyword search.
+[09:35.880 --> 09:40.840]  If the user enters something that's more like a human-formed question, you might say, okay,
+[09:40.840 --> 09:44.720]  do some what we call dense retrieval or embedding retrieval.
+[09:44.720 --> 09:46.480]  That's just an example.
+[09:46.840 --> 09:51.000]  Finally, I'm not going to get into this today at all, but let's say you have a running application,
+[09:51.000 --> 09:55.520]  you can just provide it through REST API, and then you're free to query it, upload more
+[09:55.520 --> 09:58.640]  files, and index them, and so on.
+[09:58.640 --> 10:04.400]  All right, so let's look at how that might look first thing you do is install farm Haystack.
+[10:04.400 --> 10:08.080]  If you're curious as to why there is farm at the beginning there, you can talk about
+[10:08.080 --> 10:09.080]  this later.
+[10:09.080 --> 10:12.120]  It's a bit about the history of the company.
+[10:12.120 --> 10:16.240]  Then we just simply initialize two things, the retriever.
+[10:16.240 --> 10:20.920]  Here we specifically have the embedding retriever, and notice that I'm giving it the document
+[10:20.920 --> 10:26.240]  stall, so the retriever already knows where to look for these documents, and then we define
+[10:26.240 --> 10:27.600]  an embedding model.
+[10:27.600 --> 10:32.200]  I mentioned that these retrievers could be keyword retrieval, or it could be retrieval
+[10:32.200 --> 10:34.920]  based on some embedding representation.
+[10:34.920 --> 10:41.200]  Here we're basically saying use this sum model name, so it's just a model, to create the
+[10:41.200 --> 10:43.320]  vector representations.
+[10:43.320 --> 10:49.640]  Then I'm initializing a reader, and this is a very commonly used, let's say, extract
+[10:49.640 --> 10:50.800]  a question answering model.
+[10:50.800 --> 10:55.560]  Again, some other model, and these are both off of hugging face, let's imagine.
+[10:55.560 --> 11:01.080]  We've got this retriever, and it's connected to a document store, and we've got a reader.
+[11:01.080 --> 11:03.880]  How would we build our pipeline?
+[11:03.880 --> 11:08.560]  We would first initialize a pipeline, and then the first thing we add is the first node,
+[11:08.560 --> 11:09.720]  and we're saying retriever.
+[11:09.760 --> 11:14.640]  I'm first adding the retriever, and that input you see, inputs query, is actually a special
+[11:14.640 --> 11:19.800]  input in Haystack, and it's usually indicating that this is the entry point.
+[11:19.800 --> 11:24.480]  This is the first thing that gets the query, so okay, we've told it, you've got the query.
+[11:24.480 --> 11:29.880]  I could leave it here, and this pipeline, if I run it, what it's doing is, given a query,
+[11:29.880 --> 11:31.800]  it's just dumping out documents for me.
+[11:31.800 --> 11:35.960]  That's what the retriever does, it's just going to return to me the most relevant documents.
+[11:35.960 --> 11:41.560]  I want to build a question answering pipeline, so I would maybe add a second node, and I
+[11:41.560 --> 11:46.560]  would say now this is the question answering model node, and anything that's the output
+[11:46.560 --> 11:50.000]  from the retriever is an input to this node.
+[11:50.000 --> 11:51.000]  That's simply it.
+[11:51.000 --> 11:57.840]  You could do this, but you could also just use pre-made pipelines.
+[11:57.840 --> 12:00.960]  This is a very common one, so we do have a pre-made pipeline for it, and it's just simply
+[12:00.960 --> 12:05.120]  called an extractive QA pipeline, and you just tell it what retriever and what reader
+[12:05.120 --> 12:10.480]  to use, but the pipeline I built before, that's just a lot more flexible.
+[12:10.480 --> 12:16.440]  I'm free to add any more nodes to this, I'm free to extract any nodes from this, so it's
+[12:16.440 --> 12:20.760]  just a better way to build your own pipeline.
+[12:20.760 --> 12:25.960]  Then simply what I do is I run what now looks like a very random question, but we'll get
+[12:25.960 --> 12:26.960]  to it.
+[12:26.960 --> 12:30.680]  Then hopefully you have a working system, and you've got an answer.
+[12:30.680 --> 12:31.680]  Great.
+[12:31.680 --> 12:36.600]  I'm going to build an actual example, so I want to set the scene, and I was very lazy.
+[12:36.600 --> 12:41.120]  This is actually the exact example we have in our first tutorial on our website, but
+[12:41.120 --> 12:47.120]  let's assume we have a document store somewhere, and it has a bunch of documents, TXT files
+[12:47.120 --> 12:48.960]  about Game of Thrones.
+[12:48.960 --> 12:52.240]  I'm going to make this document store FIES document store.
+[12:52.240 --> 12:56.400]  This is one of the options, so let's assume I've got FIES document store, and of course
+[12:56.440 --> 12:59.880]  I want to do question answering, and I want this to be efficient, so we're going to build
+[12:59.880 --> 13:04.080]  exactly that pipeline we just saw before, Retriever followed by a reader.
+[13:04.080 --> 13:08.240]  Specifically, I'm going to use an embedding Retriever, so these are the ones that can
+[13:08.240 --> 13:13.400]  actually look at vector representations and extract the most similar ones, and then we
+[13:13.400 --> 13:18.560]  are going to have a reader, simply a question answering node at the end.
+[13:18.560 --> 13:19.880]  How would that look?
+[13:19.880 --> 13:22.760]  I first initialize my document store.
+[13:22.800 --> 13:26.480]  This is basically, I'm not going through the indexing one just now, we'll look at that
+[13:26.480 --> 13:31.120]  in a bit, but let's assume the files are already indexed, and they're in that FIES document
+[13:31.120 --> 13:35.640]  store, and then I've got a Retriever, I'm telling it where to look, and look at my document
+[13:35.640 --> 13:40.800]  store, and I'm using this very specific embedding model of a hugging face.
+[13:40.800 --> 13:47.480]  I then tell the Retriever to update all of the embeddings in my document store, so it's
+[13:47.520 --> 13:53.520]  basically using that model to create vector representations of all of my TXD files, and
+[13:53.520 --> 13:55.440]  then I'm initializing a reader.
+[13:55.440 --> 14:01.040]  Same thing that we did before, I'm just using a specific model of a hugging face, this is
+[14:01.040 --> 14:04.480]  trained by the company I work for too.
+[14:04.480 --> 14:06.400]  Then I do the exact same thing I did before.
+[14:06.400 --> 14:11.240]  I'm just creating the pipeline, adding the nodes, and then I run maybe who is the father
+[14:11.240 --> 14:16.760]  of ARIA stock, and this is what I might get back as an answer.
+[14:16.800 --> 14:21.000]  The thing to notice here, the answers are very eddard, Ned, and that's because it's
+[14:21.000 --> 14:25.600]  not generating answers, it's extracting the answer that's already in the context.
+[14:25.600 --> 14:31.600]  If you see the first answer below, you'll notice that there's eddard in there, and this pipeline
+[14:31.600 --> 14:35.920]  and this model has decided this is the most relevant answer to you, I could have printed
+[14:35.920 --> 14:42.160]  out schools, you can get schools, I just haven't here, and then I said give me the top five.
+[14:42.200 --> 14:47.960]  The first two, three, I think are correct, so we've got something working, but what if
+[14:47.960 --> 14:53.280]  I want to generate human sounding like answers, eddard is pretty okay, I've got the answer,
+[14:53.280 --> 14:58.680]  but maybe I want a system, maybe I want to create a chatbot that talks to me.
+[14:58.680 --> 15:02.440]  Let's look at how we might do that.
+[15:02.440 --> 15:07.040]  This is going to be a bit of a special example, because I'm not going to build a pipeline.
+[15:07.040 --> 15:11.400]  The reason for that is, as mentioned before, these generative models don't need context,
+[15:11.440 --> 15:13.880]  so I should be able to just use them.
+[15:13.880 --> 15:19.960]  We've got this node called the prompt node, and what this does is actually a special node,
+[15:19.960 --> 15:24.640]  because you can more fit based on what you want it to do.
+[15:24.640 --> 15:29.680]  You might have heard recently this whole terminology around prompt engineering, and that's basically
+[15:29.680 --> 15:35.000]  used with models that are able to consume some instruction and act accordingly.
+[15:35.000 --> 15:39.920]  By default, our prompt node is basically told, you know, just answer the question, that's
+[15:39.960 --> 15:45.240]  all it does, but you could maybe define a template for it, what we call a prompt template, so
+[15:45.240 --> 15:50.680]  I could have maybe said, you know, answer the question as a yes or no answer, and it
+[15:50.680 --> 15:54.120]  would give me a yes or no answer, but obviously I need to ask it a yes or no question for
+[15:54.120 --> 15:55.120]  it to make sense.
+[15:55.120 --> 16:00.360]  Anyway, so I'm just using it like this, like the pure form, and I'm using a model from
+[16:00.360 --> 16:05.600]  OpenAI, obviously I need to provide an API key, and I'm using this particular one, text
+[16:05.600 --> 16:07.720]  of inchy 003.
+[16:07.720 --> 16:11.880]  I actually ran these yesterday, so these are the replies I got, and this particular one
+[16:11.880 --> 16:16.440]  I ran a few times, so the first time I ran, when is Milosh flying to Frankfurt?
+[16:16.440 --> 16:20.360]  By the way, spoiler alert, Milosh is our CEO.
+[16:20.360 --> 16:25.160]  So I know who Milosh is, and I know when he's flying to Frankfurt, or when he flew to Frankfurt.
+[16:25.160 --> 16:31.080]  And I get an answer, Milosh's flight to Frankfurt is scheduled for August 7th, 2020.
+[16:31.080 --> 16:37.680]  This is really convincing sounding, fine, okay, but this one was actually quite impressive,
+[16:37.680 --> 16:44.280]  again, if I ran the same exact query with this model, I got, it's not possible to answer
+[16:44.280 --> 16:45.880]  this question without more information.
+[16:45.880 --> 16:51.880]  This is actually really cool, because clearly this model sometimes can infer that, hey, maybe
+[16:51.880 --> 16:57.800]  I need more information to give you an answer, that what we now refer to as hallucination.
+[16:57.800 --> 17:01.360]  Maybe you've heard of that term, also these models can hallucinate, they're tasked to
+[17:01.360 --> 17:02.360]  generate answers.
+[17:02.920 --> 17:08.720]  It's not tasked to generate, you know, actual answers for you, that are truthful.
+[17:08.720 --> 17:11.840]  Anyway, let's say, when is Milosh travelling somewhere?
+[17:11.840 --> 17:20.640]  I love this answer, when he has the time and money available to do so.
+[17:20.640 --> 17:25.560]  And then, I guess, I don't know which one is my favourite, this one, or the next one,
+[17:25.560 --> 17:28.560]  who is Milosh?
+[17:28.560 --> 17:31.560]  A Greek island.
+[17:31.560 --> 17:38.280]  Lovely, okay, but the problem here is, this is very, you know, I could believe this, it's
+[17:38.280 --> 17:41.840]  very like, realistic, these answers.
+[17:41.840 --> 17:47.840]  So we're going to look at how we can use these large language models for our use cases, and
+[17:47.840 --> 17:51.120]  what we're going to do is basically, we're going to do exactly what we did for the extractive
+[17:51.160 --> 17:56.480]  QA1, and we're going to use a component that is quite clever, because it's been prompted
+[17:56.480 --> 18:03.520]  to say, generate answers based off of these retrieved documents and nothing else.
+[18:03.520 --> 18:08.920]  It can sometimes not work well, but there are ways to make it work well, and we won't
+[18:08.920 --> 18:14.040]  get into all the creativity behind it, so I'll show you the most basic solution you
+[18:14.040 --> 18:15.040]  might get.
+[18:15.040 --> 18:19.840]  But this is going to be what we do, it's the same exact pipeline as before, the reader
+[18:19.880 --> 18:22.520]  has been replaced by the generator.
+[18:22.520 --> 18:26.640]  So I actually have Milosh's ticket to Frankfurt.
+[18:26.640 --> 18:33.040]  It was 14th of November, and as a bonus, I thought I'd try, this is my ticket, my euro
+[18:33.040 --> 18:38.040]  star ticket, from Amsterdam to London and back.
+[18:38.040 --> 18:41.760]  So I've got these, and they are PDFs.
+[18:41.760 --> 18:46.760]  And so now I'm going to start defining my new components.
+[18:46.760 --> 18:51.840]  So I've got the same files document store, embedding dimensions is not something you
+[18:51.840 --> 18:56.200]  should worry about for now, and I'm defining an embedding retriever here.
+[18:56.200 --> 19:02.040]  What I'm doing is, again, I'm using a model by OpenAI, so I'm using an API key.
+[19:02.040 --> 19:07.240]  So this is the model I'm going to use to create vector representations and then compare it
+[19:07.240 --> 19:09.120]  to queries.
+[19:09.120 --> 19:13.680]  And this time, I'm not using the front node, I'm using that clever node there, called the
+[19:13.680 --> 19:15.600]  OpenAI answer generator.
+[19:15.600 --> 19:21.200]  And you might notice it is the exact same model as the one before.
+[19:21.200 --> 19:26.760]  We're going to briefly look at indexing, so we've got the PDF text converter and pre-processor.
+[19:26.760 --> 19:28.840]  And let's go to the next slide.
+[19:28.840 --> 19:33.560]  As mentioned before, there are pre-made pipelines, so I could have just defined generative QA
+[19:33.560 --> 19:37.360]  pipeline and told it what generate and retriever to use, but let's look at what it might look
+[19:37.360 --> 19:40.560]  like if I were to build it from scratch.
+[19:40.560 --> 19:43.520]  And first, you see the indexing pipeline.
+[19:43.520 --> 19:48.520]  So if you follow it, you'll notice that it's getting the PDF file and then writing that
+[19:48.520 --> 19:51.280]  to a document store, given some pre-processing steps.
+[19:51.280 --> 19:54.960]  And I then write my and Niloche's tickets in there.
+[19:54.960 --> 19:59.920]  And the querying pipeline is the exact same as the extractive QA pipeline you saw before.
+[19:59.920 --> 20:05.040]  All that, the only difference is, the last bit is the answer generator, not the reader.
+[20:05.040 --> 20:10.240]  This time, though, it does have some context and it does have some documents.
+[20:10.240 --> 20:14.520]  What did I get when I ran the same two questions?
+[20:14.520 --> 20:16.920]  I got, who is Milosh?
+[20:16.920 --> 20:18.600]  He's not a Greek island.
+[20:18.600 --> 20:23.440]  He is the passenger whose travel data is on the passenger itinerary receipt.
+[20:23.440 --> 20:27.680]  Now, this is the only information this model knows, so it can't tell me he's my CEO because
+[20:27.680 --> 20:31.360]  I haven't uploaded any information about my company.
+[20:31.360 --> 20:35.760]  So don't make something up, just tell me what you know.
+[20:35.840 --> 20:39.240]  If I run, when is Milosh flying to Frankfurt?
+[20:39.240 --> 20:44.040]  I get Milosh is flying to Frankfurt on the correct date and time.
+[20:44.040 --> 20:48.480]  And then I had that bonus in there, who is traveling to London.
+[20:48.480 --> 20:51.840]  I would get Twana Caelic is traveling to London.
+[20:51.840 --> 21:01.520]  Now, if I were to run, let's say, who is, let's say, when is Alfred traveling to Frankfurt?
+[21:01.520 --> 21:05.320]  What I haven't shown you here, because I think it goes a bit too deep into building these
+[21:05.360 --> 21:14.040]  types of pipelines, for the open AI answer generator, I could actually provide examples
+[21:14.040 --> 21:16.240]  and example documents.
+[21:16.240 --> 21:20.920]  Just in case I'm worried that it's going to make up something somewhere at a time that
+[21:20.920 --> 21:25.880]  this Alfred who doesn't exist is traveling to Frankfurt, I can give it some example saying,
+[21:25.880 --> 21:31.160]  hey, if you encounter something like this, just say I don't have the context for it.
+[21:31.200 --> 21:36.320]  So I could have just run query pipeline.run when is Alfred traveling to Frankfurt, and
+[21:36.320 --> 21:41.080]  it would have told me I have no context for this, so I'm not going to give you the answer.
+[21:41.080 --> 21:44.120]  This model that we saw does do that sometimes.
+[21:44.120 --> 21:49.400]  The first example we saw, it did say I don't have enough context for this, but not all
+[21:49.400 --> 21:50.400]  the time.
+[21:50.400 --> 21:54.360]  So this is how you might use it for your own use cases, you might use large language models
+[21:54.360 --> 21:59.640]  for your own use cases, and how you might mitigate them hallucinating.
+[21:59.680 --> 22:04.640]  So to conclude, extractive question answering models and pipelines are great at retrieving
+[22:04.640 --> 22:09.440]  knowledge that already exists in context, however, generative models are really cool
+[22:09.440 --> 22:14.920]  because they can generate human-like answers, but combining them with a retrieval augmenter
+[22:14.920 --> 22:20.480]  step means that you can use them very specifically for your own use cases.
+[22:20.480 --> 22:26.280]  Haystack as I mentioned is fully open source, it's built in Python, and we accept contributions
+[22:27.000 --> 22:32.440]  literally welcome, and I would say every release we have a community contribution in there.
+[22:32.440 --> 22:37.840]  Thank you very much, and this QR code is our first tutorial, bear in mind it is an extractive
+[22:37.840 --> 22:42.040]  one, it's the non-cool one, but it is a good way to start.
+[22:42.040 --> 22:43.040]  Thank you very much.
+[22:43.040 --> 22:50.040]  Thank you, Luana.
+[23:06.240 --> 23:10.640]  We have a few minutes for questions, if you have questions for Luana, we have three minutes
+[23:10.640 --> 23:13.800]  for questions, as you can also find her afterwards.

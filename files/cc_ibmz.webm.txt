@@ -1,0 +1,506 @@
+[00:00.000 --> 00:27.240]  Hi, my name is Claudio Imbrender.
+[00:27.240 --> 00:32.240]  I am one of the maintainers for KVM on S390.
+[00:32.240 --> 00:38.240]  I'm Stefan, I'm contributor to the kernel on S390 and also maintainer of the S390 tools.
+[00:38.240 --> 00:45.240]  Yes, and we are here to talk about the same thing that the previous person talked about, but for S390.
+[00:45.240 --> 00:51.240]  So, a few months ago, a colleague passed from my office and said,
+[00:51.240 --> 00:55.240]  hey, there's a confidential computed track at first time.
+[00:55.240 --> 00:57.240]  Maybe you should submit something.
+[00:57.240 --> 00:59.240]  By the way, the deadline is tomorrow.
+[00:59.240 --> 01:00.240]  So, I did.
+[01:00.240 --> 01:04.240]  I went to the website and this was the call for paper and it says,
+[01:04.240 --> 01:15.240]  all my major process vendors and there's Intel, AMD, ARM, ARM, Power and like,
+[01:16.240 --> 01:19.240]  so we are here to fix that.
+[01:19.240 --> 01:23.240]  How are we going to do it?
+[01:23.240 --> 01:30.240]  First of all, an overview of how the whole secure execution works.
+[01:30.240 --> 01:38.240]  The lifecycle, a small glimpse into how we handle swapping.
+[01:38.240 --> 01:42.240]  And then Stefan will talk about attestation and confidential dump.
+[01:42.240 --> 01:44.240]  So, let's get started.
+[01:45.240 --> 01:52.240]  So, what it does, confidential virtual machines prevents the entrusted hypervisor or host from looking into the guest
+[01:52.240 --> 01:54.240]  or touching things into the guest.
+[01:54.240 --> 01:57.240]  It does not protect against an idle service attacks.
+[01:57.240 --> 02:03.240]  It does not protect the guest from doing stupid things because we want to protect maybe the machine
+[02:03.240 --> 02:07.240]  from malicious operators, hypervisors, compliance.
+[02:07.240 --> 02:10.240]  If you're here, you know what I'm talking about, right?
+[02:11.240 --> 02:19.240]  So, yeah, this is the grand scheme of thing, which I think looks like most of confidential computer solutions.
+[02:19.240 --> 02:21.240]  Of course, well, yes.
+[02:21.240 --> 02:23.240]  So, we have what we call Ultravisor.
+[02:23.240 --> 02:26.240]  Everyone has a different name, so we call it Ultravisor.
+[02:26.240 --> 02:31.240]  It's the entrusted entity in the whole system.
+[02:31.240 --> 02:35.240]  It's the only entity that has complete access to the whole system.
+[02:35.240 --> 02:41.240]  And it's implemented partially in hardware and partially in firmware.
+[02:41.240 --> 02:46.240]  Then we have the guests, which are trusted for themselves.
+[02:46.240 --> 02:51.240]  I think they can shoot themselves in the foot if they so want,
+[02:51.240 --> 02:57.240]  but otherwise they are, if they don't do stupid things, they will be secure.
+[02:57.240 --> 03:01.240]  Notice that a secure guest can only access its own memory.
+[03:01.240 --> 03:07.240]  And the hypervisor cannot access the guest memory or Ultravisor memory.
+[03:07.240 --> 03:10.240]  Nobody can access Ultravisor memory, in fact.
+[03:10.240 --> 03:18.240]  The line is dotted because memory can be shared, but this will be seen now because, of course, I owe surprise.
+[03:18.240 --> 03:23.240]  And a non-secure guest is non-trusted, like the hypervisor.
+[03:23.240 --> 03:26.240]  So, yeah.
+[03:26.240 --> 03:28.240]  So, this is not news.
+[03:28.240 --> 03:31.240]  So, again, Ultravisor memory is inaccessible.
+[03:31.240 --> 03:34.240]  The guest memory is not accessible unless shared.
+[03:34.240 --> 03:41.240]  And attempting to access guest memory or hypervisor memory will just result in an exception.
+[03:41.240 --> 03:46.240]  So, there is no memory encryption, like in MDSCV involved.
+[03:46.240 --> 03:49.240]  It's just that the page will become inaccessible,
+[03:49.240 --> 03:54.240]  and in any way, shape or form, not even IO or stuff like that, will be able to access the page.
+[03:54.240 --> 03:57.240]  The guest decides which pages to share.
+[03:57.240 --> 04:04.240]  So, it's the guest that decides, for example, a bunch of pages at the end for bounce buffers, which were mentioned earlier.
+[04:04.240 --> 04:06.240]  Yes?
+[04:06.240 --> 04:14.240]  And for everything else, there is direct interaction with the Ultravisor.
+[04:14.240 --> 04:17.240]  So, the guest to host mappings are also secured.
+[04:17.240 --> 04:20.240]  And enforced by hardware, because, of course, this is also important.
+[04:20.240 --> 04:26.240]  If everything is secured, but then the host could swap the mappings for some pages at runtime,
+[04:26.240 --> 04:30.240]  and things could break in the guest, and we don't want it.
+[04:30.240 --> 04:35.240]  So, the host can change the mappings, but then it will crash, basically, the guest.
+[04:35.240 --> 04:37.240]  So, it's fine.
+[04:37.240 --> 04:39.240]  And for everything else, it goes to the Ultravisor.
+[04:39.240 --> 04:42.240]  So, all the other interesting things, like,
+[04:43.240 --> 04:46.240]  and for everything else, it goes to the Ultravisor.
+[04:46.240 --> 04:53.240]  So, all the other interactions that go from the Hypervisor to the guest, or from the guest to the Hypervisor,
+[04:53.240 --> 04:59.240]  they go through the Ultravisor, and the Ultravisor will check and proxy the interactions.
+[04:59.240 --> 05:05.240]  So, make sure that, for example, in some cases, some instructions are only allowed to return specific return codes.
+[05:05.240 --> 05:11.240]  If the Hypervisor is returning something that is not supposed to be returned, that will not be allowed.
+[05:12.240 --> 05:18.240]  The Hypervisor still has lots of things to do, like, the actual IO device models handling some of the instructions,
+[05:18.240 --> 05:22.240]  like, as I said, IO, some other instructions that are actually not handled by the Hypervisor,
+[05:22.240 --> 05:25.240]  but the Hypervisor need to be notified that the instruction happened,
+[05:25.240 --> 05:30.240]  because otherwise the guest will not be able to be executed correctly,
+[05:30.240 --> 05:35.240]  than scheduling a memory management, the usual stuff that's still there.
+[05:35.240 --> 05:38.240]  So, what can we build with this?
+[05:38.240 --> 05:42.240]  We have basically an almost unlimited number of secure guests at the same time.
+[05:42.240 --> 05:46.240]  It's not unlimited, but you will run out of memory before you run out of guests.
+[05:46.240 --> 05:48.240]  We're talking millions.
+[05:48.240 --> 05:50.240]  This is very important.
+[05:50.240 --> 05:54.240]  The boot image is encrypted, and it can contain secrets.
+[05:54.240 --> 05:57.240]  So, the boot image is encrypted.
+[05:57.240 --> 05:59.240]  We can swap.
+[05:59.240 --> 06:03.240]  We can have remote attestation, although it's not needed, because the boot image is encrypted.
+[06:03.240 --> 06:07.240]  But we still have it, because there are some cases where it can be useful,
+[06:07.240 --> 06:10.240]  and host-initiated dumps.
+[06:10.240 --> 06:12.240]  We do not have line migration.
+[06:12.240 --> 06:14.240]  We do not have device pass-through.
+[06:14.240 --> 06:18.240]  We do not have huge pages perking, and we do not have nested secure guests.
+[06:20.240 --> 06:22.240]  Maybe one day.
+[06:22.240 --> 06:27.240]  So, what happens when the host starts?
+[06:27.240 --> 06:32.240]  The first thing that the host does is to check if the Travisor is available,
+[06:32.240 --> 06:36.240]  and if so, to query the Travisor to know specific parameters,
+[06:36.240 --> 06:40.240]  like how much memory needs to be donated, for example,
+[06:40.240 --> 06:44.240]  and then donate a bunch of memory to the Travisor,
+[06:44.240 --> 06:50.240]  where a bunch of information and details and metadata about the pages are kept,
+[06:50.240 --> 06:55.240]  which rings a bell from the previous talk, maybe.
+[06:55.240 --> 06:59.240]  Yes, that memory now belongs to the Travisor,
+[06:59.240 --> 07:04.240]  and it cannot be touched again ever until the host reboots, basically.
+[07:04.240 --> 07:06.240]  So, it's gone forever.
+[07:06.240 --> 07:07.240]  I mean, forever.
+[07:07.240 --> 07:09.240]  I'm not even speaking.
+[07:09.240 --> 07:16.240]  So, the boot blob is encrypted,
+[07:16.240 --> 07:19.240]  so you can either have a custom image for a specific guest,
+[07:19.240 --> 07:22.240]  or you have your image, and you put, I don't know, the look keys,
+[07:22.240 --> 07:24.240]  for example, inside any 3D,
+[07:24.240 --> 07:28.240]  and then you just boot it, and it will boot safely,
+[07:28.240 --> 07:33.240]  or maybe you have a generic image because of some kind of orchestration that you're using,
+[07:33.240 --> 07:36.240]  or because it's a vendor image and you don't want to touch it,
+[07:36.240 --> 07:40.240]  and then, in that case, you will need remote attestation.
+[07:40.240 --> 07:44.240]  The boot image is encrypted using a public key.
+[07:44.240 --> 07:48.240]  The private key is inside the hardware safely embedded,
+[07:48.240 --> 07:55.240]  and so nobody can decrypt the boot image except the hardware.
+[07:56.240 --> 08:01.240]  The boot blob contains the kernel in it 3D, the kernel command line,
+[08:01.240 --> 08:03.240]  some more keys provided by the owner,
+[08:03.240 --> 08:08.240]  which can be used later for other purposes, for example, dumping.
+[08:08.240 --> 08:10.240]  And, yeah.
+[08:10.240 --> 08:12.240]  So, let's see.
+[08:12.240 --> 08:17.240]  It's a simplified view of the guest lifecycle.
+[08:17.240 --> 08:22.240]  The host creates a guest,
+[08:22.240 --> 08:26.240]  the host asks the ultravisor to create a secure guest,
+[08:26.240 --> 08:30.240]  and by doing so, also donates a bunch more memory
+[08:30.240 --> 08:35.240]  to keep some more housekeeping and more metadata about guest pages.
+[08:35.240 --> 08:39.240]  The ultravisor will, at this point, create the secure guest,
+[08:39.240 --> 08:43.240]  and then the boot blob is passed to the ultravisor,
+[08:43.240 --> 08:46.240]  which will then make the pages inaccessible, decrypt it,
+[08:46.240 --> 08:50.240]  verify the hmark, verify the hash,
+[08:50.240 --> 08:54.240]  and if everything is all right, if the image is correct
+[08:54.240 --> 08:56.240]  and there has not been tampered with,
+[08:56.240 --> 09:00.240]  then it can be finally run by the host.
+[09:00.240 --> 09:03.240]  Now, this is a slightly less simplified view,
+[09:03.240 --> 09:06.240]  which if you're watching the stream or if you watch it later,
+[09:06.240 --> 09:08.240]  you can pause and have a look at it.
+[09:08.240 --> 09:12.240]  I will not explain it now, but it's just for your convenience,
+[09:12.240 --> 09:14.240]  for reference.
+[09:14.240 --> 09:16.240]  So, memory donation.
+[09:16.240 --> 09:19.240]  I talked about memory donation, so we have the UV-based storage,
+[09:19.240 --> 09:23.240]  which is that big chunk of memory which is donated
+[09:23.240 --> 09:28.240]  by the host to the ultravisor very early in the boot process,
+[09:28.240 --> 09:30.240]  and can be big, and it's absolute memory,
+[09:30.240 --> 09:33.240]  which we call absolute, means physical memory basically,
+[09:33.240 --> 09:35.240]  so it needs to be done very early at boot
+[09:35.240 --> 09:39.240]  because otherwise you will not find a very large block of physical memory,
+[09:39.240 --> 09:42.240]  a contiguous physical memory.
+[09:42.240 --> 09:47.240]  Configuration-based storage and CPU-based storage configuration
+[09:47.240 --> 09:50.240]  means guest in S390 speak.
+[09:50.240 --> 09:53.240]  Storage means memory in S390 speak.
+[09:53.240 --> 09:59.240]  So, those are small pieces of physical and contiguous memory,
+[09:59.240 --> 10:03.240]  so it's not a problem to find a few pages.
+[10:03.240 --> 10:05.240]  Configuration-virtual storage can be big,
+[10:05.240 --> 10:07.240]  it depends on the size of the guest,
+[10:07.240 --> 10:09.240]  and this needs to be contiguous,
+[10:09.240 --> 10:11.240]  but can be contiguous in virtual memory,
+[10:11.240 --> 10:15.240]  host virtual as in kernel space,
+[10:15.240 --> 10:17.240]  kernel outer space virtual memory,
+[10:17.240 --> 10:22.240]  so it's also not a problem, you can just do a Vmalloc and you got it.
+[10:22.240 --> 10:26.240]  The configuration on CPU, memory that is donated,
+[10:26.240 --> 10:31.240]  will be taken away basically until the guest is destroyed,
+[10:31.240 --> 10:33.240]  once the guest is destroyed,
+[10:33.240 --> 10:36.240]  the memory can be used again by the host.
+[10:36.240 --> 10:41.240]  Swapping, let's have a look at how swapping works.
+[10:41.240 --> 10:45.240]  So, when the host wants to swap a page,
+[10:45.240 --> 10:46.240]  is this readable?
+[10:46.240 --> 10:48.240]  Actually yes, cool.
+[10:48.240 --> 10:51.240]  When the host wants to swap a page,
+[10:51.240 --> 10:54.240]  it will do an export page,
+[10:54.240 --> 10:57.240]  basically asking the ultravisor to please make the page accessible.
+[10:57.240 --> 11:02.240]  The ultravisor will first encrypt and save the hash somewhere,
+[11:02.240 --> 11:05.240]  somewhere means one of these regions that have been donated
+[11:05.240 --> 11:08.240]  when the guest was created.
+[11:08.240 --> 11:10.240]  Once the page is encrypted and hashed,
+[11:10.240 --> 11:12.240]  then it's made accessible,
+[11:12.240 --> 11:15.240]  which means that it's not usable by the guest anymore at this point,
+[11:15.240 --> 11:19.240]  because it's not secure anymore.
+[11:19.240 --> 11:24.240]  The host can then un-map the page, swap it to normal stuff.
+[11:24.240 --> 11:26.240]  When the guest tries to use it again,
+[11:26.240 --> 11:28.240]  the host will get the usual page fault,
+[11:28.240 --> 11:30.240]  you un-swap the page, you map it back,
+[11:30.240 --> 11:32.240]  you run the guest again,
+[11:32.240 --> 11:34.240]  but the page is there but it's not secure,
+[11:34.240 --> 11:36.240]  it's still encrypted.
+[11:36.240 --> 11:39.240]  So, the guest tries to use the page,
+[11:39.240 --> 11:41.240]  the host will get a fault again,
+[11:41.240 --> 11:43.240]  a different type of fault,
+[11:43.240 --> 11:46.240]  and this fault will trigger an import.
+[11:46.240 --> 11:49.240]  Import means the ultravisor will check,
+[11:49.240 --> 11:52.240]  make the page inaccessible,
+[11:52.240 --> 11:56.240]  decrypt it, check the integrity that if everything is all right,
+[11:56.240 --> 11:59.240]  then the page will be accepted
+[11:59.240 --> 12:03.240]  and the host can run the guest again and the guest finally
+[12:03.240 --> 12:05.240]  will be able to run.
+[12:05.240 --> 12:08.240]  Yes.
+[12:08.240 --> 12:12.240]  Next is Alistation.
+[12:12.240 --> 12:16.240]  So, let's talk about Alistation.
+[12:16.240 --> 12:20.240]  Give me a sec.
+[12:20.240 --> 12:24.240]  So, Claudia just said it's optional,
+[12:24.240 --> 12:26.240]  then why should we use it?
+[12:26.240 --> 12:29.240]  So, for IBM Secure Execution,
+[12:29.240 --> 12:33.240]  we do not require the explicit or external adaptation
+[12:33.240 --> 12:36.240]  to prove that the guest is secure as in.
+[12:36.240 --> 12:39.240]  We encrypt the image, we verify the integrity
+[12:39.240 --> 12:41.240]  and if your image contains a unique secret
+[12:41.240 --> 12:44.240]  and if you want to use a stock kernel and a stock image,
+[12:44.240 --> 12:47.240]  you can use a unique public SSH key
+[12:47.240 --> 12:49.240]  and if you can connect to that image
+[12:49.240 --> 12:51.240]  using your fitting private key,
+[12:51.240 --> 12:54.240]  your successful login will attest
+[12:54.240 --> 12:58.240]  that is your secure execution image.
+[12:58.240 --> 13:01.240]  But there are some cases where you might not want
+[13:01.240 --> 13:03.240]  or cannot do this.
+[13:03.240 --> 13:07.240]  For example, the explicit adaptation is useful
+[13:07.240 --> 13:10.240]  when you want to provide to a third party
+[13:10.240 --> 13:12.240]  that you're running on secure execution
+[13:12.240 --> 13:17.240]  without passing that private key to that other party
+[13:17.240 --> 13:21.240]  or you want to verify that you're not only running
+[13:21.240 --> 13:25.240]  a specific image but the specific image instance.
+[13:25.240 --> 13:27.240]  So, if you have your image multiple times,
+[13:27.240 --> 13:30.240]  you want to differ between those probably.
+[13:30.240 --> 13:34.240]  Or to be more general, if you want to have trusted information
+[13:34.240 --> 13:37.240]  about your secure execution guest
+[13:37.240 --> 13:40.240]  or the execution environment it's running in.
+[13:40.240 --> 13:43.240]  Also, another point would be if you have a generic image
+[13:43.240 --> 13:48.240]  from a generic stock from your supplier,
+[13:48.240 --> 13:53.240]  probably you want to first prove that this image
+[13:53.240 --> 13:56.240]  is really secure and then deploy
+[13:56.240 --> 14:00.240]  your instance-dependent secrets.
+[14:00.240 --> 14:04.240]  And the workflow, the first three steps are,
+[14:04.240 --> 14:06.240]  as Claudia talked before,
+[14:06.240 --> 14:10.240]  the host will start the secure execution image,
+[14:10.240 --> 14:13.240]  the ultravisor will verify the hashes and start the image
+[14:13.240 --> 14:18.240]  and the guest transition into secure execution mode.
+[14:18.240 --> 14:21.240]  And we have a trusted system on the left
+[14:21.240 --> 14:25.240]  and on this trusted system we will generate a request,
+[14:25.240 --> 14:28.240]  a station request, and this request will contain
+[14:28.240 --> 14:32.240]  a public ECDH key and an encrypted measurement key.
+[14:32.240 --> 14:36.240]  We do a measurement with that encrypted key later.
+[14:36.240 --> 14:39.240]  This request also encrypted with the public key
+[14:39.240 --> 14:42.240]  of the ultravisor, similar to the image.
+[14:42.240 --> 14:46.240]  Then the request will be sent to the secure execution guest
+[14:46.240 --> 14:49.240]  and it will trigger an ultravisor call to the ultravisor.
+[14:49.240 --> 14:51.240]  The ultravisor will do a measurement.
+[14:51.240 --> 14:54.240]  That measurement mostly contains the hashes used
+[14:54.240 --> 14:58.240]  to verify the image and a configuration unique ID,
+[14:58.240 --> 15:00.240]  unique for that instance.
+[15:00.240 --> 15:04.240]  And then the response travels back to our trusted system
+[15:04.240 --> 15:07.240]  and a trusted system, we can redo the HMAC
+[15:07.240 --> 15:09.240]  and if they are the same,
+[15:09.240 --> 15:12.240]  we can be sure that this image is tested
+[15:12.240 --> 15:16.240]  and running on a secure execution.
+[15:16.240 --> 15:20.240]  If they are not the same, something went wrong.
+[15:23.240 --> 15:27.240]  So for dumping, we are here talking about
+[15:27.240 --> 15:29.240]  hypervisor initiated dump.
+[15:29.240 --> 15:31.240]  So there are two types of dumping.
+[15:31.240 --> 15:34.240]  The guest can dump itself.
+[15:34.240 --> 15:38.240]  It has a pro of that you do not need an interaction
+[15:38.240 --> 15:40.240]  between the guest and the hypervisor.
+[15:41.240 --> 15:47.240]  However, you have to provide memory
+[15:47.240 --> 15:50.240]  in the guest beforehand.
+[15:50.240 --> 15:53.240]  So that's not always possible.
+[15:53.240 --> 15:56.240]  In that case, if you don't want to deny the memory
+[15:56.240 --> 16:00.240]  or if your guest is in a very badly crashed state
+[16:00.240 --> 16:05.240]  and also the dumping of yourself modifies your memory.
+[16:05.240 --> 16:08.240]  In the other way, the host initiative dumping
+[16:08.240 --> 16:10.240]  is that it works regardless of your guest state.
+[16:10.240 --> 16:12.240]  It can be very badly crashed.
+[16:12.240 --> 16:14.240]  It will not modify your guest state
+[16:14.240 --> 16:16.240]  and the guest does not change during dumping.
+[16:16.240 --> 16:19.240]  However, you need access to the guest state
+[16:19.240 --> 16:21.240]  and we promise that the hypervisor
+[16:21.240 --> 16:23.240]  never has access to the guest state.
+[16:23.240 --> 16:26.240]  So how do we do it?
+[16:26.240 --> 16:30.240]  First of all, confidential dumping is an opt-in
+[16:30.240 --> 16:32.240]  by the guest owner.
+[16:32.240 --> 16:34.240]  So if you want to be very paranoid,
+[16:34.240 --> 16:38.240]  you can just say, I don't want my image to ever be dumped.
+[16:38.240 --> 16:41.240]  But it's a reliable and secure way
+[16:41.240 --> 16:44.240]  for hypervisor initiative dumping.
+[16:44.240 --> 16:48.240]  Every guest state the hypervisor receives is encrypted.
+[16:48.240 --> 16:52.240]  Also, no QM API changes,
+[16:52.240 --> 16:56.240]  so you can just issue your worst dump as normal.
+[16:56.240 --> 17:00.240]  And the S390 tools contains a tool,
+[17:00.240 --> 17:04.240]  getDump, that will handle the decryption later.
+[17:07.240 --> 17:12.240]  And then the decrypted dump can be used as normal
+[17:12.240 --> 17:16.240]  using crash, for example, to analyze the dump.
+[17:23.240 --> 17:28.240]  So for a hypervisor perspective,
+[17:28.240 --> 17:32.240]  if the dump was requested, the hypervisor stops all VCPUs
+[17:32.240 --> 17:36.240]  and then import all guest pages.
+[17:36.240 --> 17:38.240]  Export, that's a different way, right?
+[17:38.240 --> 17:41.240]  So we will export all guest pages.
+[17:41.240 --> 17:45.240]  And then, so the guest has no access to the pages anymore,
+[17:45.240 --> 17:47.240]  but they are encrypted.
+[17:47.240 --> 17:50.240]  It will call the initiate configuration dump
+[17:50.240 --> 17:52.240]  ultravisor call.
+[17:52.240 --> 17:55.240]  So we'll initiate the dumping process
+[17:55.240 --> 17:58.240]  and set up some states in the ultravisor.
+[17:58.240 --> 18:00.240]  And then we need the state for each CPU.
+[18:00.240 --> 18:04.240]  We'll dump the CPU state for each VCPU.
+[18:04.240 --> 18:08.240]  We'll get this encrypted CPU state.
+[18:08.240 --> 18:12.240]  And then we need a metadata for the memory to encrypt it later.
+[18:12.240 --> 18:19.240]  So we have ISXTS tweaks for the decryption later.
+[18:19.240 --> 18:22.240]  And in the end, we just need some bunch of keys
+[18:22.240 --> 18:26.240]  and initialization vectors and seeds
+[18:26.240 --> 18:30.240]  and nonces to decrypt the memory later.
+[18:30.240 --> 18:34.240]  And that's all written into a VM Core L file
+[18:34.240 --> 18:39.240]  with some extensions.
+[18:39.240 --> 18:43.240]  So we zoom out a little bit.
+[18:43.240 --> 18:47.240]  During the generation of the secure execution image,
+[18:47.240 --> 18:51.240]  the user or the image owner has to first opt into the dumping
+[18:51.240 --> 18:56.240]  and then provide a customer communication key, we CCK.
+[18:56.240 --> 19:01.240]  That key is later used to decrypt the image.
+[19:01.240 --> 19:03.240]  After the generation of the image,
+[19:03.240 --> 19:05.240]  the guest owner transfers the image to its cloud provider
+[19:05.240 --> 19:07.240]  or to the host.
+[19:07.240 --> 19:10.240]  And it will start the image and the process
+[19:10.240 --> 19:13.240]  and verify the image using the ultravisor
+[19:13.240 --> 19:16.240]  and the image will be started as a secure execution guest.
+[19:16.240 --> 19:19.240]  At some point, someone will request a dump.
+[19:19.240 --> 19:25.240]  It can be by the guest image owner
+[19:25.240 --> 19:27.240]  or by the hypervisor.
+[19:27.240 --> 19:30.240]  It doesn't matter.
+[19:30.240 --> 19:32.240]  The QMU then will trigger the confidential dump
+[19:32.240 --> 19:35.240]  ultravisor calls I had in the slide before.
+[19:35.240 --> 19:39.240]  And the ultravisor will create the confidential dump
+[19:39.240 --> 19:42.240]  encrypted versus the CCK.
+[19:42.240 --> 19:45.240]  The encrypted dump data in the VM Core L file
+[19:45.240 --> 19:49.240]  is transported back to the trusted system.
+[19:49.240 --> 19:53.240]  And then in the trust system, you can decrypt the image
+[19:53.240 --> 19:56.240]  using the get dump and your secret customer communication key.
+[19:56.240 --> 20:05.240]  And then you have a decrypted normal looking dump to analyze.
+[20:05.240 --> 20:08.240]  So just a quick summary.
+[20:08.240 --> 20:12.240]  The current state is that you require an IBM Z15 for secure execution.
+[20:12.240 --> 20:14.240]  And if you want to use attestation or dumping,
+[20:14.240 --> 20:16.240]  you need an Z16.
+[20:16.240 --> 20:22.240]  And from a software perspective, everything is upstream.
+[20:22.240 --> 20:26.240]  Just to summarize the content of our talk,
+[20:26.240 --> 20:31.240]  confidential VMs for S390X is we create a secure image
+[20:31.240 --> 20:33.240]  that can have secrets in it.
+[20:33.240 --> 20:36.240]  We support swapping, implicit and explicit attestation
+[20:36.240 --> 20:38.240]  and also host and asheet dumping.
+[20:38.240 --> 20:41.240]  And now we have a bonus slide.
+[20:42.240 --> 20:44.240]  Yes, bonus slide.
+[20:44.240 --> 20:48.240]  We are working on confidential containers based on secure execution.
+[20:48.240 --> 20:51.240]  There's a pipeline kind of working,
+[20:51.240 --> 20:55.240]  including attestation and everything except for the secure part.
+[20:55.240 --> 20:58.240]  But the secure part itself works.
+[20:58.240 --> 21:00.240]  It's just a matter of putting these together.
+[21:00.240 --> 21:03.240]  So that's coming soon, hopefully.
+[21:03.240 --> 21:05.240]  Yeah.
+[21:05.240 --> 21:08.240]  Thank you.
+[21:10.240 --> 21:12.240]  Questions?
+[21:12.240 --> 21:17.240]  Question on the encryption of the image.
+[21:17.240 --> 21:23.240]  So if I'm a guest owner, I want to run a confidential VM with AC.
+[21:23.240 --> 21:26.240]  What's the process for building the...
+[21:26.240 --> 21:28.240]  Okay, so the process, the question is about
+[21:28.240 --> 21:30.240]  how to build basically the boot image.
+[21:30.240 --> 21:33.240]  So you need the public key of the machine,
+[21:33.240 --> 21:37.240]  or the machines you want to run the image on.
+[21:37.240 --> 21:40.240]  And that's the...
+[21:40.240 --> 21:43.240]  So if I have 5,000 AC machines...
+[21:43.240 --> 21:46.240]  If you have 5,000 AC machines, you need 5,000 keys,
+[21:46.240 --> 21:52.240]  but you probably will not have 5,000 AC machines.
+[21:52.240 --> 21:55.240]  But then you need...
+[21:55.240 --> 21:57.240]  Probably you hope so.
+[21:57.240 --> 22:00.240]  I mean, by all means, buy 5,000 AC machines,
+[22:00.240 --> 22:06.240]  but no, in that case, yes, you will need 5,000 keys to...
+[22:06.240 --> 22:11.240]  But you can encrypt the image, I think, with multiple keys.
+[22:11.240 --> 22:13.240]  So you don't have to have 5,000 images.
+[22:13.240 --> 22:17.240]  Okay, so I can have one image signed by multiple keys.
+[22:17.240 --> 22:19.240]  Yes, you can have one image signed by multiple keys.
+[22:19.240 --> 22:21.240]  I mean, encrypted with...
+[22:21.240 --> 22:23.240]  Yes?
+[22:23.240 --> 22:26.240]  Could you elaborate on what the endorsement mechanism
+[22:26.240 --> 22:28.240]  of these public keys are?
+[22:28.240 --> 22:31.240]  So how do I actually obtain the public key
+[22:31.240 --> 22:33.240]  for a particular machine,
+[22:33.240 --> 22:35.240]  and how do I know that I'm using the right key?
+[22:35.240 --> 22:41.240]  So the keys are signed by an IBM master key,
+[22:41.240 --> 22:43.240]  which is published somewhere.
+[22:43.240 --> 22:45.240]  I don't exactly know the details about that,
+[22:45.240 --> 22:47.240]  but somewhere there is a way,
+[22:47.240 --> 22:49.240]  there's a certification authority,
+[22:49.240 --> 22:54.240]  and you can know that there is a...
+[22:54.240 --> 22:58.240]  The keys you're getting are real keys
+[22:58.240 --> 23:03.240]  for an IBM Z15 or Z16 machine.
+[23:03.240 --> 23:04.240]  That one.
+[23:04.240 --> 23:07.240]  So to be more specific, during the image generation
+[23:07.240 --> 23:09.240]  or the adaptation request generation,
+[23:09.240 --> 23:12.240]  you provide the IBM signing key
+[23:12.240 --> 23:15.240]  that's signed by a DigiSert CA signing key
+[23:15.240 --> 23:18.240]  that's signed by some root key.
+[23:18.240 --> 23:21.240]  And we also have, obviously, a relocation list for that.
+[23:21.240 --> 23:24.240]  So you can be trusted that you're really signing
+[23:24.240 --> 23:26.240]  with a hardware key.
+[23:26.240 --> 23:29.240]  Maybe one question has come from my side.
+[23:29.240 --> 23:32.240]  One of the things that have been very useful
+[23:32.240 --> 23:35.240]  in technology like SGX is DCB recovery, right?
+[23:35.240 --> 23:37.240]  With all these attacks,
+[23:37.240 --> 23:39.240]  you have seen that they can recover from that.
+[23:39.240 --> 23:41.240]  And I'm wondering, with the type of association that you have here,
+[23:41.240 --> 23:43.240]  with a hard-coded private key,
+[23:43.240 --> 23:47.240]  there's no real way of knowing that I'm running even on a patch.
+[23:48.240 --> 23:50.240]  Do you have some sort of microcode patch
+[23:50.240 --> 23:52.240]  or something like meltdown for you?
+[23:52.240 --> 23:53.240]  Okay.
+[23:53.240 --> 23:57.240]  So I think we do support something,
+[23:57.240 --> 24:00.240]  some versioning,
+[24:00.240 --> 24:03.240]  so that you can refuse your image to be run
+[24:03.240 --> 24:07.240]  on an older machine, for example.
+[24:07.240 --> 24:10.240]  I'm not sure about the rest.
+[24:11.240 --> 24:17.240]  But, I mean, there is a relocation list
+[24:17.240 --> 24:20.240]  for if a machine gets compromised.
+[24:20.240 --> 24:21.240]  Yeah.
+[24:21.240 --> 24:23.240]  So, yeah?
+[24:23.240 --> 24:25.240]  It's on a four-machine base.
+[24:25.240 --> 24:29.240]  There's no notion of a machine can be in a compromised state
+[24:29.240 --> 24:31.240]  if it loads an older microcode version.
+[24:31.240 --> 24:34.240]  No, you cannot roll back, I think.
+[24:34.240 --> 24:36.240]  So the firmware is per machine
+[24:36.240 --> 24:39.240]  and controlled more or less by IBM.
+[24:39.240 --> 24:44.240]  So either the whole machine is compromised or nothing.
+[24:44.240 --> 24:46.240]  So that's not per guest.
+[24:46.240 --> 24:49.240]  We have no firmware per guest.
+[24:49.240 --> 24:54.240]  So if you notice that there's a bug or whatever,
+[24:54.240 --> 24:57.240]  you just revoke the whole key,
+[24:57.240 --> 24:59.240]  so the whole host key,
+[24:59.240 --> 25:03.240]  and update your firmware with a new key.
+[25:03.240 --> 25:05.240]  Or you generate a new key.
+[25:05.240 --> 25:07.240]  Yeah, I see.
+[25:07.240 --> 25:09.240]  It depends where you have the key,
+[25:09.240 --> 25:11.240]  because you mentioned in the slides that it's in hardware.
+[25:11.240 --> 25:13.240]  Yeah, yeah.
+[25:13.240 --> 25:16.240]  The private key is in hardware.
+[25:16.240 --> 25:18.240]  So, like, it's not,
+[25:18.240 --> 25:21.240]  a firmware will have to read it, obviously,
+[25:21.240 --> 25:23.240]  to process it, though.
+[25:23.240 --> 25:25.240]  So if that one is leaked, it's game over?
+[25:25.240 --> 25:26.240]  For that machine.
+[25:26.240 --> 25:28.240]  For that machine, it's game over.
+[25:28.240 --> 25:30.240]  If that is leaked, for that machine,
+[25:30.240 --> 25:32.240]  it's game over until the machine gets patched.
+[25:32.240 --> 25:35.240]  Okay, well, you kind of decrypted the image, right?
+[25:35.240 --> 25:38.240]  With the key, you can then decrypt the image,
+[25:38.240 --> 25:40.240]  the boot image.
+[25:40.240 --> 25:44.240]  So if you didn't have secrets in the boot image,
+[25:44.240 --> 25:48.240]  then you're safer, I guess.
+[25:48.240 --> 25:51.240]  Excuse me, I didn't get the detail.
+[25:51.240 --> 25:53.240]  How is it possible that the key,
+[25:53.240 --> 25:55.240]  private key is in hardware,
+[25:55.240 --> 25:57.240]  but updating the firmware changes the key?
+[25:57.240 --> 25:59.240]  No, no, no, you don't change the key.
+[25:59.240 --> 26:02.240]  In that case, if the, right, right, no, no, no.
+[26:02.240 --> 26:04.240]  If the key is compromised,
+[26:04.240 --> 26:08.240]  you have to change the hardware as well.
+[26:08.240 --> 26:11.240]  You update the firmware to get rid of the bug,
+[26:11.240 --> 26:13.240]  but the key is compromised, you need a new key.
+[26:13.240 --> 26:17.240]  You send us the hardware and then we'll basically
+[26:17.240 --> 26:20.240]  give a new key, basically.
+[26:20.240 --> 26:21.240]  Yes.
+[26:21.240 --> 26:23.240]  Keying all the service.
+[26:23.240 --> 26:25.240]  So we have a bit of a break,
+[26:25.240 --> 26:27.240]  so if you're free to go around.
+[26:27.240 --> 26:29.240]  I still have some questions, so if you don't mind.
+[26:29.240 --> 26:31.240]  By all means.
+[26:31.240 --> 26:33.240]  Maybe from the audience first.
+[26:33.240 --> 26:35.240]  So when you explore the,
+[26:35.240 --> 26:37.240]  you mentioned there are no exceptions in a row.
+[26:37.240 --> 26:39.240]  So if you don't have it, does it page fold?
+[26:39.240 --> 26:40.240]  Yes.
+[26:40.240 --> 26:42.240]  The first is a page fold?
+[26:42.240 --> 26:47.240]  So when the VM notices that the page is not fully secure.
+[26:47.240 --> 26:48.240]  Yes.
+[26:48.240 --> 26:50.240]  Why do you have two exceptions for that
+[26:50.240 --> 26:51.240]  and why do we not do it?
+[26:51.240 --> 26:52.240]  Okay, so the question,
+[26:52.240 --> 26:53.240]  I don't know if the stream is just going,
+[26:53.240 --> 26:54.240]  but I still have a question.
+[26:54.240 --> 26:55.240]  Okay, then I repeat the question.
+[26:55.240 --> 26:58.240]  So the question is why do we have, by swapping,
+[26:58.240 --> 27:02.240]  we have two different here.
+[27:02.240 --> 27:05.240]  We have a page fold and then we have the other fold.
+[27:05.240 --> 27:07.240]  Couldn't we just have one fold?
+[27:07.240 --> 27:08.240]  In theory, yes.
+[27:08.240 --> 27:11.240]  Could you like, you mentioned that you are in part
+[27:11.240 --> 27:15.240]  also just unsported and immediately in top of H?
+[27:15.240 --> 27:18.240]  You can export it and import it immediately,
+[27:18.240 --> 27:19.240]  but I don't know.
+[27:19.240 --> 27:21.240]  Okay, let me answer the first part first.
+[27:21.240 --> 27:26.240]  So yes, we could have skipped the second fold
+[27:26.240 --> 27:28.240]  by exporting the page directly,
+[27:28.240 --> 27:30.240]  by importing the page directly.
+[27:30.240 --> 27:33.240]  The point is that when the page fold happens,
+[27:33.240 --> 27:37.240]  we don't know if that is for a secure guest or not.
+[27:37.240 --> 27:42.240]  The page fold handler would need to be so much more complicated,
+[27:42.240 --> 27:44.240]  unnecessarily complicated,
+[27:44.240 --> 27:47.240]  and importing a page takes time anyway,
+[27:47.240 --> 27:51.240]  and the overhead of having an extra exception is not so big
+[27:51.240 --> 27:53.240]  compared to the amount of code we needed to write.
+[27:53.240 --> 27:55.240]  So what was the second question?
+[27:56.240 --> 27:57.240]  Okay, okay.
+[28:02.240 --> 28:03.240]  Yes.
+[28:03.240 --> 28:05.240]  Sorry, it has another question here?
+[28:05.240 --> 28:07.240]  Oh, sorry, I thought it was...
+[28:09.240 --> 28:11.240]  There's also a question from the online stream,
+[28:11.240 --> 28:14.240]  so I'm going to read it to you guys and then you can handle it.
+[28:14.240 --> 28:18.240]  So, Muhammad is asking in the flow shown,
+[28:18.240 --> 28:22.240]  can you explain why is the measurement key a part of the evidence?
+[28:22.240 --> 28:23.240]  Why is it needed?
+[28:23.240 --> 28:25.240]  Is the attestation flow specified somewhere?
+[28:31.240 --> 28:37.240]  The measurement key is generated by the trusted system owner,
+[28:37.240 --> 28:44.240]  and then encrypted with the public key of the firmware or the hardware.
+[28:44.240 --> 28:50.240]  We need us to do an HMAC, so it's a signed authentication.
+[28:50.240 --> 28:53.240]  And only the person who has the key or the machine
+[28:53.240 --> 28:57.240]  who has the measurement key can reliably create the HMAC.

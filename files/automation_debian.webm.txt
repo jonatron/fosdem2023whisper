@@ -1,0 +1,195 @@
+[00:00.000 --> 00:11.200]  Good morning, so my name is Yomov Noi, I work on Debian among other things, and today I'm
+[00:11.200 --> 00:17.400]  going to talk about some things I've been working on to automate changes to Debian
+[00:17.400 --> 00:22.560]  packaging. The talk is specifically about Debian, but hopefully some of the lessons
+[00:22.560 --> 00:33.040]  are applicable to other distributions as well. Debian hopefully doesn't need a lot
+[00:33.040 --> 00:40.080]  of introduction, but set the scene a little bit, so hopefully you're all familiar with
+[00:40.080 --> 00:43.880]  Debian distributions. Debian distributions are system integrators, and they're sort
+[00:43.880 --> 00:51.920]  of a spectrum in terms of how much work various distributions do to integrate, and Debian
+[00:51.920 --> 00:55.840]  definitely falls on sort of the far side of the spectrum there, so there's quite a
+[00:55.840 --> 01:03.320]  lot of work that happens in order to turn an upstream package into a Debian package. There's
+[01:03.320 --> 01:08.360]  work going on to have the various packages work together very well, a lot of extra metadata,
+[01:08.360 --> 01:13.440]  as opposed to some other distributions, like for example Nix, that are just a very, very
+[01:13.440 --> 01:20.080]  thin wrapper around an upstream project. That does mean that there's more work involved
+[01:20.080 --> 01:25.800]  in the Debian package, and it's also more likely to require more work when for example
+[01:25.800 --> 01:33.280]  a new upstream release comes out, but a lot of the work that is involved here relates
+[01:33.280 --> 01:59.640]  to that. Debian has about 1,000 developers, about 30,000 source packages overall, and
+[01:59.640 --> 02:04.200]  the way that Debian has traditionally worked is each package has a single person associated
+[02:04.200 --> 02:09.800]  with it. Over time we sort of move to a model in which there's teams that maintain large
+[02:09.800 --> 02:15.920]  sets of packages, but there is still a very clear owner for each of the packages, which
+[02:15.920 --> 02:22.400]  means that depending on the package there are different guidelines and different policies
+[02:22.400 --> 02:28.240]  that you have to take into account. You can just modify whatever package you want. There's
+[02:28.240 --> 02:35.000]  the Debian policy, which mandates some things around packages, but if you want to say a
+[02:35.000 --> 02:42.360]  random Haskell package, there's a Haskell package policy, and there's a particular group
+[02:42.360 --> 02:46.920]  of people who maintain the various Haskell packages, so if you're not a part of that
+[02:46.920 --> 02:54.920]  group you need to get one of them to review your changes. Traditionally Debian packages
+[02:54.920 --> 03:02.600]  have all been just sort of tarballs. The source packages have just been tarballs with a Debian
+[03:02.600 --> 03:08.040]  directory and a couple of Debian specific files in those, and those tarballs get shipped
+[03:08.040 --> 03:13.600]  around and an archive is made up out of a bunch of those tarballs, and potentially of
+[03:13.600 --> 03:21.760]  the binary packages that get built from those tarballs. And those tarballs are generally
+[03:21.760 --> 03:31.160]  GBT-signed. So that's sort of how Debian has traditionally worked over the last, I
+[03:31.160 --> 03:37.840]  guess, 15 years. The ecosystem has evolved, so fortunately we're now using Git for a lot
+[03:37.840 --> 03:43.120]  of the packages, not for all of them, so there's no mandate whatsoever within Debian that packages
+[03:43.120 --> 03:56.120]  have to be in Git, and upstream packages have also moved to Git, which is great. As a sort
+[03:56.120 --> 03:59.360]  of, I've worked on version control systems before, and as a version control geek I'm
+[03:59.360 --> 04:06.000]  a little bit sad that we have a monoculture now, but it's really nice that there's a single
+[04:06.000 --> 04:10.320]  version control system that you have to deal with, rather than sort of like a plethora,
+[04:10.320 --> 04:20.440]  which makes it really hard if you're packaging to interact with all of the different systems.
+[04:20.440 --> 04:28.320]  And there is, in Debian, no formal requirement that you have to maintain your packages on
+[04:28.320 --> 04:36.880]  our Git hosting sites also, but the vast majority of packages are on that site. There's also
+[04:36.920 --> 04:42.680]  packages that are hosted on people's individual Git servers, or on GitHub, or wherever, and
+[04:42.680 --> 04:48.080]  there's a header in the packages that allows you to declare where packages are located.
+[04:48.080 --> 04:54.040]  And this is a graph of sort of trends overall within Debian. You can also declare, or you
+[04:54.040 --> 05:01.840]  could also declare other version control systems, and over time you can see that the big red
+[05:01.840 --> 05:07.200]  bar at the bottom is packages that don't use a version control system at all, and the
+[05:07.200 --> 05:13.120]  big sort of brown yellowy bit is Git, and then there's a bunch of other version control
+[05:13.120 --> 05:19.560]  systems which you can see like gradually lose popularity. But all of this means that you
+[05:19.560 --> 05:26.560]  can now, for the vast majority of packages, find the Git URL that's associated, make a
+[05:26.560 --> 05:33.360]  change, and hopefully create a merge proposal, which is an improvement over downloading a
+[05:33.360 --> 05:39.560]  tarball of the latest uploads to Debian, creating a patch and attaching that to a bug
+[05:39.560 --> 05:46.800]  report, which both requires more work on your parts. It might mean that your changes are
+[05:46.800 --> 05:55.480]  against a version of the package that has changed by the maintainer since the last upload,
+[05:55.480 --> 06:03.720]  and it's also less work on part of the maintainer. And then there's a bunch of other things
+[06:03.720 --> 06:08.480]  that have changed, so there's more metadata now on where the upstream is located, so we
+[06:08.480 --> 06:15.400]  have an extra control file now that basically says like this is where the upstream Git repository
+[06:15.400 --> 06:23.280]  is, which makes it easier to, for example, pull in a Git snapshot from the upstream repository,
+[06:23.280 --> 06:28.160]  or in theory, and I don't think we actually use this for anything yet, like report bugs
+[06:28.160 --> 06:35.960]  in the upstream bug tracker and stuff like that automatically. And this particular file
+[06:35.960 --> 06:41.200]  is still a draft proposal, but about like a third of the packages in Debian already have
+[06:41.200 --> 06:45.560]  this file, and there's some tooling as well that can automatically generate this based
+[06:45.560 --> 07:01.280]  on other metadata that exists in the upstream repository like DOAP files or some build files.
+[07:01.280 --> 07:06.360]  And then one of the other changes in the last couple of years has been the broad adoption
+[07:36.360 --> 07:49.480]  of proper gate packages to the stable releases. And then finally, we used to have a sort of
+[07:49.480 --> 07:55.440]  a white plethora of like build tools in Debian, and over the last couple of years we sort
+[07:55.440 --> 08:03.560]  of converged on a single build tool, and that also makes it a lot easier to make changes
+[08:03.560 --> 08:07.720]  across the archive, like you don't have to first figure out what the build tool is that's
+[08:07.720 --> 08:12.960]  being used and how the particular change that you want to make is done in that particular
+[08:12.960 --> 08:21.000]  build tool. And this is the graph of sort of the adoption of the, I guess, DWIM, DAP
+[08:21.000 --> 08:48.760]  helper over time. And so traditionally in Debian, and then, like this is an example,
+[08:48.760 --> 08:55.480]  a particular control file contains a carriage line feed, because we don't have a monorepo,
+[08:55.480 --> 09:00.560]  you then sort of wait for all of the maintainers to run the tools to gradually make changes
+[09:00.560 --> 09:06.320]  and like over the course of five years everybody maybe makes that change, and the problem is
+[09:06.320 --> 09:13.960]  fixed. Yeah, so this is an example of like a control file containing a carriage line
+[09:13.960 --> 09:20.600]  feed. There is actually a command in there that describes what you need to run in order
+[09:20.600 --> 09:26.520]  to fix this, but everybody has to go and sort of like run this tool, get the suggestion,
+[09:26.520 --> 09:36.080]  run the commands, do an upload of the package, so that can take quite a while. So yeah, this
+[09:36.080 --> 09:39.920]  is the sort of what I was describing, like it can take quite long to actually get through
+[09:39.920 --> 09:45.280]  this and it requires quite a bit of attention from like a large set of people who all have
+[09:45.280 --> 09:49.920]  to learn a little bit about this particular problem, have to run this command, have to
+[09:49.920 --> 10:00.440]  do all of this work. So like, yeah, this is slow and it takes a lot of time across Debian
+[10:00.440 --> 10:12.400]  developers. Like I said, there was this command that was mentioned there. We could just automate
+[10:12.400 --> 10:16.200]  running that, like rather than having a command tell you what you should run, we could just
+[10:16.200 --> 10:22.480]  do it for you. And that's basically the idea behind the tool called Lenship Brush. So
+[10:22.480 --> 10:35.640]  it takes sort of a quarter of the
+[10:35.640 --> 10:43.160]  and it has a bit of cleverness to sort of work out where the problem is and whether it
+[10:43.160 --> 10:48.600]  can solve it with enough confidence and then it just makes the changes. And it preserves
+[10:48.600 --> 10:53.720]  as much of the rest of the packaging as it can, so it won't like completely reformat
+[10:53.720 --> 11:00.280]  the entire package and things like that. And yeah, this is sort of an example. I won't
+[11:00.280 --> 11:06.920]  go into it too deeply, but basically, like this is changing the section of the package
+[11:06.920 --> 11:11.280]  because one of the, or sorry, the priorities of the package because one of the priorities
+[11:11.280 --> 11:21.000]  was deprecated. But then there's an adoption challenge here as well because now everybody
+[11:21.000 --> 11:24.360]  has to install this particular tool and has to run it regularly on each of the packages
+[11:24.360 --> 11:35.840]  they touch. And yeah, as you can see, like this is a graph of the popcorn, the number
+[11:35.840 --> 11:40.600]  of people who have Lenship Brush installed and you can see that by like 2021, it's about
+[11:40.600 --> 11:49.040]  140. So it's not the vast majority of developers. So we can take a step further and say like
+[11:49.040 --> 11:54.920]  what if we just go out and discover all of the Git repositories and we just run this
+[11:54.920 --> 12:00.640]  tool on the repository for them and we just create a merge browser. So that's the idea
+[12:00.640 --> 12:08.560]  behind the tool called Silver Platter. And yeah, so that basically just automates that
+[12:08.560 --> 12:15.120]  whole process. But then somebody has to go in and like manually do this regularly. So
+[12:15.120 --> 12:26.280]  now if we take another step, build a cloud service that basically does this regularly
+[12:26.280 --> 12:36.080]  for all of the packages within Debian. And that is called Debian Generator. So it basically
+[12:36.080 --> 12:42.360]  just scrapes all of the VCS Git fields, finds the ones that are on hosting sites that it
+[12:42.360 --> 12:55.760]  supports. So it's either GitLab or GitHub or Launchpads and it runs Lenship Brush on them.
+[12:55.760 --> 13:00.080]  And then this is sort of what it's the kinds of things that it does. I don't think the
+[13:00.080 --> 13:07.920]  diff is particularly readable. You can see it's a relatively trivial change. In this
+[13:07.920 --> 13:16.240]  case it's like fixing actually a VCS Git header and some build depends. But it's also a change
+[13:16.240 --> 13:20.240]  that like would take somebody at least a couple of minutes to make and verify and stuff like
+[13:20.240 --> 13:30.920]  that. And this tool also provides a way to do QA in all of the changes. So it will have
+[13:30.920 --> 13:36.320]  a human review the diff at least. But it will also do a build of the package with the changes.
+[13:36.320 --> 13:41.480]  We'll do a build of the package without the changes. And it will look at the diff between
+[13:41.480 --> 14:00.360]  the binary output as well. In particular to see if like anything. In particular like
+[14:00.360 --> 14:06.480]  there's some teams in Debian that maintain like 3,000, 4,000 packages. And it sort of
+[14:06.480 --> 14:12.720]  works like TCP slow start. So it will send out one pull request to a maintainer. If they
+[14:12.720 --> 14:18.280]  merge that they'll get another two pull requests. If they merge those they'll get another four,
+[14:18.280 --> 14:25.600]  et cetera. So like it goes exponentially. But if they close the first pull request they
+[14:25.600 --> 14:31.320]  won't get any more. So it's sort of meant to like if people are interested in engaging
+[14:31.320 --> 14:37.080]  they'll get all the pull requests they want if they don't care. Or for example if they've
+[14:37.080 --> 14:41.880]  got their own workflows, if they run an engine brush themselves, they won't be spammed with
+[14:41.880 --> 14:48.600]  like lots of pull requests. And we monitor the pull requests for comments by humans.
+[14:48.600 --> 14:53.200]  So it's not just a black box that's like sent you lots and lots of pull requests. If you
+[14:53.200 --> 14:58.320]  leave a comment on a pull request because you have concerns, we'll have a look at the comments
+[14:58.320 --> 15:11.920]  and for example make changes. And yeah, there's some risks here though. Like for example the
+[15:11.920 --> 15:19.840]  slow start that I mentioned is one of the things that we built into not get people into a mood
+[15:19.840 --> 15:24.600]  where they'll basically ignore these pull requests because they're low quality or because
+[15:24.600 --> 15:32.000]  they're spammy or whatever. And like we're really trying to sort of save developers time
+[15:32.000 --> 15:38.240]  and improve the archive. But we don't want sort of another distraction that they now
+[15:38.240 --> 15:45.400]  have to deal with or that annoys them in which case they might like completely ignore things.
+[15:45.400 --> 15:50.240]  So there are a couple of principles that we try to follow. We don't make any sort of experimental
+[15:50.240 --> 15:56.520]  changes. We only make changes that we think that we have very high confidence are correct.
+[15:56.520 --> 16:00.880]  If we don't have enough confidence, we'll just like not make the change at all. Like
+[16:00.880 --> 16:16.440]  a human can always come by and make the change. And then we try to provide as much context
+[16:16.440 --> 16:21.840]  for the developers as we can. So like we'll do a build without the changes and a build
+[16:21.840 --> 16:27.000]  with the changes and we'll give them the binary depth as well. And usually that's only like
+[16:27.000 --> 16:33.640]  a line or two. But normally you would have to like manually do those builds if you were
+[16:33.640 --> 16:43.440]  making the change yourself. And this is something that we can provide so we should. And yeah,
+[16:43.440 --> 16:51.600]  we try to listen as much as possible to like feedback. Yeah, I think I've already mentioned
+[16:51.600 --> 16:58.880]  this sort of like we try really hard to be conservative in what would change. It's in
+[16:58.880 --> 17:04.720]  particular very easy to sort of like make a particular change across a large number of
+[17:04.720 --> 17:10.720]  packages and have people turn off and go like, yeah, this thing just sends me incorrect changes.
+[17:10.720 --> 17:20.560]  So I'm going to completely ignore it. Yeah, so what has this done so far? We've at this
+[17:20.560 --> 17:32.480]  point processed most of the Debian archive. Unfortunately, we lost a bunch of the data
+[17:32.480 --> 17:40.480]  with the graphs. But I've got some old graphs where you can basically see its progress. We're
+[17:40.480 --> 17:49.840]  at sort of the, I think it's around 25,000 mark at this point. So these were direct
+[17:49.840 --> 17:57.160]  pushes to repositories and these are merge proposals. And so you can see in green the
+[17:57.160 --> 18:03.120]  open merge proposals and in blue the, sorry, in blue the open merge proposals and in green
+[18:03.120 --> 18:11.280]  the merged proposals. And there's sort of some trans visible where like at some point
+[18:11.280 --> 18:17.120]  somebody in one of the teams that maintains like all the 5000 pro packages decides that
+[18:17.120 --> 18:22.120]  they're going to merge a bunch of merge proposals and you get like a spike both in terms of
+[18:22.120 --> 18:30.160]  like merged and also in terms of open merge proposals. Yeah, and then there are a bunch
+[18:30.200 --> 18:36.440]  of challenges around this as well. So a lot of packages are still not hosted in Git as
+[18:36.440 --> 18:40.640]  you saw from one of the earlier graphs. But there's also a lot of packages that are hosted
+[18:40.640 --> 18:50.320]  on Git servers that no longer exist. So there was a Debian hosting site called Aliath before
+[18:50.320 --> 18:55.160]  Salsa and there's still a lot of packages that sort of declare that they're hosted there.
+[18:55.160 --> 18:58.920]  And nobody has really bothered updating the headers or in some cases hasn't uploaded the
+[18:58.960 --> 19:05.680]  packages since we migrated. But there's also a bunch of packages that still declare that
+[19:05.680 --> 19:17.080]  they're hosted on Subversion while the Subversion server has long been turned down. So yeah,
+[19:17.080 --> 19:24.360]  there isn't really any good way of dealing with those. And then for packages that are
+[19:24.400 --> 19:29.080]  not yet on Salsa, like we have to maybe figure out something else to do. So either we could
+[19:29.080 --> 19:35.720]  try and encourage people to maybe migrate to Git or maybe we could actually generate patches
+[19:35.720 --> 19:40.920]  and attach those to bug reports. But there's a lot of sort of challenges around that as
+[19:40.920 --> 19:46.960]  well because then you have to make sure that the patch stays up to date. And maybe you want
+[19:46.960 --> 19:50.200]  to have a different threshold for when you actually file a patch because there's a lot
+[19:50.240 --> 19:56.680]  more work involved with actually applying and uploading that. And there's a lot of merge
+[19:56.680 --> 20:07.960]  proposals that actually sit idle. So one of the ways in which GitLab works is if you are a
+[20:07.960 --> 20:14.280]  member of a team that owns a lot of repositories, you don't get any notifications when people open
+[20:14.280 --> 20:20.000]  pull requests. So a lot of pull requests just sit there idle unless people actively subscribe to
+[20:20.040 --> 20:33.760]  changes. Yeah, I'll skip over this because I'm a little bit short on time. I've so far just
+[20:33.760 --> 20:39.520]  introduced the sort of small changes that we can make with Lengine fixes. There's a bunch of other
+[20:39.520 --> 20:44.120]  kinds of changes that we're making as well, in particular merging new upstream releases,
+[20:45.040 --> 20:54.400]  doing backports to older Debian releases, cleaning up some of the older, the other fields in the
+[20:54.400 --> 21:00.880]  control files, so in particular like packages that have been orphans, updating the headers to
+[21:00.880 --> 21:05.280]  reflect that, people who have retired from the projects, removing them from the uploaders and
+[21:05.400 --> 21:19.040]  maintaining the fields, and some other cleanups. That was it. Thanks for listening. All of this is
+[21:19.040 --> 21:24.240]  sort of a thin wrapper on top of a bunch of other infrastructure that has been built in Debian
+[21:24.240 --> 21:31.640]  over the last couple of years. So these are some of the other services that it's based on. And here's
+[21:31.640 --> 21:36.720]  some more links if you're interested. Any questions? Yep.
+[22:01.640 --> 22:28.600]  So the question was, could this help companies who currently skip sort of proper packaging? Yes,
+[22:28.640 --> 22:37.720]  skip packaging can just make very haphazard big containers or just deploy by copying stuff around.
+[22:37.720 --> 22:46.800]  Would you recommend them proper packaging with this tooling? I think sort of what I was getting at
+[22:46.800 --> 22:53.120]  the beginning of the talk, like there are probably other distributions that allow you to do like a
+[22:53.640 --> 22:59.920]  much thinner wrapper around the upstream that are probably more appropriate for that, because if you
+[22:59.920 --> 23:05.280]  do a Debian package, there's quite a lot of extra information you have to add to get to a full
+[23:05.280 --> 23:11.960]  Debian package that meets the Debian policy. And if you don't want to invest a lot in the
+[23:11.960 --> 23:19.080]  packaging, a Debian package is probably, it's quite a lot of investments, even with more tooling.
+[23:20.040 --> 23:26.880]  Like this isn't going to write your package description for you. Maybe it needs integration with
+[23:26.880 --> 23:30.640]  chat tpt, but like, we're not there yet.
+[23:45.400 --> 23:52.120]  When you make a change, do you have one lint rule per PR or how do you bundle them? Sorry. When you
+[23:52.160 --> 24:00.000]  make a PR, is there like one lint rule per PR or do you combine multiple text in one PR? So it varies
+[24:00.000 --> 24:05.000]  a little bit per campaign. For these things, like these small really like one line changes, I
+[24:05.000 --> 24:12.720]  combine them. And I also revisit the PRs regularly and then it'll just add new commits to the existing
+[24:12.720 --> 24:18.480]  PR. So yeah, you won't get spammed with like 10 things for 10 tiny changes. Thanks.
+[24:23.120 --> 24:31.840]  I had a question. Say, we have a similar system in Fedora project called Packet, which helps
+[24:31.840 --> 24:38.360]  automating packages in DNF as well as RPM. Say, what involves over there is making releases and
+[24:38.360 --> 24:43.000]  the change log is picked from releases that's on GitHub or GitHub or wherever that is hosted. Do you
+[24:43.000 --> 24:48.040]  plan on making something like that happen, you know, pushing updates to the packages based on the
+[24:48.040 --> 24:54.400]  releases made on their Git repositories? Yes, this does actually do that. It's not one of the things I
+[24:54.400 --> 24:57.160]  talked about, but it's one of the sort of other campaigns.

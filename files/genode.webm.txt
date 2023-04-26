@@ -1,0 +1,782 @@
+[00:00.000 --> 00:11.480]  So, our next talk is from Mikhail is using Genote as an enabler for research on mother
+[00:11.480 --> 00:39.880]  happening systems. So, continuing on the Genote environment.
+[00:39.880 --> 00:46.880]  Where are the leaflets, where are the leaflets, Stefan?
+[01:09.880 --> 01:37.880]  Maybe we can switch now, I can give you my laptop.
+[01:37.880 --> 01:48.880]  Do you have it, do you have the slides uploaded on the PENTA bar?
+[01:48.880 --> 01:53.880]  Yes, I uploaded some, some mistakes.
+[01:53.880 --> 02:11.880]  Let me give my laptop, I think that's being easy.
+[02:11.880 --> 02:30.880]  Let's do some sort of demo or something, something bad happened.
+[02:30.880 --> 02:37.880]  Oh, oh, oh, oh, oh, oh, oh, oh, oh. So, you have a stick?
+[02:37.880 --> 02:39.880]  Do you have a slide?
+[02:57.880 --> 03:01.880]  Yes, yes, yes, yes, it's better because...
+[03:02.880 --> 03:08.880]  Okay, do you want to use the keyboard?
+[03:19.880 --> 03:22.880]  Back, forward and left, right?
+[03:23.880 --> 03:30.880]  You don't see the slides, you want to see the slides, right?
+[03:30.880 --> 03:32.880]  Let me duplicate the screen then.
+[03:52.880 --> 04:07.880]  Let me do it, it's okay.
+[04:07.880 --> 04:09.880]  Let's see if we can...
+[04:09.880 --> 04:10.880]  A, B, yeah.
+[04:13.880 --> 04:15.880]  Yeah, help?
+[04:15.880 --> 04:17.880]  Help, please start.
+[04:17.880 --> 04:26.880]  I'm Michael and first a quick introduction for those who don't know me yet.
+[04:26.880 --> 04:32.880]  I studied computer science at TU Dortmund and since 2018.
+[04:32.880 --> 04:41.880]  I'm a PhD student at Osnabrück University and a full-time research assistant in the MX Kernel project,
+[04:42.880 --> 04:47.880]  which is a joint project between TU Dortmund and Osnabrück University.
+[04:47.880 --> 04:54.880]  And the focus of my research is on heterogeneous many-course systems for the data center.
+[04:59.880 --> 05:07.880]  First I will, now I will present you my experiences I made with using Genet for research
+[05:07.880 --> 05:12.880]  and how, yeah, I will show how well this worked out.
+[05:12.880 --> 05:19.880]  And now, at first I'm not working for Genet Labs,
+[05:19.880 --> 05:25.880]  so even if it might sound a bit like an advertisement,
+[05:25.880 --> 05:33.880]  it's not exactly that I was paid for that or something.
+[05:34.880 --> 05:37.880]  So let's start with a talk.
+[05:37.880 --> 05:43.880]  Yeah, the operating systems we know today very well,
+[05:43.880 --> 05:52.880]  like Linux or Windows, are basically from almost more than 30 years ago.
+[05:52.880 --> 05:55.880]  For Linux it's even called as the architecture.
+[05:55.880 --> 05:59.880]  And the systems there looked quite different.
+[05:59.880 --> 06:05.880]  There was just a single CPU and only the CPU did computation work,
+[06:05.880 --> 06:10.880]  contact switches were cheap, memory was scarce,
+[06:10.880 --> 06:17.880]  and yeah, and we had the old dogma that I was always slower than the CPU
+[06:17.880 --> 06:22.880]  and that by magnitude, but today things look different.
+[06:22.880 --> 06:24.880]  Now we have many CPUs.
+[06:24.880 --> 06:31.880]  I think octa-cores are even now the default for laptops
+[06:31.880 --> 06:38.880]  and quad-cores are the factor default for small mobile devices.
+[06:38.880 --> 06:42.880]  And as most of you will know, not just CPUs compute,
+[06:42.880 --> 06:47.880]  but now we have GPUs and in data centers also FPGAs
+[06:47.880 --> 06:54.880]  and I accelerate us in processing a memory
+[06:54.880 --> 07:03.880]  and with this new amount of cores and deep memory hierarchies,
+[07:03.880 --> 07:05.880]  contact switches aren't cheap anymore.
+[07:05.880 --> 07:09.880]  Now we have to pay synchronization costs
+[07:09.880 --> 07:13.880]  when scheduling processes by load balancing
+[07:13.880 --> 07:18.880]  and we pay for the distributed memory architecture
+[07:18.880 --> 07:23.880]  which we actually have in our systems with distributed caches
+[07:23.880 --> 07:28.880]  with higher latencies for contact switches.
+[07:28.880 --> 07:32.880]  Now main memory on the other hand has become abandoned
+[07:32.880 --> 07:37.880]  at least for the data center and now we have heterogeneous memories,
+[07:37.880 --> 07:40.880]  at least non-uniform memory access
+[07:40.880 --> 07:44.880]  and it's also a trend towards distributed memory
+[07:44.880 --> 07:49.880]  where we do not even have sharp memory guaranteed anymore.
+[07:49.880 --> 07:58.880]  And also the IO has now become almost as fast as the CPU.
+[07:58.880 --> 08:05.880]  So one might question whether the operating system abstractions
+[08:05.880 --> 08:09.880]  and interfaces we are accustomed to like POSIX
+[08:09.880 --> 08:14.880]  are still viable for these modern systems
+[08:14.880 --> 08:19.880]  and there's a lot of research which argues that they are not.
+[08:19.880 --> 08:23.880]  For example, the blocking IO of POSIX doesn't fit well
+[08:23.880 --> 08:27.880]  when IO is as fast as the CPU can be
+[08:27.880 --> 08:30.880]  then it doesn't make sense to block threads
+[08:30.880 --> 08:34.880]  because the cost of unblocking a thread or a process
+[08:34.880 --> 08:38.880]  is higher than actually doing polling or something.
+[08:38.880 --> 08:45.880]  So we need further research on operating systems to deal with that.
+[08:45.880 --> 08:51.880]  There's also a lot of research work investigating
+[08:51.880 --> 08:55.880]  how to deal with such things like an FPGA
+[08:55.880 --> 09:00.880]  which were completely different than a CPU does.
+[09:00.880 --> 09:06.880]  So we need more research but there are some hurdles on the way
+[09:06.880 --> 09:10.880]  that put OS research at a risk.
+[09:10.880 --> 09:14.880]  One major hurdle is non-free licensing
+[09:14.880 --> 09:18.880]  which prevents us from fully understanding the system
+[09:18.880 --> 09:26.880]  or especially drivers for hardware like accelerators or GPUs
+[09:26.880 --> 09:30.880]  and it makes a modifying system very difficult
+[09:30.880 --> 09:34.880]  and even if one might be able to modify it
+[09:34.880 --> 09:38.880]  it might not be publishable which is bad for research
+[09:38.880 --> 09:43.880]  where you want to have is that your results are reproducible
+[09:43.880 --> 09:47.880]  by other researchers.
+[09:47.880 --> 09:50.880]  Now furthermore we have hardware black boxes
+[09:50.880 --> 09:55.880]  which make it even harder to implement drivers
+[09:55.880 --> 09:59.880]  and make it also difficult to evaluate the hardware
+[09:59.880 --> 10:05.880]  because you can't quite figure out what is going on in the hardware there.
+[10:05.880 --> 10:10.880]  And then there are also NDAs, non-disclosure agreements
+[10:10.880 --> 10:14.880]  which may suppress unfavorable results
+[10:14.880 --> 10:19.880]  so that you might have nice results or the paper
+[10:19.880 --> 10:23.880]  you aren't allowed to publish them
+[10:23.880 --> 10:26.880]  because some company doesn't like their results
+[10:26.880 --> 10:30.880]  because it may damage their business
+[10:30.880 --> 10:36.880]  because your results state that the hardware is not as good as they think.
+[10:36.880 --> 10:41.880]  And one other big problem is missing documentation
+[10:41.880 --> 10:44.880]  especially if this leads to reverse engineering
+[10:44.880 --> 10:50.880]  like it was necessary for a long time for the NVIDIA GPUs
+[10:50.880 --> 10:54.880]  where this no-volt open source driver has
+[10:54.880 --> 10:58.880]  to be completely written from scratch
+[10:58.880 --> 11:02.880]  via reverse engineering because NVIDIA didn't publish
+[11:02.880 --> 11:06.880]  any useful documentation.
+[11:06.880 --> 11:10.880]  Now a major problem then we face in research
+[11:10.880 --> 11:14.880]  is the lack of manpower that puts start limits
+[11:14.880 --> 11:17.880]  on what we can do
+[11:17.880 --> 11:23.880]  and it can also endanger the success of the project itself.
+[11:23.880 --> 11:26.880]  In research success of a project is measured
+[11:26.880 --> 11:29.880]  and the amount of publications we can do
+[11:29.880 --> 11:34.880]  which accounts for the amount of experiments we can do
+[11:34.880 --> 11:39.880]  and this means we don't have so much time to implement drivers
+[11:39.880 --> 11:42.880]  and such stuff.
+[11:42.880 --> 11:44.880]  And also the complexity of modern hardware
+[11:44.880 --> 11:46.880]  as we have seen in the previous talk
+[11:46.880 --> 11:49.880]  for that MNT reform laptop
+[11:49.880 --> 11:53.880]  can be quite intimidating and making it even harder
+[11:53.880 --> 11:56.880]  to get an operating system working.
+[11:56.880 --> 12:02.880]  So what does OS researchers do in the scenario?
+[12:02.880 --> 12:07.880]  They mostly write workarounds and tweaks for Linux.
+[12:07.880 --> 12:12.880]  Here is a short list of publications
+[12:12.880 --> 12:17.880]  and they are mostly from OSDI 2020
+[12:17.880 --> 12:21.880]  and this is just the tip of the iceberg.
+[12:21.880 --> 12:22.880]  What's going on?
+[12:22.880 --> 12:28.880]  In fact most papers on the OSDI 2020 and 2021
+[12:28.880 --> 12:33.880]  OSDI are one of the major scientific conferences
+[12:33.880 --> 12:36.880]  for operating system research
+[12:36.880 --> 12:40.880]  and one can see that most papers here in grey
+[12:40.880 --> 12:44.880]  that were OS research papers were actually just tweaks
+[12:44.880 --> 12:47.880]  to Linux kernel and only the red part
+[12:47.880 --> 12:50.880]  were really new operating systems
+[12:50.880 --> 12:55.880]  with new concepts or abstractions.
+[12:55.880 --> 12:59.880]  So now we know why they use Linux
+[12:59.880 --> 13:02.880]  but I think Linux isn't a good idea
+[13:02.880 --> 13:06.880]  because you still have a huge and complex code base
+[13:06.880 --> 13:11.880]  to deal with as the previous talk might have already teased
+[13:11.880 --> 13:15.880]  that it is still a lot of work working in the Linux kernel
+[13:15.880 --> 13:19.880]  and getting a company with that
+[13:19.880 --> 13:23.880]  and furthermore the positive compliance of Linux
+[13:23.880 --> 13:26.880]  and also the strict requirement
+[13:26.880 --> 13:29.880]  that you may never ever break user space
+[13:29.880 --> 13:35.880]  puts hard limits on what we can do in research.
+[13:35.880 --> 13:39.880]  So completely changing abstractions
+[13:39.880 --> 13:42.880]  and interfaces that break user space
+[13:42.880 --> 13:47.880]  will never ever have the chance to get into the kernel.
+[13:47.880 --> 13:49.880]  At least it will be very difficult
+[13:49.880 --> 13:53.880]  because we need to persuade Linux torwards
+[13:53.880 --> 13:57.880]  to integrate them.
+[13:57.880 --> 14:00.880]  And furthermore Linux is a moving target.
+[14:01.880 --> 14:05.880]  The kernel APIs are changing rapidly
+[14:05.880 --> 14:10.880]  and this needs a lot of maintenance work.
+[14:10.880 --> 14:14.880]  So as we have seen before
+[14:14.880 --> 14:17.880]  a small research team might not be able to do this maintenance
+[14:17.880 --> 14:20.880]  and so extensions will break sooner or later.
+[14:20.880 --> 14:24.880]  That's something we have experienced in our own research
+[14:24.880 --> 14:28.880]  where we try to compare against other Linux extensions
+[14:28.880 --> 14:31.880]  and they didn't compare with newer kernels
+[14:31.880 --> 14:34.880]  or only worked with some ancient kernels
+[14:34.880 --> 14:38.880]  which we couldn't run on our hardware.
+[14:40.880 --> 14:44.880]  So one might ask isn't there something better to do
+[14:44.880 --> 14:49.880]  OS research with but also is able to
+[14:49.880 --> 14:54.880]  lower the burden of writing an OS from scratch.
+[14:55.880 --> 14:58.880]  So something like a framework
+[15:00.880 --> 15:02.880]  and such an OS framework
+[15:02.880 --> 15:06.880]  that should be minimal ideally
+[15:06.880 --> 15:09.880]  that eases understanding and makes it easier
+[15:09.880 --> 15:13.880]  to change kernel primitives and add new interfaces
+[15:13.880 --> 15:16.880]  and it can also assist debugging
+[15:16.880 --> 15:21.880]  because you don't need to analyze a huge code base.
+[15:21.880 --> 15:25.880]  This also makes it investigable.
+[15:27.880 --> 15:32.880]  That's necessary to understand what's going on in the system.
+[15:32.880 --> 15:35.880]  Ideally it has an open source code base
+[15:35.880 --> 15:38.880]  and it provides some profiling to it.
+[15:39.880 --> 15:41.880]  It should also be maintainable
+[15:41.880 --> 15:44.880]  so that it has regular updates.
+[15:44.880 --> 15:49.880]  So if its skill can work on newer hardware
+[15:50.880 --> 15:53.880]  and not that it's five years later
+[15:53.880 --> 15:56.880]  you can't use that framework anymore
+[15:56.880 --> 16:00.880]  because it only supports very ancient hardware.
+[16:02.880 --> 16:07.880]  Extensible is also quite obvious.
+[16:08.880 --> 16:11.880]  It makes it easier to implement
+[16:11.880 --> 16:14.880]  your own operating system services and abstractions
+[16:14.880 --> 16:18.880]  and therefore it should have separation of contents
+[16:18.880 --> 16:21.880]  and well-defined components
+[16:21.880 --> 16:25.880]  and it should also be well documented.
+[16:27.880 --> 16:32.880]  Ideally it should be a book and documented code
+[16:32.880 --> 16:36.880]  and also portable to make it future-proof
+[16:36.880 --> 16:40.880]  and enable it to be portable to other
+[16:40.880 --> 16:43.880]  also experimental hardware
+[16:43.880 --> 16:47.880]  like the NCM computer from ETH-Zurick.
+[16:49.880 --> 16:54.880]  This would also then enable support for hardware OS code design.
+[16:55.880 --> 16:57.880]  Basically what it meant here is
+[16:57.880 --> 17:02.880]  it should not assume a specific CPU architecture
+[17:03.880 --> 17:08.880]  and a nice thing to have would be composability at one time
+[17:08.880 --> 17:12.880]  something like the module system Linux has
+[17:13.880 --> 17:16.880]  which would allow to use, for example,
+[17:16.880 --> 17:19.880]  different OS interfaces simultaneously
+[17:19.880 --> 17:21.880]  to evaluate them against each other
+[17:21.880 --> 17:25.880]  and find out what interface, for example,
+[17:25.880 --> 17:28.880]  provides the best performance for a specific task.
+[17:32.880 --> 17:35.880]  So now that we have that we might ask
+[17:35.880 --> 17:40.880]  what is such a framework?
+[17:40.880 --> 17:43.880]  Does something like that exist?
+[17:43.880 --> 17:48.880]  And as the title already teespoiled
+[17:48.880 --> 17:54.880]  there is actually, I propose the genot OS framework
+[17:54.880 --> 17:56.880]  as a good candidate here.
+[17:57.880 --> 17:59.880]  As we've seen in the previous talk,
+[17:59.880 --> 18:01.880]  genot is an OS framework that provides
+[18:01.880 --> 18:03.880]  different kernels, drivers.
+[18:04.880 --> 18:07.880]  Now also from Linux which makes things
+[18:07.880 --> 18:10.880]  easier getting hardware up and running
+[18:10.880 --> 18:13.880]  and furthermore it also includes libraries
+[18:13.880 --> 18:17.880]  which makes it easier to port existing benchmarks
+[18:17.880 --> 18:20.880]  and later applications to genot
+[18:20.880 --> 18:24.880]  and your special fork of genot you use for research.
+[18:26.880 --> 18:29.880]  So getting back to the requirements,
+[18:29.880 --> 18:32.880]  how well does genot fit the bill here?
+[18:33.880 --> 18:37.880]  First it is minimal compared to Linux.
+[18:37.880 --> 18:42.880]  We only have about 53,000 lines of code
+[18:42.880 --> 18:45.880]  for genot with the Nova kernel
+[18:45.880 --> 18:48.880]  for really the operating system kernel
+[18:48.880 --> 18:52.880]  and the basic operating system abstractions
+[18:52.880 --> 18:58.880]  and services while we take the same parts of the system,
+[18:58.880 --> 19:01.880]  both are x86 only.
+[19:01.880 --> 19:06.880]  We have 911,000 for Linux 4.140
+[19:08.880 --> 19:11.880]  which this number might be higher even by now.
+[19:15.880 --> 19:19.880]  Also it's investigable because it's under GPL
+[19:19.880 --> 19:24.880]  but yeah, the tracing and profiling
+[19:24.880 --> 19:29.880]  is at the moment as I experience it quite basic
+[19:29.880 --> 19:34.880]  it's not yet not comparable to Linux Perth
+[19:36.880 --> 19:39.880]  but that might change in the future.
+[19:40.880 --> 19:42.880]  It's also maintainable.
+[19:42.880 --> 19:46.880]  I've seen that there were almost quarterly updates
+[19:46.880 --> 19:50.880]  and I didn't have to wait three updates
+[19:50.880 --> 19:54.880]  and didn't have to change much on the kernel API here.
+[19:54.880 --> 19:58.880]  So I think that is also green here.
+[20:02.880 --> 20:06.880]  Of course genot is a component-based system
+[20:06.880 --> 20:10.880]  so everything is clearly separated into single components
+[20:10.880 --> 20:16.880]  which have an RPC interface which is basically well defined.
+[20:16.880 --> 20:19.880]  That means that the basic foundation
+[20:19.880 --> 20:21.880]  should work with this RPC interface
+[20:21.880 --> 20:25.880]  are the same for each of those components
+[20:27.880 --> 20:31.880]  and the requirements for adding new components
+[20:31.880 --> 20:34.880]  are quite minimal because
+[20:36.880 --> 20:39.880]  if you don't need, for example, an NVMe driver
+[20:39.880 --> 20:42.880]  then you don't have to deal with such things
+[20:42.880 --> 20:44.880]  in that interfaces.
+[20:44.880 --> 20:48.880]  Basically you just need to know the core services
+[20:48.880 --> 20:50.880]  and libraries of Genot
+[20:50.880 --> 20:53.880]  which are very well documented in the book
+[20:53.880 --> 20:57.880]  Genot Foundations which help me a lot to understand
+[20:57.880 --> 21:01.880]  how Genot works and what the concepts are here.
+[21:03.880 --> 21:07.880]  Also they have an extensive change log for each release
+[21:07.880 --> 21:11.880]  and there's also the genodian's block
+[21:12.880 --> 21:15.880]  and the FOSDEMT talks.
+[21:15.880 --> 21:19.880]  It's also portable as we have already seen
+[21:19.880 --> 21:21.880]  in the previous talk
+[21:21.880 --> 21:24.880]  and it has its component-based architecture.
+[21:24.880 --> 21:28.880]  We saw the LightCentraler in the previous talk
+[21:28.880 --> 21:33.880]  which allowed to add components at runtime
+[21:33.880 --> 21:37.880]  or exchange them and change the configurations
+[21:37.880 --> 21:41.880]  and it's also possible to have multiple instances
+[21:41.880 --> 21:46.880]  of a service at runtime.
+[21:49.880 --> 21:54.880]  That makes Genot a quite good fit as I think.
+[21:55.880 --> 22:00.880]  How much does it facilitate as research?
+[22:01.880 --> 22:05.880]  I might ask here and before I start with that
+[22:05.880 --> 22:10.880]  I want to present shortly my own research operating system
+[22:10.880 --> 22:12.880]  called ELAN OS
+[22:12.880 --> 22:15.880]  which is an experimental implementation
+[22:15.880 --> 22:18.880]  of the MX Kernel architecture we devised
+[22:18.880 --> 22:20.880]  in our research project
+[22:20.880 --> 22:24.880]  and is based on the Genot OS framework.
+[22:25.880 --> 22:29.880]  In this MX Kernel architecture
+[22:29.880 --> 22:32.880]  we have three basic concepts
+[22:34.880 --> 22:39.880]  for clarification, the squares in this picture
+[22:39.880 --> 22:41.880]  represent a hardware resource
+[22:41.880 --> 22:44.880]  like a CPU core or a part of memory
+[22:46.880 --> 22:50.880]  and then we have the first concept
+[22:50.880 --> 22:52.880]  which are organisms
+[22:52.880 --> 22:56.880]  and these are basically resource containers
+[22:56.880 --> 23:01.880]  for applications that follow a specific common goal
+[23:01.880 --> 23:06.880]  for example a web application like a web store
+[23:06.880 --> 23:10.880]  which usually is comprised of a database, a web server
+[23:10.880 --> 23:14.880]  and some implementation logic for the store itself
+[23:14.880 --> 23:18.880]  so we would have usually three programs running
+[23:19.880 --> 23:22.880]  and they have the same goal
+[23:22.880 --> 23:26.880]  to provide this web store experience
+[23:26.880 --> 23:31.880]  and they are then in LOS put into one organism
+[23:31.880 --> 23:34.880]  and the resource management is controlled
+[23:34.880 --> 23:37.880]  by a component we call IVAT
+[23:37.880 --> 23:39.880]  that's finished for brain
+[23:39.880 --> 23:44.880]  for an organism that can be application or user specific
+[23:46.880 --> 23:51.880]  and can also provide a specific operating system interface
+[23:51.880 --> 23:56.880]  for example it might allow to provide a POSIX interface
+[23:56.880 --> 24:00.880]  or another custom OS interface
+[24:00.880 --> 24:05.880]  whatever the applications are needing
+[24:05.880 --> 24:09.880]  and these organisms can also grow
+[24:09.880 --> 24:13.880]  and shrink in the amount of resources they use
+[24:14.880 --> 24:18.880]  for example if this yellow one
+[24:18.880 --> 24:21.880]  wouldn't need these resources here
+[24:21.880 --> 24:25.880]  then the red one could also extend there
+[24:26.880 --> 24:29.880]  for this we have Heuter
+[24:29.880 --> 24:31.880]  that's the global resource management
+[24:31.880 --> 24:37.880]  that has the task to provide a fair amount
+[24:37.880 --> 24:40.880]  of research utilization
+[24:40.880 --> 24:43.880]  and between organisms
+[24:43.880 --> 24:46.880]  and can also implement such things
+[24:46.880 --> 24:50.880]  like server level agreements
+[24:51.880 --> 24:55.880]  and within an organism we have cells
+[24:55.880 --> 24:59.880]  these are basically your processes
+[24:59.880 --> 25:04.880]  and they have also an elastic resource container
+[25:04.880 --> 25:10.880]  in our system we have a strict rule
+[25:10.880 --> 25:15.880]  that space partitioning comes for
+[25:15.880 --> 25:19.880]  before time sharing
+[25:19.880 --> 25:22.880]  and that makes it necessary
+[25:22.880 --> 25:26.880]  if we have diverging loads
+[25:26.880 --> 25:30.880]  that these containers might have to shrink
+[25:30.880 --> 25:34.880]  to save resources and especially to grow
+[25:34.880 --> 25:42.880]  if already assigned resources don't suffice
+[25:46.880 --> 25:49.880]  and then one new abstraction
+[25:49.880 --> 25:51.880]  we also added is that
+[25:51.880 --> 25:54.880]  we changed the default control flow abstraction
+[25:54.880 --> 25:57.880]  from threads to tasks
+[25:57.880 --> 26:00.880]  which are closed units of work
+[26:00.880 --> 26:03.880]  you can think of them as
+[26:03.880 --> 26:05.880]  a remote procedure call
+[26:05.880 --> 26:09.880]  or a bit bigger method call
+[26:09.880 --> 26:13.880]  although its execution time is quite short
+[26:13.880 --> 26:16.880]  in microseconds to milliseconds range
+[26:16.880 --> 26:19.880]  compared to the lifetime of a thread
+[26:19.880 --> 26:22.880]  therefore we can allow it to be
+[26:22.880 --> 26:25.880]  not preemptible between each other
+[26:25.880 --> 26:29.880]  which then allows us to annotate them
+[26:29.880 --> 26:31.880]  to synchronization
+[26:31.880 --> 26:33.880]  or provide automatic prefetching
+[26:33.880 --> 26:35.880]  and other nice things
+[26:37.880 --> 26:40.880]  as the architecture then looks like
+[26:40.880 --> 26:44.880]  that we have our application running in user space
+[26:44.880 --> 26:47.880]  and in kernel space we have 2KIA
+[26:47.880 --> 26:51.880]  which is basically a fork of the NOVA microhypervisor
+[26:51.880 --> 26:54.880]  especially the genote version of it
+[26:54.880 --> 27:00.880]  which then will fulfill the role as a resource provider
+[27:00.880 --> 27:04.880]  it will basically on the command of Heutea
+[27:04.880 --> 27:08.880]  it will either withdraw a resource from an application
+[27:08.880 --> 27:10.880]  or grant a resource
+[27:16.880 --> 27:22.880]  so how did we implement this with genet?
+[27:24.880 --> 27:29.880]  first for organisms we use the feature of service interception
+[27:29.880 --> 27:31.880]  genote allows to have
+[27:31.880 --> 27:35.880]  that you have several instances of its core service
+[27:35.880 --> 27:38.880]  so for example you can implement your
+[27:38.880 --> 27:41.880]  scheduler, memory allocator and such things
+[27:41.880 --> 27:47.880]  and then we route the service that it uses
+[27:47.880 --> 27:51.880]  specialized or as service rather than the generic one
+[27:51.880 --> 27:55.880]  cells are implemented as genote components
+[27:55.880 --> 27:59.880]  and one feature genote already has is resource trading
+[27:59.880 --> 28:02.880]  but only for RAM and we will extend that
+[28:02.880 --> 28:05.880]  so that it also can work with CPUs
+[28:05.880 --> 28:09.880]  to implement that growing and shrinking of cells
+[28:09.880 --> 28:14.880]  and for tasks the genote didn't have anything
+[28:14.880 --> 28:19.880]  when we started but we have already developed
+[28:19.880 --> 28:23.880]  a task based runtime library and framework
+[28:23.880 --> 28:26.880]  basically it was a colleague from Dortmund
+[28:26.880 --> 28:29.880]  which is called amix tasking
+[28:29.880 --> 28:33.880]  what I did was porting this to genet
+[28:33.880 --> 28:39.880]  and for this I needed a standard C++ library
+[28:39.880 --> 28:45.880]  because it uses this for the internal data structures
+[28:45.880 --> 28:49.880]  and to be portable a file system
+[28:49.880 --> 28:54.880]  for the benchmarks and for writing out the profiling results
+[28:54.880 --> 28:56.880]  from that benchmarks
+[28:56.880 --> 29:01.880]  timer support which was also needed for the profiling
+[29:01.880 --> 29:05.880]  and of course we needed multi-core support
+[29:05.880 --> 29:10.880]  which was necessary to provide task parallelism
+[29:10.880 --> 29:14.880]  and the last thing was NUMA support
+[29:14.880 --> 29:19.880]  NUMA stands for non-uniform memory architecture
+[29:19.880 --> 29:22.880]  and this is needed by amix tasking
+[29:22.880 --> 29:25.880]  because it does NUMA aware task scheduling
+[29:25.880 --> 29:30.880]  and data object allocations and placements
+[29:30.880 --> 29:33.880]  and here comes the tricky part
+[29:33.880 --> 29:36.880]  if you would have to do this from scratch
+[29:36.880 --> 29:38.880]  in your own operating system
+[29:38.880 --> 29:43.880]  you would have to implement quite a huge amount of code here
+[29:43.880 --> 29:47.880]  but genote comes here to rescue
+[29:47.880 --> 29:50.880]  because it already provides a standard C++ library
+[29:50.880 --> 29:55.880]  file system timer support and also multi-core support
+[29:58.880 --> 30:02.880]  what we needed to add was NUMA support
+[30:06.880 --> 30:11.880]  and for this we extended the NOVA microhypervisor
+[30:11.880 --> 30:16.880]  that now it parses the AKPS wrap tables
+[30:17.880 --> 30:22.880]  to find out which CPU cores belong to which NUMA region
+[30:22.880 --> 30:27.880]  and also the address, memory address ranges
+[30:27.880 --> 30:30.880]  of the NUMA regions which are later used
+[30:30.880 --> 30:33.880]  for a NUMA aware allocator
+[30:34.880 --> 30:37.880]  furthermore we implemented
+[30:37.880 --> 30:43.880]  and this thing cost only 365 lines of code
+[30:43.880 --> 30:48.880]  where the barest of it was just the definition
+[30:48.880 --> 30:52.880]  of these table structures in C++ code
+[30:52.880 --> 30:55.880]  Michael are you close to finishing?
+[30:55.880 --> 30:57.880]  Time is almost up
+[31:04.880 --> 31:06.880]  I can't hurry up
+[31:06.880 --> 31:08.880]  Two more minutes please
+[31:08.880 --> 31:15.880]  Then we implemented a topology service
+[31:15.880 --> 31:21.880]  with 531 lines of code and also NUMA aware
+[31:21.880 --> 31:24.880]  Sorry, you have one hour, sorry for that
+[31:24.880 --> 31:26.880]  My bad, sorry for that
+[31:26.880 --> 31:29.880]  I don't have my laptop, I didn't
+[31:29.880 --> 31:31.880]  Sorry, go ahead, my bad
+[31:33.880 --> 31:35.880]  No problem
+[31:38.880 --> 31:40.880]  I'm so good at whipping people
+[31:46.880 --> 31:48.880]  Based on this NOVA extension
+[31:48.880 --> 31:52.880]  then we developed a topology service
+[31:52.880 --> 31:58.880]  which enables now to also query the NUMA topology
+[31:58.880 --> 32:00.880]  not just for the core components
+[32:00.880 --> 32:03.880]  but also the user space applications
+[32:03.880 --> 32:08.880]  can now ask for example where does this thread
+[32:08.880 --> 32:11.880]  I'm currently running in
+[32:11.880 --> 32:14.880]  is in the NUMA topology
+[32:14.880 --> 32:17.880]  which can be used for example then
+[32:17.880 --> 32:23.880]  for actually allocating memory locally
+[32:23.880 --> 32:26.880]  or from a specific NUMA region
+[32:26.880 --> 32:29.880]  which is a usual use case
+[32:30.880 --> 32:33.880]  used for implementing database applications
+[32:33.880 --> 32:37.880]  and also for high performance computing
+[32:37.880 --> 32:42.880]  and the last part was providing the glue code
+[32:42.880 --> 32:45.880]  between the genote interfaces
+[32:45.880 --> 32:49.880]  and this MX tasking runtime
+[32:49.880 --> 32:54.880]  and as one can see this was about
+[32:54.880 --> 32:58.880]  1500 lines of code
+[32:58.880 --> 33:04.880]  which is quite manageable for a single developer
+[33:06.880 --> 33:10.880]  and we also started to implement
+[33:10.880 --> 33:14.880]  something from scratch at the beginning of the project
+[33:14.880 --> 33:18.880]  which only compressed mostly what
+[33:18.880 --> 33:22.880]  the hardware abstraction layer here in grey
+[33:22.880 --> 33:26.880]  which was to get the system
+[33:27.880 --> 33:29.880]  running at all
+[33:29.880 --> 33:34.880]  and the other was this task-based interface
+[33:34.880 --> 33:37.880]  and this thing already needed about
+[33:37.880 --> 33:40.880]  24,000 lines of code
+[33:40.880 --> 33:44.880]  while again this ELNOS
+[33:44.880 --> 33:46.880]  this genote-based thing I started
+[33:46.880 --> 33:52.880]  has only about 5,500 lines of code
+[33:52.880 --> 33:55.880]  and I have to add that this
+[33:55.880 --> 33:59.880]  from scratch version did not have
+[33:59.880 --> 34:01.880]  anything like components
+[34:01.880 --> 34:03.880]  that there was no support
+[34:03.880 --> 34:05.880]  for memory protection for example
+[34:05.880 --> 34:08.880]  and it could only run a single application
+[34:08.880 --> 34:11.880]  while now with genote we can have
+[34:11.880 --> 34:14.880]  several applications which are memory protected
+[34:14.880 --> 34:16.880]  and isolated from each other
+[34:16.880 --> 34:19.880]  and we also have well defined
+[34:19.880 --> 34:21.880]  inter-processed communication mechanisms
+[34:21.880 --> 34:24.880]  like the remote procedure call interface
+[34:24.880 --> 34:27.880]  and also semaphors and such stuff
+[34:27.880 --> 34:30.880]  which was still lacking in the
+[34:30.880 --> 34:33.880]  from scratch version
+[34:33.880 --> 34:38.880]  and in time this is just an estimation here
+[34:38.880 --> 34:41.880]  for especially the effort here
+[34:41.880 --> 34:45.880]  I assume here that a single developer
+[34:45.880 --> 34:48.880]  can arrive about 10 lines of code
+[34:48.880 --> 34:51.880]  which is some approximation
+[34:51.880 --> 34:54.880]  that is usually used to calculate men month
+[34:54.880 --> 35:00.880]  and this culminated in about 18 men month
+[35:00.880 --> 35:04.880]  for the implementation we did from scratch
+[35:04.880 --> 35:07.880]  I have to admit that I didn't do
+[35:07.880 --> 35:09.880]  all the coding by myself
+[35:09.880 --> 35:13.880]  I had help from the people of TU Dortmund
+[35:13.880 --> 35:18.880]  and could use a small research operating
+[35:18.880 --> 35:20.880]  and not research but an operating system
+[35:20.880 --> 35:23.880]  for teaching which did already
+[35:23.880 --> 35:27.880]  the very basic stuff to get a system
+[35:27.880 --> 35:29.880]  up and running but didn't include
+[35:29.880 --> 35:33.880]  all the NUMA stuff
+[35:33.880 --> 35:37.880]  and not much drivers
+[35:37.880 --> 35:40.880]  and for the Elon OS that was something
+[35:40.880 --> 35:42.880]  I did completely by myself
+[35:42.880 --> 35:45.880]  in about six months
+[35:45.880 --> 35:50.880]  which is compared about a time saving
+[35:50.880 --> 35:53.880]  of almost 90% here
+[35:53.880 --> 35:57.880]  this NUMA should be taken with a grade of salt
+[35:57.880 --> 36:00.880]  because it's lots of approximation here
+[36:00.880 --> 36:03.880]  but I think you get the picture
+[36:03.880 --> 36:08.880]  using genote I was able to really accelerate
+[36:08.880 --> 36:11.880]  this implementation and engineering effort
+[36:11.880 --> 36:15.880]  which usually does not yield any scientific publications
+[36:15.880 --> 36:17.880]  because you implement something
+[36:17.880 --> 36:20.880]  that everyone else has already done
+[36:20.880 --> 36:23.880]  it's nothing new
+[36:23.880 --> 36:29.880]  and this helped me a lot
+[36:29.880 --> 36:32.880]  making progress
+[36:32.880 --> 36:37.880]  and now I want to show you how I used
+[36:37.880 --> 36:42.880]  genote's internal scenario concept
+[36:42.880 --> 36:45.880]  basically it's some kind of
+[36:45.880 --> 36:48.880]  and this component concept
+[36:48.880 --> 36:53.880]  to do automatic experiments
+[36:53.880 --> 36:55.880]  but first a quick recap
+[36:55.880 --> 37:00.880]  genote consists of components
+[37:00.880 --> 37:03.880]  that are these red boxes here
+[37:03.880 --> 37:09.880]  and then they're aligned in a tree
+[37:09.880 --> 37:12.880]  usually you have an inert component
+[37:12.880 --> 37:18.880]  that then starts all the other components
+[37:18.880 --> 37:22.880]  and then you can specify within a scenario
+[37:22.880 --> 37:25.880]  or something like an XML config
+[37:25.880 --> 37:30.880]  how these components are related to each other
+[37:30.880 --> 37:33.880]  for example that's its inert component shell
+[37:33.880 --> 37:36.880]  start a GUI component and a launcher component
+[37:36.880 --> 37:41.880]  and the launcher component then starts an application component
+[37:41.880 --> 37:45.880]  and this application component uses this GUI session
+[37:45.880 --> 37:48.880]  and has also the rights to use it
+[37:48.880 --> 37:54.880]  and such stuff
+[37:54.880 --> 37:58.880]  but now I want to show you
+[37:58.880 --> 38:02.880]  how these XML configurations work
+[38:02.880 --> 38:06.880]  in a real experimental setting
+[38:06.880 --> 38:08.880]  I've brought you an example
+[38:08.880 --> 38:11.880]  from the database community
+[38:11.880 --> 38:14.880]  that is a bilingtree benchmark
+[38:14.880 --> 38:19.880]  a bilingtree is a widespread data structure
+[38:19.880 --> 38:22.880]  that is used for indexing database tables
+[38:22.880 --> 38:25.880]  and it's also used very often
+[38:25.880 --> 38:28.880]  to implement key value stores
+[38:28.880 --> 38:34.880]  such as memcached
+[38:34.880 --> 38:38.880]  and now we would like to investigate
+[38:38.880 --> 38:42.880]  how the throughput of this benchmark is affected
+[38:42.880 --> 38:47.880]  when we run multiple insets on the same set of CPU cores
+[38:47.880 --> 38:49.880]  and do time sharing
+[38:49.880 --> 38:54.880]  so that we have to pay these contact switch costs
+[38:54.880 --> 38:59.880]  and then we do the spatial partitioning
+[38:59.880 --> 39:02.880]  I explained earlier
+[39:02.880 --> 39:05.880]  and let us assume our research quest
+[39:05.880 --> 39:10.880]  which scenario will yield the higher throughput
+[39:10.880 --> 39:16.880]  at the respective maximum of cores
+[39:16.880 --> 39:23.880]  so let's take a look at what we have to build up
+[39:23.880 --> 39:25.880]  as component tree
+[39:25.880 --> 39:28.880]  first we have oraces in it
+[39:28.880 --> 39:31.880]  and we want to, for example, have three instances
+[39:31.880 --> 39:34.880]  of this bilingtree benchmark
+[39:34.880 --> 39:38.880]  there are a number named bilingtree123
+[39:38.880 --> 39:44.880]  and they all need the timer service for the genet
+[39:44.880 --> 39:50.880]  and basically to just define this structure
+[39:50.880 --> 39:54.880]  we would write the code on the right
+[39:54.880 --> 40:00.880]  which is just this, oh, sorry
+[40:00.880 --> 40:05.880]  this config tag and then for each component
+[40:05.880 --> 40:09.880]  you write start the name of how the component shall be named
+[40:09.880 --> 40:11.880]  and then close that start tag
+[40:11.880 --> 40:18.880]  for the bilingtree we have one exception here
+[40:18.880 --> 40:22.880]  since bilingtree is a name which is shared
+[40:22.880 --> 40:27.880]  by all three components we specify a specific binary name
+[40:27.880 --> 40:32.880]  here which is called bilingtree
+[40:32.880 --> 40:37.880]  and called the components differently
+[40:37.880 --> 40:42.880]  that's just because genet has to have, yeah
+[40:42.880 --> 40:47.880]  requires that each component has a unique name
+[40:47.880 --> 40:50.880]  which is needed for this service routing
+[40:50.880 --> 40:56.880]  and checking access writes
+[40:56.880 --> 41:01.880]  since now we have the basic structure here
+[41:01.880 --> 41:05.880]  and we need to define that this timer component
+[41:05.880 --> 41:09.880]  is actually an operating system service here
+[41:09.880 --> 41:12.880]  this is done with a provat tag
+[41:12.880 --> 41:18.880]  and adding here that the service shall be named timer
+[41:18.880 --> 41:22.880]  and then we also have to specify where it can find
+[41:22.880 --> 41:26.880]  the other operating system services it needs
+[41:26.880 --> 41:29.880]  so it's just the default route stating that
+[41:29.880 --> 41:32.880]  if it wants to make a connection to another service
+[41:32.880 --> 41:39.880]  it should either ask its parent or one of its siblings
+[41:39.880 --> 41:44.880]  and then we do this for the bilingtree one component
+[41:44.880 --> 41:50.880]  for example and we have also ready to add something else
+[41:50.880 --> 41:57.880]  because we also want to have this timer service
+[41:57.880 --> 42:01.880]  and this is done by specifying that the name of the service
+[42:01.880 --> 42:06.880]  we need is timer and that one of the siblings
+[42:06.880 --> 42:09.880]  that's done with this child tag here
+[42:09.880 --> 42:12.880]  shall be used for that
+[42:12.880 --> 42:14.880]  which is here timer
+[42:14.880 --> 42:18.880]  we could also have another component called timer
+[42:18.880 --> 42:25.880]  and then write that name and that would use another timer
+[42:25.880 --> 42:29.880]  and we could also do this for the other trees
+[42:30.880 --> 42:37.880]  so this basically allows us to do the service interception
+[42:37.880 --> 42:43.880]  because here we can then specify which actual implementation
+[42:43.880 --> 42:47.880]  or component that provides the service shall be used
+[42:50.880 --> 42:55.880]  after that we need to specify where this component shall run
+[42:55.880 --> 42:58.880]  to realize the experiment
+[42:58.880 --> 43:01.880]  but first I want to mention that
+[43:01.880 --> 43:08.880]  Genet manages CPU cores not just as a set of IDs
+[43:08.880 --> 43:13.880]  but in a two-dimensional space which is called an affinity space
+[43:13.880 --> 43:18.880]  which looks like this and each point in this matrix
+[43:18.880 --> 43:23.880]  is a CPU core and one can map components like these
+[43:23.880 --> 43:27.880]  in a components to subsets of this
+[43:27.880 --> 43:31.880]  and we will use this mechanism now to place
+[43:31.880 --> 43:39.880]  our Billing Tree benchmark components to the cores as was stated in the experiment
+[43:39.880 --> 43:44.880]  but first we have to specify the affinity space
+[43:44.880 --> 43:49.880]  that's the huge gray square
+[43:50.880 --> 43:54.880]  and we might assume here that we have a machine with 64 cores
+[43:54.880 --> 43:56.880]  and to make things easier we say
+[43:56.880 --> 43:59.880]  with the 64 inside with one
+[43:59.880 --> 44:02.880]  so we do not have to calculate coordinates here
+[44:04.880 --> 44:07.880]  and after we have done that
+[44:07.880 --> 44:11.880]  we can pick out these subsets
+[44:11.880 --> 44:17.880]  and say for example Billing Tree 1 component shall be mapped at position X
+[44:17.880 --> 44:21.880]  which corresponds to core 1
+[44:21.880 --> 44:25.880]  and shall use 63 cores
+[44:25.880 --> 44:30.880]  which is stated by this width here and height
+[44:33.880 --> 44:37.880]  and furthermore we have to specify a RAM limit
+[44:37.880 --> 44:40.880]  because it's a database benchmark
+[44:40.880 --> 44:44.880]  we need quite a huge amount of memory
+[44:44.880 --> 44:48.880]  80 gigabyte in this example
+[44:48.880 --> 44:52.880]  and this is then done
+[44:52.880 --> 44:56.880]  for each instance of the Billing Tree
+[44:56.880 --> 45:01.880]  unfortunately this laptop didn't want to work with a beamer
+[45:01.880 --> 45:08.880]  so I couldn't show you the final config that comes out of it
+[45:08.880 --> 45:13.880]  but I already ran the benchmark
+[45:13.880 --> 45:18.880]  beforehand and that would be the results
+[45:18.880 --> 45:21.880]  if we would run the experiment
+[45:24.880 --> 45:27.880]  and this also answers the question
+[45:27.880 --> 45:32.880]  if we only consider inserts into the Billing Tree
+[45:32.880 --> 45:37.880]  then it is better to use this spatial partitioning
+[45:37.880 --> 45:42.880]  since we reach about 16 million operations per second
+[45:42.880 --> 45:46.880]  this is 60 million insert operations
+[45:46.880 --> 45:50.880]  of key value pairs into the Billing Tree
+[45:50.880 --> 45:56.880]  while on the other side if we only have a read only workload
+[45:56.880 --> 46:01.880]  that means we just look up a key in the Billing Tree then
+[46:03.880 --> 46:08.880]  as we can see the time sharing out performs
+[46:09.880 --> 46:12.880]  the strict spatial partitioning
+[46:14.880 --> 46:20.880]  I didn't come to analyze this deeper
+[46:22.880 --> 46:26.880]  and I don't think that's the scope of this talk here now
+[46:27.880 --> 46:32.880]  so to conclude hardware has changed tremendously
+[46:32.880 --> 46:36.880]  in the last two decades
+[46:36.880 --> 46:39.880]  and we need more OS research
+[46:39.880 --> 46:43.880]  but there is a high entrance hurdle to overcome
+[46:43.880 --> 46:47.880]  which can then be lowered by an OS framework
+[46:47.880 --> 46:54.880]  and my claim here is that Genote can significantly help here
+[46:54.880 --> 46:58.880]  as this specific example from my experience
+[46:58.880 --> 47:02.880]  it saved me about 90% of development time
+[47:02.880 --> 47:05.880]  compared to when I would have to implement
+[47:05.880 --> 47:08.880]  all the things by myself
+[47:08.880 --> 47:11.880]  and furthermore my research operating system
+[47:11.880 --> 47:14.880]  also provides some contributions to Genote
+[47:14.880 --> 47:19.880]  which I might file in as a pull request
+[47:19.880 --> 47:22.880]  which is this NUMA support
+[47:22.880 --> 47:26.880]  and also some support for many core systems
+[47:26.880 --> 47:31.880]  that I already contributed that by filing a bug report
+[47:32.880 --> 47:36.880]  by finding a bug that Nova crashed a boot loop
+[47:36.880 --> 47:39.880]  if you wanted to use more than 30 cores
+[47:39.880 --> 47:42.880]  this has now been fixed
+[47:42.880 --> 47:44.880]  and I've tested it
+[47:44.880 --> 47:48.880]  it definitely works with 128 CPU cores
+[47:48.880 --> 47:51.880]  on a real hardware machine
+[47:54.880 --> 47:58.880]  and also the NUMA support I implemented is also working
+[47:59.880 --> 48:03.880]  and last but not least
+[48:03.880 --> 48:07.880]  we also now have a task parallel programming library
+[48:07.880 --> 48:10.880]  which can be used with Genote
+[48:11.880 --> 48:16.880]  now my focus will be clearly on research and the data
+[48:16.880 --> 48:19.880]  in the data center here
+[48:19.880 --> 48:23.880]  and my personal road to the future with ELAN OS
+[48:23.880 --> 48:27.880]  is that next I wanted to implement more profiling tools in Genote
+[48:27.880 --> 48:30.880]  especially hardware performance counters
+[48:30.880 --> 48:35.880]  to actually find out why the plot looks like the resource
+[48:36.880 --> 48:40.880]  then I wanted to implement this elasticity of cells
+[48:40.880 --> 48:44.880]  especially the resource trading for CPU cores
+[48:44.880 --> 48:48.880]  and then the management strategies
+[48:48.880 --> 48:52.880]  for these iWord and Hoitaya components
+[48:52.880 --> 48:54.880]  these resource managers
+[48:54.880 --> 48:58.880]  and do an evaluation with a realistic scenario
+[48:58.880 --> 49:03.880]  we already have implemented a database based on MX tasking
+[49:03.880 --> 49:07.880]  which just only waits to be ported to Genote
+[49:07.880 --> 49:13.880]  and then I hopefully will have a first full feature prototype
+[49:13.880 --> 49:17.880]  of ELAN OS which can be used by the community here
+[49:18.880 --> 49:25.880]  Thank you for your attention
+[49:25.880 --> 49:29.880]  and I hope you get in touch with us
+[49:29.880 --> 49:32.880]  Thank you, Mihail
+[49:35.880 --> 49:38.880]  Thanks, questions from the audience?
+[49:39.880 --> 49:43.880]  One question I may have is you talked quite a lot about research
+[49:43.880 --> 49:46.880]  and it makes sense given your current work
+[49:46.880 --> 49:48.880]  what do you think about productization?
+[49:48.880 --> 49:51.880]  I mean getting into what the talks before
+[49:51.880 --> 49:53.880]  they had some actual use cases
+[49:53.880 --> 49:55.880]  there were business ventures
+[49:55.880 --> 49:57.880]  what do you think about productization?
+[49:57.880 --> 49:58.880]  Would this approach make sense
+[49:58.880 --> 50:00.880]  where people are still going to get back to Linux
+[50:00.880 --> 50:02.880]  because that's what everyone uses
+[50:02.880 --> 50:06.880]  and it's going to be the default?
+[50:07.880 --> 50:09.880]  That's still...
+[50:09.880 --> 50:11.880]  I'm asking an opinion, I don't have a crystal ball
+[50:11.880 --> 50:13.880]  I'm just saying what you're thinking
+[50:14.880 --> 50:17.880]  It's our assumption
+[50:17.880 --> 50:19.880]  that's why we're doing research
+[50:19.880 --> 50:21.880]  that it will be better
+[50:21.880 --> 50:25.880]  or at least have benefits compared to Linux
+[50:25.880 --> 50:28.880]  also for production use
+[50:28.880 --> 50:32.880]  especially we think that we can provide a better performance
+[50:32.880 --> 50:37.880]  and also ease the development of database systems
+[50:37.880 --> 50:41.880]  and other highly parallel applications
+[50:41.880 --> 50:45.880]  like from high-performance computing communities
+[50:45.880 --> 50:47.880]  Okay, thanks
+[50:47.880 --> 50:49.880]  Any other questions?
+[50:49.880 --> 50:50.880]  Yeah
+[50:50.880 --> 50:52.880]  First, thank you for the talk
+[50:52.880 --> 50:54.880]  I'm amazed about it
+[50:54.880 --> 50:57.880]  because 15 years ago when we started with Genote
+[50:57.880 --> 50:59.880]  we had dreamed about such things
+[50:59.880 --> 51:01.880]  like research picking it up
+[51:01.880 --> 51:03.880]  because we came from academia unfortunately
+[51:03.880 --> 51:05.880]  my question is
+[51:05.880 --> 51:08.880]  have you encountered any pain points
+[51:08.880 --> 51:10.880]  on this journey?
+[51:10.880 --> 51:12.880]  Yeah, in the last six months
+[51:12.880 --> 51:16.880]  you have had a very intensive time with Genote
+[51:16.880 --> 51:19.880]  was there anything that frustrated you about it
+[51:19.880 --> 51:24.880]  or did you think this was probably not the right choice
+[51:24.880 --> 51:28.880]  or something that we could pick up for improvement?
+[51:34.880 --> 51:36.880]  Let me quickly think
+[51:36.880 --> 51:39.880]  one thing that comes to my mind was
+[51:39.880 --> 51:42.880]  the documentation of the tracing services
+[51:42.880 --> 51:45.880]  profiling thing
+[51:45.880 --> 51:49.880]  I figured out how this trace service works
+[51:49.880 --> 51:53.880]  but it doesn't seem to do
+[51:53.880 --> 51:55.880]  not so many things yet
+[51:55.880 --> 51:58.880]  it's not comparable to what you get with Perf
+[51:58.880 --> 52:01.880]  under Linux where you can exactly see
+[52:01.880 --> 52:04.880]  the clock cycles and cache methods
+[52:04.880 --> 52:07.880]  down to function level
+[52:07.880 --> 52:10.880]  that would be nice to have
+[52:24.880 --> 52:27.880]  Thanks, it was a very nice talk
+[52:27.880 --> 52:30.880]  What specifically do you see
+[52:30.880 --> 52:33.880]  regarding for example the NZN architecture
+[52:33.880 --> 52:35.880]  from ETH Zurich
+[52:35.880 --> 52:38.880]  how much should for example
+[52:38.880 --> 52:41.880]  the Genote framework
+[52:41.880 --> 52:44.880]  be tweaked to efficiently use
+[52:44.880 --> 52:48.880]  such novel hardware architectures
+[52:48.880 --> 52:51.880]  if you can make a guess or prediction
+[52:51.880 --> 52:53.880]  Thank you
+[52:54.880 --> 52:57.880]  I had thought this
+[52:58.880 --> 53:04.880]  would for this NZN computer in particular
+[53:04.880 --> 53:09.880]  would we often cause support for ARM
+[53:09.880 --> 53:11.880]  which I think is there
+[53:11.880 --> 53:15.880]  but it would have to be adjusted to the SOC they use
+[53:15.880 --> 53:18.880]  and I'm not completely
+[53:18.880 --> 53:22.880]  not such deep into this research computer
+[53:22.880 --> 53:25.880]  I only attended a talk of Timothy Roscoe
+[53:25.880 --> 53:27.880]  where he presented this thing
+[53:27.880 --> 53:30.880]  and how cool it is
+[53:30.880 --> 53:34.880]  so I'm not quite aware of what
+[53:34.880 --> 53:36.880]  had to be done
+[53:36.880 --> 53:39.880]  I think there would have to be implemented
+[53:39.880 --> 53:43.880]  basically the usual stuff, drivers for it
+[53:56.880 --> 53:58.880]  Yeah
+[54:01.880 --> 54:04.880]  Thank you for the nice talk
+[54:04.880 --> 54:07.880]  I wanted to ask you about your
+[54:07.880 --> 54:11.880]  in a slide with future developments
+[54:11.880 --> 54:13.880]  you mentioned what you want to do
+[54:13.880 --> 54:15.880]  do you have some time frames
+[54:15.880 --> 54:18.880]  if you're committed to doing this
+[54:18.880 --> 54:20.880]  and how much Geno would help you
+[54:20.880 --> 54:22.880]  in shortening these time frames
+[54:22.880 --> 54:25.880]  how much easier would it make
+[54:25.880 --> 54:28.880]  could you make some sort of prediction about it
+[54:28.880 --> 54:30.880]  Thank you
+[54:30.880 --> 54:35.880]  Using Geno I would estimate that
+[54:35.880 --> 54:39.880]  the plan is that this all should be running
+[54:39.880 --> 54:41.880]  in fall this year
+[54:41.880 --> 54:46.880]  at least to this point here with the evaluation
+[54:47.880 --> 54:51.880]  I also hired a student assistant
+[54:51.880 --> 54:54.880]  which will help me from April onwards
+[54:54.880 --> 54:57.880]  to develop a nicer interface
+[54:57.880 --> 55:01.880]  that we do not need to always code this XML stuff
+[55:03.880 --> 55:06.880]  With the profiling I already began
+[55:06.880 --> 55:08.880]  the basic stuff is already there
+[55:08.880 --> 55:11.880]  it's just that the interface are a bit ugly
+[55:11.880 --> 55:13.880]  there are no capabilities
+[55:13.880 --> 55:16.880]  and it's not implemented as a service yet
+[55:16.880 --> 55:21.880]  but I can basically use it for my benchmark
+[55:21.880 --> 55:24.880]  As an LSD sit
+[55:24.880 --> 55:31.880]  I think these two parts will come to real
+[55:31.880 --> 55:35.880]  will be realized until I think summer
+[55:35.880 --> 55:37.880]  I would say
+[55:37.880 --> 55:41.880]  and if I would have to do this all from hand
+[55:41.880 --> 55:44.880]  I would assume that I wouldn't have been finished
+[55:44.880 --> 55:48.880]  in one year
+[55:48.880 --> 55:53.880]  not with the manpower I have available
+[55:53.880 --> 55:56.880]  Have you contributed back any of your work
+[55:56.880 --> 55:58.880]  back to Geno?
+[55:58.880 --> 56:03.880]  Not yet but I plan to contribute this NUMA support
+[56:03.880 --> 56:07.880]  I think this could be a nice addition to Geno
+[56:07.880 --> 56:11.880]  because it would enable Geno to also be
+[56:11.880 --> 56:14.880]  usable for data send applications
+[56:14.880 --> 56:18.880]  at big servers where NUMA support is crucial
+[56:20.880 --> 56:24.880]  and maybe later the performance counters
+[56:24.880 --> 56:27.880]  when they are finished and polished
+[56:29.880 --> 56:32.880]  Thank you Michael, thank you so much
+[56:37.880 --> 56:40.880]  you

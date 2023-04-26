@@ -1,0 +1,278 @@
+[00:00.000 --> 00:09.680]  Hello. Thanks everybody for coming. I will be talking today about what we know about
+[00:09.680 --> 00:16.320]  how Firefox is powered, what we can know about it, what we can do about it. First, what
+[00:16.320 --> 00:21.480]  we will cover today. So first, why do we care about this topic? Then, how can we understand
+[00:21.480 --> 00:25.920]  power use locally, which means like if Firefox is using too much power on your own computer,
+[00:25.920 --> 00:30.320]  what can you do about it? And then, how can we understand it about all users in general
+[00:30.320 --> 00:35.280]  in the wild, so the entire population? And I will finish by explaining what we have done,
+[00:35.280 --> 00:41.120]  what we have improved and what we are still doing. So first, why do we care? There are
+[00:41.120 --> 00:46.240]  really two different sets of reasons. The first one is user experience. We very frequently
+[00:46.240 --> 00:51.520]  see users complaining that, OK, Firefox is using too much resources, too much CPU. My
+[00:51.520 --> 00:55.480]  computer is noisy, like the fans are making noise, they are going at full speed. All the
+[00:55.480 --> 01:01.000]  laptop is hot if people are using a laptop. Or maybe the battery life is too short. So
+[01:01.000 --> 01:05.920]  all of those are reasons for an individual to want Firefox to use less power. There is
+[01:05.920 --> 01:11.680]  another set of reasons, which is sustainability. Mozilla cares about sustainability, made climate
+[01:11.680 --> 01:18.720]  commitments, about being carbon neutral, about reducing our greenhouse gas footprint. And
+[01:18.720 --> 01:23.120]  because we are Mozilla, we do things in the open. We want to lead on this and do it openly.
+[01:23.160 --> 01:28.440]  We want to share our tools, any material we have on this, methodologies. And also we want
+[01:28.440 --> 01:34.240]  to improve our products so that they are more sustainable. And the reason why we care so
+[01:34.240 --> 01:39.560]  much about our product is because when estimating our carbon footprint, because we have many
+[01:39.560 --> 01:46.400]  users, the use of our product is actually 98% of our footprint. So playing less, having
+[01:46.400 --> 01:50.840]  more efficient offices, this is all very great, but if we want to save a lot of power, that's
+[01:50.880 --> 01:58.760]  really looking at the product that we should go. So I said we will look locally first because
+[01:58.760 --> 02:02.320]  I think there are some people in the room who likely think Firefox uses too much power
+[02:02.320 --> 02:06.400]  on my computer. I want the battery to last longer. And that's a very valid use case.
+[02:06.400 --> 02:10.080]  And if we want to optimize for everybody, we want first to be able to optimize to have
+[02:10.080 --> 02:15.200]  it running correctly on one specific machine in front of us before trying to go at scale.
+[02:15.200 --> 02:19.880]  So I will present a few tools that we have for this. But first, I will explain how Firefox
+[02:19.920 --> 02:24.960]  uses power. It's desktop application, so like any other computer application, it's using
+[02:24.960 --> 02:31.200]  CPU time, using GPU time. Waking up CPUs, and actually CPUs are pretty good at saving
+[02:31.200 --> 02:35.200]  power when we ask them to do nothing. They go into deep sleep mode, they use almost no
+[02:35.200 --> 02:39.320]  power. The problem is if we keep waking them up, they can't really sleep, and that wastes
+[02:39.320 --> 02:44.120]  a lot of power. And then there's a few more things that we can do that use a little bit
+[02:44.120 --> 02:48.680]  of power, but not as much. Like transmitting network packets, for example, or writing to
+[02:48.680 --> 02:55.480]  disk. And they are not where we should focus our time if we really want to have a big impact.
+[02:55.480 --> 02:59.880]  So this is how we use power. And next, how we waste power. It's almost the same thing.
+[02:59.880 --> 03:05.080]  The only difference is when we do it for no user benefits. If we use CPU time and the
+[03:05.080 --> 03:09.480]  user doesn't see a benefit in what we are doing with the CPU, it's a waste. And same
+[03:09.480 --> 03:15.360]  for all the other ways we could use resources. And some typical ways to waste power is waking
+[03:15.360 --> 03:21.720]  up too often, playing animations even though they are completely invisible, or more generally
+[03:21.720 --> 03:31.760]  doing things in the background, things that have no visible effects. Yeah, so typically
+[03:31.760 --> 03:36.600]  when someone wants to understand local power use, there's two reasons. Either Firefox is
+[03:36.600 --> 03:41.560]  supposed to be guilty of using too much power, there's like one core used at 100%, sometimes
+[03:41.560 --> 03:46.800]  even more than one core. Or sometimes the user is looking at the operating system task
+[03:46.800 --> 03:51.520]  manager for a completely different reason. And notices that, okay, there are some Firefox
+[03:51.520 --> 03:56.720]  processes that should be idle because Firefox is supposed to be doing nothing. It's in the
+[03:56.720 --> 04:04.520]  background, but it's using 1% of a CPU or 0. something. Why? It used to be difficult to
+[04:04.520 --> 04:08.360]  figure out answers to those questions. We now have good tooling for it. So the first
+[04:08.440 --> 04:14.320]  tool I wanted to share is the Firefox task manager. You can open it by typing about processes
+[04:14.320 --> 04:19.600]  in the address bar. You can also use the shift escape keyboard shortcut that will open it
+[04:19.600 --> 04:24.920]  directly. And it's very similar to a task manager you would see in an operating system.
+[04:24.920 --> 04:30.600]  It's showing you a list of processes, how much memory is used by each, how much memory
+[04:30.600 --> 04:36.000]  and CPU. But unlike the operating system, it knows exactly which tab we are running
+[04:36.040 --> 04:41.320]  in which process. So if you see that there's one process that's using a lot of CPU, and
+[04:41.320 --> 04:44.200]  you see that it's a tab that you actually don't really care about, you can just close
+[04:44.200 --> 04:48.520]  that tab and this is done. Because very often we have people who say, oh, Firefox uses a
+[04:48.520 --> 04:52.800]  lot of CPU, but you know I have 50 tabs, so maybe it's because we have many tabs Firefox
+[04:52.800 --> 04:57.360]  uses a lot. Not really. Very often it just, there's one tab that's misbehaving, and finding
+[04:57.360 --> 05:02.440]  quickly the right one and closing it is a more efficient way to fix it. Something else
+[05:02.480 --> 05:07.160]  I want to show on this is that the numbers, the percentage of CPUs that are very precise
+[05:07.160 --> 05:14.160]  here, a lot more than on the operating system task managers. For example, on the third
+[05:14.160 --> 05:20.680]  process here you see 0.011% on the operating system you just see zero in this case. And
+[05:20.680 --> 05:24.760]  the reason why we want to show it when it's almost nothing is because almost nothing means
+[05:24.760 --> 05:28.920]  we are still waking up the CPU to do a little bit of something. And we want to be able to
+[05:28.920 --> 05:34.520]  catch this because we use this kind of tooling to find real bugs. This is a screenshot captured
+[05:34.520 --> 05:38.520]  on Naikli if you are on a release build you won't see the thread names unless you enable
+[05:38.520 --> 05:45.920]  it in about config. Okay, so let's assume you have found that there's a real problem
+[05:45.920 --> 05:50.840]  there and it's not a tab you can easily close. The next step which is more easily is using
+[05:50.840 --> 05:54.920]  the Firefox profiler. I won't go into details on the Firefox profiler because the next
+[05:54.920 --> 05:59.800]  presentation is also about the profiler. But I will say that we recently added a preset
+[05:59.800 --> 06:06.400]  for power profiling which configures the profiler in a way that causes very little overhead.
+[06:06.400 --> 06:12.000]  And we also have a power profiling mode that was added recently that will be able to say
+[06:12.000 --> 06:18.000]  how many watts we used, not just how much CPU. So you can enable it quickly with this
+[06:18.000 --> 06:25.600]  preset. And I just wanted to show an example of how precise the measurement can be. This
+[06:25.600 --> 06:31.080]  is a profile showing Firefox doing nothing. There was just one thing that was left. It
+[06:31.080 --> 06:35.760]  was the cursor in the address bar. It was blinking. On all the spikes that you can see
+[06:35.760 --> 06:40.920]  in here, there are whenever the cursor appears or disappears. And here we could select this
+[06:40.920 --> 06:46.720]  area and see in the tooltip exactly how much power is used to do this tiny thing. So anything
+[06:46.720 --> 06:52.200]  we do, we can see it in the profiler, see how much power it uses and correlates. Honestly,
+[06:52.200 --> 06:57.920]  I never thought we could see things like this. I thought we could see bigger things like loading
+[06:57.920 --> 07:03.240]  a page but blinking the cursor. That was a surprise. And a good one. Another thing in
+[07:03.240 --> 07:07.360]  the profiler that I wanted to share, and it's the last one because the next one will be
+[07:07.360 --> 07:11.720]  all about the profiler, is the profiler records many markers. And especially I wanted to show
+[07:11.720 --> 07:17.200]  the awake and runable markers that make it easy to see why we were waking up a thread.
+[07:17.200 --> 07:21.960]  Whenever the thread wakes up, there's an awake marker. It often says which priority the thread
+[07:21.960 --> 07:27.200]  was in from the operating system point of view and which curve the thing run. And runable
+[07:27.200 --> 07:31.760]  markers only exist on nightly but they say exactly what we run at that time. Which is
+[07:31.760 --> 07:36.760]  very convenient to then fail a bug if it's something we should not be running. One last
+[07:36.800 --> 07:43.800]  thing there, task manager, if you hover with the mouse next to the next to the PID, there's
+[07:43.800 --> 07:47.320]  a profiler icon that appears. If you click it, it will profile for five seconds the entire
+[07:47.320 --> 07:51.200]  process. A few seconds later, you will see a tab opening that shows everything happening
+[07:51.200 --> 07:58.520]  in that process. That's all I will say about troubleshooting local excessive power use.
+[07:58.520 --> 08:02.840]  I hope you will make good use of the tools I was just showing. And now we'll talk about
+[08:02.920 --> 08:07.800]  what's happening in the wild. So that's for all our users. And whenever we care about
+[08:07.800 --> 08:12.640]  what's happening for all users, we think telemetry because that's a great way to know about what's
+[08:12.640 --> 08:17.720]  happening and computers are not in front of us. And I added data collection for a few
+[08:17.720 --> 08:22.520]  things that are related to power use over the last couple of months. Most notably CPU
+[08:22.520 --> 08:29.080]  time used, GPU time used, the number of wake ups that we caused. And also we can break
+[08:29.080 --> 08:34.000]  down this data by process type. And here by process type, I mean, is it the parent process
+[08:34.000 --> 08:38.040]  that's showing the Firefox user interface? Is it a content process that's showing the
+[08:38.040 --> 08:45.040]  tab in the foreground? A content process that's for a background tab? On the native channel,
+[08:45.640 --> 08:50.200]  we can even break it down by thread name, which is a lot more detailed. And now I will show
+[08:50.200 --> 08:56.200]  the use we are making of this data. So I said we care about sustainability and we have climate
+[08:56.240 --> 09:00.880]  commitments. And one of the use case for having this kind of data is estimating our carbon
+[09:00.880 --> 09:06.800]  footprint. So thanks to the telemetry, we know that on average, every day, we use between
+[09:06.800 --> 09:12.800]  60 and 80 million hours of CPU time and about 15 million hours of GPU time. Those are big
+[09:12.800 --> 09:17.120]  numbers. It's hard to think about what we mean, but we can try to use those numbers
+[09:17.120 --> 09:23.320]  to convert to CO2 equivalent by using the CPU specifications from CPU manufacturers,
+[09:23.320 --> 09:27.960]  the information about which CPU model is being used, and electricity, carbon intensity
+[09:27.960 --> 09:32.960]  by country. So we would be publishing our carbon footprint in a couple months for last
+[09:32.960 --> 09:37.840]  year, and it's based on this kind of data. And I just wanted to give a sense of scale
+[09:37.840 --> 09:42.480]  because millions of hours, that means nothing to me. The amount of power that could be needed
+[09:42.480 --> 09:47.280]  to power Firefox for all of our users, which is hundreds of millions of users, would be
+[09:47.280 --> 09:52.360]  equivalent of a small thermal power station. Or if you're thinking more renewable energy,
+[09:52.400 --> 10:00.400]  we would need to cover about the roof of 50,000 houses with photovoltaic panels. So even
+[10:00.400 --> 10:04.120]  if we save just 1% of the power, that still means a lot compared to other things we could
+[10:04.120 --> 10:11.920]  do in our personal lives as engineers. Another example of using telemetry data is verifying
+[10:11.920 --> 10:17.080]  that the fix we landed actually had the impact we expected. And this is a case where we fixed
+[10:17.080 --> 10:24.720]  something related to how timers were implemented, timers for web pages. And this chart shows
+[10:24.720 --> 10:29.560]  how many times we wake up various threads, so it's from native users. And you see that
+[10:29.560 --> 10:36.200]  there's a change happening here, something trending down. Before, it was about 7% of
+[10:36.200 --> 10:40.840]  the wake-ups for the timer thread, and after, it was about 5%. So we really had an impact
+[10:40.840 --> 10:44.040]  with this fix. And before we collected this kind of telemetry, it would have been impossible
+[10:44.120 --> 10:51.320]  to know. And last but not least, we used this telemetry to verify our ideas about how we
+[10:51.320 --> 10:56.600]  can reduce power use. And when I started working on this project, I had the assumption, and
+[10:56.600 --> 11:01.480]  other people too, that we use a lot of power in background tabs. And that's probably because
+[11:01.480 --> 11:07.480]  as someone who uses Firefox and the Internet a lot, I have many background tabs. And we
+[11:07.480 --> 11:12.680]  just collected data. So this is a breakdown per process type. We see that the biggest
+[11:12.920 --> 11:17.640]  slice here is the foreground tab, not background. Second biggest is the GPU, so showing things
+[11:17.640 --> 11:22.120]  on screen. Then we've got the parent process, which is the UI, when the user is interacting
+[11:22.120 --> 11:28.040]  or not interacting. And only then, we have background tabs. So it's between 7% and 8%.
+[11:28.840 --> 11:34.120]  Still worth optimizing, but if we spent all of our efforts optimizing this, we would be missing
+[11:34.120 --> 11:41.000]  the biggest part of the thing, which is foreground tabs. Another idea that we tested is maybe it's
+[11:41.000 --> 11:45.160]  always hard that our web pages, they use a lot of power. We should do something about them.
+[11:45.160 --> 11:49.640]  We also collected data. It turns out to be less than 2% of it at all. Maybe still worth doing
+[11:49.640 --> 11:54.040]  something about it, but again, it's not where we will have the biggest wins. And maybe it also
+[11:54.040 --> 11:57.400]  means that tracking protection works really well in Firefox, and we are already blocking many things.
+[12:00.600 --> 12:05.560]  And the last section of this presentation will be about improvements, what we have done to reduce
+[12:05.560 --> 12:13.720]  power use and what we can still do. We fixed many bugs. When I wrote the slide, it was 26 bugs that
+[12:13.720 --> 12:19.080]  we fixed only within terms of reducing power use. But if I wrote the slide today, it would be 27,
+[12:19.080 --> 12:25.160]  because one was fixed overnight. The bugs go in various categories. It's almost always the
+[12:25.160 --> 12:29.560]  same kind of things that we find. Sometimes we have timers that really should have been stopped,
+[12:29.560 --> 12:34.600]  but keep repeating, but they are not really useful. It's one of those bugs that we fixed this
+[12:34.600 --> 12:38.520]  night, something that was waking up every 10 seconds, even when you do nothing with Firefox.
+[12:42.280 --> 12:47.320]  Sometimes it's animations that are animating, but they are animating stuff that's not even on screen,
+[12:47.880 --> 12:52.040]  maybe because it's a background window, background tab, or something hidden for some other reason.
+[12:52.840 --> 12:57.240]  When we can stop those animations, it's much better. And when I said bogus animation, it's
+[12:57.240 --> 13:01.560]  sometimes we had animations that kept running even though the window was closed. I think we
+[13:01.560 --> 13:06.840]  fixed all of those cases, but we might still find more. And I'm running pointless thread
+[13:06.840 --> 13:11.640]  wakeups. That's what I was showing before with a chart about timer threads and edge cases where
+[13:11.640 --> 13:17.240]  there was massive CPUs. So thanks to all the contributors who helped with this. It's the work
+[13:17.240 --> 13:23.800]  of many people mostly on the platform team. And I will just showcase a few examples of bug fixes
+[13:23.800 --> 13:28.920]  we did that had a big impact. So this one is specifically about Windows 11. Windows 11 has
+[13:29.000 --> 13:33.080]  an efficiency mode for processes. It's not completely clear what it does, but when reading
+[13:33.080 --> 13:37.560]  the documentation, it's mostly letting the operating system know that this process is doing
+[13:37.560 --> 13:44.360]  nothing that's user-visible. So we could execute the CPU at the lowest possible frequency. And for
+[13:44.360 --> 13:50.840]  CPUs with efficiency or performance cores, always select efficiency cores. And thanks to power
+[13:50.840 --> 13:54.760]  profiling that I mentioned before, we could actually verify the impact that we had when
+[13:54.840 --> 13:58.600]  deciding that we set content processes for background tabs in efficiency mode.
+[14:00.360 --> 14:05.000]  If you look at the slides later on, click the link. You can see it in the profile. But on my
+[14:05.000 --> 14:10.280]  computer, when I tested it, divided by five, the power use of a tab using the CPU in the background
+[14:10.280 --> 14:16.920]  continuously. Another thing I said, we have many bugs that are the same category of bug. And when
+[14:16.920 --> 14:22.280]  we can, it's nice to eliminate the entire category of bugs at once. And for animation that are broken
+[14:22.280 --> 14:27.640]  in edge cases, it's almost impossible to write tests for all the possible edge cases. But we
+[14:27.640 --> 14:32.840]  have a very extensive test suite. So one idea I had was, what if at the end of every automated
+[14:32.840 --> 14:38.600]  test we run, we verify that nothing is animating anymore? Sounds very easy. We did it. The part
+[14:38.600 --> 14:44.120]  that was not easy was fixing all the edge cases this uncovered. But that's why I'm confident it
+[14:44.120 --> 14:51.480]  won't regress as much as it used to. Next things we can do, because we still have many ideas of
+[14:51.480 --> 14:56.680]  how we could do better. I mentioned background tabs. We still have lots of ideas about how
+[14:56.680 --> 15:00.360]  background tabs could be more efficient. How we could be more aggressive about reducing the
+[15:00.360 --> 15:07.880]  frequency of timers firing there. How we could limit CPU use there. And I keep talking about
+[15:07.880 --> 15:11.320]  timers, but there's a lot we can do about timers. And there's actually currently one engineer working
+[15:11.320 --> 15:17.720]  full time and improving on timer APIs. The main idea there is to group timers. Because the most
+[15:17.720 --> 15:22.440]  expensive part about timers is they wake up the CPU. So if when we do wake up the CPU, we decide to
+[15:22.440 --> 15:27.160]  run many timers at once, it would be much cheaper in terms of power. And we are working on those
+[15:27.160 --> 15:33.400]  kind of improvements. We still have cases where we have videos that are being decoded, but not
+[15:33.400 --> 15:37.960]  played in a place where they are visible for users. Like background tabs and things like that. We try
+[15:37.960 --> 15:44.280]  to stop those, but the edge cases that we are still working on. Hidden animations. So animations
+[15:44.360 --> 15:48.680]  that keep running when something has been completely closed. I'm confident we fixed most of those.
+[15:48.680 --> 15:52.520]  Animations that keep running even though they are covered by something else. We still have many
+[15:52.520 --> 15:58.360]  cases. And the biggest one is fully occluded window. Which is you have a window that's entirely
+[15:58.360 --> 16:04.680]  above the browser window where we have animation. We try to detect that. We have got to detect it
+[16:04.680 --> 16:09.320]  at least on Mac and on Windows. It's not working as well as it should be. And I think we can do
+[16:09.320 --> 16:13.800]  much better. So there's probably, there will probably be work going in that direction.
+[16:15.960 --> 16:20.680]  And another thing that I like to profile. Also because it's testing the capabilities of a
+[16:20.680 --> 16:25.960]  profiler is what happens if Firefox is started and there's nothing. You open Firefox, you load
+[16:25.960 --> 16:30.840]  about blank, literally nothing. And then you go to a meeting or go for a walk or do something
+[16:30.840 --> 16:34.360]  else. And then you come back a few hours later, you capture the profile and you see what happened.
+[16:35.160 --> 16:39.000]  I would like what happened to be almost nothing. It's currently still more than I would like.
+[16:40.040 --> 16:44.600]  And we can still improve things there. And I think it would typically help for sustainability
+[16:44.600 --> 16:49.240]  there for people who are not using laptops that tend to go into sleep mode. But more desktop
+[16:49.240 --> 16:53.320]  computers that might turn on things on their computer. And then they go home for the night
+[16:53.320 --> 16:57.720]  or for the weekend. And the computer keeps running the entire weekend. I think it might
+[16:57.720 --> 17:04.680]  have an impact for those cases. And some more ideas that are not ready to do something about
+[17:04.680 --> 17:09.720]  for everybody that could be experimented with. Experiments you could run individually,
+[17:09.720 --> 17:14.280]  like if you want to test it for yourself. Or experiments we could run on a few thousand users
+[17:14.280 --> 17:20.600]  to see what's the impact. So the preferences there that I'm giving is when showing the chart,
+[17:20.600 --> 17:25.080]  I said that displaying the foreground tab is what's using almost half of the entire power
+[17:25.080 --> 17:30.200]  that we use for Firefox. By default, we display stuff, especially animation, 60 times per second,
+[17:30.200 --> 17:36.280]  or more if you have a screen with a faster refresh rate. Do you really need that? I think
+[17:36.280 --> 17:41.800]  most people don't. And we have a prep to limit the refresh rate. So if you want to have only
+[17:41.800 --> 17:47.160]  half the frames, just set it to 30 and you will see what happens. I think for most use cases,
+[17:47.160 --> 17:52.040]  except maybe fast video games, it should be fine. Another thing we would like to explore is
+[17:52.920 --> 17:57.080]  the cost of video to play. We already block videos that would make sound because it's noisy
+[17:57.080 --> 18:01.240]  and that's annoying. But videos that are just there in a corner, typically news articles with
+[18:01.240 --> 18:04.840]  someone waving hands and talking, but you can't hear them because you're reading the article and
+[18:04.840 --> 18:10.360]  you don't care. They use a lot of power. We could probably stop that. And there's a prep that you
+[18:10.360 --> 18:15.080]  can set that will block both when there's audio and there's video. Even if there's just video,
+[18:15.080 --> 18:22.120]  it will block it. And that's all I wanted to share for today. And I'm happy to take questions if
+[18:22.120 --> 18:36.280]  you have. But first, thanks for your attention. So who has any questions?
+[18:37.080 --> 18:53.240]  In the case that you have a lot of background tabs, does Firefox suspend those processes?
+[18:53.240 --> 19:01.640]  And if so, does the memory gets freed and does would the process manager show that or not?
+[19:02.600 --> 19:08.280]  So the question is if you have lots of background tabs, is Firefox suspending those processes,
+[19:08.280 --> 19:13.560]  is the memory getting freed? There are multiple answers to that question because there are
+[19:13.560 --> 19:18.760]  different cases. By default, the answer is mostly no. We don't suspend them. One thing we do is we
+[19:18.760 --> 19:23.640]  throttle any activity there. So if a tab is trying to do things every 10 milliseconds, we will not
+[19:23.640 --> 19:28.680]  allow that. And we will limit to once per second, which saves a lot of power already. I think we
+[19:28.760 --> 19:33.400]  can do better. I would like if it was only once per minute and then maybe after a few minutes or
+[19:33.400 --> 19:38.760]  after a few hours suspended completely. There are cases where the tabs are completely unloaded.
+[19:39.640 --> 19:44.280]  One of the cases when we are using way too much memory and we are about to crash out of memory,
+[19:44.280 --> 19:49.800]  then we will, as a priority, unload the tab that's abusing the memory. There's another case,
+[19:49.800 --> 19:53.480]  which is when you session restore, we don't reload the tab until you click them,
+[19:53.560 --> 19:57.000]  except for the foreground tabs. So then you will have many tabs, but they don't actually use
+[19:57.000 --> 20:02.280]  memory or power. And one more case is Firefox on Android. By the way, everything I said in
+[20:02.280 --> 20:06.440]  this slide show was about Firefox desktop, but we are also looking at the power use of Firefox
+[20:06.440 --> 20:11.000]  on Android. On Android, when you put a tab in the background, it's completely suspended. Nothing
+[20:11.000 --> 20:26.280]  runs anymore. Any other question? Okay. Can you just say it? So I just tried
+[20:27.240 --> 20:32.760]  seeing what my Firefox is doing about processes that I just learned about.
+[20:32.760 --> 20:52.360]  So the question is, I just learned about processes and quickly wanted to see what my
+[20:52.360 --> 20:57.560]  Firefox was doing. And the process that's using the most CPU there is the parent process,
+[20:57.560 --> 21:01.960]  which is using about 20% of the core. Do we have any idea of what it is doing?
+[21:02.600 --> 21:08.040]  So the way I would figure this out is to click the profile icon and look at a profile. And if
+[21:08.040 --> 21:11.960]  you want to send me that profile, I can tell you exactly. But otherwise, I will just say a quick
+[21:11.960 --> 21:16.920]  guess, which is what happens most of the time, is unless you are running on Windows, but I guess
+[21:16.920 --> 21:22.840]  you're probably on Linux or something else. We run, so I said GPU process is a large part. We
+[21:22.840 --> 21:28.280]  actually only have a GPU process on Windows to prevent graphics driver from crashing from crashing
+[21:28.280 --> 21:33.720]  the entire browser. So the graphics part happens on the parent process on outside of Windows.
+[21:34.440 --> 21:38.040]  And it's very likely that you have animations that are running and causing things to be displayed.
+[21:38.600 --> 21:41.560]  And with a profile, I could tell you which animations are running and why.
+[21:44.920 --> 21:50.280]  We have questions here in the matrix room. Have somebody ever compared
+[21:50.280 --> 21:55.000]  worldwide power usage of Firefox versus other proprietary browser webs?
+[21:56.520 --> 21:57.400]  I missed a few ones.
+[22:02.200 --> 22:06.040]  So worldwide power of Firefox compared to other browsers, have we ever compared?
+[22:08.040 --> 22:13.240]  I would say no, because I think the other browsers don't publish worldwide power use.
+[22:14.200 --> 22:19.320]  And I'm hoping we'll be publishing this as part of our greenhouse gas footprint report.
+[22:19.960 --> 22:24.760]  I don't think competing browsers publish any of that. And we are actually thinking that if we
+[22:24.760 --> 22:28.200]  start publishing that, maybe we will push the competition to also publish this kind of information.
+[22:31.240 --> 22:32.200]  Great. Any other?
+[22:37.880 --> 22:42.440]  So this is kind of an extension to the configuration options that you showed.
+[22:42.520 --> 22:50.520]  But are there other other tweakables that we could apply to Firefox on mobile devices,
+[22:50.520 --> 22:55.000]  like Pinefone, Libre, and so on, where we definitely don't need 60 frames a second?
+[22:58.360 --> 23:02.280]  I'm not sure I understand entirely, but I think you were asking, are there other things
+[23:02.280 --> 23:04.680]  that we could do on mobile to reduce power use there?
+[23:13.400 --> 23:16.520]  So you have a mobile device running the desktop version of Firefox,
+[23:16.520 --> 23:19.240]  and you are wondering if there are things you could do to reduce power use there.
+[23:19.800 --> 23:20.040]  Okay.
+[23:23.400 --> 23:27.240]  If you are genuinely one tab, try to eliminate entirely background tabs and try to suspend them.
+[23:30.360 --> 23:32.520]  Otherwise, the answer is almost always the same.
+[23:32.520 --> 23:34.520]  Capture a profile, see what's in there.
+[23:34.520 --> 23:38.520]  Because whenever we try to optimize by just guessing, almost all the time, we are wrong.
+[23:38.520 --> 23:40.680]  Like I said, background tabs, it's not that bad.
+[23:40.760 --> 23:41.800]  Add, it's not that bad.
+[23:43.000 --> 23:46.440]  Profiling is always the way to know exactly why you should be spending your time when you want to
+[23:46.440 --> 23:51.720]  optimize. And if you want help with profiling, the next talk will be about the profiler,
+[23:51.720 --> 23:54.680]  and we are very happy to help about understanding profiles.
+[23:58.040 --> 24:02.440]  Yep. Hi. My question is regarding hardware encoding.
+[24:03.320 --> 24:08.920]  For example, in HTML, and depending on the browser, you can give a list of different
+[24:08.920 --> 24:16.840]  content types or formats. Has there been any exploration into changing maybe the preferred
+[24:16.840 --> 24:22.840]  format loaded to optimize for less power consumption, as opposed to faster or higher resolution?
+[24:26.200 --> 24:31.000]  So what I understood of the question is, has there been any exploration to changing the kind
+[24:31.000 --> 24:35.480]  of content types we accept, for example, for images or media, to reduce power use?
+[24:36.440 --> 24:41.240]  I think the answer is no, but I know there's currently exploration in terms of what we can do
+[24:41.240 --> 24:46.280]  to reduce bandwidth use. And bandwidth also uses power in some ways. And we were thinking about
+[24:46.280 --> 24:51.800]  this mostly in the case of estimating the cost of VPNs for users. And for users who really care
+[24:51.800 --> 24:56.840]  about privacy and really want privacy on a VPN, could we do things to reduce the cost for them
+[24:56.840 --> 25:04.840]  to pay for that VPN that charges for bandwidth? So I'm afraid that all the time we have,
+[25:04.920 --> 25:10.760]  however, if you can see, Florian put his email there for questions and also shared ideas in a
+[25:10.760 --> 25:15.960]  matrix room. And we also have that matrix room. Please also add questions there. And there will
+[25:15.960 --> 25:21.800]  be member stuff there and also other volunteer Mozilla to answer. Thank you very much. We need
+[25:21.800 --> 25:33.240]  to change up for the next talk. Thank you very much, Florian.

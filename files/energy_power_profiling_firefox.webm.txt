@@ -1,0 +1,385 @@
+[00:00.000 --> 00:09.960]  Hello everybody, I will be talking about power profiling with a Firefox Profiler and Chris
+[00:09.960 --> 00:15.640]  mentioned it briefly but I will go in many more details about how this works.
+[00:15.640 --> 00:20.800]  So the outline of the talk I will first explain what the Firefox Profiler is because I don't
+[00:20.800 --> 00:26.160]  want to assume that everybody knows and then I will go into the topic which is explain
+[00:26.160 --> 00:31.320]  why we care about this, how this thing happens, where we support it and show examples of
+[00:31.320 --> 00:35.520]  which kind of information it gives us and if I have some time left I have a few more
+[00:35.520 --> 00:37.880]  things I could share.
+[00:37.880 --> 00:39.920]  So what's the Firefox Profiler?
+[00:39.920 --> 00:43.640]  You can find it as a web application at this address.
+[00:43.640 --> 00:49.120]  It's a built-in profiler inside Firefox, the web browser and by built-in there I mean
+[00:49.120 --> 00:54.760]  that the part that collects the data is inside the web browser itself and the place where
+[00:54.760 --> 00:58.600]  you see the data is a web application.
+[00:58.600 --> 01:05.320]  It was initially created for performance work especially when Mozilla and Firefox started
+[01:05.320 --> 01:11.160]  caring a lot about making things go fast because our competition said that they were faster
+[01:11.160 --> 01:14.000]  and we could compete on that.
+[01:14.000 --> 01:17.920]  So especially for Firefox 57, Firefox Quantum, we worked a lot with a profiler and the question
+[01:17.920 --> 01:22.680]  was always why is this thing so slow, can we make it faster?
+[01:22.680 --> 01:27.240]  Another time it had expanded and now we can use it for many more things, a lot of debugging
+[01:27.240 --> 01:34.120]  and it's a great way to get data about what the episode software is doing and it has multiple
+[01:34.120 --> 01:38.200]  sources of data but the two main sources are something which is we have a timer and at
+[01:38.200 --> 01:43.440]  a fixed interval we interrupt the program and capture data by getting stacks of threads
+[01:43.440 --> 01:48.960]  for example or also getting the values of counters for example, counting memory locations
+[01:49.080 --> 01:52.720]  and the other thing is markers, we will just record what happened at any specific point
+[01:52.720 --> 02:00.400]  in time and this is useful for things that happen very quickly but we still want to see.
+[02:00.400 --> 02:05.000]  So if you want to get started with your profiler as I said you go to this address where you
+[02:05.000 --> 02:10.560]  click the big button and enable Firefox profiler, you get this that appears basically clicking
+[02:10.560 --> 02:15.600]  the button just made the toolbar icon appear here on your browser but you could also find
+[02:15.600 --> 02:17.960]  it by customizing the toolbar.
+[02:17.960 --> 02:24.800]  Then you can customize a preset, here it says nightly, it's a good default for general profiling
+[02:24.800 --> 02:29.920]  and then you can start recording, it will show something like this, then you can do
+[02:29.920 --> 02:33.880]  whatever you would like to measure, for example loading a website, very often people would
+[02:33.880 --> 02:38.200]  like their website to load faster so that's a good example, do it and a few seconds later
+[02:38.200 --> 02:42.040]  when you click the capture button you will see something like this in a tab that appears.
+[02:42.040 --> 02:48.680]  So here what I profiled is loading the Wikipedia homepage and we can see there's many things
+[02:48.680 --> 02:52.680]  in the user interface, it might be a little bit overwhelming at the beginning but we get
+[02:52.680 --> 02:58.320]  used to it very quickly and you can move the mouse around and there will almost always
+[02:58.320 --> 03:01.280]  be a tooltip like this that explains what you are looking at.
+[03:01.280 --> 03:08.000]  So first part here is what we call the timeline, it's things happening across the time.
+[03:08.000 --> 03:12.320]  We can see markers, it's those small things here that we noted, those are network requests
+[03:12.320 --> 03:17.360]  or also some kind of markers and here we are hovering here on this yellow thing and we
+[03:17.360 --> 03:23.840]  see here the stack of what we are hovering, the stacks include JavaScript, C++, you can
+[03:23.840 --> 03:28.960]  know everything about what was happening at this time and then there's the bottom half
+[03:28.960 --> 03:32.920]  that's showing data in various different ways, here the cool tree is just showing what the
+[03:32.920 --> 03:41.080]  samples look like, this is the memory counter here, so counter just counting how many occasions
+[03:41.080 --> 03:46.920]  we did and we also have markers here in the marker chart where we can see actually which
+[03:46.920 --> 03:48.440]  network request we did.
+[03:48.440 --> 03:53.120]  So this is a tool again that we developed to make things faster, then we will see how
+[03:53.120 --> 03:58.780]  we can use it to make things more efficient.
+[03:58.780 --> 04:05.580]  So now we will talk about power profiling and first say why we care about this, why
+[04:05.580 --> 04:09.980]  we care and also why do I care, so my work at Masilize to make Firefox more efficient
+[04:09.980 --> 04:14.660]  to understand how it uses power and reduce the power we use and there are two main sets
+[04:14.660 --> 04:15.660]  of reasons.
+[04:15.660 --> 04:20.340]  First one is still performance because resource use is still a performance topic and users
+[04:20.340 --> 04:26.020]  care about power use actually because the phone is noisy, the laptop is too hot to type
+[04:26.020 --> 04:32.220]  on, the battery life is too short, so all very good reasons but at the individual level
+[04:32.220 --> 04:39.940]  and we also care about the more global level for sustainability, Mozilla made climate commitments.
+[04:39.940 --> 04:43.140]  Some interesting things that we mentioned here is that we want to lead openly and share
+[04:43.140 --> 04:46.820]  our tools and improve our products from a sustainability perspective.
+[04:46.820 --> 04:51.420]  So showing the tools this is what I'm doing with the power profiling stuff and the reason
+[04:51.420 --> 04:55.100]  why we want to improve our product is that when we did a greenhouse gas assessment for
+[04:55.100 --> 05:01.060]  Mozilla, it turns out the use of our product is 98%.
+[05:01.060 --> 05:05.620]  That should not really be a surprise, we have a product that's used by multiple hundred
+[05:05.620 --> 05:08.060]  millions of people.
+[05:08.060 --> 05:14.300]  So anything else we do even if it's not clean, it's still a tiny portion.
+[05:14.300 --> 05:20.180]  Okay so power profiling is to understand the local power use of Firefox or website and
+[05:20.180 --> 05:24.340]  a computer that's typically in front of us.
+[05:25.220 --> 05:29.540]  I will explain the journey I followed to try to understand how much power we were using.
+[05:29.540 --> 05:34.060]  So the first step was, okay I know what we are doing, I know how much CPU we are using
+[05:34.060 --> 05:37.780]  but I have no idea what that means in what and where we can save power and the first
+[05:37.780 --> 05:41.660]  step was to buy one of those wattmeters that are always recommended for people who want
+[05:41.660 --> 05:46.780]  to save energy by figuring out how much power is used by what in their house.
+[05:46.780 --> 05:52.100]  It's easy, it's affordable, pretty accurate but not that useful for software because
+[05:52.100 --> 05:54.820]  you can't track what happens over time.
+[05:54.820 --> 05:58.300]  Then I found something better, it's still a wattmeter but it's sending data to a computer
+[05:58.300 --> 05:59.300]  of a Bluetooth.
+[05:59.300 --> 06:04.260]  There I can see the history of what happens, it's much better but still how do I match
+[06:04.260 --> 06:08.860]  this with what actually happened, I need to remember what I did, it's not as convenient,
+[06:08.860 --> 06:12.420]  maybe I could record a video of what happened on the computer but still it's painful to
+[06:12.420 --> 06:13.420]  use.
+[06:13.420 --> 06:16.820]  And I kept wondering what are other people doing?
+[06:16.820 --> 06:20.780]  And then I found this article by Microsoft they were very happy to say that Edge was
+[06:20.780 --> 06:25.220]  the most efficient, I'm bragging about it and blah, blah, blah, blah, blah, blah.
+[06:25.220 --> 06:29.020]  One sentence caught my attention, power was measured on the surface book so Microsoft
+[06:29.020 --> 06:32.700]  device because it has integrated hardware instrumentation.
+[06:32.700 --> 06:36.300]  So what Microsoft did is they built their own computers with instrumentation so they
+[06:36.300 --> 06:40.700]  could measure how much power is being used and they explain about what this thing is.
+[06:40.700 --> 06:50.700]  Can I get one of those machines, sure, they are old, they were released in 2015 so getting
+[06:50.820 --> 06:52.980]  old now but we can still play with those.
+[06:52.980 --> 06:58.500]  So one of those machines is what they use when they compare Edge with everything else.
+[06:58.500 --> 07:03.700]  The way they looked at it was with the Windows performance monitor so it's this application
+[07:03.700 --> 07:11.580]  here and we can see indeed that I have power for the battery, CPU cores, GPU and the Wi-Fi.
+[07:11.580 --> 07:16.060]  Pretty interesting and I looked for more recent devices, I spent multiple weeks searching
+[07:16.100 --> 07:20.820]  for devices that might have those power meters because that was really interesting and the
+[07:20.820 --> 07:24.140]  devices and the picture here they are the only two that I found that actually have working
+[07:24.140 --> 07:30.660]  power meters and they are both Microsoft surface devices.
+[07:30.660 --> 07:36.740]  This is what the UI looks like if you look at the Windows performance monitor.
+[07:36.740 --> 07:40.980]  So those things they are here and they report data and it's numbers, good luck if you want
+[07:40.980 --> 07:41.980]  to understand what that means.
+[07:41.980 --> 07:42.980]  I have no idea.
+[07:42.980 --> 07:48.420]  Well, I do have some idea but it took a while to understand and then I had a good surprise.
+[07:48.420 --> 07:53.260]  I noticed on some machines that there were those things reported as energy meters and
+[07:53.260 --> 07:54.460]  the names are pretty familiar.
+[07:54.460 --> 07:59.340]  They are the same names that we see if we use a piece of software called Intel Power Gadget
+[07:59.340 --> 08:06.340]  that reports the power used by the CPU and integrated GPU and those kind of things and
+[08:06.340 --> 08:10.420]  after some correlation I realized that all the machines on which I noticed this were
+[08:10.420 --> 08:16.900]  running Windows 11 and they all had Intel CPUs and I verified this because I found a
+[08:16.900 --> 08:22.380]  Windows 10 machine, it didn't have this, I updated to Windows 11 and then those things
+[08:22.380 --> 08:23.380]  appeared.
+[08:23.380 --> 08:25.740]  So it's really Windows 11 that brought those things.
+[08:25.740 --> 08:30.260]  Intel CPUs are recorded as power meters and the very nice thing is there's a documented
+[08:30.260 --> 08:32.900]  API to use those power meters.
+[08:32.900 --> 08:36.380]  It's probably used by Perf Monitor or something like that.
+[08:36.380 --> 08:40.340]  The UI I don't want to use but with the documentation I could understand how to make use of this
+[08:41.060 --> 08:47.340]  what the unit was, Pico whatever, so that was the answer and we can create many times
+[08:47.340 --> 08:48.340]  per second.
+[08:48.340 --> 08:52.500]  It doesn't have to be only once per second and it's accessible in user line which is
+[08:52.500 --> 08:57.500]  something I care a lot for Firefox because I don't want people using Firefox as root
+[08:57.500 --> 08:58.500]  or things like that.
+[08:58.500 --> 09:03.500]  That would be absolutely terrible and no requirement to install a specific driver.
+[09:03.500 --> 09:08.180]  Before that in our test infrastructure when we were interested in measuring power we installed
+[09:08.180 --> 09:15.180]  Intel Power Gadget but we don't want to require users to do that and it's not open source.
+[09:15.180 --> 09:19.140]  So I started working on a prototype to include this in the Firefox profiler because as I
+[09:19.140 --> 09:23.980]  said we record counters, memory counters and it looks like this API is totally usable
+[09:23.980 --> 09:29.220]  for profiler counters and this is the bug where I worked on it and this is the first
+[09:29.220 --> 09:30.620]  prototype I got.
+[09:30.620 --> 09:34.900]  So the names, they match what we saw and then we have those power tracks in addition to
+[09:34.900 --> 09:37.900]  memory counters, network traffic and all the other stuff.
+[09:37.900 --> 09:42.580]  It actually looked pretty reasonable so this is a profile of Firefox starting up so we
+[09:42.580 --> 09:47.500]  use a lot of CPU at start up and then almost nothing because we are done starting up and
+[09:47.500 --> 09:53.060]  here this is the CPU being used and here this is the GPU, we use it at the beginning when
+[09:53.060 --> 09:57.020]  we start showing something and then only every once in a while, pretty reasonable.
+[09:57.020 --> 10:01.460]  So I kept working on it and polished it enough that it would really work and be something
+[10:01.460 --> 10:04.980]  that would be happy to ship.
+[10:04.980 --> 10:08.860]  So I thought the prototype now will say where it actually works, where we managed to get
+[10:08.860 --> 10:15.220]  it working because that's not everywhere but still it's almost everywhere at this point.
+[10:15.220 --> 10:19.660]  It works on Windows 11 on those specific devices I mentioned before.
+[10:19.660 --> 10:25.420]  It works on Windows 10 sorry, it works on Windows 11 with Intel CPUs and I've recently
+[10:25.420 --> 10:29.660]  had reports that with AMD CPUs it started working, I don't know exactly when but I suspect
+[10:29.660 --> 10:34.220]  it's with this update and I will try to verify soon.
+[10:34.220 --> 10:38.100]  And one thing that's very interesting with AMD CPU is that we have one power track per
+[10:38.100 --> 10:45.260]  core which might let us make much better correlation about what's actually using the power.
+[10:45.260 --> 10:53.300]  Mac, two different architectures on Mac, mostly undocumented or poorly documented API, poorly
+[10:53.300 --> 10:57.180]  documented means the name of the API is there, there's no explanation about what it does
+[10:57.180 --> 11:00.260]  or how to use it.
+[11:00.260 --> 11:03.740]  But the kernel is open source so by reversing a little bit I could figure out that this task
+[11:03.740 --> 11:11.420]  energy thing was a value in nano drill and for Intel CPUs, specifics is called with
+[11:11.420 --> 11:15.780]  magic assembly code that we had implemented eight years ago, I didn't know anything about
+[11:15.780 --> 11:17.180]  but someone pointed me to it.
+[11:17.180 --> 11:22.540]  Great, we can also support Intel Macs and then Linux.
+[11:22.540 --> 11:28.060]  So on Linux we can use Ripple Perfevents, so Ripple is running average power limit, it's
+[11:28.060 --> 11:31.420]  the data that's reported by Intel CPUs.
+[11:31.420 --> 11:38.060]  One issue on Linux is the data is not available as a user and the reason is it used to be
+[11:38.060 --> 11:43.980]  available directly and there was a side channel attack where people noticed that by querying
+[11:43.980 --> 11:50.620]  power use very repeatedly they could actually figure out what data was being processed and
+[11:50.700 --> 11:55.100]  the way they addressed it was to restrict the access so you need to run this before starting
+[11:55.100 --> 11:59.700]  power profiling and it's actually the same command that you need to run to run Linux
+[11:59.700 --> 12:02.060]  Perfevents to profile in general on Linux.
+[12:02.060 --> 12:06.820]  So it's probably fine and as long as it's just this and I don't require Firefox to be
+[12:06.820 --> 12:12.540]  run as root, I think it's okay.
+[12:12.540 --> 12:17.380]  MDC CPUs are supported since the new version of a Linux kernel but it's a few years old
+[12:17.380 --> 12:19.460]  at this point, probably fine.
+[12:19.460 --> 12:23.940]  And if you try it, it doesn't work on Ubuntu Firefox snap packages but if you download
+[12:23.940 --> 12:31.300]  Firefox on the Mozilla site and don't use the snap package, it works on Ubuntu too.
+[12:31.300 --> 12:32.500]  Here's how you configure it.
+[12:32.500 --> 12:38.100]  So I showed the profiler UI before where you could use the nightly preset.
+[12:38.100 --> 12:39.900]  I said it was fine for most cases.
+[12:39.900 --> 12:44.620]  If you want to profile power, we have a power preset that's configuring the profiler.
+[12:44.620 --> 12:47.260]  The two things it does is enabling power profiling.
+[12:47.260 --> 12:52.500]  So with this feature we have here in the configuration page and the other thing is adjusting the configuration
+[12:52.500 --> 12:57.780]  to reduce the amount of overhead because if we have a lot of profiler overhead, the things
+[12:57.780 --> 12:59.780]  we will see in the profile will be meaningless.
+[12:59.780 --> 13:03.420]  Actually, we already tried to do power profiling a couple years ago.
+[13:03.420 --> 13:08.140]  That was supposed to be a picture here.
+[13:08.140 --> 13:09.140]  That's strange.
+[13:09.140 --> 13:15.460]  I see the picture on my screen but it's not here.
+[13:15.460 --> 13:19.540]  So I was saying we are afraid that the profiler overhead would make it impossible to get any
+[13:19.540 --> 13:23.780]  useful data out of power profiles because the profiler is actually using a lot of power
+[13:23.780 --> 13:29.900]  itself to interrupt sample the stacks and all that thing.
+[13:29.900 --> 13:33.820]  So we can reduce that overhead by using longer intervals between samples and ensuring that
+[13:33.820 --> 13:40.620]  when we sample, we only capture the values of the counters and not the actual stacks.
+[13:40.620 --> 13:42.020]  It appeared quickly.
+[13:42.020 --> 13:48.420]  So we see the features here that were enabled, power profiling, markers for all threads,
+[13:48.420 --> 13:53.460]  sampling every 10 milliseconds instead of every 1 millisecond.
+[13:53.460 --> 13:57.780]  Now that I explained how we got this power profiling thing, I will show examples of what
+[13:57.780 --> 14:00.300]  it looks like when a power profile is something.
+[14:00.300 --> 14:06.220]  So loading Wikipedia homepage again, this time with the power profiling preset and we
+[14:06.220 --> 14:11.060]  can see exactly how much power was used by the content process loading Wikipedia.
+[14:11.060 --> 14:16.820]  So we can select around here and we see in the tooltip how much power was used by this
+[14:16.820 --> 14:19.940]  process during that amount of time.
+[14:19.940 --> 14:26.260]  This profile is captured on Mac so we have a track per process.
+[14:26.260 --> 14:27.260]  Another example.
+[14:27.260 --> 14:32.740]  By the way, the profiler is very easy to explore by looking and moving the mouse around and
+[14:32.740 --> 14:34.540]  looking at the tooltips.
+[14:34.540 --> 14:36.180]  It's not so great for screenshots.
+[14:36.180 --> 14:39.180]  So all my slides include a link to the profile that I'm showing.
+[14:39.180 --> 14:41.900]  So if you want to look at the slides later and click the link, that will be a lot more
+[14:41.900 --> 14:44.260]  fun for you I think.
+[14:44.260 --> 14:49.100]  This time it's Firefox startup Windows 11 and we can see how much power was used by
+[14:49.100 --> 14:52.580]  starting Firefox here by the CPU.
+[14:52.580 --> 14:57.300]  So we can see it here.
+[14:57.300 --> 15:00.820]  And this is an example I really like because it's really pushing the limit of what we can
+[15:00.820 --> 15:04.260]  profile and I had never thought we could profile this especially when I was afraid about the
+[15:04.260 --> 15:06.340]  other head.
+[15:06.340 --> 15:12.940]  But if we profile, we see that when we do nothing with Firefox, literally nothing, like
+[15:12.940 --> 15:15.100]  I was profiling Firefox about blank.
+[15:15.100 --> 15:17.580]  So literally nothing, no websites.
+[15:17.580 --> 15:22.140]  The one thing that's left is the cursor that blinks in the address bar.
+[15:22.140 --> 15:26.620]  Every 500 milliseconds there's a power spike and we can see exactly how much power it uses
+[15:26.620 --> 15:30.180]  to show or hide the cursor in the address bar.
+[15:30.180 --> 15:33.620]  So yeah, very detailed.
+[15:33.620 --> 15:36.900]  And then I will show some examples of how we used power profiling to validate fixes we've
+[15:36.900 --> 15:37.900]  done.
+[15:37.900 --> 15:41.900]  So this is something we did specifically for Windows 11.
+[15:41.900 --> 15:48.380]  They have a new feature that they call efficiency mode and it's visible in the task manager by
+[15:48.380 --> 15:51.060]  looking at this icon here, this green leaf thing.
+[15:51.060 --> 15:55.420]  It looks a lot like green racing but it actually does something.
+[15:55.420 --> 16:00.180]  It means we let the operating system know that this process is doing nothing that the
+[16:00.180 --> 16:02.860]  user cares about immediately because it's probably invisible.
+[16:03.420 --> 16:05.860]  It's probably in the background.
+[16:05.860 --> 16:10.620]  What we want instead of doing the work as fast as possible is do it with as little energy
+[16:10.620 --> 16:12.300]  as we can.
+[16:12.300 --> 16:15.420]  It's typically doing this by doing two different things.
+[16:15.420 --> 16:20.460]  One is ensuring we use the lowest possible CPU frequency, which uses less power.
+[16:20.460 --> 16:26.300]  And the second thing is on hybrid CPUs that have both efficiency and performance cores,
+[16:26.300 --> 16:28.500]  always use efficiency cores.
+[16:28.500 --> 16:31.860]  And this power profile was captured on a modern Intel laptop.
+[16:31.860 --> 16:35.540]  So we have an ultralight CPU with efficiency cores.
+[16:35.540 --> 16:39.380]  And this is a web page that I did for testing.
+[16:39.380 --> 16:45.220]  It's using 100% of the CPU, just a busy loop that does nothing except burning CPU.
+[16:45.220 --> 16:47.380]  The process here is in the foreground.
+[16:47.380 --> 16:50.380]  Here we see a process priority change because we go in the background.
+[16:50.380 --> 16:53.340]  And here you see how much power we use.
+[16:53.340 --> 16:56.500]  It's about 10 watts for the CPU, here it's down to 2.
+[16:56.500 --> 17:01.420]  So we divide it by 5 power used by just ensuring that we let Windows know that this process
+[17:01.460 --> 17:05.860]  is for something in the background, don't worry about speed.
+[17:05.860 --> 17:11.820]  And things actually run slower, by the way, but use less power.
+[17:11.820 --> 17:15.260]  And then I have a few fun examples of things that were...
+[17:15.260 --> 17:18.700]  So the previous example where stuff actually works and power profiling was useful to show
+[17:18.700 --> 17:20.620]  the stuff we cared about.
+[17:20.620 --> 17:24.820]  And now I wanted to share a few funny examples of things I absolutely didn't expect.
+[17:24.820 --> 17:32.500]  This profile is from one of the Microsoft Surface machines I put before in the picture.
+[17:32.500 --> 17:35.300]  I said we profile the CPU, the GPU, the Wi-Fi chip there.
+[17:35.300 --> 17:41.380]  And that's the only machine where I can profile the power used by the Wi-Fi.
+[17:41.380 --> 17:49.020]  And I noticed that Wi-Fi chip power used is almost always half a watt, so 500 milliwatts.
+[17:49.020 --> 17:50.860]  When the machine is plugged to a charger.
+[17:51.300 --> 17:55.700]  And what happened here is I unplugged the charger, there was a poor broadcast event.
+[17:55.700 --> 18:00.980]  And now we only use power when there's probably network traffic.
+[18:00.980 --> 18:02.780]  And I had no idea that Windows was doing this.
+[18:02.780 --> 18:09.740]  I think it's to reduce latency, but it keeps the Wi-Fi chip alive all the time.
+[18:09.740 --> 18:15.700]  And more Wi-Fi profiling, because CPU profiling you can do all you like, because it's easy to do.
+[18:15.700 --> 18:20.340]  Wi-Fi profiling, you need specific hardware, so I will share the fun.
+[18:20.340 --> 18:23.900]  This time I was power profiling what it looks like to do a bandwidth test.
+[18:23.900 --> 18:28.100]  So it was the website speedtest.net.
+[18:28.100 --> 18:33.060]  It's a single profile, there's a link here, but I zoomed on two different parts of the profile.
+[18:33.060 --> 18:37.140]  The top half is when I actually run the test on the machine.
+[18:37.140 --> 18:40.740]  So we still use 500 milliwatts here.
+[18:40.740 --> 18:43.300]  And we have peaks that go up to two watts for the Wi-Fi chip.
+[18:43.300 --> 18:45.100]  We push it to the limit.
+[18:45.100 --> 18:47.940]  It was actually not really testing the bandwidth of my internet connection,
+[18:47.940 --> 18:51.060]  more of the Wi-Fi chip of that machine.
+[18:51.060 --> 18:59.860]  And the second chart is I did the exact same test, but on this laptop that was on the same desk.
+[18:59.860 --> 19:03.740]  And here it's stable at the beginning, 500 milliwatts, stable at the end.
+[19:03.740 --> 19:07.540]  And for about the same duration, we have almost the same shape,
+[19:07.540 --> 19:11.780]  but it only goes up to 700 milliwatts or 800 milliwatts.
+[19:11.780 --> 19:18.580]  So we can see that just if there's computers in the room or very close proximity that use the Wi-Fi,
+[19:18.580 --> 19:21.380]  it looks like there's more Wi-Fi packets that the machine needs to discount
+[19:21.380 --> 19:24.260]  because they are not meant for this machine to get.
+[19:24.260 --> 19:25.860]  And that actually uses power.
+[19:25.860 --> 19:31.900]  And I think we can actually look at network traffic by looking at how much power is used on the Wi-Fi.
+[19:31.900 --> 19:34.820]  And when I tried to get this, I was getting very confused results.
+[19:34.820 --> 19:38.900]  And then I realized someone was streaming something in a different room in the house
+[19:38.900 --> 19:40.180]  on the same Wi-Fi network.
+[19:40.180 --> 19:44.140]  So we closed that computer and then I got better screenshots.
+[19:44.140 --> 19:49.940]  And yes, also when I worked on that, I like put wired network on all the other computers on my office,
+[19:49.940 --> 19:52.620]  otherwise it was a mess.
+[19:52.620 --> 19:57.980]  And another one that's still puzzling to me, I said on Mac, we have a power track per process.
+[19:57.980 --> 20:05.060]  I don't exactly know how they do it, but I suspect it's because they control both the CPU hardware and the kernel.
+[20:05.060 --> 20:09.380]  And I suspect what they do is they have a power meter internally for each core.
+[20:09.380 --> 20:13.460]  And whenever they context switch, they very likely take the value of the counter at this point.
+[20:13.460 --> 20:17.020]  So they can know exactly how much power is used by each process.
+[20:17.020 --> 20:18.940]  And this example, I still can't explain.
+[20:18.940 --> 20:22.780]  So I was using a test web page again that's using 100% of the CPU core.
+[20:22.780 --> 20:24.220]  And we see it's using 4 watts.
+[20:24.220 --> 20:27.420]  By the way, it's three different screenshots that I merge into one so that you can see different tooltips.
+[20:27.420 --> 20:32.940]  But yeah, if it's not perfectly aligned, it's because I'm not so good at image editing.
+[20:32.940 --> 20:37.460]  So using 4 watts here with a process that's just burning CPU.
+[20:37.460 --> 20:40.100]  And then the other processes, they do literally nothing.
+[20:40.100 --> 20:45.100]  So you will have to trust me on this or look at the profile, but I looked in the market chart, there's literally nothing.
+[20:45.100 --> 20:46.580]  The threads don't wake up.
+[20:46.580 --> 20:51.820]  So the only thing we are profiling here is the actual power overhead of a profiler.
+[20:51.820 --> 20:57.580]  And if you compare the numbers, we're talking about 4 watts here, 2 milliwatts here, it's probably fine.
+[20:57.580 --> 21:01.140]  Profiler overhead is probably not distorting too much of information.
+[21:01.140 --> 21:07.020]  But the one thing that's really strange is when you stop burning CPU here, a few milliseconds later,
+[21:07.060 --> 21:13.020]  the power overhead of a profiler drops dramatically, about 10 times lower.
+[21:13.020 --> 21:15.260]  I still don't have the correct explanation for this.
+[21:15.260 --> 21:17.540]  I have ideas about what it could be.
+[21:17.540 --> 21:23.820]  I suspect it is that when we are actually busy with a CPU, the operating system uses a higher frequency.
+[21:23.820 --> 21:28.820]  So it's likely that it's actually correct and it's just we are using a CPU at a higher frequency here.
+[21:28.820 --> 21:31.460]  So the same operations took more power.
+[21:31.460 --> 21:33.060]  But I'm not sure, it's just a guess.
+[21:33.060 --> 21:38.260]  Memory-contention or something, or core-contention, there's lots of things you can be serving across the system.
+[21:39.540 --> 21:45.780]  Yeah, there are lots of possible explanations, but I don't have a way to conclude about what the thing actually is.
+[21:45.780 --> 21:49.540]  Another idea was we also have efficiency cores on both machines.
+[21:49.540 --> 21:53.980]  It could be that we are switching to efficiency cores, but I'm not sure it's a good explanation,
+[21:53.980 --> 21:57.820]  especially given I have that many processes on only two efficiency cores.
+[21:57.820 --> 22:01.300]  So yeah, I don't know, but it's fun things to look at in profiles.
+[22:03.140 --> 22:05.820]  And if I have a few more minutes, I have three more slides.
+[22:05.820 --> 22:08.580]  One thing I wanted to share is the Firefox task manager.
+[22:08.580 --> 22:14.740]  Very often when you care about power profiting, it's because something is using too much power on your Firefox.
+[22:14.740 --> 22:18.220]  And the good way to look at it is to look at the task manager here.
+[22:18.220 --> 22:24.100]  That will give you all the processes used by Firefox, but in addition to showing just the process IDs
+[22:24.100 --> 22:29.420]  and how many percent of the CPU it's using, it will tell you which tabs are loaded in which process.
+[22:29.420 --> 22:32.660]  So you can figure out if you want to close a specific tab that's using too much.
+[22:32.660 --> 22:38.220]  But also, there's this profiler button here that appears when you hover the line next to the PID.
+[22:38.220 --> 22:45.420]  If you click it, five seconds later, you get a profiler tab with everything that happened in that process.
+[22:45.420 --> 22:48.460]  So in most cases, you just need to close a tab because you have one tab in the background
+[22:48.460 --> 22:50.740]  that you don't care about that's doing crazy stuff.
+[22:50.740 --> 22:55.220]  But if something really looks not the way it should be, you can do one click profiting.
+[22:55.220 --> 23:00.780]  And if your machine supports power profiting, the power tracks will be there.
+[23:00.780 --> 23:04.980]  Another thing I wanted to mention, it was also visible a little bit in Chris's presentation.
+[23:04.980 --> 23:07.420]  But I worked on power profiting.
+[23:07.420 --> 23:09.340]  I didn't work on adding the CO2 equivalent.
+[23:09.340 --> 23:14.220]  This was a very welcome contribution from Chris and Fershad from the Green Web Foundation.
+[23:14.220 --> 23:18.100]  We are very happy about that.
+[23:18.100 --> 23:22.300]  And the last thing I wanted to share here, so I explain all of this presentation,
+[23:22.300 --> 23:24.020]  how great it is to power profile.
+[23:24.020 --> 23:27.140]  And I will explain why you don't really need it.
+[23:27.140 --> 23:30.420]  In most cases, what's using most of your power is the CPU.
+[23:30.460 --> 23:34.780]  And without power profiting, we can already profile CPU use.
+[23:34.780 --> 23:36.580]  So we have CPU use per thread here.
+[23:36.580 --> 23:38.820]  That's how we make the shape here.
+[23:38.820 --> 23:44.700]  But sometimes we don't look at all the threads at once and something else might be using power or CPU.
+[23:44.700 --> 23:47.500]  And we also record the CPU for the entire process.
+[23:47.500 --> 23:48.500]  It's also a counter.
+[23:48.500 --> 23:49.740]  So we record it in the same way.
+[23:49.740 --> 23:54.380]  We don't show it by default because we're not too sure about the user interface we want to put for it.
+[23:54.380 --> 23:56.940]  But you can access it from the DevTools console here.
+[23:56.940 --> 24:00.060]  You type experimental enable process CPU tracks.
+[24:00.060 --> 24:03.460]  And you see those process CPU tracks that appear here.
+[24:03.460 --> 24:07.180]  And the shape, they are extremely similar.
+[24:07.180 --> 24:10.780]  Usually, there are slight differences mostly when we use the GPU a lot.
+[24:10.780 --> 24:14.180]  Like the shape is slightly different here, slightly different here.
+[24:14.180 --> 24:17.100]  Overall, it's mostly the same.
+[24:17.100 --> 24:23.380]  CPU profiting can get on all machines.
+[24:23.380 --> 24:25.660]  That's all I wanted to share for today.
+[24:25.660 --> 24:28.380]  First, thanks for your attention.
+[24:28.380 --> 24:30.780]  If you have questions, I think we have a little bit of time.
+[24:44.340 --> 24:48.260]  You said the screenshots were public.
+[24:48.260 --> 24:53.780]  Is there any data set underneath the screenshot publicly?
+[24:53.780 --> 25:04.340]  I didn't say the screenshots are public.
+[25:04.340 --> 25:05.700]  I said the profiles are public.
+[25:05.700 --> 25:10.060]  And there's a link at the bottom of the slides to open the profiles.
+[25:10.060 --> 25:11.820]  Yeah, but you can really get your own profile.
+[25:11.820 --> 25:15.300]  And it's a lot more fun when you profile something you actually use or your own computer.
+[25:15.300 --> 25:25.940]  OK, but it could be useful to make a community data set correlated to typical, as you said,
+[25:25.940 --> 25:32.420]  blank page linking cursor until typical very bloat website.
+[25:32.420 --> 25:43.060]  And then try to make a loop back to the website builder to give them information about what is significant.
+[25:43.060 --> 25:44.940]  OK, so it was more a comment than a question.
+[25:44.940 --> 25:50.060]  It would be useful to publish examples of what's using power.
+[25:50.060 --> 25:52.980]  One thing I should have probably mentioned is that when looking at the power numbers,
+[25:52.980 --> 25:56.460]  they don't mean a lot in terms of what your actual users will experience,
+[25:56.460 --> 26:00.980]  because the typical power use of a computer varies a lot.
+[26:00.980 --> 26:04.380]  Some of the machine I was showing in the picture, they have four-watt CPUs.
+[26:04.380 --> 26:07.700]  Some people have 200-watt CPUs.
+[26:07.700 --> 26:10.100]  The most common, because we also have telemetry at Mozilla,
+[26:10.100 --> 26:13.580]  and we look at the power use of our user's CPU,
+[26:13.580 --> 26:17.820]  the most common CPU power is 15-watt, that's typical for laptops,
+[26:17.820 --> 26:24.660]  and the second most power is 65, and that's typical for desktop machines.
+[26:24.660 --> 26:29.900]  Here's a question from the internet, where I think Friedland asks if it's detailed enough
+[26:29.900 --> 26:39.100]  to verify that constant time-crypto algorithms are also constant energy-crypto algorithms.
+[26:39.100 --> 26:40.940]  Should I repeat?
+[26:40.940 --> 26:46.460]  So the question was, is it precise enough to verify if constant time-crypto algorithms
+[26:46.460 --> 26:51.340]  are also constant energy-use algorithms?
+[26:51.340 --> 26:56.540]  If you can run the algorithm multiple times in a row long enough that you can profile it,
+[26:56.540 --> 27:00.860]  maybe, so we need to run it many times with different inputs.
+[27:00.860 --> 27:04.140]  I'm not completely sure, honestly, but you can try.
+[27:04.140 --> 27:10.220]  And the sampling rate that we get is at most every milliseconds on some operating systems.
+[27:10.220 --> 27:13.740]  And the issue I mentioned about the side-channel attack,
+[27:13.740 --> 27:17.340]  so on Linux it was worked around by making it restricted access.
+[27:17.340 --> 27:22.860]  On other platforms, the way they work around it is by ensuring we don't access it more than once every millisecond.
+[27:22.860 --> 27:26.540]  So if we access it more than once every millisecond, we get the same data again.
+[27:26.540 --> 27:32.060]  So you can't profile it more than every millisecond.
+[27:32.300 --> 27:33.660]  Yeah, it comes up, right?
+[27:33.660 --> 27:35.660]  Yeah.
+[27:35.660 --> 27:37.660]  Thanks.

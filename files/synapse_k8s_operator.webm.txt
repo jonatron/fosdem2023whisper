@@ -1,0 +1,259 @@
+[00:00.000 --> 00:10.000]  Hello everyone, good morning, good afternoon. Today we'll talk about a Kubernetes operator
+[00:10.000 --> 00:15.040]  for Synapse, which allows you to deploy and manage a Synapse on server as well as a couple
+[00:15.040 --> 00:20.240]  of bridges on top of Kubernetes. This operator is written in Go, and if you don't know what
+[00:20.240 --> 00:24.640]  Kubernetes operators are or what they do, don't worry because that's the first thing
+[00:24.640 --> 00:29.600]  we will talk about. In this talk, we will not assume any prior knowledge of Kubernetes.
+[00:30.640 --> 00:35.600]  My name is Mathias Gohens. I'm a senior software engineer at Red Hat, and I've been working with
+[00:35.600 --> 00:42.160]  operators daily since I started a bit less than two years ago. I was looking for a way to learn
+[00:42.160 --> 00:48.560]  and experiment with operators, and that's how this project started as a playground for me.
+[00:49.280 --> 00:56.880]  So let's get started. As promised, the first thing we'll do is discuss some ground concepts
+[00:56.880 --> 01:02.960]  of Kubernetes and introduce what Kubernetes operators are and what they do. And in the second
+[01:02.960 --> 01:07.680]  part of this talk, we'll talk more specifically about the Synapse operator and do a demo of its
+[01:07.680 --> 01:13.760]  main capabilities. And finally, we'll talk about the future of this project and the long list of
+[01:13.760 --> 01:20.640]  improvements and features which could be added to it. So Kubernetes, what is it? Some ground
+[01:20.640 --> 01:26.160]  concepts first. Kubernetes is a container orchestration engine. That means that it helps
+[01:26.160 --> 01:33.680]  with managing containers at scale. Among its main features, Kubernetes helps with load balancing,
+[01:33.680 --> 01:39.600]  high availability, and self-healing of your containerized application. There's this notion
+[01:39.680 --> 01:47.440]  of pods in Kubernetes. A pod is wrapper for your containers. The pod runs one of multiple containers
+[01:47.440 --> 01:53.360]  and you never run container directly on Kubernetes. You always go through this abstraction layer,
+[01:53.360 --> 02:01.520]  which is a pod. And finally, your resources are described in YAML. The Kubernetes resources,
+[02:01.520 --> 02:07.680]  such as a pod, can be described in YAML. And as a user, you often write something called manifest
+[02:07.680 --> 02:16.080]  files to create or update your resources. You have also Kubernetes CLI called kubectl or kubectl,
+[02:16.080 --> 02:23.120]  which allows you to interact with the Kubernetes API. And you can do things like kubectl get pods
+[02:23.120 --> 02:29.360]  or create new resources with kubectl create. Talking about resources, that's what they look
+[02:29.360 --> 02:36.160]  like for the most part. First, you have something called the type meta. This is where you identify
+[02:36.160 --> 02:42.240]  the type of resource that you describe. In this case here, we're talking about a replica set.
+[02:42.240 --> 02:48.880]  Other examples of Kubernetes resources are pods, we already mentioned this, deployment,
+[02:48.880 --> 02:54.560]  jobs, service account, PVC, the persistent volume claims, config map, and so on.
+[02:56.080 --> 03:00.800]  Then you have the so-called object meta, that's the part which allows you to uniquely identify an
+[03:00.800 --> 03:06.160]  instance of a resource type. So here, we're dealing with an instance of a replica set called
+[03:06.160 --> 03:12.960]  frontend. And finally, you have the spec and status section. And the spec or specification
+[03:13.760 --> 03:18.880]  represents the desired configuration. It's the desired state of this resource.
+[03:20.320 --> 03:25.920]  Finally, the status provides the user with information about the last known state of the
+[03:25.920 --> 03:35.200]  resource. And so what is a replica set, by the way? It is a way to encapsulate a pod definition.
+[03:35.200 --> 03:39.840]  So that's one here in the template. That's a template of a pod, right? And the pod runs containers.
+[03:40.720 --> 03:46.880]  And it adds a replica count to it. So here, it expresses that there should be three replica,
+[03:46.960 --> 03:54.640]  three copy of this pod running. And if for whatever reason, a pod comes to fail,
+[03:56.320 --> 04:02.800]  then the replica set is there to ensure that a new copy of this pod is being created.
+[04:04.320 --> 04:08.560]  Let's see a replica set in actions to illustrate what we just said.
+[04:08.560 --> 04:19.440]  I'm on a Kubernetes cluster here. And I already have a replica set running on this pod, on this
+[04:19.440 --> 04:25.440]  cluster. On the bottom right, you see the list of pods currently running on the cluster. So here,
+[04:25.440 --> 04:30.960]  you have three pods, three engineering pods. And well, that makes actually sense because
+[04:30.960 --> 04:37.600]  we have on this replica set configured that we would like to have a three pod running three
+[04:37.600 --> 04:44.080]  copy of the engineering pod running. Let me take one pod and delete it.
+[04:46.000 --> 04:55.280]  kubectl, delete pod, and the name of my pod. So what's going to happen? A new copy of a pod is
+[04:55.280 --> 05:00.400]  recreated almost instantly. Well, that's the job of the replica set. That's exactly what it does.
+[05:00.800 --> 05:10.240]  It ensures that three copies are running. All right, but where is this logic of recreating pods,
+[05:10.880 --> 05:20.320]  recreating copy of my pod actually implemented? Well, that's the job of controllers. So let's
+[05:20.320 --> 05:25.360]  think about this. What is a controller? A controller in Kubernetes? It's a process.
+[05:26.320 --> 05:32.720]  It's a process that runs usually within the cluster as a pod. It's responsible for managing
+[05:32.720 --> 05:40.240]  a type of resource in the cluster. So there is a job controller for managing jobs. There's a
+[05:40.240 --> 05:46.560]  deployment controllers for managing the lifecycle of deployments. And there is of course a replica
+[05:46.560 --> 05:52.000]  set controller, which we're going to see in a second. Behind the scene, how it works is that
+[05:52.000 --> 05:59.760]  it watches the Kubernetes API. Each time it is an event, like a creation, the update of the deletion
+[05:59.760 --> 06:06.160]  event, which is related to the type of resource that it manages, then it starts something called
+[06:06.160 --> 06:12.720]  its control loop. And the control loop, it's an id input and function, which role is to resolve the
+[06:12.720 --> 06:18.720]  difference between the current state of the resource and its desired state. And it's also,
+[06:18.720 --> 06:24.960]  by the way, responsible for writing the status of the resource. So let's see an example real quick.
+[06:24.960 --> 06:31.520]  This is the replica set controller or at least the simplified version of it. It implements a control
+[06:31.520 --> 06:38.240]  loop. And this control loop here in the middle is triggered every time a replica set is either
+[06:38.240 --> 06:46.800]  created, updated or deleted in the cluster. The main aspects of this control loop is to
+[06:46.880 --> 06:55.680]  first read the desired number of replicas from the replica set. That's the desired state, right?
+[06:55.680 --> 07:03.280]  This here. Second, it's to read the current state of the resource. How many replicas of the
+[07:03.280 --> 07:12.560]  NGNX pod currently exist on the cluster? That's this here. And third, it will reconcile the resource
+[07:12.640 --> 07:17.760]  state. That means that it calculates the difference between the desired and current
+[07:17.760 --> 07:27.600]  number of replicas. And it creates or deletes replicas or even it can do nothing if the current
+[07:27.600 --> 07:36.720]  and desired number of replicas already match. And finally, its last responsibility is to write
+[07:36.800 --> 07:44.320]  the resources status. So this provides the end user or other controllers in the cluster
+[07:44.320 --> 07:50.720]  information on the last known state of this resource. And they are similar built-in controllers,
+[07:50.720 --> 07:56.480]  as we mentioned, running for the deployment, for the jobs, for the PVCs, etc. For all
+[07:57.520 --> 08:03.840]  native Kubernetes resources, there is built-in controller for managing them.
+[08:04.400 --> 08:12.400]  And, well, now you must wonder, wait, you keep talking about built-in controllers
+[08:12.400 --> 08:18.720]  and native Kubernetes resources. Why is that? Does that mean that there is such an external
+[08:18.720 --> 08:26.080]  controller in the non-native resource? Well, yes, precisely that's exactly what there is,
+[08:26.080 --> 08:32.720]  and that's exactly what operators are all about. Operators are about reusing these concepts
+[08:32.720 --> 08:39.120]  of Kubernetes resource and Kubernetes controller and create our own. So first, we're going to create
+[08:39.120 --> 08:44.960]  new resource types. Let's say, for example, we're going to create a resource type called Synapse.
+[08:44.960 --> 08:50.720]  In a second, we're going to create a custom controller to manage our brand new resource type.
+[08:50.720 --> 08:56.720]  So let's say we're going to create a Synapse controller responsible for all the business
+[08:57.680 --> 09:07.360]  logic of creating and managing a Synapse home server. So first, a new resource type.
+[09:08.880 --> 09:16.560]  A new resource type. How are we going to do that? Well, we're using something called custom resource
+[09:16.560 --> 09:22.640]  definition in Kubernetes. And this is a truly amazing feature of Kubernetes because CRDs,
+[09:22.720 --> 09:28.640]  the short name for custom resource definition, they provide a way to extend the Kubernetes API
+[09:29.360 --> 09:36.000]  using the Kubernetes API. That means that there is a resource type in Kubernetes natively,
+[09:36.000 --> 09:44.320]  which is called custom resource definition. And we can write our CRD as a manifest file
+[09:44.320 --> 09:51.520]  and create and query it with kubectl. So the CRD manifest will contain information about the new
+[09:51.520 --> 10:00.640]  resource, the custom resource, and such as its kind and its open API v3 schema. Open API v3 schema
+[10:00.640 --> 10:05.840]  is a set of definitions and rules that will describe the structure of our Kubernetes resource.
+[10:07.600 --> 10:14.960]  So let's have a look. Let's have a look at custom resource definitions.
+[10:15.840 --> 10:22.080]  As a matter of fact, on my Kubernetes cluster, there are already
+[10:23.600 --> 10:30.080]  some CRDs installed and specifically CRDs for Synapse. And I can't dig into it. So here you see
+[10:30.080 --> 10:37.440]  I did the kubectl get custom resource definition because this type is natively present on Kubernetes.
+[10:38.240 --> 10:48.240]  And I can also do things like get, this is the command I run, get custom resource definition,
+[10:48.240 --> 10:56.480]  the name of my Synapse CRD, that show YAML, that's to have it in a YAML output. And what I see here
+[10:56.480 --> 11:05.120]  is how a CRD looks like. So there is a kind Kubernetes, kind, sorry, custom resource definition,
+[11:05.360 --> 11:12.240]  this is the type meta. Here we have the object meta on this meta data section
+[11:13.040 --> 11:18.800]  with the name of this CRD. And then we have the spec. And what is the spec of a CRD? Well,
+[11:18.800 --> 11:27.200]  it is describing a new resource. We are creating a new resource type in Kubernetes, a custom resource.
+[11:27.760 --> 11:35.760]  So how does this custom resource looks like? You have things, for example, such as the new kind
+[11:35.760 --> 11:41.440]  that you want to have created. You have information, for example, this is a namespaced resource or not.
+[11:42.480 --> 11:48.320]  You could also have cluster wide resources. And you have, you see here that it's available in the
+[11:48.320 --> 11:57.840]  v1, alpha one version. And you have the schema, open API v3 schema for this new custom resource,
+[11:57.840 --> 12:04.000]  this new Synapse custom resource. And on the top level, you have, you find things again,
+[12:04.000 --> 12:11.120]  like API version on kind. So this is our beloved type meta, then the meta data section, the object
+[12:11.120 --> 12:20.000]  meta that are common to all Kubernetes resources. And then you have the spec section and status
+[12:20.000 --> 12:27.760]  section. Again, we again find the second status. And here you see the descriptions of what is
+[12:27.760 --> 12:34.080]  contained into the spec. So here, for example, you have a Boolean called create new Postgres QL,
+[12:34.080 --> 12:40.000]  by default, it's false. They have a section called home server. And with some information how to
+[12:40.000 --> 12:49.040]  configure your Synapse instance. So this CRD is there to describe our new Synapse resource type.
+[12:50.320 --> 12:54.880]  We're jumping a little bit ahead here. We'll come back to the Synapse CRD later. We're actually
+[12:54.880 --> 13:01.680]  going to use it and create a Synapse instance. I just wanted to show you an example of a CRD
+[13:01.680 --> 13:10.880]  manifest file. And because this, because this CRD is installed in the cluster,
+[13:10.880 --> 13:19.280]  I can now do things like kubectl get Synapse. What do I get back from the cluster from the
+[13:19.280 --> 13:26.880]  API? No resources found in default namespace. Okay. And just to compare, if I would run this
+[13:26.880 --> 13:32.320]  here, kubectl get not exist. This is a type which does not exist. I get a different message. This
+[13:32.320 --> 13:37.520]  one, it's an error message. So the server doesn't have a resource type not exist, right? Synapse,
+[13:37.520 --> 13:46.560]  we have created CRD. So the resource type Synapse is known. And now that we talked about custom
+[13:46.560 --> 13:53.520]  resources, we can talk about building a custom controller. So that's where we need to write
+[13:53.520 --> 13:59.360]  some code and implement the actual logic of managing a simple Synapse instance, the business
+[13:59.360 --> 14:08.160]  logic. Unfortunately, we have some SDKs available, which will help us with all the boilerplate code
+[14:08.160 --> 14:14.560]  come on to all operators, such as watching the API, cashing some requests, building work queues,
+[14:14.560 --> 14:21.280]  and so on. They also help with actually creating this CRD manifest that we just saw,
+[14:21.280 --> 14:27.680]  because as you see, creating the open API with free schema by hand can be a little bit cumbersome.
+[14:27.680 --> 14:35.200]  So we also have tools in the SDK to help us bootstrap, generate actually those
+[14:36.240 --> 14:44.160]  CRD manifest files. So using an SDK really allows us to focus on writing the business logic
+[14:44.160 --> 14:52.000]  and how to manage our application. And yeah, so with that, we have it. We have seen
+[14:52.000 --> 14:57.920]  the main concepts behind Kubernetes operator. We talked about Kubernetes resources,
+[14:57.920 --> 15:03.920]  how they are structured. We saw how we can extend the Kubernetes API with custom resource definitions.
+[15:04.640 --> 15:10.960]  We talked about the controller pattern in Kubernetes and how controllers are responsible
+[15:10.960 --> 15:18.400]  for reconciling the state of the resource they manage. And we saw that we can write our own
+[15:18.400 --> 15:24.720]  controller with Operator SDK, for example. And hopefully by now, you have a good understanding
+[15:24.720 --> 15:29.120]  of what operators are and do. Of course, there would be tons of other interesting details to
+[15:29.120 --> 15:35.520]  mention on Operator SDKs and CRDs and so on. But yeah, we have a limited amount of time today. So
+[15:35.520 --> 15:41.360]  this talk is actually about the Synapse operator. So let's move on to that part, finally.
+[15:43.680 --> 15:50.080]  We have, so I made the choice to, of dividing this project into three CRDs.
+[15:51.040 --> 15:58.560]  One for the Synapse home server and one for each bridges. So right now, this operator is able to
+[15:58.560 --> 16:04.720]  manage two bridges, the Heisen bridge, so this is for IRC and matrix signal, which as the name
+[16:04.720 --> 16:13.120]  suggests is for signal. That means that you can manage each component individually and
+[16:13.120 --> 16:21.120]  independently. That's a model which would scale also better if and when additional components
+[16:21.120 --> 16:28.480]  are added to the project. So let's have a look at the CRDs individually. First, the Synapse CRD.
+[16:28.480 --> 16:34.640]  So we saw this already before and as the name suggests, it allows us to deploy a Synapse home
+[16:34.640 --> 16:40.480]  server. By default, it will use the SQLite database, which is shipped within the Synapse
+[16:40.480 --> 16:45.120]  Docker image. But there are also ways to work with Postgres. We'll talk about that a little bit later.
+[16:46.640 --> 16:49.920]  In order to deploy Synapse, we need to provide some configuration options.
+[16:50.720 --> 16:57.120]  To do that, we need a configuration file, which is called home server.yaml.
+[16:57.760 --> 17:03.200]  And as you know, if you've dealt with Synapse before, this is a very long file. There are
+[17:03.200 --> 17:08.160]  lots of configuration options. So therefore, I made the choice of providing users of the
+[17:08.160 --> 17:15.360]  Synapse operator with two options for configuring their Synapse instance. As a user, you can either
+[17:15.360 --> 17:20.320]  provide the two mandatory configuration options directly in the Synapse manifest.
+[17:20.320 --> 17:26.000]  These two mandatory options are the name of your server and whether or not to report statistics.
+[17:26.640 --> 17:34.080]  The Synapse operator then uses the default values and the rest of the home server.yaml
+[17:34.080 --> 17:39.120]  with default values. Actually, it uses a default home server.yaml template and feeds those values
+[17:39.120 --> 17:44.960]  into it. And this is especially useful if you don't have a home server.yaml at hand
+[17:45.680 --> 17:50.240]  or just want to quick start in a project, quickly test the capability of this operator
+[17:50.240 --> 17:55.440]  and just want to get a Synapse instance running. However, if you need more control over the
+[17:55.440 --> 18:00.640]  configuration of Synapse, which is totally understandable, or if you already have a home
+[18:00.640 --> 18:07.440]  server.yaml, then you want to go with the second option. And that is creating a config map containing
+[18:07.440 --> 18:12.960]  the home server.yaml and feeding it to the Synapse resource. We're going to see this
+[18:13.760 --> 18:20.160]  in a second with examples. The Synapse operator automatically will use your custom home server
+[18:20.160 --> 18:25.200]  yaml. Actually, it will make a copy of it and it will use it to configure Synapse.
+[18:26.800 --> 18:33.440]  Let's see a little demo of this. So, we're back on our Kubernetes cluster. On the top right,
+[18:33.440 --> 18:39.840]  you see the logs of the three controllers, the Synapse controller, the Heisenbridge controller
+[18:39.840 --> 18:44.880]  and the Motrix signal controller, which are running in the cluster. All the logs of those three
+[18:44.880 --> 18:50.720]  controllers are here on the top right of your screen. On the bottom right, you again have the
+[18:50.720 --> 18:55.440]  list of pod running in the cluster and the default namespace. Currently, there are none.
+[18:56.160 --> 19:03.280]  And on the left side, that's where we're going to issue some commands. Let's go ahead and create
+[19:03.280 --> 19:09.840]  our first Synapse instance. This one is going to use, so this one you see, it's a kind Synapse.
+[19:09.840 --> 19:15.520]  And with the name called MySynapse. And this one is going to use values. We're going to use,
+[19:15.520 --> 19:20.400]  provide some values in the spec section of our manifest file, the name of the server,
+[19:20.400 --> 19:25.680]  which is called myserver.com. And whether or not to report that here, true, because we are a good
+[19:25.680 --> 19:34.080]  citizen. And we are going to go ahead and create this Synapse instance. What we see here on the
+[19:34.080 --> 19:42.960]  right side is the Synapse controller getting to work. And that's business logic, right, which is
+[19:42.960 --> 19:51.120]  in the Synapse instance. It compares the desired state of this resource. So please have a home
+[19:51.120 --> 19:56.960]  server running with this configuration values. And the current state, what do I currently have in
+[19:56.960 --> 20:03.200]  a cluster? Nothing. I don't have a Synapse instance running. I don't have a pod for my Synapse instance.
+[20:03.200 --> 20:11.760]  So this is what then creates all the necessary objects, a deployment, a config map, a PDC,
+[20:11.760 --> 20:26.480]  and so on and so on. And now I can check that my Synapse is being created. So as you see,
+[20:26.480 --> 20:36.240]  get Synapse, right? This time I have one. I get this one back in. I can check my Synapse
+[20:36.720 --> 20:43.520]  status. And I see that some information on the home server configuration has been populated.
+[20:43.520 --> 20:50.560]  Well, in this case, it's pretty straightforward. It's basically a copy of the values. And you
+[20:50.560 --> 21:02.240]  can see that this Synapse instance is running. In fact, yes, you check a bit the logs of this
+[21:02.320 --> 21:11.280]  Synapse pod here. You see that, well, the usual have been created, the usual have been displayed
+[21:11.280 --> 21:20.000]  here with some info on this Synapse instance is running. Now we're going to move to the second
+[21:20.000 --> 21:28.160]  example. Now that we have seen how to create a Synapse using values, we're going to see how you
+[21:28.160 --> 21:32.480]  can do that with a custom home server, the YAML. Let's say you have your custom home server YAML.
+[21:32.480 --> 21:43.680]  This time, you have configured a server name, my matrix host. And you want to use this for
+[21:43.680 --> 21:51.760]  configuring Synapse. What you do here is create a config map for this home server YAML. So here
+[21:51.760 --> 21:57.440]  I did kubectl create config map. This is the name of my config map, my custom home server.
+[21:57.440 --> 22:03.280]  I'm using from file to say I want to use this file as an input for the data of this config map.
+[22:04.560 --> 22:11.840]  And in fact, now I have this config map created here, my custom home server 15 seconds ago.
+[22:13.360 --> 22:21.120]  Now I have the Synapse instance, a new Synapse called my custom Synapse. And in the configuration
+[22:21.120 --> 22:27.200]  options, this time, I'm not using values, I'm using here config map, and I'm giving the name
+[22:27.280 --> 22:31.840]  of the config map containing the home server YAML that I want to use for configuring this
+[22:31.840 --> 22:37.920]  instance of Synapse. So let's go ahead and create it. And again, the Synapse controller gets to work.
+[22:38.480 --> 22:47.920]  And a new pod is going to come up for this instance of Synapse. And if I'm checking this time the
+[22:47.920 --> 22:54.640]  status of my custom Synapse, in the status here, I see again some information on the home server
+[22:54.640 --> 23:01.200]  configuration has been populated by the Synapse controller. And especially the name of the server
+[23:01.200 --> 23:06.000]  and whether or not to report stats, this has been fetched from my custom home server YAML.
+[23:07.920 --> 23:13.440]  Behind the scene, what it does also, if I'm running this command again, is that it actually
+[23:13.440 --> 23:20.000]  creates a copy of your input config map. So it makes a copy of the config map you provide,
+[23:20.000 --> 23:25.840]  and it works on this copy, because sometimes the Synapse controller might have to do some
+[23:25.840 --> 23:34.480]  modification to make sure that this instance of Synapse can actually run. So it makes a copy,
+[23:34.480 --> 23:40.960]  doesn't touch your input config map, it makes a copy of it and edit it in place if needed.
+[23:43.200 --> 23:49.760]  Let's go back to the presentation and move on to the next CRD that we have, the next resource
+[23:49.760 --> 23:54.400]  type that we have installed, which is Heisenbridge. So Heisenbridge, as the name suggests, again
+[23:54.400 --> 24:02.240]  deploys an instance of the IRC bridge called Heisenbridge. And then it also automatically
+[24:02.240 --> 24:10.160]  adds this bridge as an application service to the Synapse home server YAML. And similarly to
+[24:10.160 --> 24:16.720]  Synapse, you can again provide your custom Heisenbridge configuration file if you want.
+[24:16.720 --> 24:25.200]  You can also decide to use some default values. And in that case, you don't have to provide anything
+[24:25.200 --> 24:32.480]  because there is no mandatory configuration options for Heisenbridge. So if I'm going back to the
+[24:33.760 --> 24:40.480]  terminal, I see that here I have an example manifest file for Heisenbridge, where I specify
+[24:40.480 --> 24:46.640]  in the spec section simply the name of the Synapse instance that I want to be connected to.
+[24:47.520 --> 24:56.640]  And that's okay because I have, my Synapse is an existing Synapse instance, right,
+[24:56.640 --> 25:05.280]  we created it a few minutes ago. So I can go ahead and create this. And what's happening here now,
+[25:05.280 --> 25:11.520]  we have two controllers now doing some work. First, the Heisenbridge controller,
+[25:11.520 --> 25:17.200]  which runs here this part, the Heisenbridge part. And second, we have the Synapse controller, which
+[25:17.200 --> 25:25.120]  you see has terminated one part, the one which was created four minutes ago, and has run a new part
+[25:25.840 --> 25:32.400]  about 20 seconds ago now when we first created our Heisenbridge. Why is that? Well, the business
+[25:32.480 --> 25:40.880]  logic of the Synapse controller is so that when it sees a Heisenbridge being created for an
+[25:40.880 --> 25:46.880]  existing Synapse instance, well, it reconfigures it. So it adds it, it adds the Heisenbridge as
+[25:46.880 --> 25:52.560]  an application service in Home Server YAML. And then he has to restart, not actually restart,
+[25:52.560 --> 26:02.080]  recreate the part using this new configuration. So that's what it does. I can also check the logs
+[26:02.080 --> 26:14.320]  of my Synapse pod, a grab for Heisenbridge. And we see that indeed Heisenbridge has been added
+[26:14.320 --> 26:20.640]  as an application service. There is a user Heisenbridge, which has been created, which has
+[26:20.640 --> 26:26.960]  been logged in. And there were some initial requests made for configuring it. All right,
+[26:26.960 --> 26:36.160]  so I have now a Heisenbridge instance, and I have two Synapse instances running.
+[26:37.600 --> 26:41.840]  By the way, this reconfiguration of the Home Server YAML would also work if you would have
+[26:41.840 --> 26:48.080]  provided your own Home Server YAML with a config map, because I mentioned before that
+[26:48.080 --> 26:55.120]  the controller makes a copy of this Home Server YAML. And so it works on this copy and it also
+[26:55.120 --> 27:00.320]  modifies it if needed. All right, and just to mention here, we have also the possibility to
+[27:00.320 --> 27:06.560]  configure Heisenbridge with a config map that would work in the same way as for Synapse.
+[27:06.560 --> 27:10.960]  That means that we would need to create a config map first and then feed it here
+[27:11.760 --> 27:16.800]  to the Heisenbridge resource. And in this config map, we would need to have the Heisenbridge
+[27:16.800 --> 27:23.520]  configuration file. So similarly to what we had with Synapse. Finally, we have the
+[27:23.520 --> 27:29.040]  MatrixSignal bridge. This works exactly in the same way, creating the Matrix Bridge,
+[27:29.040 --> 27:35.200]  creating a signal D, which is required for this bridge to run, and reconfiguring the Home
+[27:35.200 --> 27:42.080]  Server YAML and add MatrixSignal as a bridge there, as an app service there. Again, you can either
+[27:42.080 --> 27:47.280]  use a custom configuration file or work with default if you want a quick start. Finally,
+[27:47.280 --> 27:54.960]  there's a way to provision a PostgreSQL instance. The first thing you could do is have your
+[27:54.960 --> 27:59.440]  custom Home Server YAML and if you already have a PostgreSQL instance running, you could provide
+[27:59.440 --> 28:06.000]  your own Home Server YAML and configure the database connection information there. Or you can
+[28:06.000 --> 28:12.160]  automatically spin up a PostgreSQL instance. We saw that there is a create PostgreSQL Boolean a little
+[28:12.240 --> 28:20.800]  bit earlier. By default, it's false. But if you put it to true, it will attempt to create a PostgreSQL
+[28:20.800 --> 28:27.680]  cluster or PostgreSQL instance using the PostgreSQL operator. So that's an external dependency
+[28:27.680 --> 28:35.440]  on the Synapse operator. Let's finish very quick with the next steps. As you know,
+[28:35.440 --> 28:40.720]  MatrixSignal is a very large ecosystem with tons of projects. Many are obviously missing from the
+[28:40.720 --> 28:47.200]  Synapse operator today. First, bridges, of course. We could add more bridges. Web clients, we currently
+[28:47.200 --> 28:52.480]  don't have any, but we could have Element or Hydrogen, for instance, as a web client. We could
+[28:52.480 --> 28:59.360]  have some additional infrastructure components, such as a turn server for WebRTC, audio-video call,
+[28:59.360 --> 29:04.880]  SSL certificates, or email server. And, of course, why not also have alternative Home Servers, right?
+[29:05.440 --> 29:09.840]  Right now, we only have the Synapse Home Server, but we could also have a provided possibility to
+[29:09.840 --> 29:16.400]  deploy. You maybe can do it on the Android and turn this Synapse operator into a Matrix operator,
+[29:16.400 --> 29:24.240]  actually. Yeah, that would be for the long term. All right, so that's it for me today. Thanks for
+[29:24.240 --> 29:32.000]  listening. Today, we hear some information on how to contact me, the link to the GitHub. Don't
+[29:32.000 --> 29:39.040]  hesitate to go ahead and grab the code and try it out, provide feedbacks, write me also in the
+[29:39.040 --> 29:45.520]  Synapse operator room. Right now, it's a very quiet room, but please just come and have a chat
+[29:45.520 --> 29:50.240]  if you have any questions or if you're interested in working on this project. Thank you very much
+[29:50.240 --> 29:55.280]  for your attention, and I wish you a good rest of the conference. Bye.
+[30:39.040 --> 30:40.420]  you
+[31:09.040 --> 31:10.420]  you

@@ -1,0 +1,196 @@
+[00:00.000 --> 00:15.000]  The next talk is by Scott. He's going to talk about quick startings, secure containers
+[00:15.000 --> 00:44.000]  I'm Scott Moser, I work for Cisco Systems and over the past three years or so we've been working on a project internally that implements a lot of the image based workflows that we were talking about in another room.
+[00:45.000 --> 00:56.000]  And just kind of building up that piece by piece. That is called project machine and so that's what I primarily am working on and stuff around that.
+[00:56.000 --> 01:06.000]  So through that we kind of came to some needs and desires to change how we were running containers and that's what we got here.
+[01:06.000 --> 01:24.000]  The goal is pretty simple of this talk and our goal was really just to replace the tar and gzip format in an OCI image with SquashFS and now discuss why there's benefits of that.
+[01:25.000 --> 01:38.000]  I'll show some comparisons of what the registry data looks like and what the registry sees and compare what the runtime looks like and what's different there.
+[01:38.000 --> 01:55.000]  And then I'll give a little demo and the sales pitch part, there's two tools that are ours. They're open source but they're decent tools so I'll show them here.
+[01:55.000 --> 02:06.000]  Stacker and we signed with Cosign, we published Zot and then we run with LXC. Probably everybody's here is familiar with LXC.
+[02:06.000 --> 02:18.000]  So in order to get SquashFS file system images in a registry, it looks a lot like it does with tar, gzip images.
+[02:18.000 --> 02:25.000]  We put just files that go into registry, the metadata contains a list of images.
+[02:25.000 --> 02:39.000]  The index is a list of images, each of those images has a list of layers and then the difference really is just in the media type of the layer.
+[02:40.000 --> 02:55.000]  So we get, yeah, and then first, and so we both have a sign check, some of the tar ball in both cases, or the image right, that data's there so you can know what it is.
+[02:56.000 --> 03:06.000]  And then in addition on the SquashFS one, we put the DM Verity hash, the root hash in the metadata and we sign that.
+[03:06.000 --> 03:08.000]  That come into play later.
+[03:13.000 --> 03:14.000]  Oh, I went backward.
+[03:14.000 --> 03:30.000]  There we go. So now run type, at run time, the images really do look very similar.
+[03:30.000 --> 03:42.000]  Both of them, they, well, we uncompressed with tar and gzip or we either copy the image out of the repository to a place on the disk.
+[03:42.000 --> 03:51.000]  And then we can either share that same location for every container or you can mount it, you can take a copy of it for each container that you're going to launch.
+[03:51.000 --> 03:55.000]  You know, that path makes garbage collection a little bit easier.
+[03:55.000 --> 04:06.000]  And then in tar world, if you want to compare the data that you're running, you want to compare the file system that is running versus the thing that you downloaded.
+[04:07.000 --> 04:09.000]  That's a real pain in the rear end, right?
+[04:09.000 --> 04:19.000]  You got to basically look at all the contents of all the files and look at their modification times and compare that to the compressed tar ball or, you know, extract it and just compare it to file system trees.
+[04:19.000 --> 04:20.000]  It's a real pain.
+[04:20.000 --> 04:24.000]  With SquashFS, the image is there.
+[04:24.000 --> 04:32.000]  It was read only and you just Shaw Summit and the Shaw Summit matches the Shaw Summit you downloaded and you know you're good, right?
+[04:32.000 --> 04:35.000]  So there's a lot of benefit out of that.
+[04:35.000 --> 04:46.000]  The primary reason that we kind of got here and we're looking into something else was really that once you've extracted a tar file system out, there's kind of no way to put it back in.
+[04:46.000 --> 04:54.000]  You know, you can't ever really get back and verify that you're running what you thought.
+[04:55.000 --> 05:04.000]  So, and then in the runtime, other benefits of SquashFS and Verity is we get in privilege with privileged mounts.
+[05:04.000 --> 05:21.000]  If we're running a container that is real root and can do a mount, then we can use that de-embarity data that we got in there so that the kernel can actually then verify that the data is used as is, as it reads it off the disk.
+[05:21.000 --> 05:36.000]  And then, but is unprivileged when we're running unprivileged containers, if you can't do a mount, we do a mount with SquashFuse and there you can't use de-embarity.
+[05:36.000 --> 05:48.000]  There's no, to my knowledge, way to use a block device or use the device mapper and get block device, get de-embarity without being real root.
+[05:49.000 --> 05:51.000]  So, let's see.
+[05:51.000 --> 05:55.000]  And then another benefit is the file system doesn't implement write, right?
+[05:55.000 --> 05:59.000]  So you're not going to be, you're not going to be attacked from the file system.
+[05:59.000 --> 06:02.000]  Nobody's going to be replacing a binary there.
+[06:02.000 --> 06:12.000]  If they're going to get to it, they have to come in like from the other side and modify the disk, the data, but that should be caught via checksum or de-embarity.
+[06:13.000 --> 06:19.000]  So, but that comes at a little bit of cost because basically everybody and their brother can read a tar ball, right?
+[06:19.000 --> 06:31.000]  And at this point, but not, but SquashFuse is a little bit less readable, although there's, there's good tools, but they're not as widely, as widely deployed.
+[06:32.000 --> 06:44.000]  Oh, yeah, and I just want to point out like, so really the changes here, it's, it's not, it's not evolution, it's not revolutionary, it's evolutionary.
+[06:44.000 --> 06:46.000]  It's a small change.
+[06:46.000 --> 06:58.000]  There's changes being discussed for like OCI image V2 or V2 repositories and different file formats that would really kind of revolutionize thing and do much, much, much better than this.
+[06:58.000 --> 07:03.000]  But this is a significant improvement upon, upon what's there right now.
+[07:07.000 --> 07:17.000]  So I said there Overlay, OverlayFS doesn't have any write support or let's see, I'm sorry.
+[07:17.000 --> 07:21.000]  SquashFS doesn't have write support, so you end up having to use Overlay.
+[07:21.000 --> 07:26.000]  Overlay, again, was talked about in the image container or in the image based workflow track all the time.
+[07:26.000 --> 07:32.000]  I'm not sure how well people are aware of here, but I think it's probably generally fairly common knowledge.
+[07:32.000 --> 07:34.000]  It's a kernel file system.
+[07:34.000 --> 07:50.000]  It's very mature and you can basically stack, stack file system data on top of each other and get the same basic tree that the tar that extracting a series of layers for OCI image gets you.
+[07:51.000 --> 08:03.000]  I don't know really which came first if it was the Overlay file system in the kernel or in the wide outs there or the wide outs that are in a tar ball layer.
+[08:03.000 --> 08:06.000]  I don't know which came first, but they look very similar.
+[08:06.000 --> 08:18.000]  So the ones we're using and the ones that stack or stores in its stack or stores in the images are just the same as the kernel writes them.
+[08:18.000 --> 08:24.000]  So we just use the Overlay there and then it's a, it's simple, very use, useful.
+[08:28.000 --> 08:32.000]  Yeah, and then I say Overlay bugs are present in the kernel.
+[08:32.000 --> 08:39.000]  It has slightly different semantics than some other file systems, but largely over the past 10 years, they have been really well squashed.
+[08:39.000 --> 08:41.000]  So this, it works real well.
+[08:42.000 --> 08:52.000]  And then the last thing is that if you're using an overlay, you can easily see the changes that, that were made to a file system because they're basically all on a single tree.
+[08:52.000 --> 08:57.000]  You can look under, you can look at the Overlay layer and see these are the files that were written.
+[08:58.000 --> 09:08.000]  So deambarity is the device mapper verification.
+[09:08.000 --> 09:18.000]  And it's just a feature in the kernel that basically provides, uses technology called a Merkle tree, which allows you to provide a hash of the top.
+[09:18.000 --> 09:25.000]  And then each, each blocks and cascading down are just our hashes that are built into that.
+[09:25.000 --> 09:31.000]  So basically you can mount the thing up immediately and start reading.
+[09:31.000 --> 09:41.000]  And what will happen is you, you get bad reads if there's bad data or I, I learned today that you can also, you could trigger like a crash or something.
+[09:41.000 --> 09:46.000]  If data was not, if there was an integrity valve violation there.
+[09:46.000 --> 09:50.000]  So let's see.
+[09:50.000 --> 09:51.000]  Yeah.
+[09:51.000 --> 09:53.000]  And so that's deambarity, very useful.
+[09:53.000 --> 09:56.000]  But again, that only works as real root.
+[09:56.000 --> 10:03.000]  So let's go ahead and try to do a demo of this.
+[10:03.000 --> 10:10.000]  Now, yeah, use anybody if you're, if you think I'm just giving a sales pitch, maybe I am.
+[10:10.000 --> 10:13.000]  I don't say a lot of good things about software in general.
+[10:13.000 --> 10:18.000]  But these two that I'm selling are reasonable pieces of software and they may help you.
+[10:18.000 --> 10:20.000]  So we're going to build with stacker.
+[10:20.000 --> 10:22.000]  We're going to sign things with cosine.
+[10:22.000 --> 10:28.000]  We're going to publish to Zot and we're going to run Alex and we're going to run things with LXC.
+[10:28.000 --> 10:29.000]  Let's see.
+[10:29.000 --> 10:31.000]  See how this goes.
+[10:31.000 --> 10:33.000]  This worked at 3am last night.
+[10:33.000 --> 10:42.000]  So, you know, let's see.
+[10:42.000 --> 10:44.000]  I just do that.
+[10:44.000 --> 10:48.000]  All right.
+[10:48.000 --> 10:51.000]  So this is a stacker file.
+[10:51.000 --> 10:53.000]  And then again, stacker is our build tool.
+[10:53.000 --> 10:57.000]  It's really very similar to Docker in what it's capable of.
+[10:57.000 --> 10:59.000]  It runs completely unprivileged.
+[10:59.000 --> 11:07.000]  It can also run privilege, but runs completely unprivileged and allows you to build OCI images.
+[11:07.000 --> 11:13.000]  You can build them either in TAR or in SquashFS file system type.
+[11:13.000 --> 11:16.000]  Let's see.
+[11:16.000 --> 11:24.000]  It's a very mature project and it's working towards CNCF inclusion.
+[11:24.000 --> 11:28.000]  So it works and it pretty much works out of the box.
+[11:28.000 --> 11:30.000]  It's not a single binary.
+[11:30.000 --> 11:33.000]  It runs on disk rows pretty close out of the box.
+[11:33.000 --> 11:36.000]  So you don't need to have a huge stack to try it out.
+[11:36.000 --> 12:01.000]  So I'm going to go ahead and do stacker build.
+[12:01.000 --> 12:05.000]  I'm going to do this because, yeah, there's no way I was going to type that right.
+[12:05.000 --> 12:06.000]  All right.
+[12:06.000 --> 12:08.000]  So there we said build.
+[12:08.000 --> 12:13.000]  I want to build both the layer types, TAR and SquashFS.
+[12:13.000 --> 12:15.000]  And then substitute.
+[12:15.000 --> 12:20.000]  It just provides some mechanism to substitute inside the YAML file.
+[12:20.000 --> 12:22.000]  Because I don't want to go to Docker right now.
+[12:22.000 --> 12:26.000]  I'd rather go to a local ZAP that I'm running.
+[12:26.000 --> 12:28.000]  So there it didn't actually build that.
+[12:28.000 --> 12:31.000]  Clearly it didn't do all that apt and everything.
+[12:31.000 --> 12:33.000]  It was already built, so it reused its cache.
+[12:33.000 --> 12:37.000]  And now we can go ahead and co-sign.
+[12:37.000 --> 12:45.000]  Yeah, we'll publish those images.
+[12:45.000 --> 12:53.000]  So there.
+[12:53.000 --> 12:55.000]  Here's the two images that it built.
+[12:55.000 --> 13:01.000]  It built one called talkroot-squashFS.
+[13:01.000 --> 13:02.000]  And one just called talkroot.
+[13:02.000 --> 13:04.000]  And the one without that is a TAR.
+[13:04.000 --> 13:05.000]  And then up there is GZIP.
+[13:05.000 --> 13:10.000]  And then you can see that these are the same image manifest type.
+[13:10.000 --> 13:16.000]  And so largely tools will still be able to read the Squash data that we put up.
+[13:16.000 --> 13:18.000]  Like Scopeo will still copy it down.
+[13:18.000 --> 13:22.000]  You can still move them around without a whole lot of extra work.
+[13:22.000 --> 13:24.000]  Let's see.
+[13:24.000 --> 13:37.000]  So now go ahead and publish those.
+[13:37.000 --> 13:40.000]  Publish those two images.
+[13:40.000 --> 13:43.000]  And that just uploaded them to a local ZAP.
+[13:43.000 --> 13:46.000]  It's running here that I've got running on local host.
+[13:46.000 --> 13:56.000]  And let's see now.
+[13:56.000 --> 13:58.000]  Is that right?
+[13:58.000 --> 13:59.000]  What did I mean?
+[13:59.000 --> 14:00.000]  Co-sign?
+[14:00.000 --> 14:03.000]  Come on.
+[14:03.000 --> 14:10.000]  What did mean that?
+[14:10.000 --> 14:13.000]  So I'll go ahead and generate a co-sign key pair.
+[14:13.000 --> 14:21.000]  And that is enforced currently in Etsy containers.
+[14:21.000 --> 14:23.000]  Yeah, that's there.
+[14:23.000 --> 14:29.000]  Basically I say anything that come from local host there needs to be signed by this key that we just did.
+[14:29.000 --> 14:42.000]  So we're going to need to go ahead and sign that stuff.
+[14:42.000 --> 14:47.000]  Co-sign is telling me that in that log verbiage that nobody's really going to read,
+[14:47.000 --> 14:55.000]  it's telling me that you should not just refer to an image in a repository by its name.
+[14:55.000 --> 14:59.000]  You should give the hash because otherwise it might not be what you think you're signing.
+[14:59.000 --> 15:03.000]  So that's bad practice.
+[15:03.000 --> 15:08.000]  Shame on me.
+[15:08.000 --> 15:10.000]  All right, let's see.
+[15:10.000 --> 15:14.000]  So now we've got stuff published into ZOT.
+[15:14.000 --> 15:22.000]  Our local ZOT is running.
+[15:22.000 --> 15:26.000]  And we can see these images are in ZOT.
+[15:26.000 --> 15:29.000]  And ZOT is just another thing that we run.
+[15:29.000 --> 15:34.000]  It runs an OCI registry.
+[15:34.000 --> 15:36.000]  It's really good software.
+[15:36.000 --> 15:37.000]  It's really very easily.
+[15:37.000 --> 15:38.000]  It's one binary.
+[15:38.000 --> 15:43.000]  You take it a little bit of config and then you can run a Docker registry.
+[15:43.000 --> 15:52.000]  The biggest benefit that I see out of it is that I don't hit the Docker bandwidth threshold.
+[15:52.000 --> 15:55.000]  Because out of our company, whatever it is out of that lab,
+[15:55.000 --> 15:58.000]  that usually gets hit by like 7 AM in the morning.
+[15:58.000 --> 16:04.000]  So if you don't have something caching, then you're out of luck.
+[16:04.000 --> 16:05.000]  Let's see.
+[16:05.000 --> 16:09.000]  So now we've got images in our local ZOT.
+[16:09.000 --> 16:14.000]  We've built them, signed them, and published them to a local repository.
+[16:14.000 --> 16:19.000]  And now I can go ahead and try to run one.
+[16:19.000 --> 16:22.000]  So this is the status quo.
+[16:22.000 --> 16:27.000]  This is, I create a user namespaced container.
+[16:27.000 --> 16:41.000]  And then I can LXC start, minus in.
+[16:41.000 --> 16:51.000]  I meant now.
+[16:51.000 --> 16:53.000]  It lets you watch it boot.
+[16:53.000 --> 16:55.000]  So that's just the tar one.
+[16:55.000 --> 16:57.000]  It extracted that to the file system.
+[16:57.000 --> 17:00.000]  It mounted up the file system in a user namespace.
+[17:00.000 --> 17:04.000]  And it let me run.
+[17:04.000 --> 17:09.000]  Come on now.
+[17:09.000 --> 17:11.000]  OK, now we can do the same thing.
+[17:11.000 --> 17:18.000]  But instead of using the talk root of s, we'll use the talk root of s dash squash of s.
+[17:18.000 --> 17:28.000]  We'll name this image.
+[17:28.000 --> 17:35.000]  So that then, it copied the OCI, it pulled down the OCI data out of the ZOT repository,
+[17:35.000 --> 17:39.000]  put on disk, and then is ready for me to run it.
+[17:39.000 --> 17:45.000]  When I run it, I hope.
+[17:45.000 --> 17:46.000]  There.
+[17:46.000 --> 17:47.000]  All right.
+[17:47.000 --> 18:00.000]  So now I've got running on the system.
+[18:00.000 --> 18:04.000]  Let's see.
+[18:04.000 --> 18:15.000]  Here I've got an overlay file system like is mounted underneath that.
+[18:15.000 --> 18:20.000]  These squash fused binaries got mounted one, one, and then another, and then another,
+[18:20.000 --> 18:22.000]  and then an overlay over the top of those three.
+[18:22.000 --> 18:25.000]  So this is running completely unprivileged.
+[18:25.000 --> 18:28.000]  I can mount those up and use them in place.
+[18:28.000 --> 18:33.000]  Go ahead and see.
+[18:33.000 --> 18:39.000]  How much time am I like, OK, then I think I can show another one running as root,
+[18:39.000 --> 18:44.000]  but it's basically, oh, actually, yeah, I will go ahead and try to start that just because.
+[18:44.000 --> 18:47.000]  If I can.
+[18:47.000 --> 19:01.000]  The one that the thing to show there is that.
+[19:01.000 --> 19:04.000]  Oh, no, I should end and ask and take questions.
+[19:04.000 --> 19:09.000]  Yeah, because I was saying I wasn't sure if you were.
+[19:09.000 --> 19:12.000]  So, yeah, so thanks for listening.
+[19:12.000 --> 19:18.000]  So I want to thank God for letting me be here and, you know, spend another day on software and complaining about software.
+[19:18.000 --> 19:26.000]  And thank my team for letting and for helping me out my family for letting me be gone and Cisco on you guys for coming.
+[19:26.000 --> 19:31.000]  This is project machine and anybody got any questions.
+[19:31.000 --> 19:34.000]  Sorry.
+[19:34.000 --> 19:42.000]  We have time for one question.
+[19:42.000 --> 19:44.000]  All right, very clear.
+[19:44.000 --> 19:47.000]  Feel free to reach out and thank you.

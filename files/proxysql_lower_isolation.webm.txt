@@ -1,0 +1,225 @@
+[00:00.000 --> 00:12.360]  First, because the last time I did a presentation, I forgot to say this and there were people
+[00:12.360 --> 00:14.160]  last step after asking.
+[00:14.160 --> 00:23.280]  So I am assistant engineer working at ProxySQL, my name is Sorry.
+[00:23.280 --> 00:28.600]  So I am assistant engineer working at ProxySQL, my name is Xavier and for any more information
+[00:28.600 --> 00:37.600]  if you follow us, so that's g-hub and j-lub and there is what I am usually.
+[00:37.600 --> 00:44.080]  But maybe a more interesting question is how am I here and this is just because of this
+[00:44.080 --> 00:50.360]  conference because in certain conference I found this a couple years ago and yes, it
+[00:50.360 --> 00:59.920]  was the first in 2020 in certain corner so and we are still hiring since then and I am
+[00:59.920 --> 01:02.120]  speeding up a little bit here.
+[01:02.120 --> 01:14.720]  So if you are a developer and you find yourself meeting any of those conditions, so.
+[01:14.720 --> 01:18.520]  You tell me when I can do, okay.
+[01:18.520 --> 01:24.800]  So a brief introduction to ProxySQL, I am going to be very brief, so high performance
+[01:24.800 --> 01:31.160]  protocol where proxy for my SQL and focus is scalability, flexibility, certain time
+[01:31.160 --> 01:43.720]  and just basic topology, right, like any other proxy, our offers.
+[01:43.720 --> 01:49.880]  So these slides normally are like three or four but we are going only to carry this presentation
+[01:49.880 --> 01:55.880]  about the first three of those, so load balancing, query router, cluster monetization, we are
+[01:55.880 --> 02:00.960]  not going to see any of that, even though the three of that today, but yeah, SQL far
+[02:00.960 --> 02:08.120]  with statistics, mirroring and the statistics parts you can develop a lot of that but yeah,
+[02:08.120 --> 02:13.640]  we are going mostly to care about load balancing and query routing and probably cluster monetization
+[02:13.640 --> 02:21.240]  will be also important if you are, you know, using what we are talking about today, but
+[02:21.240 --> 02:28.160]  and we have done a lot of recent work there lately, so but let's move on and say what
+[02:28.160 --> 02:32.480]  is what is Gallera cluster and what is the cluster that we are, we are experimenting
+[02:32.480 --> 02:34.320]  on with today.
+[02:34.320 --> 02:39.640]  So multi-primary cluster is in a synchronous application, easy to use, high probability
+[02:39.640 --> 02:47.680]  solution, so it has all the goodies of a multi-primary cluster, right?
+[02:47.680 --> 02:55.360]  So it's, so in essence it's multi-primary or not a primary REC plaga and it's used
+[02:55.360 --> 03:03.600]  in a synchronous application which I put this disclaimer here because it's how they
+[03:03.600 --> 03:10.360]  officially announced it, so it's virtual synchronization and even in logical asynchronous,
+[03:10.360 --> 03:16.800]  the actual writing and committing happens independently and that's very important, the fact that it's
+[03:16.800 --> 03:23.360]  virtual asynchronous because what we are going to care is about the definitions of the isolation
+[03:23.360 --> 03:32.000]  levels of per cluster node and per cluster itself, so the typical isolation levels that
+[03:32.120 --> 03:38.320]  we have in committed and repeatable read, so Gallera says that this all, this isolation
+[03:38.320 --> 03:43.280]  level is available for you at cluster level being the default one repeatable read and
+[03:43.280 --> 03:50.600]  you know, solvable, but no, obviously solvable solves all of the problems in this talk, but
+[03:50.600 --> 03:59.560]  with KB hats that, you know, make it pointless for the purpose of the talk, so mostly performance.
+[03:59.560 --> 04:10.240]  So repeatable reads offers non-digit reads and reads remain repeatable during transactions,
+[04:10.240 --> 04:13.000]  so offers from the last update problem.
+[04:13.000 --> 04:20.240]  What I am, I am making this distinction here because we have just going back through the
+[04:20.360 --> 04:31.240]  isolation levels, we have per cluster, per node and having repeatable read at no level
+[04:31.240 --> 04:40.800]  is something that doesn't, how to say it, is something that solves some issues that you
+[04:40.800 --> 04:46.960]  are going to expect a lot more at cluster level, so because of that Gallera has another
+[04:46.960 --> 04:54.440]  kind of isolation during the application, which is a form of, sorry I am just going
+[04:54.440 --> 04:59.720]  to get a little bit more into the interviews, of the loss of date, so the loss of date for
+[04:59.720 --> 05:04.960]  what, for any that is not familiar is just that during one transaction you perform a
+[05:04.960 --> 05:10.840]  read and then another transaction perform a return update and then the first transaction
+[05:10.840 --> 05:17.160]  perform a write and that preview, that update from the second transaction may be lost, and
+[05:17.160 --> 05:22.600]  is something that could happen at a lot more cluster level, so in Gallera they have a form
+[05:22.600 --> 05:30.080]  of a snapshot isolation that is an enforcement of a repeatable read and is essentially the
+[05:30.080 --> 05:39.400]  first committed read, so that leads to deadlocks, but it is a protection for the loss of date
+[05:39.400 --> 05:48.600]  problem, and I have just said all this for saying that okay we have a lot of consistency
+[05:48.600 --> 06:00.160]  across the cluster, right, across the cluster nodes, but this level isolation is respected
+[06:00.160 --> 06:07.640]  as it was in one node itself, but there is something that is missing, what is the next
+[06:07.680 --> 06:12.880]  question, what about the semantics, right, there are the semantics of these isolation
+[06:12.880 --> 06:20.920]  levels preserved at cluster level, they are not, because for that we have WS3 same weight
+[06:20.920 --> 06:30.680]  which enforce the read commit semantics at cluster level, so once you have that you don't
+[06:30.720 --> 06:43.880]  have any potential read after write, right, but it is a very, that, you know, at what
+[06:43.880 --> 06:48.120]  cost, you have elevated now the semantics to the semantics that you probably wanted from
+[06:48.120 --> 06:58.000]  the beginning at cluster level, but what is the cost of that, so we are going to provide
+[06:58.000 --> 07:06.000]  some numbers, what is the cost of that, and now as in every measurement marking thing,
+[07:06.000 --> 07:10.480]  these are, there are a lot of things that we can discuss here, I am going just to provide
+[07:10.480 --> 07:16.440]  some numbers that I think that are representative from what we have tested, but, you know, there
+[07:16.440 --> 07:22.920]  can always be discussion, so this is the system, and just saying that because just for the
+[07:22.920 --> 07:27.200]  setup that you are going to see, if you have a system that is alike, you will see that
+[07:27.200 --> 07:32.880]  CPU, not bottleneck, memory, not bottleneck, and disk, not bottleneck, what we are seeing
+[07:32.880 --> 07:39.640]  is the performance in the cluster where it is not fully, there is no resource constraint
+[07:39.640 --> 07:48.040]  in more than one resource at the same time, so the versions, these are the versions, probably
+[07:48.040 --> 07:54.920]  the infra will be available if someone wants to try itself, so the versions, this is the
+[07:54.920 --> 07:59.760]  version that I am using, and the network is a dockeraceous infra with 500 microseconds
+[07:59.760 --> 08:06.200]  delay imposed for one millisecond RTT between the nodes, and that is because, you know,
+[08:06.200 --> 08:12.520]  you cannot benchmark a cluster with zero network latency, especially because you are killing
+[08:12.520 --> 08:23.560]  the whole point of benchmarking, so cluster, let's start talking about some numbers, single
+[08:23.560 --> 08:29.840]  primary grids will be against multi-primary grids, so the first you benchmark like this
+[08:29.840 --> 08:34.440]  and you see that multi-primary grids outperform the single primary grids, and you are like
+[08:34.440 --> 08:44.680]  what, that's wonderful, that's what I wanted, more nodes, more grids, around 70% more grids,
+[08:44.680 --> 08:47.560]  that's incredible, right?
+[08:47.560 --> 08:51.720]  Okay, this is not the truth, and why is it not the truth?
+[08:51.720 --> 08:56.920]  Because there is a lot of lies that we tell ourselves when we do benchmarking, and this
+[08:56.920 --> 09:02.480]  is pretty much the super ideal scenario for a replication of a multi-primary, which is
+[09:02.480 --> 09:07.760]  transactions, only grids, I don't care about many synchronization problems that will arise
+[09:07.760 --> 09:13.320]  of the level of isolation that we have talked before, and all nodes are equally busy because
+[09:13.320 --> 09:19.120]  I have decided the load is distributed and the queries are all the same, and all take
+[09:19.120 --> 09:20.120]  the same time.
+[09:20.120 --> 09:27.320]  Okay, of course, perfect throughput, because everything takes the same time all the time.
+[09:27.320 --> 09:35.160]  Same with grids, all the grids, and you have crazy amount of throughput yourself, but it's
+[09:35.160 --> 09:39.760]  not also outperforming like before.
+[09:39.760 --> 09:48.640]  Now Gaussian, the same ideal, now mix it to read-write, now we start seeing some more
+[09:48.640 --> 09:50.080]  real stuff.
+[09:50.080 --> 09:52.680]  So what happens when I mix the load?
+[09:52.680 --> 09:58.600]  Well, obviously numbers go down very hard.
+[09:58.600 --> 10:01.240]  Now this is the cluster grids, cluster reads.
+[10:01.240 --> 10:07.200]  We have dropped from 30,000 to around 10,000 reads, and we have dropped from, I think it
+[10:07.200 --> 10:12.360]  was like 5,000, 6,000 to what it looks like between 2,000 and 3,000.
+[10:12.360 --> 10:17.280]  So it's half the reads and half the grids, reads probably one-third.
+[10:17.280 --> 10:20.200]  This is equally distributed load.
+[10:20.200 --> 10:29.560]  Now we compare the cluster with just one node of the cluster.
+[10:29.560 --> 10:36.080]  Now it's all the same load, this mixed load, but one node.
+[10:36.080 --> 10:41.640]  And now we have 15% more grids and 19% more reads, but it reverses.
+[10:41.640 --> 10:45.800]  Now the single node is outperforming the whole cluster.
+[10:46.800 --> 10:54.480]  This makes sense, because you're in a mixed load, and in a mixed load like that against
+[10:54.480 --> 10:58.320]  all the nodes, you have a lot of collisions, you have a lot of problems, and that's all
+[10:58.320 --> 11:02.440]  gone in one single node.
+[11:02.440 --> 11:07.840]  But this is not anything that you're not suspecting, this is just a problem, this is just usual.
+[11:07.840 --> 11:11.960]  This is how it's supposed to be.
+[11:12.120 --> 11:20.560]  What we want is to increase the reads, because we have 30,000 reads and now we have 10,000,
+[11:20.560 --> 11:23.640]  so let's try to improve that.
+[11:23.640 --> 11:29.480]  So let's make a read-reader split over the cluster and see what happens.
+[11:29.480 --> 11:35.360]  So if we do a read-reader split, and this is HA proxy, by the way, this field part of
+[11:35.360 --> 11:40.800]  the vermin are going to be HA proxy because this is the dumbiest read-reader split.
+[11:40.800 --> 11:46.760]  We have a port for reads, we have a port for reads, and that's it.
+[11:46.760 --> 11:52.080]  So the cluster reads, we see that they are more the same as we had before, but then we
+[11:52.080 --> 12:00.520]  have where a split reads, which go insanely up, and our grades has gone down a little
+[12:00.520 --> 12:01.520]  bit.
+[12:01.520 --> 12:07.800]  So we are compromising our grades by our reads, and that also makes sense, because by doing
+[12:07.800 --> 12:12.200]  that amount of reads in the whole cluster, we are creating a lot of pressure in the other
+[12:12.200 --> 12:20.600]  cluster nodes, because this is maximum cluster throughput, like 10%, 50% of the total cluster
+[12:20.600 --> 12:25.280]  throughput on reads, where it is fully on reads.
+[12:25.280 --> 12:28.760]  So you're compromising a lot, and you're losing some grades.
+[12:28.760 --> 12:33.040]  So well, that's okay, that's okay.
+[12:33.040 --> 12:38.240]  But we will, in this journey of talking about the semantics and the synchronization, and
+[12:38.240 --> 12:42.400]  I have just done the dumbiest read-reader split in which I don't care about any read-after
+[12:42.400 --> 12:46.360]  grades or anything, right, the semantics.
+[12:46.360 --> 12:57.120]  So what happens if I now enable the synchronization for the readers, and I enable the full cluster
+[12:57.120 --> 13:03.080]  read-committed semantics, okay, that's fine.
+[13:03.080 --> 13:10.960]  So what happens is that we go back to basically the same performance that we were having against
+[13:10.960 --> 13:16.200]  the whole cluster, which makes sense, because now instead of writing against everyone, you
+[13:16.200 --> 13:23.000]  are writing against one and reading from the others, but waiting for the replication.
+[13:23.000 --> 13:32.440]  So we can see that the split reads go between the same frames, is split reads still win,
+[13:32.440 --> 13:39.680]  but it's marginal, and speed writes still win a little bit, but it's also marginal.
+[13:39.680 --> 13:46.120]  So we have created, now we have the whole cluster having the nice semantics that we wanted and
+[13:46.120 --> 13:54.400]  etc., but we are in, we haven't fixed our performance throughput.
+[13:54.400 --> 13:57.240]  So what can we do in this scenario?
+[13:57.240 --> 14:02.160]  Because what looks like we need a little bit more complicated logic, we are in square one
+[14:02.160 --> 14:06.680]  of the problem.
+[14:06.680 --> 14:11.360]  Read-side, what do I say, I'm sorry, read-side above the original read-write, writes are
+[14:11.360 --> 14:19.240]  below the original read-write, and we still need protections for our critical reads.
+[14:19.240 --> 14:25.000]  Okay, an alternative for avoiding this, we'll be using a single writer for a multi-premier
+[14:25.000 --> 14:31.640]  cluster, which looks like, for what we had seen before, it shouldn't be like a very
+[14:31.640 --> 14:38.920]  bad performance trade-off in terms of whole cluster grids, and then we re-read the critical
+[14:38.920 --> 14:49.560]  reads only to the master, and then we, for to the replica, we choose, we choose to read
+[14:49.560 --> 14:54.200]  all the non-critical reads to the other replicas.
+[14:54.200 --> 15:02.760]  So critical reads to the primary, okay, and now we're being processed equally to the picture,
+[15:02.760 --> 15:07.560]  because that's something that we can do with process equally very easily.
+[15:07.560 --> 15:11.560]  Contrary to the Mexico-Purilus, which offers you both of the things that you need, which
+[15:11.560 --> 15:17.520]  is reverection and anthropocontrol.
+[15:17.520 --> 15:25.600]  The testing scenario, we are going to have a 10-90 ratio of writes versus reads, we are
+[15:25.600 --> 15:30.440]  going to have a 5% of critical reads and a 95% of regular reads.
+[15:30.880 --> 15:42.400]  Okay, which is, well, I would say that changing this into a more balanced ratio with an impact,
+[15:42.400 --> 15:48.760]  okay, with an impact so much, thank you, with an impact so much the performance, the problem
+[15:48.760 --> 15:54.520]  is that if the total throughput is what you care about, okay, so the ratio is not as important
+[15:54.520 --> 15:59.120]  as the, how much you are going to stress the cluster with the throughput that you want
+[15:59.120 --> 16:03.080]  for that ratio.
+[16:03.080 --> 16:09.240]  So now we're being processed equally into the picture.
+[16:09.240 --> 16:15.160]  In this scenario, these are the non-critical reads, these are the critical reads, and these
+[16:15.160 --> 16:18.800]  are the writes.
+[16:18.800 --> 16:25.480]  So we have improved almost a 50% on non-critical reads, we are retaining more or less the write
+[16:25.480 --> 16:39.640]  load, and we have an extra 1,000 reads in the critical reads.
+[16:39.640 --> 16:43.920]  So we are trying to, we have able to preserve the great throughput, increase the throughput
+[16:43.920 --> 16:51.840]  of our 50%, and this is against the whole cluster read load and progress with the synchronization
+[16:51.840 --> 16:52.840]  enabled.
+[16:53.840 --> 16:56.320]  And this is the most important part of it.
+[16:56.320 --> 17:01.880]  This is like this, because I decided that it was going to be like this, because if I
+[17:01.880 --> 17:08.120]  went back here, and I decided that I am not going to limit the throughput on the reads,
+[17:08.120 --> 17:14.640]  I will go as up as almost the whole cluster throughput, and I will compromise the writes
+[17:14.640 --> 17:20.840]  again, that will go below what you were seeing before at any time in another benchmark.
+[17:21.280 --> 17:22.360]  And why is that?
+[17:22.360 --> 17:25.520]  Because the total cluster throughput is what it is.
+[17:25.520 --> 17:29.040]  So what you need is to control what you want to do with that throughput.
+[17:29.040 --> 17:35.480]  You cannot expect just to get more reads for free.
+[17:35.480 --> 17:42.800]  So the conclusions, multi-primary clusters can be a lot of benefit for you, let's please
+[17:42.800 --> 17:43.800]  set up.
+[17:43.800 --> 17:46.640]  And it's just like this.
+[17:46.640 --> 17:49.560]  System measurements analysis is really hard.
+[17:50.560 --> 17:52.640]  Really, really hard.
+[17:52.640 --> 17:58.560]  And especially benchmarking is also very hard, because most of the things that I have said
+[17:58.560 --> 18:03.320]  here, they are right, but they are right in this scenario.
+[18:03.320 --> 18:08.480]  And if you change slightly the scenario, it may not be.
+[18:08.480 --> 18:12.160]  Adapting the system to your workload is what you always want to do.
+[18:12.160 --> 18:16.000]  A different workload will change everything.
+[18:17.000 --> 18:21.120]  The final conclusion is that control is everything.
+[18:21.120 --> 18:24.920]  Being able to control the throughput and being able to control what you want to do with your
+[18:24.920 --> 18:30.600]  load is what is going to decide the performance of the cluster, more than anything else.
+[18:30.600 --> 18:34.880]  And for that, process SQL is a great tool.
+[18:34.880 --> 18:41.280]  And thank you a lot for your attention, and happy specificity.
+[18:41.280 --> 18:45.760]  You have five minutes for the questions.
+[18:45.760 --> 18:46.760]  Okay.
+[18:46.760 --> 18:53.560]  How do you know the maximum throughput of a cluster?
+[18:53.560 --> 18:55.360]  You just measure.
+[18:55.360 --> 19:01.280]  Like you create an artificial environment, I would say, where I say that it's very hard,
+[19:01.280 --> 19:05.960]  because it's probably not going to be the typical load that you're going to have.
+[19:05.960 --> 19:13.040]  You try to replicate, and then you measure, because otherwise it's...
+[19:13.040 --> 19:17.960]  I would say that you are not going to know which is the limiting factor until you try.
+[19:21.960 --> 19:25.960]  What did you use to measure the workload?
+[19:25.960 --> 19:27.120]  Seizebench.
+[19:27.120 --> 19:36.400]  I was using Seizebench, the Lua, one with all the scripts, and the old, very old, magical
+[19:36.400 --> 19:43.840]  one, because it has, let's use, because you can do the same thing with the Lua one.
+[19:43.840 --> 19:49.480]  You can create your own things and et cetera, but I just wanted to benchmark also what if
+[19:49.480 --> 19:53.600]  I am selecting from different tables of the one that I am writing for and that thing.
+[19:53.600 --> 19:56.960]  And name selection is not something that you have in the Lua one by default.
+[19:56.960 --> 20:00.120]  So you don't have throughput limiting by default.
+[20:00.120 --> 20:02.560]  And it's something that you have in the old one in the options.
+[20:02.560 --> 20:06.840]  So for convenience, I use a mix.
+[20:06.840 --> 20:14.320]  Which, by the way, no, it impacts the performance, depending on what you're measuring.
+[20:14.320 --> 20:18.760]  If you're measuring in process equal, if you're measuring against the other proxy, it's different
+[20:18.760 --> 20:20.640]  depending even on the tool that you're choosing.
+[20:20.640 --> 20:30.640]  You said that you used Seizebench, I wanted to hear, because in my test, when I was trying
+[20:30.640 --> 20:38.640]  to do multi-write multiple loads, I noticed that the drop of write performance was because
+[20:38.640 --> 20:40.640]  of write complete.
+[20:40.640 --> 20:41.640]  Yes.
+[20:41.640 --> 20:47.640]  So if it's not right here to me, how you're achieving, like, better for multi-writing,
+[20:48.640 --> 20:52.640]  because you need to certify all loads.
+[20:52.640 --> 20:58.640]  How I achieve better throughput writing to a single note that the whole, to multiple
+[20:58.640 --> 20:59.640]  notes.
+[20:59.640 --> 21:00.640]  Yeah.
+[21:00.640 --> 21:07.640]  Because from what I see, you have better performance writing multiple loads than a single load.
+[21:07.640 --> 21:12.640]  Probably because I was having very, very few conflicts, because the size of the table
+[21:12.640 --> 21:14.640]  that I choose were very big.
+[21:14.640 --> 21:18.640]  And I was having very, very few conflicts during that testing.
+[21:18.640 --> 21:23.640]  It was a very, very favorable scenario for writing.
+[21:23.640 --> 21:25.640]  That's why I say that it's super ideal.
+[21:25.640 --> 21:29.640]  When I say that it was ideal, it was because it's super, super ideal.
+[21:29.640 --> 21:30.640]  Yeah.
+[21:30.640 --> 21:31.640]  I don't know.
+[21:37.640 --> 21:39.640]  Thank you very much.
+[21:39.640 --> 21:40.640]  Thank you.
+[21:42.640 --> 21:43.640]  Thank you.

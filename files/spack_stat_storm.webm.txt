@@ -1,0 +1,375 @@
+[00:00.000 --> 00:10.320]  All right, it works, cool.
+[00:10.320 --> 00:12.400]  So welcome all to this talk.
+[00:12.400 --> 00:15.440]  My first time at FOSDAM, so I'm excited.
+[00:15.440 --> 00:20.200]  I will be talking about taming the stat storm in SPAC.
+[00:20.200 --> 00:24.560]  So what is the stat storm and why should it be tamed?
+[00:24.560 --> 00:29.960]  This storm was coined, let's say, by the Geeks developers who happened to be also here.
+[00:30.920 --> 00:37.560]  And it's for you to be affected by this problem, you have a need a few ingredients.
+[00:37.560 --> 00:43.360]  One is a package manager that installs every package into its own prefix.
+[00:43.360 --> 00:46.960]  NICs, for instance, Geeks or SPAC.
+[00:46.960 --> 00:52.960]  You need a loader, like a dynamic loader or interpreter like Python,
+[00:52.960 --> 00:56.960]  that has to locate dependencies at application startup.
+[00:56.960 --> 01:01.960]  And you have to have a typical HPC file system that is slow and shared.
+[01:01.960 --> 01:07.960]  And with all these ingredients, you get horrible startup times of applications.
+[01:07.960 --> 01:09.960]  And that is what the stat storm is about.
+[01:12.960 --> 01:16.960]  First, before we look into the problem more, a little bit about SPAC.
+[01:16.960 --> 01:19.960]  I guess Todd will also introduce it.
+[01:19.960 --> 01:25.960]  But SPAC is a flexible package manager, primarily targeted for HPC.
+[01:25.960 --> 01:32.960]  One of the nice things or that attracted me to it was that you don't need root privileges to start using it.
+[01:32.960 --> 01:39.960]  And it builds on top of your distro so it can also integrate with, like, MPI libraries that are already there.
+[01:39.960 --> 01:44.960]  It supports installing multiple flavors of the same package.
+[01:44.960 --> 01:49.960]  And I'm saying flavors because a version does not really describe a specific package.
+[01:49.960 --> 01:52.960]  There are, like, tons of compile time toggles.
+[01:52.960 --> 01:55.960]  Usually, you can swap dependencies in and out.
+[01:55.960 --> 02:02.960]  And, well, a version does not uniquely describe a package.
+[02:02.960 --> 02:06.960]  And it also comes with a very powerful dependency solver.
+[02:06.960 --> 02:14.960]  And it is quite easy to contribute to it because the package recipes are written in Python.
+[02:14.960 --> 02:26.960]  So, for example, below here is how you could write part of a recipe to specify, like, a conditional dependency on Python under, like, these particular conditions.
+[02:26.960 --> 02:35.960]  And if you're used to, like, Appcat install or whatever, you can do that basically with SPAC2.
+[02:35.960 --> 02:38.960]  You can say SPAC install FFTW.
+[02:38.960 --> 02:40.960]  But you can also be more precise.
+[02:40.960 --> 02:42.960]  That is unique about SPAC, I think.
+[02:42.960 --> 02:51.960]  You can say SPAC install FFTW and set the variants to, like, compile time toggle to, like, precision.
+[02:51.960 --> 02:53.960]  I want float and doubles.
+[02:53.960 --> 02:56.960]  I want FFTW to be compiled with MPI.
+[02:56.960 --> 03:00.960]  And the particular provider for MPI will be MPitch.
+[03:00.960 --> 03:06.960]  And it should be not version 4, but limited to or constrained to version 3.
+[03:06.960 --> 03:08.960]  So that is the input you give to SPAC.
+[03:08.960 --> 03:16.960]  And then it goes for a think and it spits out a dependency graph with all the details filled in.
+[03:16.960 --> 03:19.960]  So there's, like, the concretization process.
+[03:19.960 --> 03:22.960]  It's called SPAC.
+[03:22.960 --> 03:25.960]  That can then be installed.
+[03:25.960 --> 03:31.960]  And every package, as I said, it will be installed into its own prefix.
+[03:31.960 --> 03:38.960]  And the directory name of this prefix will contain a hash derived from the dependency graph.
+[03:38.960 --> 03:42.960]  And that allows you to have multiple packages installed at the same time.
+[03:42.960 --> 03:50.960]  So that makes SPAC a intentionally non-file system hierarchy standard compliant package manager.
+[03:50.960 --> 03:54.960]  So there is no root level bin directory or a lib directory.
+[03:54.960 --> 03:56.960]  Everything is in its own prefix.
+[03:56.960 --> 04:00.960]  So it can look like this, for instance.
+[04:01.960 --> 04:08.960]  But then the problem is that packages have to actually be located at runtime.
+[04:08.960 --> 04:12.960]  And I guess the classical solution, I mean, it's not very unique to SPAC.
+[04:12.960 --> 04:16.960]  The classical solution in HPC is to use, like, module files, for example.
+[04:16.960 --> 04:20.960]  So you log into a system, you do module load, FFTW.
+[04:20.960 --> 04:27.960]  And before you know it, you have dozens of kilobytes of environment variables set for binaries,
+[04:27.960 --> 04:31.960]  typically like LDLibraryPath is filled with stuff.
+[04:31.960 --> 04:35.960]  And for Python, PythonPath, et cetera.
+[04:35.960 --> 04:40.960]  This is not necessarily great because, especially for SPAC,
+[04:40.960 --> 04:44.960]  if you want to use SPAC executables and also system executables,
+[04:44.960 --> 04:51.960]  if SPAC sets LDLibraryPath, then your system executables may change behavior.
+[04:51.960 --> 04:57.960]  Or if you use, like, two different SPAC executables with conflicting dependencies,
+[04:57.960 --> 05:02.960]  and you have this one global variable that might also lead to issues.
+[05:02.960 --> 05:09.960]  So these environment variables are not the way to solve it.
+[05:09.960 --> 05:16.960]  Let's focus just on ELF binaries or executables libraries on Linux.
+[05:16.960 --> 05:24.960]  If you have an executable, like an ELF executable,
+[05:24.960 --> 05:31.960]  in there you find a section that says what interpreters you use.
+[05:31.960 --> 05:35.960]  That is the dynamic loader. That's at least one thing that is mentioned by absolute path.
+[05:35.960 --> 05:39.960]  So that's what the kernel finds. The kernel starts the loader.
+[05:39.960 --> 05:42.960]  The loader interprets the executable.
+[05:42.960 --> 05:47.960]  It needs to find a bunch of libraries in the dynamic section.
+[05:47.960 --> 05:51.960]  It recursively finds these libraries.
+[05:51.960 --> 05:55.960]  So that's basically how the story goes.
+[05:55.960 --> 06:00.960]  And then we want users to be able to run executables without all the magic variables,
+[06:00.960 --> 06:02.960]  or the opaque variables.
+[06:02.960 --> 06:06.960]  And the typical solution, which I think is shared among Nix, Geeks, SPAC,
+[06:06.960 --> 06:11.960]  is to have a compiler wrapper that injects R-paths.
+[06:11.960 --> 06:16.960]  And R-paths are basically binary local search paths
+[06:16.960 --> 06:20.960]  so that you don't have to use global variables anymore.
+[06:20.960 --> 06:25.960]  The exact behavior of the loader then kind of depends on what libc you use.
+[06:25.960 --> 06:31.960]  So for instance, in glibc, the R-paths beat the library path during the search,
+[06:31.960 --> 06:33.960]  which is also something that SPAC exploits.
+[06:33.960 --> 06:38.960]  That's the way that SPAC actually can run executables on messy HPC systems
+[06:38.960 --> 06:41.960]  that do set these variables for other things.
+[06:41.960 --> 06:45.960]  On muscle libc, the search behavior is slightly different,
+[06:45.960 --> 06:50.960]  but you don't see muscle that much in HPC anyways.
+[06:50.960 --> 06:56.960]  However, there is a cost to R-path, and that is a runtime search.
+[06:56.960 --> 07:01.960]  Normally for system executables, what happens is that if you start the executable,
+[07:01.960 --> 07:04.960]  the loader will basically just loop over the things that it needs
+[07:04.960 --> 07:10.960]  and look it up in a global cache, like the loader cache.
+[07:10.960 --> 07:16.960]  And this is quick, and nobody complains about startup times, I guess.
+[07:16.960 --> 07:19.960]  In SPAC, you have at least a double loop,
+[07:19.960 --> 07:22.960]  and in glibc you even have maybe a triple loop.
+[07:22.960 --> 07:26.960]  You loop over the need libraries, the search paths, the R-paths,
+[07:26.960 --> 07:33.960]  and then there's hardware-related sub-directories of the R-paths
+[07:33.960 --> 07:36.960]  where you can maybe find optimized libraries,
+[07:36.960 --> 07:38.960]  which is actually kind of redundant in the SPAC world
+[07:38.960 --> 07:43.960]  because we optimize every package for a specific target,
+[07:43.960 --> 07:46.960]  so there is no need to look in sub-directories.
+[07:46.960 --> 07:55.960]  Well, in any case, there is this triple loop where eventually there is some syscall.
+[07:55.960 --> 08:00.960]  And generally, that is not a big deal because in general,
+[08:00.960 --> 08:02.960]  how many dependencies do you really have?
+[08:02.960 --> 08:05.960]  If you look at Git, maybe there are three packages involved,
+[08:05.960 --> 08:08.960]  so there is not a whole lot of searching going on,
+[08:08.960 --> 08:17.960]  but things get really wild if you look at, for instance, Emacs with GTK support.
+[08:17.960 --> 08:19.960]  This is not the whole...
+[08:19.960 --> 08:22.960]  It doesn't fit on the slide to show all the dependencies,
+[08:22.960 --> 08:26.960]  and you can get like, I don't know, like 150 libraries
+[08:26.960 --> 08:33.960]  with like about 700 DT-meeted entries in the binaries.
+[08:33.960 --> 08:41.960]  Yeah, there is a lot of load, runtime overhead, or startup overhead.
+[08:41.960 --> 08:45.960]  If you use strays, you can actually see what happens,
+[08:45.960 --> 08:51.960]  and you get horrible things like about 5,000 syscalls,
+[08:51.960 --> 08:56.960]  of which 4,000 are basically searching for a library
+[08:56.960 --> 09:00.960]  in a path where it can't find it.
+[09:00.960 --> 09:02.960]  So yeah, there is some overhead to it.
+[09:02.960 --> 09:07.960]  And even, like I tried this on the production system,
+[09:07.960 --> 09:10.960]  on a warm cache, there is like very noticeable overhead
+[09:10.960 --> 09:16.960]  where a lot of time is spent in like system time,
+[09:16.960 --> 09:20.960]  just to, I don't know, like print the version of Emacs,
+[09:20.960 --> 09:27.960]  which should really just print immediately, of course.
+[09:27.960 --> 09:30.960]  So with the dynamic loader in spec,
+[09:30.960 --> 09:36.960]  you typically have an overhead that is shifting towards loading objects
+[09:36.960 --> 09:41.960]  and not like relocation where the dynamic loader is usually known to be slow for.
+[09:41.960 --> 09:43.960]  And then HPC is really a problem,
+[09:43.960 --> 09:46.960]  because typically you don't start like one process,
+[09:46.960 --> 09:53.960]  but you start like a whole series of processes among different nodes.
+[09:53.960 --> 09:57.960]  So yeah, there is a good reason to try and improve this.
+[09:57.960 --> 10:02.960]  So obvious solution would be to just switch to static linking,
+[10:02.960 --> 10:06.960]  because there is no dynamic loader involved anymore.
+[10:06.960 --> 10:12.960]  But generally, there is still use for shared libraries, I would say.
+[10:12.960 --> 10:15.960]  For one, you can avoid all the symbol clashes,
+[10:15.960 --> 10:21.960]  especially I feel like these huge graphs or dependency graphs,
+[10:21.960 --> 10:23.960]  like with the Emacs example,
+[10:23.960 --> 10:28.960]  the odds that you find like some symbol that's being used twice are quite high,
+[10:28.960 --> 10:31.960]  and shared libraries have good ways to say like,
+[10:31.960 --> 10:34.960]  this is my public interface and this is my private interface,
+[10:34.960 --> 10:39.960]  and if you have clashes in the private interface, well, there is no problem.
+[10:39.960 --> 10:44.960]  Also, LD preloading is still nice to have, I would say,
+[10:44.960 --> 10:47.960]  like swapping out a malloc just to try,
+[10:47.960 --> 10:53.960]  like will this improve my performance, for instance.
+[10:53.960 --> 10:55.960]  So that would be gone with static linking,
+[10:55.960 --> 10:58.960]  and there are some other issues, like, I don't know.
+[10:58.960 --> 11:00.960]  Dynamic languages, if you have to interface with them,
+[11:00.960 --> 11:05.960]  you kind of have to use shared libraries anyways.
+[11:05.960 --> 11:11.960]  The geek solution that's already there for, I don't know, like over a year at least,
+[11:11.960 --> 11:14.960]  is to patch GLEPSE,
+[11:14.960 --> 11:20.960]  and basically they create a package local cache of libraries,
+[11:20.960 --> 11:27.960]  so that you basically know like the library name maps to a particular path.
+[11:27.960 --> 11:30.960]  It is made package local instead of global,
+[11:30.960 --> 11:32.960]  which I think is quite elegant,
+[11:32.960 --> 11:37.960]  but for SPAC it is not really usable because it requires GLEPSE.
+[11:37.960 --> 11:41.960]  Muscle doesn't have a loader cache, for instance,
+[11:41.960 --> 11:43.960]  and it also requires patching in GLEPSE,
+[11:43.960 --> 11:47.960]  and we currently don't control GLEPSE.
+[11:47.960 --> 11:50.960]  So it's for SPAC not really an option.
+[11:50.960 --> 11:57.960]  Another solution would be to emulate a loader cache by simlinking.
+[11:57.960 --> 12:02.960]  So in our prefix, we add like a bunch of simlinks from,
+[12:02.960 --> 12:07.960]  these are the libraries that we probably need to the dependencies where they are,
+[12:07.960 --> 12:10.960]  and then we can replace nrpass into one,
+[12:10.960 --> 12:12.960]  and so there's like a single search path,
+[12:12.960 --> 12:15.960]  which is also easy, which also works for muscle,
+[12:15.960 --> 12:18.960]  and it's a more recommended way to, like according to the muscle made in this,
+[12:18.960 --> 12:21.960]  to emulate this cache.
+[12:21.960 --> 12:23.960]  But there are some technical issues,
+[12:23.960 --> 12:28.960]  like you can still have relative R paths with origin semantics,
+[12:28.960 --> 12:31.960]  and they become relative to a simlink,
+[12:31.960 --> 12:36.960]  and not to the actual library in the prefix directory where they are,
+[12:36.960 --> 12:39.960]  so it may not always work.
+[12:39.960 --> 12:43.960]  Another solution, shrinkwrap.
+[12:43.960 --> 12:47.960]  This is actually done a bit more recent,
+[12:47.960 --> 12:54.960]  and it's currently a pull request to patch-elve from a NixOS project,
+[12:54.960 --> 12:58.960]  and their idea is basically to replace all the,
+[12:58.960 --> 13:03.960]  all the DT-needed entries with absolute paths of like the transitive closure.
+[13:03.960 --> 13:06.960]  So if you run LOD, you're executable,
+[13:06.960 --> 13:08.960]  you get a bunch of libraries out of that,
+[13:08.960 --> 13:11.960]  and all of them go into the DT-needed entries,
+[13:11.960 --> 13:14.960]  and by absolute path and dynamic loader will do no search,
+[13:14.960 --> 13:16.960]  it will just directly open them.
+[13:16.960 --> 13:18.960]  So it's interesting.
+[13:18.960 --> 13:20.960]  It's built on top of patch-elve,
+[13:20.960 --> 13:23.960]  which is also used like a lot in Nix.
+[13:23.960 --> 13:27.960]  At the same time, patching L files that way is kind of tedious,
+[13:27.960 --> 13:30.960]  and there are bugs every now and then,
+[13:30.960 --> 13:34.960]  and there are some side effects I'll talk about in a bit.
+[13:34.960 --> 13:38.960]  But before we look at the current spec solution,
+[13:38.960 --> 13:40.960]  let's step back a bit.
+[13:40.960 --> 13:43.960]  Like a typical user issue
+[13:43.960 --> 13:47.960]  who is not very familiar with loader internals or whatever,
+[13:47.960 --> 13:51.960]  they build their software on an HPC system,
+[13:51.960 --> 13:54.960]  they submit their jobs, and it doesn't work,
+[13:54.960 --> 13:57.960]  and like the loader cannot find particular libraries
+[13:57.960 --> 14:00.960]  that were located during the build, but not at runtime,
+[14:00.960 --> 14:05.960]  or they suddenly end up with the wrong Lipson and C++ or whatever.
+[14:05.960 --> 14:08.960]  That is a bit of an issue with the discrepancy
+[14:08.960 --> 14:11.960]  between like the linker and the loader,
+[14:11.960 --> 14:14.960]  and the basic example is like this,
+[14:14.960 --> 14:17.960]  you create a shared library, you create an executable,
+[14:17.960 --> 14:19.960]  you link to the library,
+[14:19.960 --> 14:23.960]  this is a libf, you run the executable,
+[14:23.960 --> 14:25.960]  and oh no, it cannot find the thing.
+[14:25.960 --> 14:28.960]  Obviously, we can understand why that happens,
+[14:28.960 --> 14:30.960]  but at the same time it's a bit dumb,
+[14:30.960 --> 14:34.960]  like you just linked it, why can't you not find it right now?
+[14:34.960 --> 14:38.960]  In general, of course, we are probably going to install the library,
+[14:38.960 --> 14:40.960]  and maybe it's in a slightly different location,
+[14:40.960 --> 14:44.960]  so we cannot fix the path ahead of time,
+[14:44.960 --> 14:46.960]  but if you think about back,
+[14:46.960 --> 14:49.960]  all the dependencies, they are pretty much fixed
+[14:49.960 --> 14:51.960]  in their location in a prefix,
+[14:51.960 --> 14:53.960]  so they're not going to move anywhere,
+[14:53.960 --> 15:01.960]  so if linking immediately binds the library path,
+[15:01.960 --> 15:03.960]  that would be great.
+[15:03.960 --> 15:08.960]  And one way to do that is if you think about what the linker does,
+[15:08.960 --> 15:10.960]  it does a whole lot of things,
+[15:10.960 --> 15:13.960]  but one of the things is it copies the shared object name
+[15:13.960 --> 15:15.960]  of the library that you're linking to
+[15:15.960 --> 15:18.960]  into the executable, a library that needs it.
+[15:18.960 --> 15:23.960]  In the dynamic loader, it performs a search for that name,
+[15:23.960 --> 15:25.960]  always except if there is like a forward slash,
+[15:25.960 --> 15:28.960]  or like a directory separator in it,
+[15:28.960 --> 15:30.960]  then it directly opens it.
+[15:30.960 --> 15:33.960]  So what if you create a library
+[15:33.960 --> 15:36.960]  with a shared object name that contains a forward slash?
+[15:36.960 --> 15:38.960]  That is the trick,
+[15:38.960 --> 15:42.960]  and actually the trick is also quite popular on macOS,
+[15:42.960 --> 15:45.960]  just not very popular on Linux.
+[15:45.960 --> 15:51.960]  So what you get is any linker that you would use would,
+[15:51.960 --> 15:56.960]  if you, sorry, any linker that you would use
+[15:56.960 --> 16:03.960]  would basically copy a path directly into a DC-needed entry.
+[16:03.960 --> 16:05.960]  So that raises the question,
+[16:05.960 --> 16:08.960]  can you just change shared object names?
+[16:08.960 --> 16:12.960]  And generally, yes, you could.
+[16:12.960 --> 16:14.960]  And they're mostly like a cache key anyways,
+[16:14.960 --> 16:17.960]  it's not a very special field in a binary.
+[16:17.960 --> 16:21.960]  There is some possibility to have like introspection
+[16:21.960 --> 16:24.960]  with deal info in C.
+[16:24.960 --> 16:27.960]  It is rarely ever used,
+[16:27.960 --> 16:29.960]  so I've only really seen it in Java,
+[16:29.960 --> 16:34.960]  where they check like what Tlpc version is used, for instance.
+[16:34.960 --> 16:37.960]  But then, okay, in spec, we can say like,
+[16:37.960 --> 16:42.960]  okay, leave that so name there then for that specific package.
+[16:42.960 --> 16:44.960]  And that is basically,
+[16:44.960 --> 16:49.960]  that leads us to the current trick that spec uses.
+[16:49.960 --> 16:54.960]  So we have an opt-in setting in spec 0.19
+[16:54.960 --> 16:57.960]  that you can enable with this command.
+[16:57.960 --> 17:01.960]  And basically what it does is,
+[17:01.960 --> 17:03.960]  after something gets installed,
+[17:03.960 --> 17:07.960]  we replace all the shared object names with the path
+[17:07.960 --> 17:10.960]  where the library is located itself.
+[17:10.960 --> 17:13.960]  And then what you get is not only better performance
+[17:13.960 --> 17:15.960]  because there's no search anymore,
+[17:15.960 --> 17:18.960]  but also more like stability or hardening
+[17:18.960 --> 17:21.960]  because whatever you link to is also what you get at runtime.
+[17:21.960 --> 17:25.960]  There's no discrepancy anymore between the linker and the loader.
+[17:25.960 --> 17:28.960]  They will always use the same libraries.
+[17:28.960 --> 17:30.960]  It also works outside of spec,
+[17:30.960 --> 17:32.960]  so if there's like things installed with spec
+[17:32.960 --> 17:34.960]  and people start linking against it,
+[17:34.960 --> 17:38.960]  they will automatically always use the spec libraries
+[17:38.960 --> 17:40.960]  without having to set environment variables
+[17:40.960 --> 17:44.960]  or setting R paths themselves.
+[17:45.960 --> 17:49.960]  It does not, in some cases, the trick happens a bit too late.
+[17:49.960 --> 17:51.960]  Like if you, I don't know, build curl,
+[17:51.960 --> 17:55.960]  curl links to lip curl, like intra package linking,
+[17:55.960 --> 18:00.960]  then lip call shared object name has not been replaced yet.
+[18:00.960 --> 18:02.960]  We do that past post install,
+[18:02.960 --> 18:07.960]  so sometimes there may be some small issues.
+[18:07.960 --> 18:10.960]  And last thing that I want to say about this is like,
+[18:10.960 --> 18:12.960]  how do you replace shared object names?
+[18:12.960 --> 18:16.960]  So currently we simply use patch elf.
+[18:16.960 --> 18:20.960]  It is generally good, I would say,
+[18:20.960 --> 18:22.960]  apart from the issue tracker,
+[18:22.960 --> 18:25.960]  which has multiple dozens of problems reported,
+[18:25.960 --> 18:30.960]  but it generally works.
+[18:30.960 --> 18:33.960]  But there is one downside, namely that it,
+[18:33.960 --> 18:36.960]  well, it increases the, or it reduces the,
+[18:36.960 --> 18:39.960]  or it solves the stat storm problem.
+[18:39.960 --> 18:41.960]  At the same time, it may, like,
+[18:41.960 --> 18:43.960]  change the L files in non-trivial ways
+[18:43.960 --> 18:45.960]  and create new load segments.
+[18:45.960 --> 18:49.960]  So you end up with fewer stat goals,
+[18:49.960 --> 18:52.960]  but more M-map goals, for instance.
+[18:52.960 --> 18:56.960]  So if we can avoid patch elf, that would actually be nice.
+[18:56.960 --> 19:00.960]  And then there is actually another trick that we are,
+[19:00.960 --> 19:03.960]  well, it's under consideration, or it's an open pull request,
+[19:03.960 --> 19:07.960]  to basically reserve some space
+[19:07.960 --> 19:12.960]  in the dynamic section of the executables and libraries
+[19:12.960 --> 19:16.960]  with a dummy R path.
+[19:16.960 --> 19:19.960]  And then in Python with SPAC,
+[19:19.960 --> 19:25.960]  we just move the shared object name into that placeholder space.
+[19:25.960 --> 19:29.960]  And then we can basically update executables and libraries in place,
+[19:29.960 --> 19:34.960]  and it doesn't require all the advanced patch elf logic.
+[19:35.960 --> 19:37.960]  Okay, so with that solution,
+[19:37.960 --> 19:39.960]  do we improve the startup time of e-mail,
+[19:39.960 --> 19:44.960]  or like, do we improve the e-max time to printing the version?
+[19:44.960 --> 19:48.960]  And the answer is pretty much yes.
+[19:48.960 --> 19:52.960]  So the system time goes down quite a bit, so that's good.
+[19:52.960 --> 19:57.960]  But we still don't have, we don't capture glipc,
+[19:57.960 --> 19:59.960]  so this is what the LDD output looks like.
+[19:59.960 --> 20:02.960]  It all absolutely passed, but not glipc.
+[20:02.960 --> 20:05.960]  It still search for.
+[20:05.960 --> 20:08.960]  And now we end up in a rather funny situation
+[20:08.960 --> 20:12.960]  where basically everything that the dynamic loader opens
+[20:12.960 --> 20:16.960]  or needs is found directly,
+[20:16.960 --> 20:20.960]  except that it spends about 400 syscalls looking for glipc,
+[20:20.960 --> 20:23.960]  and the loader itself is part of glipc,
+[20:23.960 --> 20:25.960]  so it feels a bit dumb.
+[20:25.960 --> 20:29.960]  But in muscle glipc, actually, that is not an issue at all
+[20:29.960 --> 20:32.960]  because they're quite smart about it.
+[20:32.960 --> 20:36.960]  The loader is actually also the glipc implementation,
+[20:36.960 --> 20:39.960]  so they never locate glipc,
+[20:39.960 --> 20:42.960]  and that's also a reason why muscle binaries
+[20:42.960 --> 20:47.960]  may start actually a little bit faster than glipc binaries.
+[20:47.960 --> 20:50.960]  But if we are now at the last issue,
+[20:50.960 --> 20:55.960]  like if we make the paths of glipc absolute or preload them,
+[20:55.960 --> 20:59.960]  then we actually finally reduce the startup time
+[20:59.960 --> 21:01.960]  to something reasonable.
+[21:01.960 --> 21:04.960]  And then the statstorm issue is solved,
+[21:04.960 --> 21:06.960]  so there are actually zero statcalls,
+[21:06.960 --> 21:14.960]  and the open-add calls are, well, significantly reduced.
+[21:14.960 --> 21:17.960]  So basically, to answer the question,
+[21:17.960 --> 21:22.960]  have we solved the statstorm spec mostly?
+[21:22.960 --> 21:26.960]  It would be easier if we also control glipc,
+[21:26.960 --> 21:30.960]  but we are not there yet.
+[21:30.960 --> 21:33.960]  But at the same time, it is definitely possible,
+[21:33.960 --> 21:38.960]  and, well, for sure, you get the second runtime for free,
+[21:38.960 --> 21:40.960]  and if you push a little bit harder,
+[21:40.960 --> 21:44.960]  we could still make the paths to glipc itself absolute,
+[21:44.960 --> 21:49.960]  for instance, and then you get the proper performance.
+[21:49.960 --> 21:52.960]  So here are some further links for, like,
+[21:52.960 --> 21:54.960]  there's also the whole discussion,
+[21:54.960 --> 21:56.960]  and Nick's going on,
+[21:56.960 --> 21:59.960]  and their issue has been open since 2017,
+[21:59.960 --> 22:02.960]  I think, where people reported this issue,
+[22:02.960 --> 22:04.960]  like slow startup times,
+[22:04.960 --> 22:07.960]  and lately there's quite some discussion
+[22:07.960 --> 22:09.960]  for them going on, too.
+[22:09.960 --> 22:11.960]  They also have the same issue.
+[22:11.960 --> 22:13.960]  They not only want to support glipc,
+[22:13.960 --> 22:15.960]  but also muscle,
+[22:15.960 --> 22:18.960]  so it's interesting to read up on that, too.
+[22:18.960 --> 22:21.960]  And I'll leave it by that. Thank you.
+[22:29.960 --> 22:31.960]  Any questions for Harman?
+[22:31.960 --> 22:40.960]  Hello.
+[22:40.960 --> 22:42.960]  Hi.
+[22:42.960 --> 22:44.960]  So I have a question.
+[22:44.960 --> 22:47.960]  So how do you load the prefixes on your software packages?
+[22:47.960 --> 22:50.960]  Do you use a module system like Elmot or something like that?
+[22:50.960 --> 22:54.960]  So we have multiple ways to actually use the software.
+[22:54.960 --> 22:58.960]  You can generate modules, yeah.
+[22:58.960 --> 23:03.960]  There is also a way to, which I like a little bit more,
+[23:03.960 --> 23:05.960]  is, like, you create an environment,
+[23:05.960 --> 23:10.960]  you add all the packages in there that you need,
+[23:10.960 --> 23:12.960]  and then you generate a view.
+[23:12.960 --> 23:19.960]  That is actually like a more classical directory structure
+[23:19.960 --> 23:22.960]  that you get out of that, where everything is merged.
+[23:22.960 --> 23:25.960]  Because, for instance, in Elmot, with the modules,
+[23:25.960 --> 23:28.960]  you can swap modules on the fly,
+[23:28.960 --> 23:31.960]  so it can be used by the user.
+[23:31.960 --> 23:35.960]  So I'm wondering if you're using these absolute paths,
+[23:35.960 --> 23:40.960]  and then one of my users decided to do a module swap
+[23:40.960 --> 23:44.960]  on the OpenMPI library, so something else.
+[23:44.960 --> 23:46.960]  How is that handled with this system?
+[23:46.960 --> 23:49.960]  So one thing that you lose is the ability,
+[23:49.960 --> 23:51.960]  like, if you use absolute paths,
+[23:51.960 --> 23:54.960]  one thing that you lose is the ability to use the library path,
+[23:54.960 --> 23:57.960]  but you can do LD preload, and to be honest,
+[23:57.960 --> 24:00.960]  I'm not sure why LD preload doesn't, well,
+[24:00.960 --> 24:03.960]  it's not used that much, but LD preload has the advantage
+[24:03.960 --> 24:05.960]  that you can very specifically talk,
+[24:05.960 --> 24:07.960]  like, I want to use this library.
+[24:07.960 --> 24:09.960]  Yeah, that's quite hard to say.
+[24:09.960 --> 24:11.960]  Yeah, but it's also not very different from, like...
+[24:11.960 --> 24:13.960]  It's prepended everywhere, so yeah.
+[24:13.960 --> 24:16.960]  It's also not very different, in my opinion,
+[24:16.960 --> 24:20.960]  from using a LD library path, but yeah.
+[24:20.960 --> 24:22.960]  Thank you.
+[24:24.960 --> 24:26.960]  Thank you.

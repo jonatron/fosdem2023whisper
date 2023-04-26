@@ -1,0 +1,513 @@
+[00:00.000 --> 00:13.400]  How's everybody feeling? Good. So if you haven't figured it out yet, I'm Chris Nova. Some people
+[00:13.400 --> 00:21.180]  call me Chris. Some people call me Nova. Just don't call me Shirley. So we're going to get
+[00:21.180 --> 00:25.000]  started with a few quick questions. There's a lot of people here. So I just want to get
+[00:25.000 --> 00:30.120]  a feel for who's in the audience. So who here knows what mastodon is? Show of your hands.
+[00:30.120 --> 00:35.200]  Okay. For folks at home, literally everybody just put their hand up. Who here knows what
+[00:35.200 --> 00:43.040]  hackaderm is? Oh, God. Sorry. So pretty much the same number of people. Who here knows
+[00:43.040 --> 00:49.160]  how to denial a service? Dadosa service? Okay. And how about just general abuse? How
+[00:49.160 --> 00:54.240]  to like just use a service? Okay. So for those of you on the camera, literally the entire
+[00:54.240 --> 01:01.480]  stadium of people just put all of their hands up. I can't believe I'm about to do this.
+[01:01.480 --> 01:09.680]  You have 45 minutes starting now. You have my full permission to DOS my shit. Take down
+[01:09.680 --> 01:16.680]  the service. You can do whatever you want. There are three known things I know of today
+[01:16.680 --> 01:20.840]  that should make this pretty easy. I think if you knew exactly what you were doing, you
+[01:20.880 --> 01:25.200]  could probably do it in about five minutes. So anyway, that's how we're going to start
+[01:25.200 --> 01:32.920]  the talk off today. So the goal of this is to wake my partner up. So she's asleep right
+[01:32.920 --> 01:39.800]  now. She's at home in Seattle. And if you're successful in disrupting the service, she
+[01:39.800 --> 01:44.520]  will get some discord notifications and we have a team of volunteers. Their phones will
+[01:44.520 --> 01:51.840]  go off. My phone will start going off. And hopefully, hopefully my puppy greets her with
+[01:51.840 --> 01:59.000]  a smile and wakes her up as there's inevitably a crisis. Okay. So the reason I wanted to
+[01:59.000 --> 02:05.040]  start this off is because we have had to do a tremendous amount of work to bring Hack
+[02:05.040 --> 02:12.360]  Derm to where it is today. So just to kind of start the slides off with some basic numbers
+[02:12.400 --> 02:17.080]  here. I don't know if y'all can see this, but this is just a public glimpse into the
+[02:17.080 --> 02:24.280]  service that's online today, just serving mastodon. And there's 44,000 users. It looks
+[02:24.280 --> 02:28.440]  like we had 200 people sign up today. I don't know how many of those people were here at
+[02:28.440 --> 02:34.640]  Fosnum. I don't really know very much about them at all. We've had 20,000 toots. Sorry,
+[02:34.640 --> 02:41.640]  we've had 789,000 toots. And we have 20,000 monthly active users. So there's been 20,000
+[02:42.040 --> 02:47.200]  people who signed into the service in the past 30 days alone. And we are currently federating
+[02:47.200 --> 02:54.700]  with another 20,000 instances, which in my opinion is yet another attack vector for the
+[02:54.700 --> 03:00.480]  internet at large that we should probably spend more time discussing. So if you are
+[03:00.480 --> 03:05.920]  successful in flooding the service, hopefully by the end of my talk, we should see some
+[03:05.920 --> 03:12.920]  spikes in these two middle graphs here. The HTTP response time is probably the most sensitive
+[03:13.120 --> 03:20.120]  part of our entire system today. Cool. So let's get back into it. So about me, I work
+[03:24.960 --> 03:29.920]  at GitHub. I'm a principal engineer at GitHub. I'm also an author. I've written some mediocre
+[03:29.920 --> 03:36.160]  quality books. And as of four days ago, I'm also the president and a board member of a
+[03:36.160 --> 03:42.660]  foundation I'll tell you about here shortly. And if you want to follow me on decentralized
+[03:42.660 --> 03:48.360]  social media, there's my links there. Okay. So we're going to start off and we're going
+[03:48.360 --> 03:52.600]  to do some basic context studying. And then we're going to go into like a little bit of
+[03:52.600 --> 03:59.040]  an incident report of a situation we found ourselves in last November. And then we'll
+[03:59.080 --> 04:04.200]  talk a little bit about what this means to me, what this means to the United States economy,
+[04:04.200 --> 04:08.800]  the legal situation in the United States, and how we're kind of navigating all of this
+[04:08.800 --> 04:15.800]  that we really kind of just stumbled upon earlier last year. So the short story here
+[04:16.760 --> 04:22.040]  is my little mastodon server that was used for me in about 100 of my friends, if maybe
+[04:22.040 --> 04:28.960]  not even 100, maybe 50 of my friends, had very quickly turned into what I consider medium
+[04:29.000 --> 04:34.800]  size scale. And when we reached medium size scale, a lot of the problems aren't necessarily
+[04:34.800 --> 04:40.440]  related to the technology. Although, as you're about to find out, operating a Ruby monolith
+[04:40.440 --> 04:47.200]  at scale does come with a substantial amount of concerns, which we'll dig more into that
+[04:47.200 --> 04:54.200]  in a moment. Okay. So just for folks at home who are watching the video after the fact,
+[04:54.440 --> 05:00.440]  I want to give a little bit of context on mastodon in general. And I want to be clear.
+[05:00.440 --> 05:05.960]  I am not a mastodon. Well, I guess it depends what you define as a contributor, but I don't
+[05:05.960 --> 05:12.960]  work on mastodon that much. I've written a few issues. I've helped talk to some folks
+[05:12.960 --> 05:18.960]  who do contribute to the project. But for the most part, this is probably the most detached
+[05:19.000 --> 05:25.500]  I am from any of the open source projects I work on. I literally am a consumer of mastodon.
+[05:25.500 --> 05:30.320]  The most involved I have gotten with this particular project has been going to GitHub
+[05:30.320 --> 05:35.480]  and going to the release tab and downloading the latest versions for me to go and install
+[05:35.480 --> 05:42.000]  on my server. So it's kind of nice, not going to lie, to just be on the consumer side of
+[05:42.000 --> 05:47.720]  the open source for a change. But mastodon is ultimately social networking that's not
+[05:47.760 --> 05:54.680]  for sale. It's built on the activity pub W3C protocol. And it's an alternative to familiar
+[05:54.680 --> 06:00.680]  social media sites like Twitter. And it gives you much more ownership and control of your
+[06:00.680 --> 06:07.680]  data from both an operator and a user perspective. Okay. So this is probably the number one
+[06:07.720 --> 06:12.280]  question I get asked, which is how did we come up with the name Hackaderm? And if you
+[06:12.320 --> 06:17.760]  talk to my friends in Italy, it's hashaderm or hashadermio or I've heard a lot of different
+[06:17.760 --> 06:22.760]  variations of it. It's my partner came up with the name. It's ultimately a plan words
+[06:22.760 --> 06:29.760]  with hacky and packaderm. So hacky is a clumsy, temporal or in elegant solution to a technical
+[06:30.200 --> 06:37.200]  problem. And packaderm is a large thick skinned mammal such as an elephant rhinoceros or
+[06:37.920 --> 06:43.360]  hippopotamus, obviously mastodon. You see where we're going with this. And so we like
+[06:43.360 --> 06:50.360]  to say that hackaderm is a clumsy, temporary or in elegant thick skinned social media server.
+[06:51.960 --> 06:56.320]  And depending on how successful some of these people with their laptops are, we're going
+[06:56.320 --> 07:03.320]  to see how thick the skin really is. So again, right now we have roughly 45,000 hackadermians
+[07:03.880 --> 07:10.880]  is what we refer to the people in the community, which is a lot of people. I wasn't prepared
+[07:13.400 --> 07:19.460]  for the sheer number of people and the sheer number of like bizarre things that we would
+[07:19.460 --> 07:26.360]  be getting into as we approach the size scale. And we have 20,000 people who are active.
+[07:26.360 --> 07:32.320]  And so this is, there's a lot of implications of that specific ratio. But for the most part
+[07:32.320 --> 07:39.320]  we see a lot of traffic go through our network every day. And I think at least once a day
+[07:39.760 --> 07:45.680]  there's some sort of crisis. So we have all of the major problems of Jurassic Park, of
+[07:45.680 --> 07:51.240]  a major theme park, of a normal technical shop, which has been fascinating to kind of
+[07:51.240 --> 07:58.240]  watch this whole thing grow. The hackaderm community is pretty interesting. And to be
+[07:58.280 --> 08:04.280]  completely honest, I'm still not really sure how it ended up the way it did. But it's mostly
+[08:04.280 --> 08:10.280]  composed of technical and open source professionals, such as people here. It's similar to Fostodon,
+[08:10.280 --> 08:15.280]  who here has heard of the Fostodon MasterDawn server. That one's also great. Also, I have
+[08:15.280 --> 08:20.280]  some colleagues who work on the InfoSec one. That's also another good one. But I see a
+[08:20.280 --> 08:25.280]  lot of like SREs, such style people, a lot of senior engineers who work on the InfoSec
+[08:25.320 --> 08:32.320]  style people, a lot of senior engineers, directors. We even have some executives. And then we
+[08:32.320 --> 08:38.320]  also have like honestly just some very beautiful anonymous hackers who keep everybody in check.
+[08:38.320 --> 08:44.320]  And so it's a good blend of people. And we see a lot of interesting things come through
+[08:44.320 --> 08:51.320]  our various servers. So our about page reads, here we are trying to build a curated network
+[08:51.360 --> 08:57.360]  of respectful professionals in the tech industry around the globe. And the around the globe part
+[08:57.360 --> 09:02.360]  is the interesting part, especially when we start looking at the legal implications of this,
+[09:02.360 --> 09:08.360]  which again, we weren't necessarily prepared for. And we welcome anyone who follows the rules
+[09:08.360 --> 09:15.360]  and needs a safe home or a fresh start. I think this was personally a big one for me. And I
+[09:15.360 --> 09:20.360]  think this is also very relevant to a lot of the folks that I know who have joined in the last
+[09:20.400 --> 09:26.400]  few months. I do think that there's like some pretty, in my opinion anyway, some pretty toxic
+[09:26.400 --> 09:32.400]  mental health situations that folks find themselves in using Twitter. And I think that this is
+[09:32.400 --> 09:37.400]  kind of an opportunity to just like rip the Band-Aid off and start fresh and kind of establish
+[09:37.400 --> 09:43.400]  some new habits for people and some new self image for people. And so I do see a lot of people
+[09:43.400 --> 09:48.400]  kind of reimagining themselves and reinventing themselves when they come to Hackaderm. But
+[09:48.440 --> 09:53.440]  yeah, ultimately, it's hackers, professionals, enthusiasts, and we're passionate about life,
+[09:53.440 --> 09:59.440]  respect, and digital freedom, and we believe in peace and balance. And I wrote this very casually
+[09:59.440 --> 10:04.440]  like on a Twitch stream, and those words are actually pretty important now that we're continuing
+[10:04.440 --> 10:09.440]  to dive a little deeper into what they actually mean. I think the thing that kind of comes to mind
+[10:09.440 --> 10:15.440]  right now, the word professionals and enthusiasts right next to each other, when you come to
+[10:18.440 --> 10:24.440]  a certain scale, having a lot of enthusiasts sit alongside professionals comes with some consequences
+[10:24.440 --> 10:29.440]  and balancing these two things is actually pretty challenging from an operation standpoint.
+[10:29.440 --> 10:34.440]  But ultimately, we want to be a safe space for the tech industry, for people who want to talk
+[10:34.440 --> 10:40.440]  about the economy, open source intelligence, news. We talk a lot about Rust, we talk about Linux.
+[10:40.440 --> 10:46.440]  Who here was at my talk on Aura yesterday? Awesome, thank you. So a few folks here. So that's a
+[10:46.480 --> 10:52.480]  new project that I'm trying to get more people to talk about. We talk about Kubernetes, Go, et cetera,
+[10:52.480 --> 11:01.480]  et cetera. So anyway, we're going to spend a little bit of time talking about this blog post that
+[11:01.480 --> 11:09.480]  I wrote called Leaving the Basement. And to set the context a little bit, Hackaderm literally
+[11:09.520 --> 11:16.520]  started running in my basement. And this is the story of how we kind of ended up moving out of the
+[11:16.520 --> 11:22.520]  basement and dealing with some pretty substantial scale problems. I think it was in the middle of
+[11:22.520 --> 11:29.520]  November, we started to, the service started to degrade. And there was a lot of consequences of
+[11:29.520 --> 11:37.520]  just shutting the service down. And so people were getting very aggressive on the internet. As it
+[11:37.560 --> 11:41.560]  turns out, the internet is full of grown men with opinions. I don't know if any of y'all have noticed
+[11:41.560 --> 11:48.560]  this or not. But yeah, sometimes these grown men with opinions have very toxic opinions, and they
+[11:48.560 --> 11:53.560]  like to say a lot of things about people's services. And so we tried to do our best to keep a
+[11:53.560 --> 11:59.560]  positive attitude and just continue to move forward. So this is the story of what actually
+[11:59.560 --> 12:04.560]  happened behind the scenes and how we ended up there. And I think there's some really good
+[12:04.600 --> 12:13.600]  takeaways in this from a technical perspective. Okay, so we'll begin our story on November 27th
+[12:13.600 --> 12:20.600]  of last year, 2022. And also keep in mind that, you know, this is one month before the holidays. So
+[12:20.600 --> 12:26.600]  this is about the most burnt out I ever get every year. So usually around the end of November,
+[12:26.600 --> 12:31.600]  I'm honestly, I'm about the most I can say to anyone is like fuck off, like I just really need
+[12:31.640 --> 12:36.640]  some space. And I need a break and I want to go relax and I want to sleep in. And this is when
+[12:36.640 --> 12:42.640]  our new service decided just to completely go down. And this was a really good growing opportunity
+[12:42.640 --> 12:49.640]  for people. So we have some really interesting numbers here. And I tried to do my best to build a
+[12:49.640 --> 12:55.640]  graph. And this is like, it looks like a very stereotypical stock graph that's like pointing up
+[12:55.680 --> 13:00.680]  into the right. So I feel like I should just, you know, do like a good, like, hi, guys, we're here
+[13:00.680 --> 13:04.680]  to talk about business. And look, our business is going up into the right. And like business numbers
+[13:04.680 --> 13:09.680]  are important because growth and strategy and impact and business. But honestly, this is just the
+[13:09.680 --> 13:14.680]  amount of people who were leaving Twitter. And really, I think they were just kind of looking for a
+[13:14.680 --> 13:23.680]  new home. And we just happened to be one that that met their needs for the time being. So up until
+[13:23.720 --> 13:31.720]  November 1st, we had less than 700 people. The prior six months, the service was online. That's how
+[13:31.720 --> 13:38.720]  we gained those 700 people. So it was roughly 100 people a month for the first six months. And then
+[13:38.720 --> 13:48.720]  this happened. And this was very unexpected for both myself and everybody in my immediate circle. So
+[13:48.760 --> 13:54.760]  one of the things I talk about as a professional SRE. So let me back up. When I'm not keeping the
+[13:54.760 --> 14:00.760]  masted on Ruby monoliths online, my other job is keeping the GitHub Ruby monoliths online. So
+[14:00.760 --> 14:06.760]  some of you use GitHub. Some of you use Hackaderm. I work on both of them. And I have two different
+[14:06.760 --> 14:12.760]  UB keys here in my backpack, one for each service. And so anyway, one of the things I often say is
+[14:12.800 --> 14:17.800]  when I enter a conversation with someone, this is the most important thing. And I honestly want to
+[14:17.800 --> 14:22.800]  get this as like my next tattoo because I say this at least once a week, which is what is the current
+[14:22.800 --> 14:27.800]  state of the systems? And if you can't answer this question very confidently at any given moment,
+[14:27.800 --> 14:32.800]  especially in a crisis, we should be having other conversations at that point because this is the
+[14:32.800 --> 14:38.800]  starting point of every conversation in my opinion. So we'll start our service off our service
+[14:38.840 --> 14:45.840]  discussion off here. So we had a rack of hardware in my basement. And these are the specs that we had
+[14:49.840 --> 14:55.840]  running in the basement. So it was a hobby rack that I've collected over the past 10 years or so,
+[14:55.840 --> 15:02.840]  you know, pieces of hardware that have been donated to me or that I found for a cheap price that
+[15:02.880 --> 15:08.880]  were used. In fact, the star of the show, Alice, over here on the far left, I've literally carried her
+[15:08.880 --> 15:15.880]  across Market Street in San Francisco and dropped her in a pile of like pee on the side of the road.
+[15:15.880 --> 15:20.880]  The hardware has been through a lot to say the least, but it's what we had and this is what I was
+[15:20.880 --> 15:26.880]  using for kind of a home lab at the time. I think the important thing here to notice though is that
+[15:26.920 --> 15:32.920]  these are not trivial computers. These are proper rack mounted servers with proper specs and most,
+[15:32.920 --> 15:38.920]  for the most part, these worked fine. It got the name the water tower because we had Alice, who was
+[15:38.920 --> 15:44.920]  our main compute node, and then we had three identical Dell PowerEdge R620s named Yacko, Wacko,
+[15:44.920 --> 15:50.920]  and Dot, respectively, and all three of them seemed to just be up to shenanigans at any given point
+[15:50.960 --> 15:57.960]  in time, from memory failure to broken boot loaders to just bizarre networking behavior and having
+[15:57.960 --> 16:02.960]  to go flip out Nix to try to get a better network connection. There was just a lot of obscure things
+[16:02.960 --> 16:11.960]  that was happening at the hardware level. So, Meet Alice. She's a very infamous server, especially
+[16:11.960 --> 16:17.960]  if you've read any of our posts or if you've ever watched my Twitch stream, but there she is
+[16:18.000 --> 16:24.000]  there, and that's in my basement, and that's the Dell R630, and you can see she's got eight SSDs
+[16:24.000 --> 16:32.000]  in the front of the carriage there, and she was sitting behind a firewall of my own design,
+[16:32.000 --> 16:39.000]  and that was our main endpoint for pretty much everything I ran in my home lab, and that just
+[16:39.000 --> 16:45.000]  so happened to be the main endpoint for our mastodon service up until the month of November.
+[16:45.040 --> 16:55.040]  So, yes, it was a home lab, and I think the whole point of this is that we used it for a lot of
+[16:55.040 --> 17:02.040]  things, and so the mastodon service was running on the home lab, and I do a lot of really bizarre
+[17:02.040 --> 17:08.040]  things on Twitch, so if you follow me on Twitch, you probably have seen me work on kernel modules
+[17:08.080 --> 17:14.080]  and experimental EBPF probes, and I've experimented with adding some features to the ZFS file
+[17:14.080 --> 17:21.080]  system and compiling my own version of ZFS from scratch, and I've been doing a lot, and I also
+[17:21.080 --> 17:28.080]  installed mastodon on that same server, and that's the key part of this. So, here's a list of
+[17:28.080 --> 17:34.080]  things from my home lab that have not blown up. There has not been a billionaire who decided to
+[17:34.120 --> 17:40.120]  buy a company that decided to insult the broader technical community and encourage them to move
+[17:40.120 --> 17:45.120]  off to a decentralized service, and so you've probably never heard of any of these, and that all
+[17:45.120 --> 17:51.120]  of these also run in that same home lab, so I think it's important to realize that this was a
+[17:51.120 --> 17:58.120]  very unexpected event, and that these servers were in a pretty high state of entropy, and we
+[17:58.160 --> 18:05.160]  didn't really have a good idea of the state of the systems. This was a home lab. So, as it turns out,
+[18:05.160 --> 18:12.160]  50,000 people trust me and really dislike a certain billionaire, and this was the one thing I
+[18:12.160 --> 18:19.160]  kept hearing. We kept having large to medium size and smaller size name people with substantial
+[18:19.160 --> 18:24.160]  Twitter following, like shoot us an e-mail and be like, yo, Nova, I'm done with Twitter, we're
+[18:24.200 --> 18:28.200]  going to come to your mastodon server, and I'm like, okay, sounds cool, and then they have, you
+[18:28.200 --> 18:34.200]  know, 350,000 Twitter followers, and it's not about the followers, but from an operator's
+[18:34.200 --> 18:39.200]  perspective, I'm like, holy shit, that's a lot of traffic. That's a lot of people that we're
+[18:39.200 --> 18:43.200]  going to have to open up web sockets against, and there's a lot to deal with there if you're
+[18:43.200 --> 18:47.200]  going to be sending all of these messages out to all of these people who are going to be following
+[18:47.200 --> 18:51.200]  you, and they all continue to say the one thing, which is like, well, we trust you to not screw
+[18:51.240 --> 18:55.240]  this up, and like, you know, you can probably do better than he can, so we're just going to move
+[18:55.240 --> 19:03.240]  over to your server anyway. Okay, so what had ended up happening is, it's a long story, and how we
+[19:03.240 --> 19:08.240]  ended up finding it, I think ultimately took about three weeks, but we don't say root cause
+[19:08.240 --> 19:13.240]  anymore, we say core cause, and the core cause of the incident is ultimately we had a bad disk
+[19:13.240 --> 19:19.240]  on Alice. I don't know why the disk was bad, this really bothers me, so I'm just going to chop it
+[19:19.280 --> 19:24.280]  up to like, it was just like a bad one in the batch, but we were able to actually isolate it
+[19:24.280 --> 19:31.280]  after the fact, and determine that like a basic reader write to this SSD was in fact the problem.
+[19:31.280 --> 19:38.280]  I also think an interesting takeaway here is that these were not consumer SSDs, these were
+[19:38.280 --> 19:45.280]  actual proper enterprise SSDs, one of which either just decided to get slow IO, or I don't
+[19:45.320 --> 19:51.320]  know what happened to it, but even in an isolation zone writing directly to an EXT4 system, we were
+[19:51.320 --> 19:56.320]  still able to prove that this disk was substantially slower than another one of the same make and
+[19:56.320 --> 20:03.320]  model. So it wasn't always bad, and it started to go bad, and this ultimately led to a cascading
+[20:03.320 --> 20:10.320]  failure across our CDN and our geographic edge nodes, and so the interesting thing, and this
+[20:10.360 --> 20:16.360]  is just one of those things, this is the aforementioned bad disk, and it also for some reason
+[20:16.360 --> 20:23.360]  has a broken chassis in the front, so part of me kind of has to wonder, did the movers drop
+[20:23.360 --> 20:28.360]  the server, or did something happen? I'm not really totally sure, but these are the woes of
+[20:28.360 --> 20:36.360]  operating your own hardware in your basement. So here's a model of the cascading failure. Who
+[20:36.400 --> 20:42.400]  here has dealt with cascading failures in production before? Okay, so 15 or 20, 30 hands
+[20:42.400 --> 20:49.400]  or so. These are fascinating, how you get into these situations, and usually when you're
+[20:50.640 --> 20:55.640]  dealing with one of these cascading failures, you're not really starting at the database,
+[20:55.640 --> 21:00.640]  or at least you glance at the database and you think maybe something's wrong, and you
+[21:00.760 --> 21:07.760]  usually blame DNS, but in our case, we were working back from our CDN. So imagine you
+[21:08.240 --> 21:12.680]  are operating a mastodon server in your basement, and 50,000 people on the internet decide to
+[21:12.680 --> 21:16.120]  join, and all of a sudden you can't even join a zoom call the next morning, because your
+[21:16.120 --> 21:21.560]  internet pipeline is so throttled from your ISP, who's like, bro, why are you bringing
+[21:21.560 --> 21:26.600]  this much traffic to your house? I don't understand what's going on, this is very bizarre. So what
+[21:26.680 --> 21:33.180]  we did is the very first thing we did to offset the problem was we set up these CDN nodes
+[21:33.180 --> 21:38.720]  around the world, and these basically served as reverse engine X proxies that had media
+[21:38.720 --> 21:43.720]  cash on them, and we would then route the traffic through a dedicated connection from
+[21:43.720 --> 21:50.720]  one of these CDN nodes back to YACO in my rack, and then YACO would then proxy the data
+[21:51.360 --> 21:57.360]  over to Alice, and Alice was our main, our primary database running in the rack. So when
+[21:57.360 --> 22:02.360]  things started to fail, it was like very intermittent failures in Frankfurt, and then we would get
+[22:02.360 --> 22:07.280]  like some very intermittent failures in Fremont, and it all looked like engine X was the problem,
+[22:07.280 --> 22:12.160]  we were getting timeouts and slow requests, and this whole incident is what later inspired
+[22:12.160 --> 22:15.880]  us to build that dashboard that you see today, and the reason I was like we should be looking
+[22:15.920 --> 22:22.920]  at those HTTP request times when I very politely asked you all to please DDoS my server, and
+[22:23.280 --> 22:28.840]  so that transferred all the way back to Alice, and we learned entirely too much about Mastodon
+[22:28.840 --> 22:34.520]  at scale, retracing everything back through the rack, and we had to go and trace Redis
+[22:34.520 --> 22:41.520]  logs, and Sidekick queues, and Mastodon Ruby servers with the Puma server, and ultimately
+[22:41.760 --> 22:47.960]  we found out that it was simply just Postgres unable to read and write from the database
+[22:47.960 --> 22:54.960]  as fast as we would like. So these are what the graphs looked like the day of the outage,
+[22:55.800 --> 23:00.160]  so we grabbed some screenshots, and I'm really glad we did because these make for some interesting
+[23:00.160 --> 23:06.200]  takeaways here. On the left side you can see our HTTP response time, and so these are our
+[23:06.280 --> 23:13.280]  get 200s, so in some cases the response time was actually, they were returning a 200, but
+[23:15.040 --> 23:20.640]  we were having like 40 second responses. Was anybody here on Hackaderm when it was like
+[23:20.640 --> 23:26.200]  in this weird like hangy stage where you kind of could upload media, but you kind of couldn't,
+[23:26.200 --> 23:30.960]  and you're like what the heck is NovaPan's doing, she doesn't know how to operate a service?
+[23:30.960 --> 23:35.880]  So this is what we were working on, we were working backwards from these graphs, and it
+[23:35.880 --> 23:40.520]  was interesting to see the behavior of Mastodon under these conditions because you very quickly
+[23:40.520 --> 23:44.840]  realized that different parts of the user interface were coupled with different parts
+[23:44.840 --> 23:49.680]  of the back end, and so, and they all assumed that the entire user interface would work.
+[23:49.680 --> 23:53.640]  So if the database started to go slow, maybe you could upload the image, but we couldn't
+[23:53.640 --> 23:58.920]  actually write the image key to MySQL, and the UI would just kind of just exist in this
+[23:58.920 --> 24:05.080]  in-between stage for like five minutes at a time. It was very interesting behavior.
+[24:05.080 --> 24:09.920]  But ultimately, we isolated out the IO on disk, and we were able to determine it was
+[24:09.920 --> 24:16.320]  old SDG and old SDH down here in the bottom right. You can see these numbers are closer
+[24:16.320 --> 24:23.320]  to 100% for IO on our disks, and this was what was causing those cascading failures.
+[24:25.360 --> 24:31.400]  So ultimately, this was a very exciting time. People were joining Mastodon around the clock,
+[24:31.400 --> 24:37.240]  and our little group of people that hung out on Discord very quickly turned into a more
+[24:37.240 --> 24:43.040]  serious group of people who hung out on Discord, and it was really fascinating to watch friends
+[24:43.040 --> 24:47.880]  of the Twitch stream and my partner Quintessence, and there's even people here in the room.
+[24:47.880 --> 24:55.360]  Malte and DMA, are you right here in the front? We are now best friends, and we wouldn't necessarily
+[24:55.360 --> 25:00.480]  be friends if it wouldn't have been for this whole incident in the first place.
+[25:00.520 --> 25:05.320]  So we were definitely working around the clock. I think Malte and DMA would kind of hand the
+[25:05.320 --> 25:09.520]  service off to us when we woke up in the morning, and we would work until they woke up the
+[25:09.520 --> 25:13.960]  following morning, and it was just this constant game of providing quick summaries of our work
+[25:13.960 --> 25:17.480]  and then just like crashing and going to sleep for a few hours and trying to hold down a
+[25:17.480 --> 25:23.400]  day job while we dealt with the service. And this is for the most part what it felt like
+[25:23.400 --> 25:27.640]  behind the scenes. We had a dedicated channel where we were trying hard to work through
+[25:27.680 --> 25:33.840]  things, and I think this is Malte just sent to the image. This is the moment where we finally
+[25:33.840 --> 25:39.280]  realized what was going on, and we were starting to isolate the problems on the disks, and I
+[25:39.280 --> 25:43.040]  think Malte was just like, okay, we finally found the problem. It's exactly what we thought it was,
+[25:43.040 --> 25:48.720]  and everything is fine. This is going to be fine. And meanwhile, we have, you know,
+[25:48.720 --> 25:53.600]  main names and technology joining the service, and things are kind of burning down all around us.
+[25:54.600 --> 26:01.200]  From the human perspective, I wanted to share two interesting failure modes that we got into as
+[26:01.200 --> 26:05.960]  people that I think are just an interesting takeaway for anybody who operates a production
+[26:05.960 --> 26:13.960]  service. So the first failure mode was in a state of panic, I tried to just throw more computers
+[26:13.960 --> 26:19.280]  at the problem, and so my response was like, we're going to go put more computers in the rack,
+[26:19.520 --> 26:24.600]  and I turned on dot for the first time, and gave dot a public IP address, and I think the other
+[26:24.600 --> 26:30.680]  big takeaway here was we got very good at doing the wrong things, and I think this is a very,
+[26:30.680 --> 26:38.120]  very familiar trap for a lot of the organizations that I work with every day, is there will be
+[26:38.120 --> 26:44.200]  some crisis, and they will respond to the crisis by doing something. In our case, it was creating a
+[26:44.200 --> 26:49.000]  spreadsheet, and the spreadsheet helped us do some quick math, and that math helped us inform
+[26:49.240 --> 26:54.320]  how we needed to provision our different system D services, and then when we changed the system D
+[26:54.320 --> 26:59.800]  service, the rule was you needed to go update the spreadsheet, and this was a reaction to a crisis
+[26:59.800 --> 27:06.720]  that allowed us to move forward, and then it was very difficult to get out of this situation, so I
+[27:06.720 --> 27:11.520]  do think that there's a very interesting takeaway of you get in the habit of doing the wrong thing
+[27:11.520 --> 27:17.920]  or doing a bad behavior during a crisis, and that can actually persist in the last longer than the
+[27:17.960 --> 27:23.080]  actual incident itself, so we had all the major problems of a normal SRE team, and this was a
+[27:23.080 --> 27:31.760]  volunteer open source project to begin with. Okay, so I have a friend in Boulder, his name's Gabe,
+[27:31.760 --> 27:37.400]  him and I have known each other for a long time, he's grown very quickly in his career, he's now
+[27:37.400 --> 27:44.840]  the Chief Product Officer of Digital Ocean, and Gabe texted me one day and says, hey Nova, so I
+[27:44.880 --> 27:52.200]  bought this farm, and I'm trying to upload rooster pictures on your website, and I can't upload my
+[27:52.200 --> 27:57.280]  rooster pictures on Hackaderm today. What's going on, and is there anything Digital Ocean can do
+[27:57.280 --> 28:03.760]  to help? And so we were in a situation where we were trying to come up with a plan, we had just
+[28:03.760 --> 28:10.120]  identified that the disks were the bottleneck and the single cause of our infrastructure problems,
+[28:10.720 --> 28:17.560]  and I think this was the first time I kind of realized like, oh, we have 50,000 really smart,
+[28:17.560 --> 28:23.960]  well-connected people who can more than obviously help us with our problems, and really the problem
+[28:23.960 --> 28:29.720]  is how do we reach out to them, give them access to production, form a plan, and execute on that
+[28:29.720 --> 28:34.640]  plan, and it became very obvious that our main problem wasn't necessarily fixing the disks in
+[28:34.640 --> 28:39.960]  the basement, it was managing people, and it was organizing people to work on the service and making
+[28:39.960 --> 28:45.680]  sure that we were in a good position to accept help from a corporation such as Digital Ocean in
+[28:45.680 --> 28:52.920]  the first place. So Malte here, he's going to get embarrassed, but can we just give him a round of
+[28:52.920 --> 29:05.120]  applause for this plan? He's smiling, but honestly, like if there was a Malte saved the day kind of
+[29:05.120 --> 29:10.840]  moment, like straight up Malte saved the day. He came up with this very interesting engine X pattern
+[29:10.840 --> 29:18.480]  that allowed us to effectively move our data off of the bad disks in the basement to the Digital
+[29:18.480 --> 29:23.480]  Ocean service without taking the service offline, which you're like, okay, that's pretty cool,
+[29:23.480 --> 29:28.880]  you can keep the service up, and you can start to fix the problem at the same time. Additionally,
+[29:28.880 --> 29:34.680]  what this did was this actually gave us a means of getting the data out, and everybody who used
+[29:34.720 --> 29:41.640]  the service contributed to the data migration. And so what we did is we set up this, who's here
+[29:41.640 --> 29:48.080]  familiar with the try files directive in engine X config, a few people, you should, if you get time,
+[29:48.080 --> 29:55.120]  go read about try files. This is a fascinating thing that engine X does, and what we were able to do
+[29:55.120 --> 30:02.520]  was point media.hackaderm.io on Alice. We were able to point all of the CDN nodes towards Alice,
+[30:03.160 --> 30:09.520]  and Alice would first try to resource the file from S3 running in Digital Ocean. If it could find
+[30:09.520 --> 30:15.840]  it, it would then return that directly as basically a reverse proxy from S3 to the client, and
+[30:15.840 --> 30:22.040]  otherwise it would resource it from the disks locally in the rack. So every time somebody read,
+[30:22.040 --> 30:27.600]  whether it was an image or a post or something coming from the rack, it would then persist into
+[30:27.640 --> 30:33.960]  S3 on the back end, and we would never have to serve that image ever again from Alice. So this was
+[30:33.960 --> 30:39.800]  a clever solution, and it gave us a means to slowly start transferring the data, and every minute
+[30:39.800 --> 30:43.720]  we transferred the data was another minute that it was likely going to be served from a cloud
+[30:43.720 --> 30:58.840]  provider and not from my really crappy hardware running in my basement. So the disks were so slow,
+[30:58.840 --> 31:03.320]  I mean, in my mind, these disks could be personified. They were like, they were beaten,
+[31:03.320 --> 31:10.280]  they were tired, they have been through hell and back again, and it took eight days for us to arclone
+[31:10.600 --> 31:16.280]  all of the data, which was about two terabytes of data, of Rooster videos and cat pictures and
+[31:16.280 --> 31:23.040]  catter-day hashtags and all kinds of mastodon things over to Digital Ocean S3, and this was all
+[31:23.040 --> 31:31.920]  courtesy of Gabe, who was like, bro, I just want to upload my Rooster pictures. So as we moved the
+[31:31.920 --> 31:38.280]  files out of the basement, it became obvious that running this service in my basement was no longer
+[31:38.280 --> 31:44.040]  going to work for us and that enough people had joined that we had reached critical mass. So our
+[31:44.040 --> 31:49.560]  next decision was, okay, where do we actually want to move the compute to? And I think we all kind
+[31:49.560 --> 31:54.480]  of have been like a little bit traumatized from like the vendor lock-in and the tech industry as
+[31:54.480 --> 32:00.080]  it exists today. And so I think looking at Hackaderm, there was a lot of people who were very critical,
+[32:00.080 --> 32:06.360]  myself included, of a dependency on various corporations. So we definitely didn't want to
+[32:06.360 --> 32:10.960]  just go throw money at Amazon, right? Amazon has enough money. We're good taking our little
+[32:10.960 --> 32:14.400]  community and putting it there. And we didn't want to go do the same thing at another cloud
+[32:14.400 --> 32:19.600]  provider. So ultimately, we made the decision to go to Hetzner in Germany. Whoo, Hetzner.
+[32:19.600 --> 32:30.920]  Another good caveat here is that from a legal perspective, Germany has some of the most restrictive
+[32:30.920 --> 32:35.640]  privacy laws. And so this is going to be about the most isolated zone we're going to get in today.
+[32:36.040 --> 32:41.240]  And a quick glance and a quick consultation with a lawyer told us that Germany was going to be the
+[32:41.240 --> 32:47.120]  safest place to start the service from. So again, our biggest concerns had almost nothing to do
+[32:47.120 --> 32:52.360]  with the crappy disks in my basement and almost everything to do with like international privacy
+[32:52.360 --> 32:58.120]  law and user data. And we've very quickly found ourselves having discussions about the complications
+[32:58.120 --> 33:06.840]  and implications of operating a global service. So here is our most recent diagram of how we
+[33:06.840 --> 33:11.840]  kind of set things up. You can see that we had to balance things in my basement with things in
+[33:11.840 --> 33:18.280]  Germany. And you can see that we have a set of CDN or point of presence nodes around the world. So
+[33:18.280 --> 33:23.040]  it was very exciting for me when I flew across the ocean from Seattle to come here to Brussels,
+[33:23.720 --> 33:28.520]  because for the first time our service, since the outage, was actually fast and responsive again
+[33:28.520 --> 33:34.480]  because I am now being proxied through another server now that I am here on a different continent.
+[33:36.240 --> 33:41.040]  So now what? Okay, so we've reached the point of stability. Our servers are stable. People are
+[33:41.040 --> 33:46.440]  able to send their Rooster videos again. And we're still very much not out of the weeds. We still
+[33:46.480 --> 33:53.760]  have a lot of concerns we need to deal with. So in general, the top Ruby monolith problems that
+[33:53.760 --> 34:00.480]  we have solved to date is sidekick scaling, which if you've ever, who's here has operated sidekick
+[34:00.480 --> 34:06.240]  before? It's a Ruby thing, show of hands. It's like a Ruby daemon that you have to specify the
+[34:06.240 --> 34:10.840]  amount of threads and concurrent workers at runtime. And mastodon is built on this. So like
+[34:10.840 --> 34:15.120]  every time we federate with a server, there's a whole queue that runs in the background that does
+[34:15.160 --> 34:20.160]  the federation for us. We've also had to tackle network scaling, and we have a global CDN with
+[34:20.160 --> 34:25.520]  reverse nginx proxies that has a cache on the edge so that the more people who look at an image,
+[34:25.520 --> 34:30.240]  the more it's served from the cache. And all of those have legal implications. And it's just
+[34:30.240 --> 34:34.880]  been a lot of work that we've had to get into to just operate a basic service so that we can all
+[34:34.880 --> 34:39.600]  sit here in this room and I can make the joke, please go DDoS my web server on the back end.
+[34:40.320 --> 34:47.200]  So here's a graph of our egress data. So the top of the graph here is roughly one terabyte of
+[34:47.200 --> 34:54.720]  data per day. So you can see that looks like over on January 26th, we peaked over a terabyte of
+[34:54.720 --> 35:01.200]  egress data. So that's honestly from an enterprise and scale perspective, this is no trivial amount
+[35:01.200 --> 35:06.080]  of data, right? We're moving a lot of data across the wire and the fact that Hetzner can support
+[35:06.080 --> 35:14.240]  us is very nice and seems to be working well for our needs today. Another interesting thing
+[35:14.240 --> 35:19.200]  about just federation in general that we've had to kind of learn as a community is there's actually
+[35:19.200 --> 35:24.800]  a lot of moderation consequences. And there's a pretty big user data and user privacy risk
+[35:24.800 --> 35:30.560]  with operating mastodon. And so I put this sort of diagram together to just illustrate some of
+[35:30.560 --> 35:35.280]  the consequences that we've had to deal with. In this case, we have three instances, one friendly,
+[35:35.280 --> 35:40.400]  one neutral, and one evil. And even if the friendly instance decided to block the evil
+[35:40.400 --> 35:46.880]  instance for whatever reason they deemed to be a cause for that blocking, it's still able for
+[35:46.880 --> 35:52.400]  content to get out and to end up federating with another instance. I think what's important about
+[35:52.400 --> 35:58.720]  this is this means that we can end up with content that is potentially illegal in the United States
+[35:59.520 --> 36:05.600]  or illegal to have without like an 18 and up warning that puts myself, my family, and everybody
+[36:05.600 --> 36:11.040]  who works on Hackaderm at risk. And so we've been trying hard to figure out how do we actually
+[36:11.040 --> 36:16.160]  manage content and actually get to a point where we can manage this in an effective way. And let
+[36:16.160 --> 36:22.880]  me just say I cannot thank the content warning feature on mastodon enough because that actually
+[36:22.880 --> 36:26.160]  gives us a lot of insight into the types of things that could potentially be harmful.
+[36:26.880 --> 36:33.680]  So ultimately, we had a lot of top non-Ruby monolith problems. So obviously, there was illegal
+[36:33.680 --> 36:40.240]  concern. We have a team of moderators working around the clock who just deal with trolls and
+[36:40.240 --> 36:45.520]  people who are causing problems and bad actors, and they're having to make judgment calls. And we
+[36:45.520 --> 36:50.480]  have to establish rules, and these rules need to be enforced, and we have to respond to people,
+[36:50.480 --> 36:55.600]  and people have really good reasons. There's videos out there that are very disruptive,
+[36:55.600 --> 36:59.600]  and we have to go respond to them. And it takes a lot of work just to balance that on the back end.
+[37:00.240 --> 37:04.480]  And the whole thing is ran by volunteers. And ultimately, where we are right now is we're
+[37:04.480 --> 37:11.760]  spending roughly 1000 euro a month in hosting costs alone between the digital ocean bill,
+[37:11.760 --> 37:16.800]  the Hetzner bill. We have an email API. So every time you go and you sign up for the service,
+[37:16.800 --> 37:22.560]  you have to get an email so we can validate who you are. And all of this is coming from
+[37:22.640 --> 37:29.600]  donations as they exist today. Okay. So if you want to learn more about Hackaderm,
+[37:29.600 --> 37:34.080]  the community, and how we run things, we have a dedicated community resource. If you want to go
+[37:34.080 --> 37:38.400]  grab and check it out, that's where we do things like announce our rules and our policies, and we
+[37:38.400 --> 37:46.000]  document how we make moderation decisions in general. So the consequence of all of this is we've
+[37:46.000 --> 37:52.400]  decided to found a new foundation called the Nivenly Foundation, which that's very exciting.
+[37:57.120 --> 38:02.160]  So the name is just it's just the name of my blog that we turned into a 501c3.
+[38:02.800 --> 38:07.360]  And I kind of like most things in my life, I kind of want this foundation to be relatively boring,
+[38:07.360 --> 38:13.440]  but this will be the legal entity that will be used to protect Hackaderm and to hopefully
+[38:13.520 --> 38:19.040]  fund the process moving forward. So right now the Nivenly Foundation has two projects, one of
+[38:19.040 --> 38:23.680]  which I talked about yesterday called Aura, which is a distributed runtime written in Rust,
+[38:23.680 --> 38:30.240]  and we also have Hackaderm. This is exciting because we this feels like the 90s. We have an
+[38:30.240 --> 38:35.440]  open source service. This isn't an open source project that you can go download. We like legit
+[38:35.440 --> 38:40.640]  have an open source service with graphs and people with pagers that we have to go and operate.
+[38:41.520 --> 38:46.560]  And so that's an exciting thing that the Nivenly Foundation gets to do. So I want to introduce
+[38:46.560 --> 38:51.760]  my wonderful partner who's not here, who is the executive director of the Nivenly Foundation,
+[38:51.760 --> 38:58.480]  and also the person that we hopefully didn't just wake up by d-dossing the server. Anyway,
+[38:58.480 --> 39:03.520]  she does the majority of the work and she couldn't be here today, but can we just give her a round
+[39:03.600 --> 39:15.600]  of applause? Because she is actually the one who gets everything done. So she manages the
+[39:15.600 --> 39:20.240]  infrastructure team right now. She's managing the moderator team right now. She even created these
+[39:20.240 --> 39:24.640]  teams in the first place because people were freaking out and didn't know what to do. And so
+[39:24.640 --> 39:29.520]  she wakes up every morning and deals with everything that Hackaderm throws at her, and I honestly
+[39:30.160 --> 39:35.120]  thank her enough for the hard work that she's done. So one of the problems we've had to solve is a
+[39:35.120 --> 39:39.760]  governance model for this whole thing. So we now have an open source service. There's legal risks
+[39:39.760 --> 39:46.240]  and how are we going to make decisions as a nonprofit. And so we started to look at some of
+[39:46.240 --> 39:53.760]  the consequences of modern day social media and some of the consequences of how corporations are
+[39:53.760 --> 39:59.040]  navigating different open source spaces. And some of the things I noticed was for the most part,
+[39:59.280 --> 40:05.360]  on Twitter especially, communities are very isolated from decisions. Users are detached from
+[40:05.360 --> 40:11.600]  the technology and how things are done. And people are usually unable to impact change. So I had
+[40:11.600 --> 40:16.800]  gotten into some trouble with Twitter. They banned my account. I wasn't able to talk to anyone. I had
+[40:16.800 --> 40:21.680]  no avenue in which I could go and actually communicate with this corporation. And that became
+[40:21.680 --> 40:25.360]  very problematic for me because I kind of used Twitter for a lot of things professionally.
+[40:25.760 --> 40:33.120]  So what I started to realize was actually corporations usually have more influence and
+[40:33.120 --> 40:39.040]  a better standing in the fabric of the economy than just a regular person does. And so as soon
+[40:39.040 --> 40:45.520]  as I was able to interface with a corporation, I realized that I was no longer isolated from
+[40:45.520 --> 40:51.040]  decisions. And I found that corporations often are not detached from the technology and corporations
+[40:51.040 --> 40:55.520]  are in fact able to impact change. And I became obsessed with this idea. And I wrote a whole
+[40:55.520 --> 41:00.320]  book about it. And I could, everywhere I looked, I saw this idea that ultimately corporations seem
+[41:00.320 --> 41:07.600]  to have more rights than people. And that was very difficult for me to reconcile. I also think
+[41:07.600 --> 41:15.200]  that this general observation explains why we see a lot of this on the Fediverse today. I think
+[41:15.200 --> 41:19.680]  that there is this culture of cyberbullying and assuming that the people operating servers are
+[41:19.680 --> 41:25.040]  inherently evil. And I see a lot of criticism instead of a lot of contribution. And somebody
+[41:25.040 --> 41:30.480]  who comes from open source and I've worked on Linux and FreeBSD and Kubernetes, the Go programming
+[41:30.480 --> 41:36.400]  language, the Rust programming language, it's very difficult for me not to intuitively walk up
+[41:36.400 --> 41:42.160]  to a project and want to contribute. And so I guess this is just my way of saying that Mastodon
+[41:42.160 --> 41:47.520]  gives us an opportunity and the Fediverse gives us an opportunity to no longer isolate people
+[41:47.600 --> 41:51.840]  from the folks who are operating their services they use every day. And that's very exciting for
+[41:51.840 --> 41:57.920]  me. So in our governing model, we want to figure out a way to balance communities and corporations.
+[41:57.920 --> 42:02.800]  And this is the hybrid model that I'm hoping will actually be able to create a sustainable
+[42:02.800 --> 42:08.480]  governing model for what we're doing. So right now, while we think corporate sponsorships are
+[42:08.480 --> 42:14.080]  important, we're actually going to have two forms of non-corporate sponsorship, which are project
+[42:14.080 --> 42:18.960]  members that you can achieve that status to simply by rolling up your sleeves and either
+[42:18.960 --> 42:24.240]  contributing a project or becoming a contributor to one of our existing projects, or a general
+[42:24.240 --> 42:29.600]  member, which is a small opt-in monthly fee that we have a few hundred people paying for
+[42:29.600 --> 42:34.880]  right now. And the beauty of this is all general members are going to have a vote in how we do
+[42:34.880 --> 42:42.000]  things. So if Hackaderm, the Mastodon server, wanted to, let's say, let a tech company have an
+[42:42.000 --> 42:47.520]  account and that became controversial, anybody who makes a monthly donation to the service now
+[42:47.520 --> 42:51.040]  is going to be able to have a vote in how we do things. And we're actually going to introduce
+[42:51.040 --> 42:57.120]  a concept of open-source democracy. And we're going to be leveraging open W3C protocols
+[42:57.120 --> 43:02.000]  to make this happen. And we still have some math to figure out exactly how much this is going to
+[43:02.000 --> 43:07.280]  cost. However, this model is all built around the idea of a cooperation, which you see a lot of
+[43:07.280 --> 43:12.240]  successful global companies do this and balance the different laws and trade-offs of different
+[43:12.240 --> 43:16.960]  economies around the world. So my hope is that this will be slightly more sustainable and break
+[43:16.960 --> 43:22.240]  down the sort of barrier between corporations and people because people now have a vote in
+[43:22.240 --> 43:28.560]  influence and authority in how we do things. So we're still in very early stages of this. If you
+[43:28.560 --> 43:34.320]  want to talk more, I'll be here at Fosdham. If you want to talk about Mastodon. And very specifically,
+[43:34.400 --> 43:40.240]  if anybody here has any opinions on open-source democracy or how to build an open-source democratic
+[43:40.240 --> 43:45.600]  model such that users can vote, I would love to talk to you. I want to learn as much as I can,
+[43:45.600 --> 43:49.760]  and I want to help get Nivenly to a point where we actually have a sustainable model,
+[43:49.760 --> 43:54.080]  and maybe we can learn some things from the various policy and legal efforts going on here
+[43:54.720 --> 44:00.960]  in Belgium and in the EU. So now what? Now, really, it's just keeping Hackaderm online,
+[44:00.960 --> 44:05.920]  which we're about to see if it is. Hopefully it is because I really feel like y'all would have
+[44:05.920 --> 44:10.640]  been able to do a lot of damage if I would have been giving this presentation last November.
+[44:10.640 --> 44:15.120]  And we just want to work towards a democratic model so that people who use the social media
+[44:15.120 --> 44:20.640]  service have a vote and have influence in how that social media service is running so that it becomes
+[44:20.640 --> 44:28.400]  everybody's social media service and not my social media service or somebody else's. So thank you
+[44:28.400 --> 44:35.120]  to everyone who's been working on the service so far, and thank you to DMA and Malte who are here
+[44:35.120 --> 44:39.520]  in the front, and specifically to the infrastructure team who helped us get out of the basement
+[44:39.520 --> 44:46.720]  and keep the service online so that we can all have cat pictures and all the wonderful things that
+[44:46.720 --> 44:49.120]  come with Mastodon. So thanks, everyone.
+[45:00.560 --> 45:04.400]  Cool. And I grabbed a photo. So the test here is going to be to see, I'm going to try to upload
+[45:04.400 --> 45:12.480]  the photo during questions, and we'll see how it goes. So here's a public resource. If you want to
+[45:12.560 --> 45:16.640]  go check out the graph and see if there was a spike, you can go to grafana.hakaderm.io.
+[45:18.320 --> 45:24.480]  And if you want to go to find out links to my slides and a recording of the video in the future,
+[45:24.480 --> 45:28.240]  please go to github.com. And thanks again.
+[45:42.640 --> 45:52.400]  And I guess we can do questions if anybody has questions. There's one over here.
+[45:53.760 --> 45:58.240]  Right here. He's got his hand up.
+[45:58.560 --> 46:12.000]  Okay, okay. I'm sorry.
+[46:21.600 --> 46:26.320]  Could you start to interrupt, everybody? If you could please leave quietly, we are going to do Q&A
+[46:26.320 --> 46:29.920]  right now. So we're just going to have a bit of Q&A. Please leave quietly. Thank you.
+[46:31.040 --> 46:37.840]  I'm sorry, Chris. Can you show us the grafana panel? I can't hear you. I'm sorry. Okay, okay, okay.
+[46:39.440 --> 46:40.400]  My questions. Thank you.
+[46:41.200 --> 46:56.160]  Okay, right now. So the question was, can we see again the grafana table?
+[46:56.160 --> 47:04.640]  Sure. Awesome.
+[47:07.840 --> 47:21.920]  Grab a photo of this. Whoever did this round of applause.
+[47:22.000 --> 47:29.120]  That's awesome. Hi. I was wondering, you were saying you could contribute skills or money to help.
+[47:29.120 --> 47:36.320]  What are some ways that we as developers, engineers, SREs can help in the near future
+[47:36.320 --> 47:39.920]  with keeping the video? It's a really good question. So the question was,
+[47:39.920 --> 47:44.400]  how could we potentially volunteer or help out other than just throwing money at the problem?
+[47:45.200 --> 47:50.160]  So the person to talk to is Quintessence. And we have a whole mod team right now that's working
+[47:50.240 --> 47:54.800]  on onboarding docs. And I think we have 12 people right now. And these are folks from
+[47:54.800 --> 48:00.080]  various tech companies around the world. And we have a Discord. So there's a link in the public
+[48:00.080 --> 48:04.480]  resources I put. And there's a section on volunteering. And you can just interface with the team and
+[48:04.480 --> 48:20.800]  get plugged in that way. Yeah, of course. Okay. More questions?
+[48:25.200 --> 48:32.240]  Yes. You mentioned a thousand euros a month for the hosting. But I was wondering if you had an
+[48:32.240 --> 48:39.440]  idea of what your total cost of ownership is now. And if the increase is linear with the increase
+[48:39.440 --> 48:47.280]  of users in traffic. Sorry. The total cost of what? You mentioned a thousand euros per month
+[48:47.280 --> 48:52.320]  for the hosting. But I guess your cost is much, much higher than that. So I was wondering if you
+[48:52.320 --> 48:58.560]  know what your total cost is now monthly. And if it's been a linear increase with the number of
+[48:58.640 --> 49:05.280]  users or? So the question is, is the cost of operating the Mastodon server, does it grow
+[49:05.280 --> 49:11.040]  linearly with users? And the answer is no. It does increase with users. But I definitely think
+[49:11.040 --> 49:15.760]  there's a threshold where you move from a small size to a medium size. And I think the traffic
+[49:15.760 --> 49:20.960]  was really the deciding factor from us. So earlier it was just a few servers that we could operate
+[49:20.960 --> 49:26.080]  on a small pipe. And now that we have a much larger footprint, we have to pay for a more
+[49:26.080 --> 49:32.880]  enterprise and potentially a CDN and DDoS protection here in the future. And so that's
+[49:32.880 --> 49:36.400]  grown up quite a bit. And that's probably our biggest cost right now is just the network.
+[49:39.760 --> 49:40.800]  Cool. Any other questions?
+[49:40.960 --> 49:56.000]  Hey, great talk. Did you evaluate, did you or any of your friends evaluate any other
+[49:57.840 --> 50:02.640]  Mastodon compatible solution like Pluroma, Coma or any of that?
+[50:03.600 --> 50:09.680]  Say, sorry, say again. Did you or any or when, when, when setting up,
+[50:11.360 --> 50:15.520]  when setting up Hackaderm, did you or any of your friends
+[50:16.880 --> 50:25.040]  evaluate any of the Mastodon compatible servers like Pluroma, Coma or any of that?
+[50:25.680 --> 50:29.840]  So this, this is a really good question. So the question was, when we were setting up Hackaderm,
+[50:29.840 --> 50:34.080]  did we look at any of the other Mastodon services like Pluroma or anything else?
+[50:34.960 --> 50:40.160]  So the answer is no. And again, like, it's not like there was one day where I woke up and said,
+[50:40.160 --> 50:44.160]  I'm going to go build a Mastodon server and I'm going to try to get all of the tech industry to
+[50:44.160 --> 50:49.600]  come join us, right? Like I set it up for like me and my friends to just try out and Mastodon was
+[50:49.600 --> 50:54.320]  the easiest one to get running on Arch Linux. And that was about the most thought that went
+[50:54.320 --> 51:00.240]  into setting up Mastodon originally. And I think that like it had just continued to grow organically.
+[51:00.240 --> 51:06.000]  And so like in hindsight, I mean, I like, I think there's opportunity to rewrite parts of Mastodon.
+[51:06.000 --> 51:09.760]  I think there's a lot of opportunity to like have alternative dashboards as well.
+[51:10.800 --> 51:15.760]  And so I'm not opposed to like operating different services for Hackaderm. I like to think of
+[51:15.760 --> 51:20.960]  Hackaderm as a social media service where we just are on Mastodon mostly right now for today.
+[51:21.840 --> 51:26.240]  So I don't have any personal experience operating the others, but I suspect that
+[51:26.960 --> 51:31.760]  you know, as we move forward, the community might decide to switch over or run a different version
+[51:31.760 --> 51:34.640]  or who knows, right? That's that's going to be up to the community now.
+[51:37.760 --> 51:43.600]  All right. I have a further question. How fast was your internet speed at home to serve the
+[51:43.680 --> 51:50.560]  Mastodon server? Sorry, say again? How fast was your internet speed at home to serve the
+[51:50.560 --> 51:57.600]  Mastodon server? So like you showed the stats of your server setup with like 40 gigabits of
+[51:58.160 --> 52:04.720]  possible network bandwidth, but how fast was actually the provided bandwidth from your ISP?
+[52:04.720 --> 52:08.320]  Yeah. So this is a good question, which is how much bandwidth were we going through at my house?
+[52:09.040 --> 52:12.800]  So in there's an official write up of the situation where we have some screenshots of the
+[52:12.800 --> 52:20.240]  firewall at the house. And ultimately, we had pushed I think one terabyte was our busiest day
+[52:20.240 --> 52:26.080]  in the middle of November over the ISP. So I had two connections, one of which was symmetrical 1G
+[52:26.080 --> 52:30.480]  up and down that we were able to use and we like it maxed out our pipeline. We were like we were
+[52:30.480 --> 52:41.120]  being startled by the ISP at one time. Yeah. Yeah. Thank you.

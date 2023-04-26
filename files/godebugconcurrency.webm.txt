@@ -1,0 +1,194 @@
+[00:00.000 --> 00:09.440]  is going to talk about the most painful thing I ever did in Go, which is debugging concurrent
+[00:09.440 --> 00:10.440]  programs.
+[00:10.440 --> 00:12.880]  I'll give it a pause for Andriy.
+[00:12.880 --> 00:13.880]  Hi.
+[00:13.880 --> 00:16.400]  Can you hear me well?
+[00:16.400 --> 00:17.400]  Nice.
+[00:17.400 --> 00:26.960]  I'm very pleased all of you here.
+[00:27.960 --> 00:32.560]  In person, finally, since all this COVID.
+[00:32.560 --> 00:40.880]  And today I will talk about debugging concurrent programs in Go, and a little bit about myself.
+[00:40.880 --> 00:42.080]  My name is Andriy.
+[00:42.080 --> 00:47.680]  I'm a software engineer originally from Ukraine, currently, unfortunately, living in Austria.
+[00:47.680 --> 00:55.600]  I'm a big fan of sports, gymnastics, crossfit, and different debuggers, etc.
+[00:55.600 --> 01:03.200]  The interest in parallel programming has grown dramatically recent years.
+[01:03.200 --> 01:09.040]  And the added complexity of expressing concurrency has made debugging parallel programs even
+[01:09.040 --> 01:13.400]  harder than debugging sequential programs.
+[01:13.400 --> 01:24.880]  And usually, sorry, every day at work, I feel like I have these eight stages of debugging
+[01:25.280 --> 01:26.640]  myself.
+[01:26.640 --> 01:31.120]  So that can't happen.
+[01:31.120 --> 01:34.360]  That does not happen on my machine.
+[01:34.360 --> 01:36.880]  That should not happen.
+[01:36.880 --> 01:37.880]  Why does it happen?
+[01:37.880 --> 01:38.880]  Oh, I see now.
+[01:38.880 --> 01:44.040]  I feel I know what's the problem.
+[01:44.040 --> 01:46.760]  Then how did that ever work?
+[01:46.760 --> 01:54.240]  So last couple of days, I saw PR, like, oh, it's not working since two years, some code.
+[01:54.240 --> 01:57.360]  And I was like, who wrote this?
+[01:57.360 --> 02:02.200]  And like, oh, wait, it was me.
+[02:02.200 --> 02:10.760]  So the classical approach for debugging sequential programs involves very easy, like, straightforward
+[02:10.760 --> 02:11.760]  way.
+[02:11.760 --> 02:16.160]  So we rapidly stop and set breakpoints.
+[02:16.160 --> 02:18.800]  We just go step by step.
+[02:18.800 --> 02:27.040]  And like, sometimes we print something, sometimes we continue, rerun, etc.
+[02:27.040 --> 02:35.080]  So and this style we just usually we call is cyclic debugging.
+[02:35.080 --> 02:41.720]  But the problem, unfortunately, parallel or concurrent programs do not always have reproducible
+[02:41.720 --> 02:48.760]  behavior, even when they run with the same inputs on the same machine with the same results.
+[02:48.760 --> 02:59.240]  So an output results usually can be radically different, and it's hard to predict.
+[02:59.240 --> 03:08.160]  This difference, a cure, for example, when you run some program, and as you can see,
+[03:08.160 --> 03:13.920]  it's very dummy one, but output is different each time when I run it on my machine.
+[03:13.920 --> 03:19.040]  Sometimes it's the same, but sometimes not.
+[03:19.040 --> 03:25.120]  Yeah, I spend lots of time to read some books and articles and videos on YouTube.
+[03:25.120 --> 03:31.880]  I just always trying to find, like, a question, like an answer to my question, okay, there
+[03:31.880 --> 03:38.520]  is any, like, okay, we have books how to write code, we have books how to write tests, okay,
+[03:38.520 --> 03:41.160]  how to debug code, there is no books.
+[03:41.160 --> 03:50.040]  Even there is no books to how debug concurrent programs, and so to start explaining my journey,
+[03:50.040 --> 03:57.320]  how I usually do it, let's a little bit remind who, what is gorotin?
+[03:57.320 --> 04:06.440]  So gorotin is just like an abstraction, yeah, it's, by the way, struct which handle gorotin
+[04:06.440 --> 04:09.560]  under the hood inside Go.
+[04:09.560 --> 04:16.520]  And usually gorotins are multiplexed on different or multiply OS threads.
+[04:16.520 --> 04:27.280]  So if one should block, and like we're waiting for some IO call, others can continue to run.
+[04:27.280 --> 04:36.040]  And there are also lots of design which hides many complexities of thread creation and management.
+[04:36.040 --> 04:41.400]  So go and do it on our own, so it's nice.
+[04:41.400 --> 04:48.480]  And to create a gorotin, it's very easy, just prefix your function with go keyword, and
+[04:48.480 --> 04:53.920]  that's new gorotin, nothing completed.
+[04:53.920 --> 04:59.800]  By the way, who knows why they name it gorotins?
+[04:59.800 --> 05:08.840]  Maybe somebody have ideas, yeah, go ahead.
+[05:08.840 --> 05:13.640]  Why not just call it gorotin?
+[05:13.640 --> 05:24.840]  So in each language, we can just replace first letter and like gorotin, yeah, it's, yeah,
+[05:24.840 --> 05:25.840]  yes and no.
+[05:25.840 --> 05:31.320]  So like they call it, at least from what I read, they call it because like threads,
+[05:31.320 --> 05:33.760]  gorotins, processes and so on.
+[05:33.760 --> 05:37.720]  It's not an accurate explanation what guarantees does.
+[05:37.720 --> 05:45.440]  So gorotin has its own like simple model and how it's executed, et cetera, et cetera.
+[05:45.440 --> 05:52.180]  And that's why like they know it, cool.
+[05:52.180 --> 05:59.100]  So next question, before I will share my experience, how do you think, how can I debug
+[05:59.100 --> 06:01.820]  my concurrent program?
+[06:01.820 --> 06:06.180]  So nice, nice.
+[06:06.180 --> 06:08.540]  Can you repeat what the answer was for the stream?
+[06:08.540 --> 06:10.820]  Thank you.
+[06:10.820 --> 06:14.020]  Can you repeat the question, you mean?
+[06:14.020 --> 06:17.260]  If you have an answer from the room, can you quickly repeat it so it's recorded on the
+[06:17.260 --> 06:18.260]  stream?
+[06:18.260 --> 06:22.860]  Yeah, we'll do.
+[06:22.860 --> 06:27.740]  So let's repeat, how can, how can I debug my concurrent program?
+[06:27.740 --> 06:35.820]  So the gentleman suggested using prints, nice, yes, nice.
+[06:35.820 --> 06:45.820]  This author of delt by the way, okay, any other ideas?
+[06:45.820 --> 06:50.740]  Okay, yes, yeah, it's a good idea, nice.
+[06:50.740 --> 07:00.140]  So just to repeat for people who are watching, their ideas was using debugger delt, using
+[07:00.140 --> 07:05.420]  trace or trace, using tests, et cetera.
+[07:05.420 --> 07:10.740]  So my first assumption was, okay, playground, let's play a little bit.
+[07:10.740 --> 07:20.860]  And like a few years ago, when I started writing this talk to be honest, there was like a limit,
+[07:20.860 --> 07:27.580]  so playground worked only with Go Max Prods 1, so it always reproduced my program.
+[07:27.580 --> 07:33.220]  But right now, it's more or less simulate local development.
+[07:33.220 --> 07:36.180]  Okay, I have more like bright ideas.
+[07:36.180 --> 07:43.980]  So maybe we can just color logs, I don't know, visualize goroutines, why not?
+[07:43.980 --> 07:50.940]  So here's a funny package, which just what it does, it's just like print different goroutines
+[07:50.940 --> 07:54.100]  with different colors like this.
+[07:54.100 --> 08:03.740]  So yeah, I mean, if you do something very quick, you can just figure out which goroutine,
+[08:03.740 --> 08:07.540]  which color, et cetera.
+[08:07.540 --> 08:16.340]  Yeah, return to seriously, there is interesting article, it's quite old, but one of my friends
+[08:16.340 --> 08:24.260]  from Ukraine, he wrote this article also a few years ago, he decided to visualize how
+[08:24.260 --> 08:29.900]  all this scheduling, goroutines works with these fancy pictures, also very good article
+[08:29.900 --> 08:33.820]  to highly recommend.
+[08:33.820 --> 08:42.700]  Another idea is try to print how Go schedule events.
+[08:42.700 --> 08:54.540]  So there is the environment variable, which can print you some extra information and yeah.
+[08:54.540 --> 09:02.900]  And of course, using debuggers, today I will focus a little bit on Delph and a little bit
+[09:02.900 --> 09:05.100]  on GDB.
+[09:05.100 --> 09:09.020]  So next question.
+[09:09.020 --> 09:13.100]  Can I set breakpoint inside goroutine?
+[09:13.100 --> 09:14.100]  Any ideas?
+[09:14.100 --> 09:15.100]  Yes?
+[09:15.100 --> 09:16.100]  No?
+[09:16.100 --> 09:17.100]  Yes?
+[09:17.100 --> 09:23.380]  So the answer is yes, yeah, typically you can set breakpoint inside goroutine, you can
+[09:23.380 --> 09:30.980]  jump into this goroutine, see what's inside and yeah, it's very handy, especially if you
+[09:30.980 --> 09:39.700]  develop like server and other stuff, okay.
+[09:39.700 --> 09:41.500]  What about channels?
+[09:41.500 --> 09:54.020]  So if I decide like send a message to the buffer channel of size four, yeah, it's very
+[09:54.020 --> 10:00.860]  nice that you can set breakpoint, you can print channel and Delph has very fancy like
+[10:01.260 --> 10:07.780]  meta data, which shows you even like current channel state.
+[10:07.780 --> 10:15.780]  So you see I send like one, it's a first item and some data information also useful.
+[10:15.780 --> 10:24.860]  Then if I add another one, so like next, you see now I have two elements in channel and
+[10:24.860 --> 10:33.580]  the small problem, usually like if I want to send message to channel from Delph CLI,
+[10:33.580 --> 10:40.300]  unfortunately it's not supported, here's the issue I created, yeah, and there's a comment
+[10:40.300 --> 10:51.620]  that yeah, we can fix it, but yeah, I hope we will fix it some time, yeah, so you can't
+[10:51.620 --> 11:01.380]  set, so technically it's possible, but it's not, I mean, so it can be same semantic, you
+[11:01.380 --> 11:08.100]  can set and Delph will handle it.
+[11:08.100 --> 11:19.380]  Okay, now let's focus a little bit on how we can debug goroutines, so yeah, if you're
+[11:19.380 --> 11:24.540]  inside a goroutine and you will print a state of goroutine, there's a keyword, goroutine,
+[11:24.540 --> 11:33.980]  it prints current goroutine where you put your breakpoint, but if you have lots of goroutines,
+[11:33.980 --> 11:41.660]  there's like interesting feature, I really use a lot, so, but let's step back a little
+[11:41.660 --> 11:50.020]  bit, there's another idea and like implementation, you can use this profile labels, so it's
+[11:50.020 --> 11:58.340]  inside pprof model, so you can run pprof do and inside through context run your code and
+[11:58.340 --> 12:05.820]  it will like mark your goroutine with label and usually you use this labels for profiling,
+[12:05.820 --> 12:17.620]  so you can open pprof profiles and see like some different metrics, but you can do it
+[12:17.620 --> 12:28.780]  also with Delph, which is super cool, so you can, if you label your goroutines with labels
+[12:28.780 --> 12:39.380]  like this or if you use like middleware, you can also do it, I mean, if you use web server,
+[12:39.380 --> 12:47.620]  you can use this middleware, I post link on next slide and it will automatically like add
+[12:47.620 --> 12:56.420]  labels to all your handlers, which is nice, so you can see like which handler you are currently
+[12:56.420 --> 13:02.420]  because if you print goroutines, you will see like even in Delph, you will see lots of
+[13:02.420 --> 13:10.780]  unreadable information, but if you just need to focus on login goroutines or like goroutines
+[13:10.780 --> 13:15.380]  which doing something with your database, you can label it in the same manner as you
+[13:15.380 --> 13:21.820]  do with pprof and then, yeah, also you can do it directly, by the way, this library which
+[13:21.860 --> 13:29.300]  I mentioned, it's very small one, it's also support like set labels, just a wrapper, so
+[13:29.300 --> 13:37.940]  very handy one and then, if you run goroutines keyword inside Delph debugger, minus L, it
+[13:37.940 --> 13:44.860]  will print goroutines, it's just very simple hello world, which has like this main goroutine
+[13:44.860 --> 13:58.300]  and few other goroutines without any labels, et cetera, but then, I created another like
+[13:58.300 --> 14:10.980]  project inspired by one article and yeah, so here you can print all goroutines which
+[14:11.020 --> 14:20.180]  related to your like label page and yeah, also you can go to docs and find different like group
+[14:20.180 --> 14:28.740]  by, I don't know, filters, so it's very handy and how you can find your goroutine, then you
+[14:28.740 --> 14:35.380]  can switch to this goroutine, if you don't know, also you can print or list source code, you can
+[14:35.380 --> 14:46.780]  set new breakpoint, it's very nice and yeah, also you can use this demo project, it's not my,
+[14:46.780 --> 14:56.860]  but it's more written for goland, but if to run it, you just need to this small tweak, you need
+[14:56.860 --> 15:03.980]  pass some build flags and tags debugger, otherwise this library will not work and then you can repeat
+[15:03.980 --> 15:11.780]  everything I did, I highly recommend to play with it and when you need it, you will be already like
+[15:11.780 --> 15:22.860]  with everything you need. Regarding gdb, yeah, I play a little bit with them, it's quite not
+[15:22.900 --> 15:32.060]  supported what I need for goland and yeah, it has this like info goroutines keyword,
+[15:32.060 --> 15:42.620]  as far as I remember, you can't like filter goroutines and it's not readable, so like yeah,
+[15:42.620 --> 15:51.340]  especially this part, yeah and I decided to not waste my time, to be honest, because it's yeah,
+[15:51.340 --> 16:04.780]  you can just use delf and for such problem rather than playing with gdb. Cool, so next,
+[16:04.780 --> 16:14.940]  not only with debugger, you can find your problems, one important problem in goland world is deadlocks
+[16:15.900 --> 16:26.140]  and with deadlocks, usually program gets stuck on the channel send operation, which waiting
+[16:26.140 --> 16:34.540]  forever, for example, to read the value and nice that goland support detection of these
+[16:34.540 --> 16:41.460]  situations compared to other languages, for example, Python does not support this deadlock
+[16:41.820 --> 16:55.180]  detection, which is hard to debug such problems and yeah, if you need like real world examples,
+[16:55.180 --> 17:04.860]  you can see this very interesting library go deadlock, which using this library also found
+[17:04.940 --> 17:12.340]  lots of deadlocks on cockroach db and there are lots of interesting examples how mutex is
+[17:12.340 --> 17:23.380]  can be handled properly, how to write it properly and etc, etc, it's like this library is an
+[17:23.380 --> 17:36.380]  entire separate like discussion. Returning to our case, yeah, I wrote like, I put to
+[17:36.380 --> 17:44.140]  slide this very simple example, so yeah, sometimes you have this conflict in access and you have
+[17:44.140 --> 17:54.660]  this data races and I saw it few times in some open source projects, but usually people do not
+[17:54.660 --> 18:03.300]  do it, so I highly recommend run your CI pipeline with this dash race, especially tests, it helps
+[18:03.300 --> 18:14.060]  you like always run with this flag and it will print you if there is data races or not, this
+[18:14.060 --> 18:24.780]  dash race not always can find all data races, some common yes, but sometimes no, but highly
+[18:24.780 --> 18:39.340]  recommend to add it to your project, so never skip, so now I have like seven, I have a seven rules
+[18:39.340 --> 18:48.500]  for you, so how to unblock yourself when you get stuck on something and you don't know how to
+[18:48.500 --> 18:56.940]  debug it, so first never assume a particular order of execution, so when you write in concurrent
+[18:56.940 --> 19:08.740]  programs try to always think about not running it in particular order, especially it works with
+[19:08.740 --> 19:20.740]  some benchmarks and tests, so try to not put this like, I also saw it lots of times when people,
+[19:20.740 --> 19:28.780]  when run tests, when you run go test by default, if you know they run it in parallel, but usually
+[19:28.820 --> 19:42.260]  people say like, no run it like sequentially and that's not a good idea, another advice, it's more
+[19:42.260 --> 19:48.740]  about designing than writing code, try to implement your any concurrency logic at highest level as
+[19:48.740 --> 19:58.580]  possible, try to not pass lots of channels, lots of like go routines etc, try to like keep logic
+[19:58.580 --> 20:11.180]  separately and this concurrency separately, yeah, don't forget as I said, go race not always helps
+[20:11.180 --> 20:20.780]  because it's not detects when program like whole freeze, it's only when a subset of go routines
+[20:20.780 --> 20:29.740]  get stuck, as gentlemen suggested, you can use as trace and different tools for tracing which can
+[20:29.740 --> 20:37.980]  help you to see like, are we waiting for some resource like reading file, access net, it's more
+[20:37.980 --> 20:46.700]  low level but it's very useful, yeah, I show it on another talk but you probably know about it,
+[20:46.700 --> 20:55.300]  you can use conditional breakpoints which helps you to cover cases especially when it's concurrent
+[20:55.300 --> 21:05.660]  program so you can catch only your case, not like click next on every go team, as I said,
+[21:05.660 --> 21:14.060]  you can use shadow in tracer, you can use go deadlock and yeah, last but not least use debugger,
+[21:14.060 --> 21:21.020]  don't forget about it, it's also very handy and like every release, every version I see how
+[21:21.020 --> 21:35.380]  debuggers are adding new stuff which is nice, cool, so I have like few references because to
+[21:35.380 --> 21:42.860]  cover everything is hard in 25 minutes, I will post slides so you can accurately read everything,
+[21:43.660 --> 22:03.580]  maybe to like picture it and thank you, thank you, are there any questions? Yeah,
+[22:03.580 --> 22:09.660]  before you're thinking, if you want to donate to Ukraine, just let me know, few my friends right
+[22:09.660 --> 22:31.260]  now are fighting so we can help directly, if you're afraid. Thank you. Oh, I have a question. Have
+[22:31.260 --> 22:37.540]  you tried using tools such as RR or Hermit which try to execute the program in a deterministic
+[22:37.580 --> 22:42.500]  fashion? You mean backwards? Yes, they can do a recording for their execution and then
+[22:42.500 --> 22:48.620]  replace but the point is that the recording is deterministic. Yeah, I use it for sequential
+[22:48.620 --> 22:55.620]  debugging, never for concurrent debugging, I mean, maybe it's possible but in my case it's,
+[22:56.420 --> 23:01.740]  I covered what I just showed, of course there are other cases, I will try.
+[23:01.740 --> 23:11.700]  If you are leaving the room trying to stay quiet for a second, do not talk,
+[23:11.700 --> 23:23.020]  chairs are okay, so we can still hear any questions. Well, no more questions,
+[23:23.020 --> 23:26.020]  that means your talk was very clear. Thank you and a lot of applause.

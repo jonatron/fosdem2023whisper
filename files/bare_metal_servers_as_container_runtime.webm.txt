@@ -1,0 +1,112 @@
+[00:00.000 --> 00:13.160]  So, hello everyone, my name is Florian, I work at Scaleway and I'm an engineering manager
+[00:13.160 --> 00:20.440]  software developer there and today we'll talk about how we use servers to handle our production
+[00:20.440 --> 00:26.240]  workload just like if there were containers.
+[00:26.240 --> 00:32.200]  So a quick slide of context, Scaleway is a European cloud provider, we do a lot of tests,
+[00:32.200 --> 00:40.840]  data centers, shared host, collocation, shared hosting, whatever instances, databases, we
+[00:40.840 --> 00:46.320]  have physical locations in France, Amsterdam and in Poland and I work in the storage team
+[00:46.320 --> 00:50.840]  as I said, we are a team of ten people, we handle pretty much everything storage-ish
+[00:51.160 --> 00:58.600]  related at Scaleway, so being the block and object storage products and also some order
+[00:58.600 --> 01:04.200]  systems like the RfNSAN and the data backup in the online ecosystem and we have around
+[01:04.200 --> 01:13.320]  a thousand servers in production and more than a hundred bitabytes of storage. So when I joined
+[01:13.320 --> 01:21.440]  the team five years ago, the intro was what it was, it was drawn organically over the years
+[01:21.440 --> 01:32.160]  and the versions were over the places, everything was a bit custom for the team needs at the time,
+[01:32.160 --> 01:41.760]  so some servers were locally installed, some were PXC but everything was not homogeneous and we
+[01:41.760 --> 01:48.320]  had an old pearl-based automation system that suffered a lot because not so much people had
+[01:48.320 --> 01:55.880]  fluency in pearl, so it was pretty much a huge happen-only script that did stuff. So we wanted
+[01:55.880 --> 02:02.640]  to start something fresh, something new, something we could work on for a few years, so we started
+[02:02.640 --> 02:08.840]  considering stuff, everybody at the time started to use containers but we were not a fan because
+[02:08.840 --> 02:13.960]  at that time they were not as material, the tooling and ecosystem was not that great and also we
+[02:13.960 --> 02:20.000]  wanted to try something different. We still use containers for developer purposes, CI and whatever
+[02:20.000 --> 02:27.400]  but we decided to do pixie live booting. It comes with some great advantages, first of all you
+[02:27.400 --> 02:32.000]  just plug the server to the network, you put your discovery image and you are pretty much set up,
+[02:32.160 --> 02:40.400]  nothing else to do. Reboot is just like taking down a container to update it and it's when you
+[02:40.400 --> 02:46.640]  have thousands of servers in production, reboot is not that big of a deal, it's just life. The only
+[02:46.640 --> 02:52.800]  downside is that you need to have a solid network and working the HCP. As a cloud provider you
+[02:52.800 --> 03:01.560]  don't have network, don't do anything, so not really a downside. So let's talk about automation.
+[03:02.280 --> 03:10.760]  After using the Perl stuff we started on salt, it worked okay but it was really hard to test
+[03:10.760 --> 03:16.680]  modifications before putting them in production and at the time it was nobody's job, pretty much,
+[03:16.680 --> 03:22.840]  like no one had clear in-house responsibility for it, so it was not that well maintained.
+[03:23.720 --> 03:29.400]  So one day we decided to move to Ansible, mostly because everyone else at the time was moving to
+[03:29.480 --> 03:37.080]  Ansible in the company, so we wanted to share our efforts and small libraries so that everybody can
+[03:38.920 --> 03:46.520]  like do stuff cleaner and not have something where everyone does things on the side. It's
+[03:46.520 --> 03:52.280]  easier to write, easier to test, the learning curve is not as steep as with salt and you don't
+[03:52.280 --> 03:55.880]  have a central controller that has to be maintained by a sentencing team, you just
+[03:55.880 --> 04:01.160]  can keep that in-house. But ultimately we wrote something along the lines of a controller,
+[04:01.160 --> 04:11.160]  but some really dumb stuff, around 250 lines of go for the server and just a shy of 100
+[04:11.160 --> 04:17.160]  for the client, it's written in Python, it's pretty dumb just an API that when a server boots it
+[04:17.160 --> 04:21.400]  calls it the API ID. Okay, here you are, here's your configuration.
+[04:24.600 --> 04:30.600]  Just to have something a bit cleaner that works well with pixie images, we have split up the
+[04:30.600 --> 04:36.360]  automation in two parts, we have one part that's our deployment playbooks, the only job in the life
+[04:36.360 --> 04:43.000]  is to install and update all the software stacks and that's pretty much it, and afterwards we have
+[04:43.000 --> 04:48.760]  the runtime playbooks, which job is to set up networking, because basically when you boot it
+[04:48.760 --> 04:55.560]  in the lifeboots you just have the basic one interface DHCP address and you need some network
+[04:55.560 --> 05:00.120]  configuration to make your service work, it assembles the raids, mount fire system, tune
+[05:00.120 --> 05:06.200]  the OS like sysatel, separate governor or whatever, and after that just configure and start your services.
+[05:06.600 --> 05:15.960]  One quick note, the installed playbooks are run on prediction server and during image
+[05:15.960 --> 05:21.240]  creations and some are there just to remove default packages that we do not want to have
+[05:22.200 --> 05:30.200]  in the built image. Now just a little bit about how we handle pixie image creations,
+[05:31.080 --> 05:35.560]  basically a pixie image is a squash of s that you download over the internet just after
+[05:35.560 --> 05:42.040]  having booted your kernel, it's literally a rootfes of your server that's inside the RAM,
+[05:43.560 --> 05:49.080]  the first ways that were used before arrived was just a snapshot of the rootfes of a VM,
+[05:49.960 --> 05:56.200]  afterwards there were Docker to pixie.pl, basically a huge power strip that was extracting the
+[05:57.560 --> 06:03.240]  file system of a container, it came with some limitations, because basically
+[06:05.720 --> 06:10.520]  the way that base image of containers are made make that not a fully functional OS,
+[06:11.640 --> 06:19.080]  afterwards we use Ashko Parker and now we use a small trick with sshd and uncivilized ssh port
+[06:19.080 --> 06:24.600]  that basically traps the uncivilization inside the ashrut on the build server.
+[06:26.040 --> 06:31.640]  The advantage of this is that the same playbooks for the deployments of software are used for both
+[06:31.640 --> 06:38.200]  the creation of the image and updating servers and predictions, and the build system is based
+[06:38.200 --> 06:43.640]  on the ubuntu server image, nothing fancy, and we are using the default LiveBooty Neutron fs
+[06:43.640 --> 06:51.240]  package that comes up with dbian and ubuntu with a few tweaks to allow for retries and to avoid
+[06:51.240 --> 06:58.120]  boot storms, like you have 30 or 40 servers that reboot at the same time that do not fetch
+[06:58.920 --> 07:03.480]  the squash fs on the same machines to avoid any networking issues.
+[07:06.200 --> 07:11.560]  Here's the fun part, there is a small playbook that's called pixiemagic.tml that handles a lot of
+[07:11.560 --> 07:19.720]  stuff, that's cool because the ubuntu default packages are not all meant to be run inside
+[07:19.720 --> 07:26.120]  a LiveBoot environment, first we avoid triggering the packages triggers during kernel install
+[07:26.120 --> 07:31.000]  because it saves a lot of time during the creation of an image, but afterwards you have to rebuild
+[07:31.000 --> 07:36.440]  all the dkms and custom kernel models to specifically target the kernel version that is
+[07:36.440 --> 07:41.800]  inside the shoot because it's not the same as the host necessarily, all the hypermorph profiles
+[07:41.800 --> 07:51.640]  are to be patched because they limit what software can access which files, but as you are running
+[07:51.640 --> 07:58.360]  from ram, you have some kind of overlay fs above it, so apparently that's ntp for example,
+[07:58.360 --> 08:07.800]  it's not targeting the ntp drift file in slashvar but in somewhere like varlib, live, medium,
+[08:07.800 --> 08:13.880]  something, overlay fs, so you have to patch all those, here's the flag, just like two weeks to
+[08:13.880 --> 08:21.160]  find in another main learning list of the kernel, like 2.4 or something, you have that support for
+[08:21.240 --> 08:27.400]  the overlay fs, so you don't break the default in your td before configuration, and as the system
+[08:27.400 --> 08:33.320]  is amnesiac after each reboot, you have to take into account that we do not use any network
+[08:33.320 --> 08:40.040]  configuration utility, so no network d, no if and down, nothing, so you have to take that into
+[08:40.040 --> 08:49.480]  account because some simulink are broken by default. So we've been doing that for five years and
+[08:49.720 --> 08:58.120]  well, pretty much nothing to say, just works, we have the convenience of containers, so we have
+[08:58.920 --> 09:04.600]  all the systems into production that are pretty much homogeneous, with pretty much some version
+[09:04.600 --> 09:10.840]  everywhere, and we have the comfort of using just plain bare metal servers without having any issues,
+[09:11.560 --> 09:17.480]  like a long time ago when you updated Docker, it had the bad habits of restarting every container
+[09:17.560 --> 09:25.480]  on the host without asking you anything, we can scale from 100 servers to a thousand,
+[09:26.680 --> 09:31.320]  with only pretty much three to four people handling deployment in installation of servers,
+[09:32.760 --> 09:39.560]  and new servers are deployed quite fast, like it takes like one hour to deploy 10 new servers
+[09:39.560 --> 09:45.560]  maximum, because you just have to collect the max, update the DHCP, and put the machines, and it just
+[09:45.560 --> 09:50.360]  works, and if you want to update anything, you just have to reboot, it's pretty simple.
+[09:53.000 --> 09:59.080]  I think that's supposed to be fast. Does anyone have questions? Yes?
+[09:59.080 --> 10:03.720]  That doesn't mean that the operating system has basically never written the disk on the client.
+[10:04.440 --> 10:05.080]  Excuse me.
+[10:05.080 --> 10:08.520]  Does that essentially mean that you have diskless servers there?
+[10:08.520 --> 10:10.040]  Yeah. Okay, cool.
+[10:10.040 --> 10:17.240]  So the only data that's written on physical disk are the question.
+[10:18.040 --> 10:22.520]  So I was saying that we did that install pretty much the servers, that there was no
+[10:22.520 --> 10:28.600]  OS installed on servers, and yes, we do have a few ones, like the one that handles the images,
+[10:28.600 --> 10:34.920]  the installation, the DHCP, and so on, but every other servers inside our infrastructure is diskless
+[10:35.640 --> 10:40.360]  for the OS parts, because we do have data from clients, and we tend to store that in memory,
+[10:41.400 --> 10:44.360]  but that pretty much every disk is used for clients.
+[10:46.280 --> 10:47.280]  Yes?
+[10:47.280 --> 10:51.800]  Did you consider using live build or building your images instead of packer?
+[10:53.400 --> 10:59.160]  So the question was, did we consider using live build from packer? We did use that,
+[10:59.800 --> 11:05.720]  but at the time we were running on public virtual machines, and the building of images was pretty
+[11:05.720 --> 11:12.840]  slow, so we moved to this solution using shrewd and a big-ass build server, and just really,
+[11:12.840 --> 11:16.120]  really fast, so that's why we use that now. Yes?
+[11:16.120 --> 11:21.240]  By swapping out self-master, that means that now Ansible needs to be run like ad hoc.
+[11:21.240 --> 11:26.200]  What kind of automation do you have on top of that? Because having to run Ansible every time
+[11:26.200 --> 11:34.120]  from your laptop? Yeah, so as I said, the playbooks are run at boot time on the servers.
+[11:34.120 --> 11:38.360]  Basically, on every servers you have a small client written in pittons that's like
+[11:38.360 --> 11:44.200]  80 lines, but pretty much half of it is commentaries, and you just call an API saying,
+[11:44.200 --> 11:49.960]  hey, my IP is that, can you deploy me? And we have multiple services everywhere that just
+[11:49.960 --> 11:54.840]  have a copy of all the deployment files and the configuration files, and it's a reverse
+[11:54.920 --> 11:59.400]  Ansible deployment from a server inside there, so you don't have any human interaction to redeploy
+[11:59.400 --> 12:20.760]  a server. Any other questions? So thanks for your time.
+[12:24.840 --> 12:26.220]  you

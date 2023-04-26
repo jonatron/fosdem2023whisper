@@ -1,0 +1,188 @@
+[00:00.000 --> 00:14.760]  So, hey everyone, Daniel Almeida here from Colabra, and today we're going to be talking
+[00:14.760 --> 00:20.680]  a little bit about stateless decoder virtualization using Verdeo Video and Rust, and mainly about
+[00:20.680 --> 00:23.960]  what's the status of Verdeo Video in general.
+[00:23.960 --> 00:31.400]  There's been this huge hiatus, and different companies now have different downstream patches
+[00:31.400 --> 00:35.920]  going on, but recently there's been this new push to get everything upstream.
+[00:35.920 --> 00:39.640]  There's been new conversation taking place in the mailing lists, so I think this is a
+[00:39.640 --> 00:47.760]  good time to actually do a recap on the Verdeo Video device, and also to showcase how we're
+[00:47.760 --> 00:53.240]  using Rust in our own criminalized implementation as Colabra has been working closely with the
+[00:53.240 --> 00:58.920]  criminalized engineers to make this happen, so without further ado, I think we can get
+[00:58.920 --> 01:00.240]  started.
+[01:00.240 --> 01:06.920]  And the first question I think mainly everyone should ask themselves is like, why are we
+[01:06.920 --> 01:12.960]  doing this, and how this is important, and the reason why is basically, I think it's
+[01:12.960 --> 01:13.960]  two-fold.
+[01:13.960 --> 01:19.520]  So, the first thing is that video data is this massive share of the internet traffic.
+[01:19.520 --> 01:25.400]  There was some data that was collected by Cisco that predicted that by 2022, 82% of
+[01:25.400 --> 01:37.040]  all consumer internet traffic would be like video-related data, up from 77% in 2018, so
+[01:37.040 --> 01:42.760]  video data is this huge share of traffic, so this is one thing.
+[01:42.760 --> 01:49.440]  The other thing is this new use case for Chromebooks, wherein you can purchase a Chromebook,
+[01:49.440 --> 01:56.280]  so a laptop, an ultrabook of sorts, and then you can run Android applications on it, thanks
+[01:56.280 --> 02:03.160]  to this ArcVM virtualization layer that they have going on that will transparently virtualize
+[02:03.160 --> 02:10.160]  the Android apps so that you can use them on your Chromebook in a somewhat transparent
+[02:10.160 --> 02:11.600]  way.
+[02:11.600 --> 02:18.200]  This means that a user can use like Netflix, YouTube, and games, and things from the apps
+[02:18.240 --> 02:23.760]  in the Play Store, and this makes the device much more useful in general.
+[02:23.760 --> 02:28.840]  The idea is that these devices, these Chromebook devices are usually, they are capable of hardware
+[02:28.840 --> 02:35.120]  accelerated video decoding, and if they can do that in a hardware accelerated way, it's
+[02:35.120 --> 02:41.360]  a good idea to expose this capability to Android apps as well, so that Android apps can benefit
+[02:41.360 --> 02:45.520]  from the hardware in the machine.
+[02:45.520 --> 02:50.000]  With that said, before we can explore this a tad more, we should be talking a little
+[02:50.000 --> 02:56.600]  bit about Viferal 2 memory to memory devices, and I have this figure here, which I've taken
+[02:56.600 --> 03:02.200]  from Hans Rikul, the Viferal 2 maintainer, thanks Hans, and it just shows a codec device
+[03:02.200 --> 03:06.560]  in the middle, and it's in the middle of two queues, so on the left side, you guys can
+[03:06.560 --> 03:10.520]  see what we call the output queue, and on the right side, you guys can see what we call
+[03:10.520 --> 03:17.760]  the capture queue, and the idea is that these two queues, they contain buffers, and a user
+[03:17.760 --> 03:24.840]  space app will be continuously queuing and dequeuing buffers from these two queues, and
+[03:24.840 --> 03:31.080]  the idea is for a decoder, which is the actual type of codec device I want to talk about,
+[03:31.080 --> 03:36.440]  we could talk about encoders, but let's just focus on decoders for this presentation.
+[03:36.440 --> 03:41.400]  The idea is that for a decoder device, user space applications are going to be queuing
+[03:41.400 --> 03:48.560]  bitstream buffers on the output queue, so buffers containing compressed data using some
+[03:48.560 --> 03:56.440]  codecs, so VP9, H264, HEVC, and this data will be eventually processed by the device,
+[03:56.440 --> 04:01.520]  and then the device will be placing this data on the capture queue, on the buffers in the
+[04:01.520 --> 04:07.120]  capture queue, and then eventually the user space app will be able to dequeue these buffers
+[04:07.120 --> 04:14.080]  containing the decoder data, so this is a loop that takes place while the device is decoding,
+[04:14.080 --> 04:21.120]  and there's also this finite state machine that drives the device as well, so one of
+[04:21.120 --> 04:28.040]  the questions that one may make is why is there is this finite state machine in place,
+[04:28.040 --> 04:35.280]  and the reason why is this model where we have two queues and the codec device in the
+[04:35.280 --> 04:42.760]  middle, it's not sufficient to express some different kind of scenarios, so for instance
+[04:42.760 --> 04:46.560]  if you're playing video and you want to do a seek to another position, something that
+[04:46.560 --> 04:50.360]  happens very often, you're watching a given portion of a video, then you want to watch
+[04:50.360 --> 04:57.200]  a different portion for whatever reason, that's called a seek, and the previous model with
+[04:57.240 --> 05:03.320]  only the two queues, it's not capable of expressing that, so the idea is that you'll have a number
+[05:03.320 --> 05:09.040]  of different states, and you can transition between these states by issuing ioctals against
+[05:09.040 --> 05:14.800]  the video device node that you've presumably previously opened, so think like slash devs
+[05:14.800 --> 05:20.160]  slash video zero or something along these lines, you will be opening this video node,
+[05:20.160 --> 05:25.360]  and then you'll be issuing ioctals against this video node to transition between states,
+[05:25.360 --> 05:29.400]  and eventually you're going to be in the decoding state where a decoding loop is going to take
+[05:29.400 --> 05:36.680]  place, and then you'll be queuing and dequeuing buffers for the codec to process.
+[05:36.680 --> 05:40.920]  With that said, I want to talk a little bit more about the differences between a stateful
+[05:40.920 --> 05:45.560]  and a stateless architecture, and the main difference basically boils down to who's keeping
+[05:45.560 --> 05:52.440]  track of the decoding state, so when you're decoding video, there's some state that somebody
+[05:52.440 --> 05:58.400]  has to keep track of, usually the set of the decoded picture buffers, among other stuff,
+[05:58.400 --> 06:03.560]  and in a stateful architecture, the driver or the firmware will be the piece that's going to be
+[06:03.560 --> 06:10.160]  keeping track of that, whereas in a stateless architecture, the guest user space will be
+[06:10.160 --> 06:15.920]  the actual program that's going to be keeping track of the decoding state, so in a stateless
+[06:15.920 --> 06:21.120]  architecture, the device is just this clean slate that you serve program with some metadata that
+[06:21.120 --> 06:27.680]  you extract from the beat stream, and it'll just process that one frame, whereas in a stateful
+[06:27.680 --> 06:33.600]  architecture, you just send in data, and the device will be acting as a black box,
+[06:33.600 --> 06:38.440]  where you just send it data, and eventually it's going to give you back decoded frames,
+[06:38.440 --> 06:46.840]  so it's a different approach to do video decoding in general. With that said,
+[06:47.160 --> 06:52.320]  we can talk a little bit about Verdeo Video, so Verdeo Video was initially developed by Google
+[06:52.320 --> 06:58.600]  in Open Synergy, and Vistix is the latest submission upstream, there's a kernel driver
+[06:58.600 --> 07:05.280]  submission for that, it refers to Verdeo Video version 3, and the Google has downstream patches
+[07:05.280 --> 07:15.840]  to use that driver within Chrome OS, so using their own implementation basically, and in Verdeo
+[07:15.840 --> 07:22.880]  Video, we basically have two vert cues, vert cues are like this, it's a cue where you can sort of
+[07:22.880 --> 07:29.840]  communicate by exchanging memory, this is a Verdeo serve concept, and the idea is that we have two
+[07:29.840 --> 07:36.000]  cues in Verdeo Video, one is the command cue, where we'll be pushing data from the driver to the
+[07:36.000 --> 07:41.880]  device, so from guest to the host device for processing, we're going to be pushing data,
+[07:42.080 --> 07:48.760]  pushing commands, and then we have the event cue where we have the opposite communication taking
+[07:48.760 --> 07:57.200]  place, so that the host can inform the guest of things like dynamic resolution changes,
+[07:57.200 --> 08:05.880]  or errors, or something along these lines. So the reason we were speaking about stateful
+[08:05.880 --> 08:11.200]  and stateless implementations in Viferal 2 memory to memory devices is that the Verdeo Video
+[08:12.080 --> 08:19.320]  kernel driver exposes itself as a Viferal 2 stateful device, and why Viferal 2 stateful? Well,
+[08:19.320 --> 08:25.080]  first of all, it's a mature interface, it cover cases where the underlying decoder IP is not
+[08:25.080 --> 08:31.200]  within a GPU, there are approaches out there that are trying just to like virtualize VA API,
+[08:31.200 --> 08:36.360]  or something along these lines, but we really wanted to cater as well for the case where the
+[08:36.360 --> 08:42.000]  decoder IP is not within a GPU, because we have devices where this is precisely the case,
+[08:42.000 --> 08:47.720]  and also a black box approach is really useful, because we just want to send it data, and we
+[08:47.720 --> 08:57.480]  wanted to do its decoding in the background without the guest application being aware that
+[08:57.480 --> 09:03.120]  there's this entire virtualization layer going on in the background, and this driver is also heavily
+[09:03.120 --> 09:09.840]  based on the Verdeo GPU, which is also upstream in the Linux kernel. So the idea for the kernel
+[09:09.840 --> 09:15.160]  driver is really simple, it translates from the Viferal 2 iOctals to Verdeo Video Commands. So
+[09:15.160 --> 09:22.560]  the guest user space app will be, as we said, previously issuing Viferal 2 iOctals against
+[09:22.560 --> 09:30.240]  this video device node, so that it can sort of change states to eventually end up in the decoding
+[09:30.240 --> 09:37.600]  state, and also so that it can be, while it's in the decoding state, so that it can be queuing and
+[09:37.600 --> 09:45.360]  dequeuing buffers in that decoding loop. So whenever the device issue iOctals against the video
+[09:45.360 --> 09:53.320]  node, the kernel driver will be translating that into Verdeo Video Commands, and then placing these
+[09:53.320 --> 09:58.920]  commands in the command queue for further processing by the host device, and by doing this
+[09:58.960 --> 10:05.760]  translation, it ends up implementing the Viferal 2 Stateful Finite Stay Machine, and so that a guest
+[10:05.760 --> 10:09.720]  user space app doesn't really have to know that there's any virtualization taking place, it just
+[10:09.720 --> 10:16.200]  submits iOctals, submits data in the buffers, and eventually it's able to dequeue buffers with
+[10:16.200 --> 10:25.840]  the decoded data in them. So here's a small example just to drive home what I'm trying to say here,
+[10:26.080 --> 10:32.480]  we have one iOctal being issued by the guest user space in this figure, and in this particular case
+[10:32.480 --> 10:38.160]  it's video C create buffs or rec buffs, it's another call as well rec buffs, which is just a way for
+[10:38.160 --> 10:45.120]  the guest to say that, or for a user space app to save to Viferal 2 that he wants to allocate
+[10:45.120 --> 10:52.320]  buffers. So the Verdeo Video Kernel Driver, which is again a Viferal 2 Stateful device, will
+[10:52.320 --> 10:58.400]  intercept that call, it will translate that call into some Verdeo Video Command, it'll place that
+[10:58.400 --> 11:04.080]  command in the command queue for processing by the host, and then the host will be talking to
+[11:04.080 --> 11:10.080]  this question mark box somehow to process this Verdeo Video Command resource create into something
+[11:10.080 --> 11:17.440]  useful. So here's the architecture thus far, we have a, in the guest we have a guest user space
+[11:17.440 --> 11:22.320]  app issuing iOctals against the Verdeo Video Kernel Driver, the Verdeo Video Kernel Driver
+[11:22.320 --> 11:29.840]  translating these iOctals into Verdeo Video Specific Commands. For our use case here, we have CrossVM
+[11:29.840 --> 11:36.560]  which is Google's virtual machine manager, taking these commands in the command queue,
+[11:36.560 --> 11:42.720]  dequeuing them, and then processing them using this question mark shaded box in the host.
+[11:43.680 --> 11:51.360]  Eventually this shaded box will be somehow decoding the video data, and it'll be piping the
+[11:51.360 --> 11:56.320]  the frames back to CrossVM, and then CrossVM will be pushing the frames back using the
+[11:57.360 --> 12:02.000]  the virtual queues back to the Verdeo Video Kernel Driver, and then the Verdeo Video Kernel Driver
+[12:02.000 --> 12:08.240]  can make the frames available to the guest user space application, which can be like gstreamer,
+[12:08.320 --> 12:20.000]  or ffmpeg, or you know other apps. So, and now we have to talk a little bit about what is that
+[12:20.000 --> 12:27.600]  shaded question mark box, and these are like CrossVM decoder backends. So what is CrossVM in
+[12:27.600 --> 12:32.400]  the first place? Well, CrossVM is this virtual machine manager that's shipped with GromoS,
+[12:32.480 --> 12:40.480]  and it's the cornerstone of GromoS virtualization layer. So it's when, for instance, when you're
+[12:40.480 --> 12:46.800]  running Android apps in the background, it's CrossVM that's going to be providing the virtualization
+[12:46.800 --> 12:53.120]  for it, and it has this huge focus on security. So it's written in Rust, and it's focused on
+[12:53.120 --> 13:00.320]  Verdeo devices. And the main idea here being that CrossVM as a virtual machine manager really has
+[13:00.320 --> 13:05.280]  no idea how to decode video. This is a very different thing from what it was built to do,
+[13:05.280 --> 13:10.320]  so it has to interface with something to get that video data decoded. And that's something
+[13:10.320 --> 13:15.120]  which I've denoted with that shaded question mark box, that's something is what we call
+[13:16.480 --> 13:25.520]  a back end for CrossVM. So we have like three different backends going on nowadays for CrossVM,
+[13:26.080 --> 13:34.800]  the first of which being LibVDA. So the idea with LibVDA is pretty simple. LibVDA is just this
+[13:34.800 --> 13:41.680]  library that lets you interface with the Chromium GPU process to actually decode video data. So
+[13:43.760 --> 13:49.200]  most of us here know that Chromium is this very mature project with a very mature video
+[13:49.280 --> 13:54.800]  decoding stack. So the idea is simple, just use Chromium, ask Chromium to decode data,
+[13:54.800 --> 14:00.400]  bam, there you go. But this has a major issue, which is like we have a virtual machine manager
+[14:00.400 --> 14:04.960]  which is written in Rust with a focus on security and memory safety and everything,
+[14:05.600 --> 14:09.280]  linking against a web browser which is a very different kind of software,
+[14:09.920 --> 14:14.960]  which is also by the way not written in Rust. So this is a problem, this is something that
+[14:14.960 --> 14:20.880]  the Chromium engineers wanted to do away with, which is why we have like CrossCodeX
+[14:21.920 --> 14:27.840]  going on, which is our own crate written in Rust. We also have like an FFM pack back end using the
+[14:27.840 --> 14:35.360]  FFM pack software decoders. It's used only for testing so that you can test the radio video
+[14:35.360 --> 14:42.480]  implementation in CrossVM without necessarily owning a Chromebook device, you can test that
+[14:43.280 --> 14:51.280]  with a regular laptop if you're using the FFM pack back end and also if you're using CrossCodeX.
+[14:52.000 --> 14:59.040]  So the idea of FFM pack is just to use it just for testing and we're not integrating it like the
+[14:59.040 --> 15:06.080]  hardware like Acceleration and FFM pack because again FFM pack is this huge project written in C
+[15:06.880 --> 15:13.120]  which brings us to the topic of CrossCodeX which is our solution. CrossCodeX is basically a crate,
+[15:13.120 --> 15:21.680]  a library written in Rust to do video decoding in safe Rust with all the guarantees that the
+[15:21.680 --> 15:28.560]  Rust language provide to us, so memory safety, so on and so forth. It's not published on crates.io
+[15:28.560 --> 15:34.560]  yet because it's heavily working progress and it contains all the pieces that are necessary in
+[15:34.560 --> 15:40.480]  order to do video decoding. So mainly parsers which is where we're going to be extracting the
+[15:40.480 --> 15:47.680]  metadata to drive the decoder, the decoder logic which is the piece that's going to be keeping
+[15:47.680 --> 15:52.960]  track of things like of the state right which is what we've talked about previously, so things like
+[15:52.960 --> 15:59.520]  the set of reference frames and any other kind of information that you have to keep track of
+[15:59.520 --> 16:08.880]  between frames and also it itself contains backends as we will see shortly. Currently we have a VA API
+[16:08.880 --> 16:17.360]  backend so CrossCodeX will itself use the VA API driver in the system to get a video decoded
+[16:17.360 --> 16:22.640]  and they're also working on another backend which is the Vifero 2 stateless backend.
+[16:23.600 --> 16:32.960]  So here is a more complete picture I think, so everything in this picture is just that
+[16:32.960 --> 16:39.360]  shaded question mark box from earlier, so here you guys can see we have CrossVM, CrossVM will be
+[16:39.360 --> 16:48.640]  using for now, CrossVM will be using like CrossCodeX to decode video, CrossCodeX will be using the VA
+[16:48.720 --> 16:54.800]  API CrossCodeX backend, it'll be talking to the VA API implementation in the system which will be
+[16:54.800 --> 17:02.720]  talking to the VA API driver, so Intel Media Driver or Mesa depending on what graphics card you're
+[17:02.720 --> 17:10.720]  using that's going to be talking to DRM in the host kernel and then up until now nobody really
+[17:10.720 --> 17:16.240]  knows how to decode video data, but once DRM starts talking with the GPU then the GPU knows
+[17:16.240 --> 17:22.800]  how to decode video because it has an IP in there, a circuitry that is specialized in video
+[17:22.800 --> 17:29.600]  decoding so the GPU will be doing the video decoding and eventually getting the raw decoded data
+[17:30.160 --> 17:35.120]  and then the data will be pushed all the way back until it gets to CrossVM, then when it gets to
+[17:35.120 --> 17:40.160]  CrossVM we'll be pushing the data back to the radio video kernel driver in the guest now and then
+[17:40.160 --> 17:44.960]  the radio video kernel driver in the guest can make the decoded data available to the
+[17:47.680 --> 17:54.720]  guest user space application. So here's some backlog, we still have to upstream the radio
+[17:54.720 --> 18:00.720]  video protocol, as I said there's been this new push to get everything upstream, Google is collaborating
+[18:00.720 --> 18:08.880]  again with open synergy so that we can get video upstream because it's not upstream yet,
+[18:08.880 --> 18:14.640]  we plan on adding more codec support because thus far we only have VP8, VP9 and H264
+[18:15.440 --> 18:22.480]  supported and most people want to see HEVC and AV1 which is like the state of the art for
+[18:22.480 --> 18:29.840]  like video decoders. Encoder support for cross codecs in particular while a radio video itself
+[18:29.840 --> 18:36.960]  has encoder support, the Google's implementation which involves like cross codecs does not
+[18:37.200 --> 18:43.600]  the cross codecs grade does not have encoder support yet, you can encode using libvda which
+[18:43.600 --> 18:51.200]  which again is this path that uses the the Chromium GPU process to do video encoding,
+[18:52.320 --> 18:58.240]  it's and this is already used in production so it can be used but there's no supporting cross
+[18:58.240 --> 19:03.600]  codecs properly yet and we're also working on a referral to stateless back-end in cross codecs
+[19:03.600 --> 19:11.200]  so that we can support like more devices. So just a quick summary, Google is already using
+[19:11.200 --> 19:16.720]  radio video in production through libvda, we've been working with Chromium as engineers so that
+[19:16.720 --> 19:22.560]  the libvda dependency can be removed because Google really wants this to be using Rust,
+[19:22.560 --> 19:29.840]  to be using safe Rust code in order to do the video decoding, we plan to upstream radio video
+[19:29.840 --> 19:34.800]  like collaboration and working together with Google and working together with other industry
+[19:34.800 --> 19:41.760]  players, we plan on upstreaming the radio video protocol and for Google in particular this improves
+[19:41.760 --> 19:48.240]  the experience for Chromebook users and not only that but this is like only one application for
+[19:48.240 --> 19:54.400]  radio video in general, other companies can can benefit from the radio video work that's been
+[19:54.400 --> 20:00.480]  done here to use radio video for their own projects and their own use cases. So that was
+[20:00.480 --> 20:06.480]  it, that was basically what I had to say about radio video, I hope that was informative and yeah,
+[20:06.480 --> 20:18.240]  thank you very much!

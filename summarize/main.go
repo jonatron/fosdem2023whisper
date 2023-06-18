@@ -10,12 +10,16 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/pkoukk/tiktoken-go"
 	"github.com/sashabaranov/go-openai"
 )
 
+// Flags
 var (
-	dir      = flag.String("dir", "", "Path to the files to summarize")
-	apiToken = flag.String("api-token", "", "OpenAI API token")
+	dir       = flag.String("dir", "", "Path to the files to summarize")
+	apiToken  = flag.String("api-token", "", "OpenAI API token")
+	dry       = flag.Bool("dry", false, "Dry run (don't actually summarize)")
+	overwrite = flag.Bool("overwrite", false, "Overwrite existing summaries")
 )
 
 func main() {
@@ -26,16 +30,17 @@ func main() {
 	flag.Parse()
 	if *dir == "" {
 		log.Fatalf("Please specify a directory with files to summarize via `--dir` CLI argument.\n")
-	} else if *apiToken == "" {
+	} else if *apiToken == "" && !*dry {
 		log.Fatalf("Please specify an API token via `--api-token` CLI argument.\nYou can get one at https://platform.openai.com/account/api-keys.\n")
 	}
 
-	linksContent, err := os.ReadFile(*dir + "/../links.html")
+	// Tokenizer for dry run / estimating cost, but also choosing model to save on cost.
+	tt, err := tiktoken.EncodingForModel(openai.GPT3Dot5Turbo)
 	if err != nil {
-		log.Fatalln("Couldn't read links file:", err)
+		log.Fatalln("Couldn't get tokenizer:", err)
 	}
-	linksString := string(linksContent)
 
+	// OpenAI client
 	c := openai.NewClient(*apiToken)
 
 	promptPrefix := "The following text is the transcript of a talk given at the FOSDEM conference in 2023. FOSDEM is about free and open source software development. Because the transcript was created by a speech-to-text machine learning model, there might be some errors and typos. There might also be a Questions and Answers section at the end. Please summarize the talk in a few sentences, while leaving out the Q&A section."
@@ -44,9 +49,20 @@ func main() {
 	if err != nil {
 		log.Fatalln("Couldn't read directory:", err)
 	}
+	var priceEstimateSum float64
 	for _, entry := range entries {
 		if entry.IsDir() || filepath.Ext(entry.Name()) != ".json" {
 			continue
+		}
+		talkName := strings.TrimSuffix(entry.Name(), ".webm.json")
+
+		// If overwrite option is false, entry if summary already exists.
+		if !*overwrite {
+			summaryFilePath := filepath.Join(*dir, talkName+".webm.summary.txt")
+			if _, err := os.Stat(summaryFilePath); err == nil {
+				log.Println("Summary for", talkName, "already exists, skipping.")
+				continue
+			}
 		}
 
 		filePath := filepath.Join(*dir, entry.Name())
@@ -64,18 +80,9 @@ func main() {
 			continue
 		}
 
-		// OpenAPI gpt-3.5-turbo model only allows 4000 tokens, which is around 3000 words.
-		// Splitting in chunks will make the model lose context, so we skip long transcripts.
-		// With the prompt prefix and summary completion, let's check for 2700 words.
-		if len(strings.Fields(transcript.Text)) > 2700 {
-			log.Println("File too long, skipping.", entry.Name(), "has", len(strings.Fields(transcript.Text)), "words.")
-			continue
-		}
-
-		fmt.Println("Summarizing", entry.Name())
+		fmt.Println("Summarizing", talkName)
 
 		req := openai.ChatCompletionRequest{
-			Model: openai.GPT3Dot5Turbo,
 			Messages: []openai.ChatCompletionMessage{
 				{
 					Role:    openai.ChatMessageRoleUser,
@@ -83,9 +90,37 @@ func main() {
 				},
 			},
 		}
+
+		// Calculate token count, both for dry run / estimating cost, but also choosing model to save on cost
+		inputTokensCount := len(tt.Encode(req.Messages[0].Role, nil, nil))
+		inputTokensCount += len(tt.Encode(req.Messages[0].Content, nil, nil))
+		// Plus summary output, which is roughly 100 words, which is roughly +33% in tokens.
+		outputTokenCount := 133
+
+		var priceEstimate float64
+		// For pricing check https://openai.com/pricing, section "Chat".
+		if inputTokensCount+outputTokenCount > 16000 {
+			log.Println("File too long (exceeding 16k tokens), skipping.")
+			continue
+		} else if inputTokensCount+outputTokenCount > 4000 {
+			req.Model = openai.GPT3Dot5Turbo16K
+			priceEstimate = 0.003 / 1000 * float64(inputTokensCount)
+			priceEstimate += 0.004 / 1000 * float64(outputTokenCount)
+		} else {
+			req.Model = openai.GPT3Dot5Turbo
+			priceEstimate = 0.0015 / 1000 * float64(inputTokensCount)
+			priceEstimate += 0.002 / 1000 * float64(outputTokenCount)
+		}
+		priceEstimateSum += priceEstimate
+
+		if *dry {
+			log.Printf("%v tokens; estimated cost: $%.2f\n", inputTokensCount+outputTokenCount, priceEstimate)
+			continue
+		}
+
 		resp, err := c.CreateChatCompletion(ctx, req)
 		if err != nil {
-			log.Println("Couldn't create gpt-3.5-turbo completion:", err)
+			log.Printf("Couldn't create completion with %v: %v\n", req.Model, err)
 			continue
 		}
 		summary := resp.Choices[0].Message.Content
@@ -102,20 +137,35 @@ func main() {
 			continue
 		}
 
-		// Link in HTML
-		// Replace `<a href="files/foo.webm.json">JSON</a>`
-		// with `<a href="files/foo.webm.summary.txt">Summary</a> <a href="files/foo.webm.json">JSON</a>`
-		// But only if the summary link doesn't exist yet (to allow re-running this CLI multiple times).
-		summaryLink := `<a href="files/` + strings.TrimSuffix(entry.Name(), ".json") + ".summary.txt" + `">Summary</a>`
-		if !strings.Contains(linksString, summaryLink) {
-			old := `<a href="files/` + entry.Name() + `">JSON</a>`
-			new := summaryLink + " " + old
-			linksString = strings.Replace(linksString, old, new, -1)
+		err = writeLink(*dir, entry.Name())
+		if err != nil {
+			log.Fatalf("Couldn't write link: %v\n", err)
 		}
 	}
 
-	err = os.WriteFile(*dir+"/../links.html", []byte(linksString), 0644)
+	log.Printf("Estimated total cost: $%.2f\n", priceEstimateSum)
+}
+
+func writeLink(dir, fileName string) error {
+	// Link in HTML
+	// Replace `<a href="files/foo.webm.json">JSON</a>`
+	// with `<a href="files/foo.webm.summary.txt">Summary</a> <a href="files/foo.webm.json">JSON</a>`
+	// But only if the summary link doesn't exist yet (to allow re-running this CLI multiple times).
+	linksContent, err := os.ReadFile(dir + "/../links.html")
 	if err != nil {
-		log.Fatalln("Couldn't write links file:", err)
+		return fmt.Errorf("couldn't read links file: %w", err)
 	}
+	linksString := string(linksContent)
+	summaryLink := `<a href="files/` + strings.TrimSuffix(fileName, ".json") + ".summary.txt" + `">Summary</a>`
+	if !strings.Contains(linksString, summaryLink) {
+		old := `<a href="files/` + fileName + `">JSON</a>`
+		new := summaryLink + " " + old
+		linksString = strings.Replace(linksString, old, new, -1)
+	}
+	err = os.WriteFile(dir+"/../links.html", []byte(linksString), 0644)
+	if err != nil {
+		return fmt.Errorf("couldn't write links file: %w", err)
+	}
+
+	return nil
 }
